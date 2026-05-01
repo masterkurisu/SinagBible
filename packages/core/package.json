@@ -1,0 +1,24 @@
+{
+  "name": "@sinag-bible/core",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./kjv": "./src/kjv.ts",
+    "./bible-translations": "./src/bible-translations.ts",
+    "./bible-meta": "./src/bible-meta.ts",
+    "./helloao-verse-inline": "./src/helloao-verse-inline.ts",
+    "./journal": "./src/journal.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sinag-bible/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

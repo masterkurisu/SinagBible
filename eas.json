@@ -1,0 +1,35 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "node": "20.19.0",
+      "pnpm": "10.32.1",
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "node": "20.19.0",
+      "pnpm": "10.32.1",
+      "distribution": "internal"
+    },
+    "production": {
+      "developmentClient": false,
+      "env": {
+        "EXPO_USE_METRO_WORKSPACE_ROOT": "1"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "node": "20.20.2",
+      "pnpm": "10.32.1",
+      "autoIncrement": true,
+      "installCommand": "cd ../.. && pnpm install --frozen-lockfile"
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

@@ -1,0 +1,3439 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import type { GestureResponderEvent, PanResponderGestureState } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  ActivityIndicator,
+  PanResponder,
+  Pressable,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  StyleSheet,
+  Animated,
+  Easing,
+  Dimensions,
+  useWindowDimensions,
+  BackHandler,
+  type LayoutRectangle,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useReaderStorage } from "@/lib/use-reader-storage";
+import * as Clipboard from "expo-clipboard";
+import { useLocalSearchParams, useRouter, Stack } from "expo-router";
+import { FlashList, type FlashListRef, type ListRenderItemInfo } from "@shopify/flash-list";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  formatTranslationDropdownLabel,
+  getBookNavForTranslation,
+  getChapterBySlugForTranslation,
+  isTranslationId,
+  type TranslationId,
+} from "@sinag-bible/core/bible-translations";
+import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
+import type { HighlightColor } from "@sinag-bible/types";
+import { formatSelectedReference } from "@sinag-bible/core";
+import { highlightColorOptions } from "@sinag-bible/ui";
+import { mobileAppThemePickerOptions } from "@sinag-bible/tokens";
+import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
+import {
+  ReaderCopyIcon,
+  ReaderHighlightIcon,
+  ReaderJournalIcon,
+  ReaderNoteIcon,
+} from "@/components/reader-action-icons";
+import { BibleBookIcon } from "@/components/icons/BibleBookIcon";
+import { BookIcon } from "@/components/icons/BookIcon";
+import { ReaderSettingsCogIcon } from "@/components/icons/ReaderSettingsCogIcon";
+import { FilterListIcon } from "@/components/icons/FilterListIcon";
+import { ReaderFontSettingsIcon } from "@/components/icons/ReaderFontSettingsIcon";
+import {
+  ReaderAlignCenterIcon,
+  ReaderAlignJustifyIcon,
+  ReaderAlignLeftIcon,
+  ReaderAlignRightIcon,
+} from "@/components/icons/ReaderFontSheetAlignIcons";
+import { ReaderThemesPaletteIcon } from "@/components/icons/ReaderThemesPaletteIcon";
+import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
+import { ReaderFontSizeSlider } from "@/components/reader-font-size-slider";
+import { ReaderVerseRow } from "@/components/reader-verse-row";
+import { readerChapterScreenParams } from "@/lib/reader-navigation";
+import { nativeTabFabOffsetPx, nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
+import {
+  JournalNewEntryForm,
+  type JournalNewEntryFormHandle,
+  type JournalNewEntryInitialParams,
+} from "@/components/journal-new-entry-form";
+import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
+import { hapticLightImpact, hapticMediumImpact, hapticSelection } from "@/lib/haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import { FullWindowOverlay } from "react-native-screens";
+
+/** ~20% smaller than a typical ~17pt stack title; acronym another 20% smaller. */
+const READER_HEADER_TITLE_MAIN_PX = 17 * 0.8;
+const READER_HEADER_TITLE_TRANS_PX = READER_HEADER_TITLE_MAIN_PX * 0.8;
+
+const TRANSLATION_IDS = ["KJV", "WEB", "OEB", "ADB1905"] as const;
+const TRANSLATION_LANGUAGE_BY_ID: Record<(typeof TRANSLATION_IDS)[number], string> = {
+  KJV: "English",
+  WEB: "English",
+  ADB1905: "Tagalog",
+  OEB: "English",
+};
+
+type ChapterNavTarget = { slug: string; chapter: number };
+
+const READER_FONT_SCALE_STORAGE_KEY = "sb:reader:fontScale";
+const READER_LINE_SPACING_STORAGE_KEY = "sb:reader:lineSpacingScale";
+const READER_TEXT_ALIGN_STORAGE_KEY = "sb:reader:verseTextAlign";
+
+type ReaderVerseTextAlign = "left" | "right" | "center" | "justify";
+
+const READER_VERSE_TEXT_ALIGN_OPTIONS: readonly ReaderVerseTextAlign[] = [
+  "left",
+  "right",
+  "center",
+  "justify",
+] as const;
+
+function isReaderVerseTextAlign(raw: string): raw is ReaderVerseTextAlign {
+  return (READER_VERSE_TEXT_ALIGN_OPTIONS as readonly string[]).includes(raw);
+}
+
+function readerVerseTextAlignLabel(a: ReaderVerseTextAlign): string {
+  switch (a) {
+    case "left":
+      return "Left";
+    case "right":
+      return "Right";
+    case "center":
+      return "Center";
+    case "justify":
+      return "Justify";
+  }
+}
+
+const FONT_SHEET_ALIGN_ROW: readonly {
+  align: ReaderVerseTextAlign;
+  Icon: typeof ReaderAlignLeftIcon;
+}[] = [
+  { align: "left", Icon: ReaderAlignLeftIcon },
+  { align: "center", Icon: ReaderAlignCenterIcon },
+  { align: "right", Icon: ReaderAlignRightIcon },
+  { align: "justify", Icon: ReaderAlignJustifyIcon },
+];
+
+function getReaderChapterNeighbors(
+  books: BibleBookNavItem[],
+  chapter: BibleChapter,
+  chapterNumber: number,
+): { prevChapter: ChapterNavTarget | null; nextChapter: ChapterNavTarget | null } {
+  const bookIndex = books.findIndex((b) => b.slug === chapter.bookSlug);
+  const currentBook = books[bookIndex];
+  const prevChapter: ChapterNavTarget | null =
+    chapterNumber > 1
+      ? { slug: chapter.bookSlug, chapter: chapterNumber - 1 }
+      : bookIndex > 0
+        ? { slug: books[bookIndex - 1]!.slug, chapter: books[bookIndex - 1]!.chapterCount }
+        : null;
+  const nextChapter: ChapterNavTarget | null =
+    currentBook && chapterNumber < currentBook.chapterCount
+      ? { slug: chapter.bookSlug, chapter: chapterNumber + 1 }
+      : bookIndex < books.length - 1
+        ? { slug: books[bookIndex + 1]!.slug, chapter: 1 }
+        : null;
+  return { prevChapter, nextChapter };
+}
+
+const READER_TOOLS_POPUP_PAD_H = 12;
+const READER_TOOLS_POPUP_GAP = 12;
+/** Shared icon box for Aa + book glyph (visual size match). */
+const READER_TOOLS_QUICK_ICON_SIZE = 20;
+const READER_TOOLS_QUICK_ICON_ROW_H = 24;
+/** Min width per labeled column (icon + caption) + padding + gaps. */
+const READER_TOOLS_COL_MIN_W = 68;
+const READER_TOOLS_POPUP_COLS = 3;
+const READER_TOOLS_POPUP_MIN_W =
+  READER_TOOLS_POPUP_PAD_H * 2 +
+  READER_TOOLS_COL_MIN_W * READER_TOOLS_POPUP_COLS +
+  READER_TOOLS_POPUP_GAP * (READER_TOOLS_POPUP_COLS - 1);
+
+/** Slide-down distance (px) for reader menus at open. */
+const READER_MENU_SLIDE_FROM_PX = 20;
+/** Font settings card: top inset inside the card (`ScrollView` content `paddingTop`). */
+const READER_FONT_CARD_PADDING_TOP_PX = 12;
+/** Font settings card: space between font-size slider and the “Font spacing” label (`marginTop` on that label). */
+const READER_FONT_CARD_GAP_AFTER_SIZE_SLIDER_PX = 5;
+/** Font settings card: space between font-spacing slider and the align icon row (`marginTop` on that row). */
+const READER_FONT_CARD_GAP_AFTER_SPACING_SLIDER_PX = 5;
+/** Fade-in for verse body after in-place chapter changes (`setParams`). */
+const READER_VERSES_FADE_IN_MS = 320;
+const READER_TABLET_TWO_COLUMN_GAP = 18;
+
+/** FlashList v2 auto-measures cells; this matches a typical single-line verse row (Lora line + number + padding). */
+function readerVerseEstimatedFlashListItemSizePx(lineHeightPx: number): number {
+  return Math.max(48, Math.round(lineHeightPx + 36));
+}
+
+type ReaderVerseFlashItem =
+  | { kind: "verse"; verseIndex: number; verseText: string }
+  | { kind: "empty"; side: "left" | "right"; row: number };
+
+function buildReaderVerseFlashListData(
+  verses: readonly string[],
+  twoColumn: boolean,
+  splitIndex: number,
+): ReaderVerseFlashItem[] {
+  if (!twoColumn) {
+    return verses.map((text, i) => ({
+      kind: "verse" as const,
+      verseIndex: i,
+      verseText: text,
+    }));
+  }
+  const leftLen = splitIndex;
+  const rightLen = Math.max(0, verses.length - splitIndex);
+  const rows = Math.max(leftLen, rightLen);
+  const out: ReaderVerseFlashItem[] = [];
+  for (let r = 0; r < rows; r++) {
+    if (r < leftLen) {
+      out.push({ kind: "verse", verseIndex: r, verseText: verses[r] ?? "" });
+    } else {
+      out.push({ kind: "empty", side: "left", row: r });
+    }
+    if (r < rightLen) {
+      const vi = splitIndex + r;
+      out.push({ kind: "verse", verseIndex: vi, verseText: verses[vi] ?? "" });
+    } else {
+      out.push({ kind: "empty", side: "right", row: r });
+    }
+  }
+  return out;
+}
+
+/** Index of first verse in the right column; left column is verse indices [0, index). */
+function splitVerseIndexForBalancedColumns(verses: readonly string[]): number {
+  const n = verses.length;
+  if (n <= 1) return n;
+  let total = 0;
+  const lengths = verses.map((v) => v.length);
+  for (const l of lengths) total += l;
+  if (total === 0) return Math.ceil(n / 2);
+  const target = total / 2;
+  let acc = 0;
+  for (let i = 0; i < n; i++) {
+    acc += lengths[i] ?? 0;
+    if (acc >= target && i < n - 1) {
+      return i + 1;
+    }
+  }
+  return Math.ceil(n / 2);
+}
+/** Reader verse body font scale (base 16px); slider range 50%–300%. */
+const FONT_SCALE_MIN = 0.5;
+const FONT_SCALE_MAX = 3;
+/** Multiplier on verse line height (base 28px at scale 1); slider range 60%–200%. */
+const LINE_SPACING_MIN = 0.6;
+const LINE_SPACING_MAX = 2;
+
+type ReaderToolsDropdown = "book" | "translation" | "theme";
+
+type BookSelectorViewMode = "grid" | "az" | "testament";
+type SelectorTestamentTab = "old" | "new";
+
+const BOOK_SELECTOR_VIEW_STORAGE_KEY = "sb:reader:bookSelectorView";
+
+/** iOS: render the sheet in a separate UIWindow so vertical drags are not handed to Expo / shell. */
+function ReaderBookSheetWindowOverlay({ children }: { children: ReactNode }) {
+  if (Platform.OS !== "ios") return children;
+  return (
+    <FullWindowOverlay unstable_accessibilityContainerViewIsModal>{children}</FullWindowOverlay>
+  );
+}
+
+const noopChapterSwipePan = PanResponder.create({
+  onStartShouldSetPanResponder: () => false,
+  onMoveShouldSetPanResponder: () => false,
+  onMoveShouldSetPanResponderCapture: () => false,
+  onPanResponderTerminationRequest: () => true,
+  onPanResponderRelease: () => {},
+});
+
+/**
+ * Strict: only claim the pan during move so diagonal scrolling stays on the chapter list.
+ * Android uses stricter thresholds so vertical scrolling wins more often and chapter swipe
+ * does not steal slight diagonals.
+ */
+function chapterSwipeMoveShouldActivate(g: PanResponderGestureState): boolean {
+  const adx = Math.abs(g.dx);
+  const ady = Math.abs(g.dy);
+  if (Platform.OS === "android") {
+    return adx > 44 && adx > ady * 2.35 + 36;
+  }
+  return adx > 28 && adx > ady * 1.7 + 22;
+}
+
+/**
+ * Android: the native vertical scroll recognizer otherwise wins before horizontal swipes reach
+ * `onMoveShouldSetPanResponder`, so chapter navigation never fires. iOS keeps capture disabled so
+ * vertical scrolling stays smooth (unchanged).
+ */
+function chapterSwipeMoveShouldSetCapture(): boolean {
+  return Platform.OS === "android";
+}
+
+/** Slightly looser at release so a mostly-horizontal swipe still changes chapter after scrolling. */
+function chapterSwipeReleaseShouldNavigate(g: PanResponderGestureState, minHorizontal: number): boolean {
+  const adx = Math.abs(g.dx);
+  const ady = Math.abs(g.dy);
+  if (adx < minHorizontal) return false;
+  if (Platform.OS === "android") {
+    return adx > ady * 1.65 + 22;
+  }
+  return adx > ady * 1.35 + 14;
+}
+
+const AnimatedReaderChapterFlashList = Animated.createAnimatedComponent(
+  FlashList,
+) as typeof FlashList<ReaderVerseFlashItem>;
+
+export default function ReaderChapterScreen() {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { book: bookSlug, chapter: chapterParam, translation } = useLocalSearchParams<{
+    book: string;
+    chapter: string;
+    translation?: string;
+  }>();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { bundle, themeId, setThemeId } = useMobileAppTheme();
+  const colors = bundle.ui;
+  const rc = bundle.reader;
+
+  const chapterNumber = parseInt(chapterParam ?? "1", 10);
+  const requestedTranslationRaw = translation?.trim().toUpperCase();
+  const requestedTranslationId: TranslationId = isTranslationId(requestedTranslationRaw)
+    ? requestedTranslationRaw
+    : "KJV";
+
+  const goToReaderChapter = useCallback(
+    (nextBookSlug: string, nextChapter: number, translationId: TranslationId) => {
+      router.setParams(readerChapterScreenParams(nextBookSlug, nextChapter, translationId));
+    },
+    [router],
+  );
+
+  const [readerPayload, setReaderPayload] = useState<{
+    resolvedTranslationId: TranslationId;
+    books: BibleBookNavItem[];
+    chapter: BibleChapter;
+  } | null>(null);
+  const [chapterMissing, setChapterMissing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setChapterMissing(false);
+
+      const slug = bookSlug ?? "";
+      let resolved: TranslationId = requestedTranslationId;
+      let books = await getBookNavForTranslation(resolved);
+      let chapter = await getChapterBySlugForTranslation(resolved, slug, chapterNumber);
+
+      if (!chapter) {
+        resolved = "KJV";
+        books = await getBookNavForTranslation(resolved);
+        chapter = await getChapterBySlugForTranslation(resolved, slug, chapterNumber);
+      }
+
+      if (cancelled) return;
+
+      if (!chapter) {
+        setReaderPayload(null);
+        setChapterMissing(true);
+        return;
+      }
+
+      setReaderPayload({ resolvedTranslationId: resolved, books, chapter });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedTranslationId, bookSlug, chapterNumber]);
+
+  const resolvedTranslationId = readerPayload?.resolvedTranslationId;
+  const books = readerPayload?.books;
+  const chapter = readerPayload?.chapter;
+
+  const {
+    highlights,
+    notes,
+    removeHighlightsFromVerses,
+    applyHighlightToVerses,
+    persistNoteForVerse,
+  } = useReaderStorage(chapter, resolvedTranslationId);
+
+  const [fontSizeScale, setFontSizeScale] = useState(1);
+  const fontScaleUserTouchedRef = useRef(false);
+  const [lineSpacingScale, setLineSpacingScale] = useState(1);
+  const lineSpacingUserTouchedRef = useRef(false);
+  const [verseTextAlign, setVerseTextAlign] = useState<ReaderVerseTextAlign>("justify");
+  const verseTextAlignUserTouchedRef = useRef(false);
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
+  const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
+  const [readerDropdown, setReaderDropdown] = useState<ReaderToolsDropdown | null>(null);
+  const [bookPickerStep, setBookPickerStep] = useState<"books" | "chapters">("books");
+  const [bookPickerBook, setBookPickerBook] = useState<BibleBookNavItem | null>(null);
+  const [bookSelectorViewMode, setBookSelectorViewMode] = useState<BookSelectorViewMode>("testament");
+  const [selectorTestamentTab, setSelectorTestamentTab] = useState<SelectorTestamentTab>("new");
+  const [bookViewMenuOpen, setBookViewMenuOpen] = useState(false);
+  const [bookSelectorStorageReady, setBookSelectorStorageReady] = useState(false);
+  const [dropdownAnchor, setDropdownAnchor] = useState<LayoutRectangle | null>(null);
+
+  const bookFanRef = useRef<View | null>(null);
+  const translationFanRef = useRef<View | null>(null);
+  const themesFanRef = useRef<View | null>(null);
+  const fontSettingsFanRef = useRef<View | null>(null);
+  const settingsCogRef = useRef<View | null>(null);
+
+  const [settingsMenuAnchor, setSettingsMenuAnchor] = useState<LayoutRectangle | null>(null);
+
+  const dropSlideAnim = useRef(new Animated.Value(0)).current;
+  const dropOpacityAnim = useRef(new Animated.Value(0)).current;
+  const settingsPopupSlideAnim = useRef(new Animated.Value(0)).current;
+  const settingsPopupOpacityAnim = useRef(new Animated.Value(0)).current;
+  const bookSheetTranslateY = useRef(new Animated.Value(0)).current;
+  const bookSheetClosingRef = useRef(false);
+  const bookSheetDragStartYRef = useRef(0);
+  const fontSettingsPopupSlideAnim = useRef(new Animated.Value(0)).current;
+  const fontSettingsPopupOpacityAnim = useRef(new Animated.Value(0)).current;
+  const readerVersesOpacityAnim = useRef(new Animated.Value(1)).current;
+  /** True after we've shown synced content then lost sync (chapter change), not initial null payload. */
+  const readerVersesHadDesyncRef = useRef(false);
+
+  const [selectedVerseNumbers, setSelectedVerseNumbers] = useState<Set<number>>(() => new Set());
+  const [noteModalVisible, setNoteModalVisible] = useState(false);
+  const [noteTargetVerse, setNoteTargetVerse] = useState<number | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [actionBarMode, setActionBarMode] = useState<"default" | "highlight">("default");
+  const suppressNextVerseTapRef = useRef<number | null>(null);
+  const [pickedHighlightColor, setPickedHighlightColor] = useState<HighlightColor>("yellow");
+  const [copyToastVisible, setCopyToastVisible] = useState(false);
+  const [newEntrySheetOpen, setNewEntrySheetOpen] = useState(false);
+  const [newEntrySheetKey, setNewEntrySheetKey] = useState(0);
+  const [newEntryInitialParams, setNewEntryInitialParams] =
+    useState<JournalNewEntryInitialParams | null>(null);
+  const [newEntryHasDraft, setNewEntryHasDraft] = useState(false);
+  const readerScrollRef = useRef<FlashListRef<ReaderVerseFlashItem> | null>(null);
+  /** Drives cross-fade between in-content heading and stack header title (native scroll events). */
+  const readerScrollYAnim = useRef(new Animated.Value(0)).current;
+  const [readerPageHeadingHeight, setReaderPageHeadingHeight] = useState(96);
+  const readerHeadingFadeEndPx = Math.max(40, Math.round(readerPageHeadingHeight * 0.82));
+  const readerPageHeadingOpacityAnim = useMemo(
+    () =>
+      readerScrollYAnim.interpolate({
+        inputRange: [0, readerHeadingFadeEndPx],
+        outputRange: [1, 0],
+        extrapolate: "clamp",
+      }),
+    [readerScrollYAnim, readerHeadingFadeEndPx],
+  );
+  const readerHeaderTitleOpacityAnim = useMemo(
+    () =>
+      readerScrollYAnim.interpolate({
+        inputRange: [0, readerHeadingFadeEndPx],
+        outputRange: [0, 1],
+        extrapolate: "clamp",
+      }),
+    [readerScrollYAnim, readerHeadingFadeEndPx],
+  );
+  const newEntryFormRef = useRef<JournalNewEntryFormHandle | null>(null);
+
+  const newEntrySheetOpacity = useRef(new Animated.Value(0)).current;
+  const newEntrySheetTranslate = useRef(new Animated.Value(20)).current;
+  const newEntrySheetClosingRef = useRef(false);
+
+  useEffect(() => {
+    fontScaleUserTouchedRef.current = false;
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(READER_FONT_SCALE_STORAGE_KEY);
+        if (cancelled) return;
+        if (raw && !fontScaleUserTouchedRef.current) {
+          const n = parseFloat(raw);
+          if (Number.isFinite(n) && n >= FONT_SCALE_MIN && n <= FONT_SCALE_MAX) {
+            setFontSizeScale(n);
+          }
+        }
+      } catch {
+        // ignore corrupt storage
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    lineSpacingUserTouchedRef.current = false;
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(READER_LINE_SPACING_STORAGE_KEY);
+        if (cancelled) return;
+        if (raw && !lineSpacingUserTouchedRef.current) {
+          const n = parseFloat(raw);
+          if (Number.isFinite(n) && n >= LINE_SPACING_MIN && n <= LINE_SPACING_MAX) {
+            setLineSpacingScale(n);
+          }
+        }
+      } catch {
+        // ignore corrupt storage
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    verseTextAlignUserTouchedRef.current = false;
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(READER_TEXT_ALIGN_STORAGE_KEY);
+        if (cancelled) return;
+        if (raw && !verseTextAlignUserTouchedRef.current && isReaderVerseTextAlign(raw)) {
+          setVerseTextAlign(raw);
+        }
+      } catch {
+        // ignore corrupt storage
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(BOOK_SELECTOR_VIEW_STORAGE_KEY);
+        if (cancelled) return;
+        if (raw) {
+          const parsed = JSON.parse(raw) as {
+            mode?: BookSelectorViewMode;
+            testamentTab?: SelectorTestamentTab;
+          };
+          if (parsed.mode === "grid" || parsed.mode === "az" || parsed.mode === "testament") {
+            setBookSelectorViewMode(parsed.mode);
+          }
+          if (parsed.testamentTab === "old" || parsed.testamentTab === "new") {
+            setSelectorTestamentTab(parsed.testamentTab);
+          }
+        }
+      } catch {
+        // ignore corrupt storage
+      } finally {
+        if (!cancelled) setBookSelectorStorageReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!bookSelectorStorageReady) return;
+    void AsyncStorage.setItem(
+      BOOK_SELECTOR_VIEW_STORAGE_KEY,
+      JSON.stringify({
+        mode: bookSelectorViewMode,
+        testamentTab: selectorTestamentTab,
+      }),
+    );
+  }, [bookSelectorStorageReady, bookSelectorViewMode, selectorTestamentTab]);
+
+  useEffect(() => {
+    return registerTabScrollRef("reader", {
+      scrollToOffset: ({ offset, animated = true }) => {
+        readerScrollRef.current?.scrollToOffset({ offset, animated });
+      },
+    });
+  }, []);
+
+  useEffect(() => {
+    readerScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
+    readerScrollYAnim.setValue(0);
+  }, [bookSlug, chapterNumber, requestedTranslationId, readerScrollYAnim]);
+
+  const setFontSizeScalePersisted = useCallback((v: number) => {
+    fontScaleUserTouchedRef.current = true;
+    const next = Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, v));
+    setFontSizeScale(next);
+    void AsyncStorage.setItem(READER_FONT_SCALE_STORAGE_KEY, String(next));
+  }, []);
+
+  const setLineSpacingScalePersisted = useCallback((v: number) => {
+    lineSpacingUserTouchedRef.current = true;
+    const next = Math.min(LINE_SPACING_MAX, Math.max(LINE_SPACING_MIN, v));
+    setLineSpacingScale(next);
+    void AsyncStorage.setItem(READER_LINE_SPACING_STORAGE_KEY, String(next));
+  }, []);
+
+  const setVerseTextAlignPersisted = useCallback((a: ReaderVerseTextAlign) => {
+    hapticLightImpact();
+    verseTextAlignUserTouchedRef.current = true;
+    setVerseTextAlign(a);
+    void AsyncStorage.setItem(READER_TEXT_ALIGN_STORAGE_KEY, a);
+  }, []);
+
+  const selectedVerses = useMemo(
+    () => Array.from(selectedVerseNumbers).sort((a, b) => a - b),
+    [selectedVerseNumbers],
+  );
+
+  const closeToolsMenu = useCallback(() => {
+    setToolsMenuOpen(false);
+    setFontSettingsSheetOpen(false);
+    setReaderDropdown(null);
+    setDropdownAnchor(null);
+    setBookPickerStep("books");
+    setBookPickerBook(null);
+    setBookViewMenuOpen(false);
+  }, []);
+
+  const closeFontSettingsPopup = useCallback(() => {
+    setFontSettingsSheetOpen(false);
+  }, []);
+
+  const openFontSettingsSheet = useCallback(() => {
+    hapticLightImpact();
+    setToolsMenuOpen(false);
+    setReaderDropdown(null);
+    setDropdownAnchor(null);
+    setBookPickerStep("books");
+    setBookPickerBook(null);
+    setBookViewMenuOpen(false);
+    setFontSettingsSheetOpen(true);
+  }, []);
+
+  const clearVerseSelection = useCallback(() => {
+    setSelectedVerseNumbers(new Set());
+  }, []);
+
+  const toggleVerseSelection = useCallback(
+    (verseNumber: number) => {
+      if (toolsMenuOpen) closeToolsMenu();
+      setSelectedVerseNumbers((current) => {
+        const next = new Set(current);
+        if (next.has(verseNumber)) next.delete(verseNumber);
+        else next.add(verseNumber);
+        return next;
+      });
+    },
+    [toolsMenuOpen, closeToolsMenu],
+  );
+
+  const handleVerseTap = useCallback(
+    (verseNumber: number) => {
+      if (suppressNextVerseTapRef.current === verseNumber) {
+        suppressNextVerseTapRef.current = null;
+        return;
+      }
+      hapticSelection();
+      toggleVerseSelection(verseNumber);
+    },
+    [toggleVerseSelection],
+  );
+
+  const handleVerseLongPress = useCallback(
+    (verseNumber: number) => {
+      hapticMediumImpact();
+      if (highlights[verseNumber]) {
+        removeHighlightsFromVerses([verseNumber]);
+      } else {
+        applyHighlightToVerses([verseNumber], pickedHighlightColor);
+      }
+      suppressNextVerseTapRef.current = verseNumber;
+    },
+    [applyHighlightToVerses, highlights, pickedHighlightColor, removeHighlightsFromVerses],
+  );
+
+  useEffect(() => {
+    setSelectedVerseNumbers(new Set());
+    setNoteModalVisible(false);
+    setNoteTargetVerse(null);
+    setNoteDraft("");
+    setActionBarMode("default");
+  }, [bookSlug, chapterNumber, requestedTranslationId]);
+
+  useEffect(() => {
+    if (!copyToastVisible) return;
+    const t = setTimeout(() => setCopyToastVisible(false), 2200);
+    return () => clearTimeout(t);
+  }, [copyToastVisible]);
+
+  const copySelectedVerses = useCallback(async () => {
+    const ch = readerPayload?.chapter;
+    const tid = readerPayload?.resolvedTranslationId;
+    if (!ch || !tid || selectedVerses.length === 0) return;
+    const refBase = formatSelectedReference(ch.bookName, ch.chapterNumber, selectedVerses);
+    const refLine = `${refBase} (${tid})`;
+    const text = selectedVerses
+      .map((n) => ch.verses[n - 1])
+      .filter(Boolean)
+      .join(" ");
+    try {
+      await Clipboard.setStringAsync(`${refLine}\n${text}`);
+      hapticLightImpact();
+      setCopyToastVisible(true);
+      clearVerseSelection();
+    } catch {
+      Alert.alert("Copy failed", "Could not copy to the clipboard.");
+    }
+  }, [readerPayload?.chapter, readerPayload?.resolvedTranslationId, selectedVerses, clearVerseSelection]);
+
+  const removeHighlightsFromSelection = useCallback(() => {
+    if (selectedVerses.length === 0) return;
+    removeHighlightsFromVerses(selectedVerses);
+    setActionBarMode("default");
+    clearVerseSelection();
+  }, [removeHighlightsFromVerses, selectedVerses, clearVerseSelection]);
+
+  const applyPickedHighlightToSelection = useCallback(() => {
+    if (selectedVerses.length === 0) return;
+    applyHighlightToVerses(selectedVerses, pickedHighlightColor);
+    setActionBarMode("default");
+    clearVerseSelection();
+  }, [
+    applyHighlightToVerses,
+    pickedHighlightColor,
+    selectedVerses,
+    clearVerseSelection,
+  ]);
+
+  const openNoteForSelection = useCallback(() => {
+    if (selectedVerses.length === 0) return;
+    const last = selectedVerses[selectedVerses.length - 1]!;
+    setNoteTargetVerse(last);
+    setNoteDraft(notes[last] ?? "");
+    setNoteModalVisible(true);
+  }, [selectedVerses, notes]);
+
+  const saveNoteFromModal = useCallback(() => {
+    const verse = noteTargetVerse;
+    if (verse == null) return;
+    persistNoteForVerse(verse, noteDraft.trim());
+    setNoteModalVisible(false);
+    setNoteTargetVerse(null);
+    setNoteDraft("");
+    clearVerseSelection();
+  }, [noteTargetVerse, noteDraft, persistNoteForVerse, clearVerseSelection]);
+
+  const openJournalFromSelection = useCallback(() => {
+    const ch = readerPayload?.chapter;
+    const tid = readerPayload?.resolvedTranslationId;
+    if (!ch || !tid || selectedVerses.length === 0) return;
+    hapticLightImpact();
+    const first = selectedVerses[0]!;
+    const last = selectedVerses[selectedVerses.length - 1]!;
+    setNewEntryInitialParams({
+      book: ch.bookSlug,
+      chapter: String(ch.chapterNumber),
+      verseStart: String(first),
+      verseEnd: String(last),
+      translation: tid,
+    });
+    setNewEntrySheetKey((k) => k + 1);
+    setNewEntrySheetOpen(true);
+    clearVerseSelection();
+  }, [readerPayload?.chapter, readerPayload?.resolvedTranslationId, selectedVerses, clearVerseSelection]);
+
+  const animateCloseNewEntrySheet = useCallback(
+    (velocityY = 0, draggedY = 0) => {
+      if (newEntrySheetClosingRef.current) return;
+      newEntrySheetClosingRef.current = true;
+
+      const screenHeight = Dimensions.get("window").height;
+      const sheetMaxHeight = Math.min(660, screenHeight * 0.8);
+      const targetTranslateY = sheetMaxHeight + 40;
+      const clampedDragY = Math.max(0, draggedY);
+      const velocity = Math.max(0, velocityY);
+      const duration = Math.max(150, Math.min(320, Math.round(280 - Math.min(1.8, velocity) * 90)));
+
+      Animated.parallel([
+        Animated.timing(newEntrySheetTranslate, {
+          toValue: targetTranslateY,
+          duration,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(newEntrySheetOpacity, {
+          toValue: 0,
+          duration: Math.max(180, duration + 90),
+          delay: 80,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        newEntrySheetClosingRef.current = false;
+        setNewEntrySheetOpen(false);
+        newEntrySheetTranslate.setValue(20);
+        newEntrySheetOpacity.setValue(0);
+      });
+
+      if (clampedDragY > 0) {
+        newEntrySheetTranslate.setValue(clampedDragY);
+      }
+    },
+    [newEntrySheetOpacity, newEntrySheetTranslate],
+  );
+
+  const closeNewEntrySheet = useCallback(() => {
+    animateCloseNewEntrySheet(0.45, 0);
+  }, [animateCloseNewEntrySheet]);
+
+  const springReaderNewEntryOpen = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(newEntrySheetTranslate, {
+        toValue: 0,
+        friction: 9,
+        tension: 75,
+        useNativeDriver: true,
+      }),
+      Animated.timing(newEntrySheetOpacity, {
+        toValue: 1,
+        duration: 170,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [newEntrySheetOpacity, newEntrySheetTranslate]);
+
+  const confirmReaderNewEntryDraftClose = useCallback(() => {
+    Alert.alert("Save or discard?", "You have unsaved text in this draft.", [
+      { text: "Keep editing", style: "cancel" },
+      { text: "Save", onPress: () => newEntryFormRef.current?.save() },
+      { text: "Discard", style: "destructive", onPress: closeNewEntrySheet },
+    ]);
+  }, [closeNewEntrySheet]);
+
+  const requestCloseReaderNewEntrySheet = useCallback(() => {
+    if (!newEntryHasDraft) {
+      closeNewEntrySheet();
+      return;
+    }
+    confirmReaderNewEntryDraftClose();
+  }, [newEntryHasDraft, closeNewEntrySheet, confirmReaderNewEntryDraftClose]);
+
+  useEffect(() => {
+    if (!toolsMenuOpen) {
+      setSettingsMenuAnchor(null);
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      settingsCogRef.current?.measureInWindow((x, y, width, height) => {
+        setSettingsMenuAnchor({ x, y, width, height });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [toolsMenuOpen]);
+
+  useEffect(() => {
+    if (!newEntrySheetOpen) return;
+    newEntrySheetClosingRef.current = false;
+    newEntrySheetOpacity.setValue(0);
+    newEntrySheetTranslate.setValue(20);
+    Animated.parallel([
+      Animated.timing(newEntrySheetOpacity, {
+        toValue: 1,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(newEntrySheetTranslate, {
+        toValue: 0,
+        friction: 8,
+        tension: 65,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [newEntrySheetOpen, newEntrySheetOpacity, newEntrySheetTranslate]);
+
+  const newEntryHandlePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => newEntrySheetOpen,
+        onMoveShouldSetPanResponder: (_e, g) =>
+          newEntrySheetOpen && g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderTerminationRequest: () => true,
+        onPanResponderGrant: () => {
+          newEntrySheetTranslate.stopAnimation();
+          newEntrySheetOpacity.stopAnimation();
+        },
+        onPanResponderMove: (_e, g) => {
+          if (!newEntrySheetOpen || newEntrySheetClosingRef.current) return;
+          const dragY = Math.max(0, g.dy);
+          newEntrySheetTranslate.setValue(dragY);
+          newEntrySheetOpacity.setValue(Math.max(0.82, 1 - dragY / 900));
+        },
+        onPanResponderRelease: (_e, g) => {
+          if (!newEntrySheetOpen || newEntrySheetClosingRef.current) return;
+          const dragY = Math.max(0, g.dy);
+          const shouldClose = dragY > 90 || g.vy > 0.55;
+          if (shouldClose) {
+            if (newEntryHasDraft) {
+              springReaderNewEntryOpen();
+              confirmReaderNewEntryDraftClose();
+              return;
+            }
+            animateCloseNewEntrySheet(g.vy, dragY);
+            return;
+          }
+          Animated.parallel([
+            Animated.spring(newEntrySheetTranslate, {
+              toValue: 0,
+              velocity: Math.max(0, g.vy),
+              friction: 9,
+              tension: 75,
+              useNativeDriver: true,
+            }),
+            Animated.timing(newEntrySheetOpacity, {
+              toValue: 1,
+              duration: 170,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]).start();
+        },
+        onPanResponderTerminate: (_e, g) => {
+          if (!newEntrySheetOpen || newEntrySheetClosingRef.current) return;
+          const dragY = Math.max(0, g.dy);
+          const shouldClose = dragY > 90 || g.vy > 0.55;
+          if (shouldClose) {
+            if (newEntryHasDraft) {
+              springReaderNewEntryOpen();
+              confirmReaderNewEntryDraftClose();
+              return;
+            }
+            animateCloseNewEntrySheet(g.vy, dragY);
+            return;
+          }
+          Animated.parallel([
+            Animated.spring(newEntrySheetTranslate, {
+              toValue: 0,
+              velocity: Math.max(0, g.vy),
+              friction: 9,
+              tension: 75,
+              useNativeDriver: true,
+            }),
+            Animated.timing(newEntrySheetOpacity, {
+              toValue: 1,
+              duration: 170,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]).start();
+        },
+      }),
+    [
+      animateCloseNewEntrySheet,
+      confirmReaderNewEntryDraftClose,
+      newEntryHasDraft,
+      newEntrySheetOpen,
+      newEntrySheetOpacity,
+      newEntrySheetTranslate,
+      springReaderNewEntryOpen,
+    ],
+  );
+
+  const measureAndSetDropdown = useCallback(
+    (ref: RefObject<View | null>, kind: ReaderToolsDropdown) => {
+      if (readerDropdown === kind) {
+        setReaderDropdown(null);
+        setDropdownAnchor(null);
+        setBookPickerStep("books");
+        setBookPickerBook(null);
+        setBookViewMenuOpen(false);
+        return;
+      }
+      requestAnimationFrame(() => {
+        ref.current?.measureInWindow((x, y, width, height) => {
+          if (kind === "translation" || kind === "theme") {
+            setToolsMenuOpen(false);
+          }
+          setDropdownAnchor({ x, y, width, height });
+          setReaderDropdown(kind);
+        });
+      });
+    },
+    [readerDropdown],
+  );
+
+  const getBookAzSortKey = useCallback(
+    (bookName: string) => bookName.replace(/^[0-9]+\s*/u, "").trim().toLowerCase(),
+    [],
+  );
+
+  const { oldTestamentBooks, newTestamentBooks } = useMemo(() => {
+    const b = readerPayload?.books ?? [];
+    const OT_COUNT = 39;
+    return {
+      oldTestamentBooks: b.slice(0, OT_COUNT),
+      newTestamentBooks: b.slice(OT_COUNT),
+    };
+  }, [readerPayload?.books]);
+
+  const azSortedBooks = useMemo(
+    () =>
+      [...(readerPayload?.books ?? [])].sort((a, b) =>
+        getBookAzSortKey(a.name).localeCompare(getBookAzSortKey(b.name)),
+      ),
+    [readerPayload?.books, getBookAzSortKey],
+  );
+
+  const gridSectionsForPicker = useMemo(
+    () =>
+      [
+        { id: "ot" as const, label: "OLD TESTAMENT", items: oldTestamentBooks },
+        { id: "nt" as const, label: "NEW TESTAMENT", items: newTestamentBooks },
+      ] as const,
+    [oldTestamentBooks, newTestamentBooks],
+  );
+
+  const activeBookViewLabel = useMemo(() => {
+    if (bookSelectorViewMode === "grid") return "Grid view";
+    if (bookSelectorViewMode === "az") return "A-Z view";
+    return selectorTestamentTab === "old" ? "Old Testament view" : "New Testament view";
+  }, [bookSelectorViewMode, selectorTestamentTab]);
+
+  const applyBookSelectorView = useCallback((view: "grid" | "az" | "old" | "new") => {
+    hapticLightImpact();
+    if (view === "grid" || view === "az") {
+      setBookSelectorViewMode(view);
+    } else {
+      setBookSelectorViewMode("testament");
+      setSelectorTestamentTab(view);
+    }
+    setBookViewMenuOpen(false);
+  }, []);
+
+  const openBookTools = useCallback(() => {
+    hapticLightImpact();
+    setToolsMenuOpen(false);
+    setFontSettingsSheetOpen(false);
+    setBookPickerStep("books");
+    setBookPickerBook(null);
+    measureAndSetDropdown(bookFanRef, "book");
+  }, [measureAndSetDropdown]);
+
+  useEffect(() => {
+    if (!readerDropdown) {
+      dropSlideAnim.setValue(0);
+      dropOpacityAnim.setValue(0);
+      return;
+    }
+    dropSlideAnim.setValue(0);
+    dropOpacityAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(dropSlideAnim, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(dropOpacityAnim, {
+        toValue: 1,
+        duration: 240,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [readerDropdown, dropSlideAnim, dropOpacityAnim]);
+
+  useEffect(() => {
+    if (!toolsMenuOpen || !settingsMenuAnchor) {
+      settingsPopupSlideAnim.setValue(0);
+      settingsPopupOpacityAnim.setValue(0);
+      return;
+    }
+    settingsPopupSlideAnim.setValue(0);
+    settingsPopupOpacityAnim.setValue(0);
+    Animated.parallel([
+      Animated.timing(settingsPopupSlideAnim, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(settingsPopupOpacityAnim, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [toolsMenuOpen, settingsMenuAnchor, settingsPopupSlideAnim, settingsPopupOpacityAnim]);
+
+  const toggleToolsMenu = useCallback(() => {
+    hapticLightImpact();
+    setToolsMenuOpen((open) => {
+      if (open) {
+        setFontSettingsSheetOpen(false);
+        setReaderDropdown(null);
+        setDropdownAnchor(null);
+        setBookPickerStep("books");
+        setBookPickerBook(null);
+        setBookViewMenuOpen(false);
+        return false;
+      }
+      setFontSettingsSheetOpen(false);
+      setReaderDropdown(null);
+      setDropdownAnchor(null);
+      setBookPickerStep("books");
+      setBookPickerBook(null);
+      setBookViewMenuOpen(false);
+      return true;
+    });
+  }, []);
+
+  const dismissReaderChromeFromBackgroundPress = useCallback(() => {
+    if (toolsMenuOpen) closeToolsMenu();
+    else if (fontSettingsSheetOpen) closeFontSettingsPopup();
+  }, [toolsMenuOpen, closeToolsMenu, fontSettingsSheetOpen, closeFontSettingsPopup]);
+
+  const onReaderScrollBeginDrag = useCallback(() => {
+    dismissReaderChromeFromBackgroundPress();
+  }, [dismissReaderChromeFromBackgroundPress]);
+
+  const closeReaderDropdown = useCallback(() => {
+    bookSheetTranslateY.stopAnimation();
+    bookSheetClosingRef.current = false;
+    bookSheetTranslateY.setValue(0);
+    setReaderDropdown(null);
+    setDropdownAnchor(null);
+    setBookPickerStep("books");
+    setBookPickerBook(null);
+    setBookViewMenuOpen(false);
+  }, [bookSheetTranslateY]);
+
+  const animateCloseBookSheet = useCallback(
+    (velocityY = 0, draggedY = 0) => {
+      if (bookSheetClosingRef.current) return;
+      bookSheetClosingRef.current = true;
+      const h = Dimensions.get("window").height;
+      const targetY = h + 56;
+      const vel = Math.max(0, velocityY);
+      const duration = Math.max(170, Math.min(340, Math.round(300 - Math.min(1.85, vel) * 88)));
+      bookSheetTranslateY.stopAnimation();
+      const clamped = Math.max(0, draggedY);
+      if (clamped > 0) {
+        bookSheetTranslateY.setValue(clamped);
+      }
+      Animated.timing(bookSheetTranslateY, {
+        toValue: targetY,
+        duration,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(() => {
+        bookSheetClosingRef.current = false;
+        bookSheetTranslateY.setValue(0);
+        closeReaderDropdown();
+      });
+    },
+    [bookSheetTranslateY, closeReaderDropdown],
+  );
+
+  const bookSheetDragPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_e, g) =>
+          !bookSheetClosingRef.current && g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderTerminationRequest: () => true,
+        onPanResponderGrant: () => {
+          setBookViewMenuOpen(false);
+          bookSheetTranslateY.stopAnimation((value: number) => {
+            bookSheetDragStartYRef.current = value;
+          });
+        },
+        onPanResponderMove: (_e, g) => {
+          if (bookSheetClosingRef.current) return;
+          bookSheetTranslateY.setValue(Math.max(0, bookSheetDragStartYRef.current + g.dy));
+        },
+        onPanResponderRelease: (_e, g) => {
+          if (bookSheetClosingRef.current) return;
+          const y = Math.max(0, bookSheetDragStartYRef.current + g.dy);
+          if (y > 90 || g.vy > 0.55) {
+            animateCloseBookSheet(g.vy, y);
+            return;
+          }
+          Animated.spring(bookSheetTranslateY, {
+            toValue: 0,
+            velocity: Math.max(0, g.vy),
+            friction: 9,
+            tension: 75,
+            useNativeDriver: true,
+          }).start();
+        },
+        onPanResponderTerminate: (_e, g) => {
+          if (bookSheetClosingRef.current) return;
+          const y = Math.max(0, bookSheetDragStartYRef.current + g.dy);
+          if (y > 90 || g.vy > 0.55) {
+            animateCloseBookSheet(g.vy, y);
+            return;
+          }
+          Animated.spring(bookSheetTranslateY, {
+            toValue: 0,
+            velocity: Math.max(0, g.vy),
+            friction: 9,
+            tension: 75,
+            useNativeDriver: true,
+          }).start();
+        },
+      }),
+    [animateCloseBookSheet, bookSheetTranslateY],
+  );
+
+  useEffect(() => {
+    if (readerDropdown !== "book") return;
+    bookSheetClosingRef.current = false;
+    bookSheetTranslateY.stopAnimation();
+    bookSheetTranslateY.setValue(Dimensions.get("window").height);
+    Animated.spring(bookSheetTranslateY, {
+      toValue: 0,
+      friction: 9,
+      tension: 68,
+      useNativeDriver: true,
+    }).start();
+  }, [readerDropdown, bookSheetTranslateY]);
+
+  useEffect(() => {
+    if (readerDropdown !== "book") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      animateCloseBookSheet(0.45, 0);
+      return true;
+    });
+    return () => sub.remove();
+  }, [readerDropdown, animateCloseBookSheet]);
+
+  useEffect(() => {
+    if (!fontSettingsSheetOpen) {
+      fontSettingsPopupSlideAnim.setValue(0);
+      fontSettingsPopupOpacityAnim.setValue(0);
+      return;
+    }
+    fontSettingsPopupSlideAnim.setValue(0);
+    fontSettingsPopupOpacityAnim.setValue(0);
+    Animated.parallel([
+      Animated.timing(fontSettingsPopupSlideAnim, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(fontSettingsPopupOpacityAnim, {
+        toValue: 1,
+        duration: 240,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fontSettingsSheetOpen, fontSettingsPopupSlideAnim, fontSettingsPopupOpacityAnim]);
+
+  const isReaderContentCurrent = Boolean(
+    readerPayload &&
+      readerPayload.chapter.bookSlug === (bookSlug ?? "") &&
+      readerPayload.chapter.chapterNumber === chapterNumber &&
+      readerPayload.resolvedTranslationId === requestedTranslationId,
+  );
+
+  useEffect(() => {
+    if (!readerPayload) return;
+
+    if (!isReaderContentCurrent) {
+      readerVersesHadDesyncRef.current = true;
+      readerVersesOpacityAnim.stopAnimation();
+      readerVersesOpacityAnim.setValue(0);
+      return;
+    }
+
+    if (readerVersesHadDesyncRef.current) {
+      readerVersesOpacityAnim.stopAnimation();
+      readerVersesOpacityAnim.setValue(0);
+      Animated.timing(readerVersesOpacityAnim, {
+        toValue: 1,
+        duration: READER_VERSES_FADE_IN_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      readerVersesOpacityAnim.setValue(1);
+    }
+  }, [readerPayload, isReaderContentCurrent, readerVersesOpacityAnim]);
+
+  const chapterNav = useMemo(() => {
+    if (!readerPayload?.chapter || !readerPayload.books) {
+      return { prevChapter: null as ChapterNavTarget | null, nextChapter: null as ChapterNavTarget | null };
+    }
+    const slug = bookSlug ?? "";
+    const ch = readerPayload.chapter;
+    const tid = readerPayload.resolvedTranslationId;
+    const synced =
+      ch.bookSlug === slug && ch.chapterNumber === chapterNumber && tid === requestedTranslationId;
+    const navChapter: BibleChapter = synced
+      ? ch
+      : {
+          bookName: readerPayload.books.find((b) => b.slug === slug)?.name ?? ch.bookName,
+          bookSlug: slug,
+          chapterNumber,
+          verses: ch.verses,
+        };
+    return getReaderChapterNeighbors(readerPayload.books, navChapter, chapterNumber);
+  }, [readerPayload, bookSlug, chapterNumber, requestedTranslationId]);
+
+  const chapterSwipePan = useMemo(() => {
+    const tid = readerPayload?.resolvedTranslationId;
+    if (!tid) return noopChapterSwipePan;
+    const { prevChapter, nextChapter } = chapterNav;
+    const releaseThresholdPx = Platform.OS === "android" ? 72 : 52;
+    const tryChapterSwipeNavigate = (g: PanResponderGestureState) => {
+      if (!chapterSwipeReleaseShouldNavigate(g, releaseThresholdPx)) return;
+      if (g.dx <= -releaseThresholdPx && nextChapter) {
+        goToReaderChapter(nextChapter.slug, nextChapter.chapter, tid);
+      } else if (g.dx >= releaseThresholdPx && prevChapter) {
+        goToReaderChapter(prevChapter.slug, prevChapter.chapter, tid);
+      }
+    };
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_e: GestureResponderEvent, g: PanResponderGestureState) =>
+        chapterSwipeMoveShouldActivate(g),
+      onMoveShouldSetPanResponderCapture: (_e: GestureResponderEvent, g: PanResponderGestureState) =>
+        chapterSwipeMoveShouldSetCapture() && chapterSwipeMoveShouldActivate(g),
+      onPanResponderTerminationRequest: () => true,
+      onPanResponderRelease: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+        tryChapterSwipeNavigate(g);
+      },
+      onPanResponderTerminate: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+        tryChapterSwipeNavigate(g);
+      },
+    });
+  }, [chapterNav, readerPayload?.resolvedTranslationId, goToReaderChapter]);
+
+  const readerTabletLandscapeTwoColumn =
+    chapter != null &&
+    isTabletLayout(windowWidth, windowHeight) &&
+    windowWidth > windowHeight;
+
+  const readerTwoColumnSplitIndex = useMemo(
+    () => (chapter ? splitVerseIndexForBalancedColumns(chapter.verses) : 0),
+    [chapter],
+  );
+
+  const readerVerseFontSize = 16 * fontSizeScale;
+  const readerVerseLineHeight = 28 * fontSizeScale * lineSpacingScale;
+
+  const verseFlashListData = useMemo((): ReaderVerseFlashItem[] => {
+    if (!chapter) return [];
+    return buildReaderVerseFlashListData(
+      chapter.verses,
+      readerTabletLandscapeTwoColumn,
+      readerTwoColumnSplitIndex,
+    );
+  }, [chapter, readerTabletLandscapeTwoColumn, readerTwoColumnSplitIndex]);
+
+  const verseFlashListDataForList = useMemo(
+    () => (isReaderContentCurrent ? verseFlashListData : []),
+    [isReaderContentCurrent, verseFlashListData],
+  );
+
+  /** Typical single-line verse row height; FlashList v2 measures real layouts (no `estimatedItemSize` prop). */
+  const readerVerseEstimatedItemSize = readerVerseEstimatedFlashListItemSizePx(readerVerseLineHeight);
+
+  const flashListExtraData = useMemo(
+    () => ({
+      selectedVerseNumbers,
+      highlights,
+      notes,
+      themeId,
+      selectionBackground: rc.selectionBackground,
+      selectionText: rc.selectionText,
+      verseNumberColor: rc.verseNumberColor,
+      noteBelowVerseBackground: rc.noteBelowVerseBackground,
+      bodyTextColor: colors.brown800,
+      readerVerseFontSize,
+      readerVerseLineHeight,
+      verseTextAlign,
+    }),
+    [
+      selectedVerseNumbers,
+      highlights,
+      notes,
+      themeId,
+      rc.selectionBackground,
+      rc.selectionText,
+      rc.verseNumberColor,
+      rc.noteBelowVerseBackground,
+      colors.brown800,
+      readerVerseFontSize,
+      readerVerseLineHeight,
+      verseTextAlign,
+    ],
+  );
+
+  const renderReaderVerseFlashItem = useCallback(
+    ({ item, index }: ListRenderItemInfo<ReaderVerseFlashItem>) => {
+      if (item.kind === "empty") {
+        return (
+          <View
+            style={{
+              flex: 1,
+              paddingRight:
+                readerTabletLandscapeTwoColumn && index % 2 === 0
+                  ? READER_TABLET_TWO_COLUMN_GAP / 2
+                  : 0,
+              paddingLeft:
+                readerTabletLandscapeTwoColumn && index % 2 === 1
+                  ? READER_TABLET_TWO_COLUMN_GAP / 2
+                  : 0,
+            }}
+          />
+        );
+      }
+      const verseNum = item.verseIndex + 1;
+      const ed = flashListExtraData;
+      return (
+        <Animated.View
+          style={{
+            opacity: readerVersesOpacityAnim,
+            flex: 1,
+            paddingRight:
+              readerTabletLandscapeTwoColumn && index % 2 === 0
+                ? READER_TABLET_TWO_COLUMN_GAP / 2
+                : 0,
+            paddingLeft:
+              readerTabletLandscapeTwoColumn && index % 2 === 1
+                ? READER_TABLET_TWO_COLUMN_GAP / 2
+                : 0,
+          }}
+        >
+          <ReaderVerseRow
+            verseNum={verseNum}
+            verseText={item.verseText}
+            isSelected={ed.selectedVerseNumbers.has(verseNum)}
+            highlight={ed.highlights[verseNum]}
+            noteText={ed.notes[verseNum]?.trim()}
+            themeId={ed.themeId}
+            selectionBackground={ed.selectionBackground}
+            selectionText={ed.selectionText}
+            verseNumberColor={ed.verseNumberColor}
+            noteBelowVerseBackground={ed.noteBelowVerseBackground}
+            bodyTextColor={ed.bodyTextColor}
+            readerVerseFontSize={ed.readerVerseFontSize}
+            readerVerseLineHeight={ed.readerVerseLineHeight}
+            verseTextAlign={ed.verseTextAlign}
+            onVersePress={handleVerseTap}
+            onVerseLongPress={handleVerseLongPress}
+          />
+        </Animated.View>
+      );
+    },
+    [
+      flashListExtraData,
+      readerVersesOpacityAnim,
+      handleVerseTap,
+      handleVerseLongPress,
+      readerTabletLandscapeTwoColumn,
+    ],
+  );
+
+  const readerVerseFlashKeyExtractor = useCallback((item: ReaderVerseFlashItem) => {
+    if (item.kind === "verse") return `v-${item.verseIndex}`;
+    return `e-${item.side}-${item.row}`;
+  }, []);
+
+  const readerChapterFlashListFooter = useCallback(() => {
+    if (!isReaderContentCurrent) return null;
+    const { prevChapter, nextChapter } = chapterNav;
+    return (
+      <Animated.View style={{ opacity: readerVersesOpacityAnim }}>
+        <View className="flex-row justify-between mt-8 gap-3">
+          {prevChapter ? (
+            <TouchableOpacity
+              className="flex-1 rounded-full py-3 px-4 items-center"
+              style={{ backgroundColor: colors.parchmentDark }}
+              onPress={() => {
+                closeToolsMenu();
+                goToReaderChapter(
+                  prevChapter.slug,
+                  prevChapter.chapter,
+                  resolvedTranslationId ?? requestedTranslationId,
+                );
+              }}
+            >
+              <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: colors.brown800 }}>
+                ← Previous
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View className="flex-1" />
+          )}
+
+          {nextChapter ? (
+            <TouchableOpacity
+              className="flex-1 rounded-full py-3 px-4 items-center"
+              style={{ backgroundColor: colors.parchmentDark }}
+              onPress={() => {
+                closeToolsMenu();
+                goToReaderChapter(
+                  nextChapter.slug,
+                  nextChapter.chapter,
+                  resolvedTranslationId ?? requestedTranslationId,
+                );
+              }}
+            >
+              <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: colors.brown800 }}>
+                Next →
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View className="flex-1" />
+          )}
+        </View>
+        <Pressable
+          onPress={dismissReaderChromeFromBackgroundPress}
+          style={{ flexGrow: 1, minHeight: Math.max(160, windowHeight * 0.35) }}
+          android_ripple={null}
+          accessible={false}
+        />
+      </Animated.View>
+    );
+  }, [
+    isReaderContentCurrent,
+    readerVersesOpacityAnim,
+    chapterNav,
+    colors.parchmentDark,
+    colors.brown800,
+    resolvedTranslationId,
+    requestedTranslationId,
+    goToReaderChapter,
+    closeToolsMenu,
+    dismissReaderChromeFromBackgroundPress,
+    windowHeight,
+  ]);
+
+  if (chapterMissing) {
+    return (
+      <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: rc.sceneSurface }}>
+        <Text style={{ fontFamily: "Inter_400Regular", color: colors.tan300, textAlign: "center" }}>
+          Chapter not found.
+        </Text>
+      </View>
+    );
+  }
+
+  if (!readerPayload || !chapter || !books || !resolvedTranslationId) {
+    return (
+      <View className="flex-1 items-center justify-center gap-3" style={{ backgroundColor: rc.sceneSurface }}>
+        <ActivityIndicator color={colors.brown800} />
+        <Text style={{ fontFamily: "Inter_400Regular", color: colors.tan300, fontSize: 14 }}>
+          Loading chapter…
+        </Text>
+      </View>
+    );
+  }
+
+  const readerHeaderBookName =
+    books.find((b) => b.slug === (bookSlug ?? ""))?.name ?? chapter.bookName;
+  const readerHeaderTranslationId = isReaderContentCurrent
+    ? resolvedTranslationId
+    : requestedTranslationId;
+
+  const readerChapterPageHeading = (
+    <Animated.View
+      className="mb-3"
+      style={{ opacity: readerPageHeadingOpacityAnim }}
+      onLayout={(e) => {
+        const h = e.nativeEvent.layout.height;
+        setReaderPageHeadingHeight((prev) => (Math.abs(prev - h) > 1 ? h : prev));
+      }}
+    >
+      <Text
+        className="text-xs tracking-widest uppercase mb-1.5"
+        style={{ fontFamily: "Inter_400Regular", color: colors.gold }}
+      >
+        {readerHeaderTranslationId} ({TRANSLATION_LANGUAGE_BY_ID[readerHeaderTranslationId]})
+      </Text>
+      <Text
+        style={{ fontFamily: "Lora_400Regular", fontSize: 36, lineHeight: 42, color: colors.brown800 }}
+        numberOfLines={2}
+      >
+        {readerHeaderBookName}
+      </Text>
+      <Text
+        className="text-sm tracking-widest uppercase mt-0.5"
+        style={{ fontFamily: "Inter_400Regular", color: colors.tan200 }}
+      >
+        Chapter {chapterNumber}
+      </Text>
+    </Animated.View>
+  );
+
+  const { prevChapter, nextChapter } = chapterNav;
+
+  const readerOverlayOpen =
+    toolsMenuOpen ||
+    fontSettingsSheetOpen ||
+    readerDropdown != null ||
+    noteModalVisible ||
+    newEntrySheetOpen;
+  /**
+   * Do not tie chapter swipes to `isReaderContentCurrent`: after `setParams`, the route updates
+   * immediately but `readerPayload` is still the previous chapter until the async load finishes.
+   * That made `noop` pan handlers run so the next swipe did nothing (often read as “one swipe only”).
+   * `chapterNav` already uses URL params for neighbors while payload catches up.
+   */
+  const chapterSwipePanHandlers = (readerOverlayOpen ? noopChapterSwipePan : chapterSwipePan).panHandlers;
+
+  const hasVerseSelection = selectedVerses.length > 0;
+  const actionBarBottomPx = nativeTabFabOffsetPx(insets.bottom);
+  const newEntrySheetBottomPx = nativeTabSheetBottomInsetPx(insets.bottom, 10);
+  /**
+   * Book sheet uses `FullWindowOverlay` over the tab scene; the visible native tab bar can read
+   * taller than `nativeTabSheetBottomInsetPx`’s iOS estimate alone — add a small iOS nudge so the
+   * sheet clears the bar plus the requested gap (`5`).
+   */
+  const readerBookSheetBottomPx =
+    nativeTabSheetBottomInsetPx(insets.bottom, 5) + Platform.select({ ios: 12, default: 0 });
+  /**
+   * Extra gap above the tab bar so the sheet clears the floating tab pill. Phones use a larger lift;
+   * tablets need less or the in-card layout leaves a big empty band above the save row.
+   */
+  const readerNewEntrySheetBottomLiftPx = isTabletLayout(windowWidth, windowHeight) ? 12 : 50;
+  const newEntrySheetTopPx = insets.top + 8;
+  const selectionBannerTopPx =
+    Math.max(insets.top, 12) + 4 + 30 + (isTabletLayout(windowWidth, windowHeight) ? 20 : 0);
+  const copyToastTopPx = selectionBannerTopPx + (hasVerseSelection ? 42 : 36);
+
+  const screenW = windowWidth;
+  /** Horizontal gap between sheet card and window edge (matches journal reader sheet). */
+  const readerBookSheetScreenEdgePad = 2;
+  const readerBookSheetContentW =
+    screenW - (insets.left + readerBookSheetScreenEdgePad) - (insets.right + readerBookSheetScreenEdgePad);
+  const readerBookSheetPad = 16;
+  const readerBookGridGap = 8;
+  const readerBookGridCellW =
+    (readerBookSheetContentW - readerBookSheetPad * 2 - readerBookGridGap * 2) / 3;
+  const readerChapterCols = 5;
+  const readerChapterGridCellW =
+    (readerBookSheetContentW - readerBookSheetPad * 2 - readerBookGridGap * (readerChapterCols - 1)) /
+    readerChapterCols;
+  const newEntrySheetHorizontalInset = insets.left + 2;
+  const newEntrySheetWidth = Math.min(
+    windowWidth - newEntrySheetHorizontalInset * 2,
+    isTabletLayout(windowWidth, windowHeight)
+      ? TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX
+      : windowWidth - newEntrySheetHorizontalInset * 2,
+  );
+  const newEntrySheetLeft = Math.max(newEntrySheetHorizontalInset, (windowWidth - newEntrySheetWidth) / 2);
+  const readerDropdownMaxW = Math.min(340, screenW - 24);
+  const isTabletReaderLayout = isTabletLayout(windowWidth, windowHeight);
+  const fontSettingsScale = isTabletReaderLayout ? 1.5 : 1;
+  const fontSettingsPopupMaxW = Math.min(isTabletReaderLayout ? 510 : 340, screenW - 24);
+  const fontSettingsPopupMaxH = Dimensions.get("window").height * (isTabletReaderLayout ? 0.7 : 0.78);
+  const fontSettingsPopupPadH = 16 * fontSettingsScale;
+  const fontSettingsPopupPadTop = READER_FONT_CARD_PADDING_TOP_PX * fontSettingsScale;
+  const fontSettingsPopupPadBottom = 12 * fontSettingsScale;
+  const fontSettingsSectionLabelSize = 10 * fontSettingsScale;
+  const fontSettingsAlignIconSize = 22 * fontSettingsScale;
+  const readerDropdownTop =
+    dropdownAnchor != null ? dropdownAnchor.y + dropdownAnchor.height + 8 : 0;
+  const readerDropdownLeft =
+    readerDropdown === "translation" || readerDropdown === "theme"
+      ? Math.max(12, (screenW - readerDropdownMaxW) / 2)
+      : dropdownAnchor != null
+        ? Math.min(
+            Math.max(12, dropdownAnchor.x + dropdownAnchor.width - readerDropdownMaxW),
+            screenW - readerDropdownMaxW - 12,
+          )
+        : 0;
+  const selectionBannerCloseIconColor =
+    themeId === "dark" || themeId === "night" || themeId === "mono" ? "#ffffff" : rc.selectionText;
+
+  /** Keep below status bar / notch: Modal is `statusBarTranslucent` and the menu slides up by `READER_MENU_SLIDE_FROM_PX`. */
+  const settingsPopupMinTop = insets.top + 8 + READER_MENU_SLIDE_FROM_PX;
+  const settingsPopupTop =
+    settingsMenuAnchor != null
+      ? Math.max(settingsMenuAnchor.y + settingsMenuAnchor.height + 8, settingsPopupMinTop)
+      : 0;
+  const settingsPopupLeft =
+    settingsMenuAnchor != null
+      ? Math.max(
+          12,
+          Math.min(
+            settingsMenuAnchor.x + settingsMenuAnchor.width - READER_TOOLS_POPUP_MIN_W,
+            screenW - READER_TOOLS_POPUP_MIN_W - 12,
+          ),
+        )
+      : 0;
+  const settingsMutedTextColor = themeId === "spectrum" ? colors.brown600 : colors.tan200;
+
+  const readerSettingsToolsRow = (
+    <View ref={settingsCogRef} collapsable={false} className="h-11 w-11 items-center justify-center">
+      <Pressable
+        className="h-11 w-11 items-center justify-center rounded-full"
+        hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+        onPress={toggleToolsMenu}
+        accessibilityRole="button"
+        accessibilityLabel={toolsMenuOpen ? "Close reader tools" : "Reader settings"}
+        accessibilityState={{ expanded: toolsMenuOpen }}
+      >
+        <View className="h-6 w-6 items-center justify-center" style={{ transform: [{ translateX: 2 }, { translateY: -4 }] }}>
+          <ReaderSettingsCogIcon size={26} color={colors.brown800} />
+        </View>
+      </Pressable>
+    </View>
+  );
+
+  const readerHeaderBookButton = (
+    <View ref={bookFanRef} collapsable={false} className="h-11 w-11 items-center justify-center">
+      <Pressable
+        className="h-11 w-11 items-center justify-center rounded-full"
+        hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+        onPress={openBookTools}
+        accessibilityRole="button"
+        accessibilityLabel={readerDropdown === "book" ? "Close book list" : "Choose a Bible book"}
+        accessibilityState={{ selected: readerDropdown === "book" }}
+      >
+        <View className="h-6 w-6 items-center justify-center" style={{ transform: [{ translateY: -4 }] }}>
+          <BibleBookIcon
+            size={21}
+            color={readerDropdown === "book" ? colors.gold : colors.brown800}
+          />
+        </View>
+      </Pressable>
+    </View>
+  );
+
+  const readerHeaderToolsGroup = (
+    <View
+      className="flex-row items-center rounded-full"
+      style={{
+        height: 44,
+        width: Platform.OS === "ios" ? 92 : undefined,
+        justifyContent: "space-evenly",
+        paddingHorizontal: 0,
+        gap: 0,
+        backgroundColor: "transparent",
+        borderWidth: 0,
+        marginRight: 0,
+      }}
+    >
+      {readerHeaderBookButton}
+      {readerSettingsToolsRow}
+    </View>
+  );
+
+  const readerAndroidTopToolsTopPx = Math.max(insets.top, 8) + 2;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: rc.sceneSurface }}>
+      <Stack.Screen
+        options={{
+          headerShown: Platform.OS === "ios" ? readerDropdown !== "book" : false,
+          /**
+           * iOS: no custom header background — keeps `headerTransparent` so scrolling text shows through.
+           * Android: opaque fill from `57f2fe3` avoids white flashes under the native stack header when params update.
+           */
+          ...(Platform.OS !== "ios"
+            ? {
+                headerBackground: () => (
+                  <View
+                    pointerEvents="none"
+                    style={[StyleSheet.absoluteFill, { backgroundColor: rc.sceneSurface }]}
+                  />
+                ),
+              }
+            : {}),
+          headerTitle: () => (
+            <Animated.View pointerEvents="none" style={{ opacity: readerHeaderTitleOpacityAnim }}>
+              <View
+                className="flex-row items-baseline justify-center"
+                style={{
+                  maxWidth: screenW * 0.42,
+                  flexShrink: 1,
+                  paddingTop: 2,
+                  paddingBottom: 2,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: "Inter_500Medium",
+                    fontSize: READER_HEADER_TITLE_MAIN_PX,
+                    lineHeight: Math.ceil(READER_HEADER_TITLE_MAIN_PX * 1.25),
+                    color: colors.brown800,
+                  }}
+                  numberOfLines={1}
+                >
+                  {readerHeaderBookName} {chapterNumber}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: "Inter_400Regular",
+                    fontSize: READER_HEADER_TITLE_TRANS_PX,
+                    lineHeight: Math.ceil(READER_HEADER_TITLE_TRANS_PX * 1.25),
+                    color: colors.gold,
+                  }}
+                  numberOfLines={1}
+                >{` (${readerHeaderTranslationId})`}</Text>
+              </View>
+            </Animated.View>
+          ),
+          headerTitleAlign: "center",
+          headerLeft: () => null,
+          headerRight: Platform.OS === "ios" ? () => readerHeaderToolsGroup : undefined,
+          headerBackVisible: false,
+          headerShadowVisible: false,
+          headerStyle: {
+            backgroundColor: "transparent",
+            borderBottomWidth: 0,
+            elevation: 0,
+            shadowOpacity: 0,
+          } as { backgroundColor: string },
+          headerTintColor: colors.brown800,
+          headerTransparent: Platform.OS === "ios",
+        }}
+      />
+
+      {Platform.OS === "android" ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: "absolute",
+            top: readerAndroidTopToolsTopPx,
+            right: Math.max(insets.right, 10),
+            zIndex: 30,
+            elevation: 30,
+          }}
+        >
+          {readerHeaderToolsGroup}
+        </View>
+      ) : null}
+
+      <AnimatedReaderChapterFlashList
+        ref={readerScrollRef}
+        {...chapterSwipePanHandlers}
+        {...({ estimatedItemSize: readerVerseEstimatedItemSize } as Record<string, unknown>)}
+        className="flex-1"
+        style={{ backgroundColor: rc.sceneSurface }}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: readerScrollYAnim } } }],
+          { useNativeDriver: true },
+        )}
+        onScrollBeginDrag={onReaderScrollBeginDrag}
+        data={verseFlashListDataForList}
+        renderItem={renderReaderVerseFlashItem}
+        keyExtractor={readerVerseFlashKeyExtractor}
+        extraData={flashListExtraData}
+        getItemType={(item) => item.kind}
+        numColumns={readerTabletLandscapeTwoColumn ? 2 : 1}
+        ListHeaderComponent={() => (
+          <Pressable
+            onPress={dismissReaderChromeFromBackgroundPress}
+            android_ripple={null}
+            accessible={false}
+          >
+            {readerChapterPageHeading}
+          </Pressable>
+        )}
+        ListFooterComponent={readerChapterFlashListFooter}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingLeft: 10,
+          paddingRight: 15,
+          paddingTop: 94,
+          paddingBottom: hasVerseSelection ? actionBarBottomPx + (actionBarMode === "highlight" ? 112 : 88) : 96,
+        }}
+      />
+
+      {hasVerseSelection ? (
+        <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: 50 }]}>
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: "absolute",
+              top: selectionBannerTopPx,
+              left: 0,
+              right: 0,
+              alignItems: "center",
+              paddingHorizontal: 16,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: rc.selectionBackground,
+                borderRadius: 999,
+                paddingLeft: 12,
+                paddingRight: 4,
+                paddingVertical: 4,
+                maxWidth: "100%",
+                shadowColor: rc.popoverShadow,
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.18,
+                shadowRadius: 10,
+                elevation: 4,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "Inter_400Regular",
+                  fontSize: 11,
+                  color: rc.selectionText,
+                  flexShrink: 1,
+                  paddingVertical: 2,
+                }}
+                numberOfLines={1}
+              >
+                {selectedVerses.length}{" "}
+                {selectedVerses.length === 1 ? "verse selected" : "verses selected"}
+              </Text>
+              <TouchableOpacity
+                onPress={clearVerseSelection}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Clear verse selection"
+                className="h-7 w-7 rounded-full items-center justify-center"
+              >
+                <Text style={{ color: selectionBannerCloseIconColor, fontSize: 20, lineHeight: 20 }}>×</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {copyToastVisible ? (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 51 }]}>
+          <View
+            style={{
+              position: "absolute",
+              top: copyToastTopPx,
+              left: 0,
+              right: 0,
+              alignItems: "center",
+              paddingHorizontal: 16,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                backgroundColor: colors.brown800,
+                borderRadius: 999,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                shadowColor: rc.popoverShadow,
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
+            >
+              <Text style={{ color: rc.selectionText, fontSize: 15 }}>✓</Text>
+              <Text
+                style={{
+                  fontFamily: "Inter_500Medium",
+                  fontSize: 12,
+                  color: rc.selectionText,
+                }}
+              >
+                Copied
+              </Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {hasVerseSelection ? (
+        <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: 45 }]}>
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: "absolute",
+              bottom: actionBarBottomPx,
+              left: 0,
+              right: 0,
+              alignItems: "center",
+              paddingLeft: 16,
+              paddingRight: actionBarMode === "highlight" ? 4 : 16,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                flexWrap: "wrap",
+                rowGap: 10,
+                columnGap: 6,
+                backgroundColor: colors.parchmentMid,
+                borderRadius: 999,
+                paddingLeft: actionBarMode === "highlight" ? 12 : 10,
+                paddingRight: actionBarMode === "highlight" ? 12 : 10,
+                paddingVertical: actionBarMode === "highlight" ? 10 : 6,
+                borderWidth: 1,
+                borderColor: colors.borderSolid,
+                shadowColor: "#242423",
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+                elevation: 4,
+                maxWidth: "100%",
+              }}
+            >
+              {actionBarMode === "highlight" ? (
+                <>
+                  <TouchableOpacity
+                    onPress={() => setActionBarMode("default")}
+                    accessibilityLabel="Back from highlight"
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      borderWidth: 1,
+                      borderColor: colors.borderSolid,
+                      borderRadius: 999,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={{ fontFamily: "Inter_400Regular", color: colors.tan300 }}>←</Text>
+                    <Text style={{ fontFamily: "Inter_500Medium", color: colors.brown800 }}>Back</Text>
+                  </TouchableOpacity>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    {highlightColorOptions.map((opt) => {
+                      const picked = pickedHighlightColor === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          onPress={() => setPickedHighlightColor(opt.id)}
+                          accessibilityLabel={`Use ${opt.id} highlight`}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 14,
+                            backgroundColor: opt.swatch,
+                            borderWidth: picked ? 3 : 1,
+                            borderColor: picked ? opt.ring : "rgba(0,0,0,0.06)",
+                          }}
+                        />
+                      );
+                    })}
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
+                    <TouchableOpacity
+                      onPress={removeHighlightsFromSelection}
+                      accessibilityLabel="Remove highlight"
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    >
+                      <Text style={{ fontFamily: "Inter_400Regular", color: colors.tan300 }}>Remove</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={applyPickedHighlightToSelection}
+                      accessibilityLabel="Apply highlight"
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: "Inter_500Medium",
+                          color: colors.brown800,
+                          fontWeight: "600",
+                        }}
+                      >
+                        Apply
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const first = selectedVerses[0];
+                      const existing = first != null ? highlights[first] : undefined;
+                      if (existing) setPickedHighlightColor(existing);
+                      setActionBarMode("highlight");
+                    }}
+                    accessibilityLabel="Highlight"
+                    className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                    activeOpacity={0.7}
+                  >
+                    <ReaderHighlightIcon color={rc.actionIconMuted} size={22} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      void copySelectedVerses();
+                    }}
+                    accessibilityLabel="Copy"
+                    className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                    activeOpacity={0.7}
+                  >
+                    <ReaderCopyIcon color={rc.actionIconMuted} size={22} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={openNoteForSelection}
+                    accessibilityLabel="Note"
+                    className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                    activeOpacity={0.7}
+                  >
+                    <ReaderNoteIcon color={rc.actionIconMuted} size={22} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={openJournalFromSelection}
+                    accessibilityLabel="New journal entry from selection"
+                    className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                    style={{ backgroundColor: colors.brown800 }}
+                    activeOpacity={0.85}
+                  >
+                    <ReaderJournalIcon color={rc.selectionText} size={22} />
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      <Modal
+        visible={newEntrySheetOpen}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={requestCloseReaderNewEntrySheet}
+      >
+        <View pointerEvents="box-none" style={{ flex: 1 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss new entry"
+            onPress={requestCloseReaderNewEntrySheet}
+            style={[StyleSheet.absoluteFill, { backgroundColor: bundle.journal.newEntryRouteScrim }]}
+          />
+          <Animated.View
+            pointerEvents="box-none"
+            style={{
+              position: "absolute",
+              left: newEntrySheetLeft,
+              width: newEntrySheetWidth,
+              top: newEntrySheetTopPx,
+              bottom: newEntrySheetBottomPx + readerNewEntrySheetBottomLiftPx,
+              opacity: newEntrySheetOpacity,
+              transform: [{ translateY: newEntrySheetTranslate }],
+            }}
+          >
+            <View style={{ flex: 1, minHeight: 0 }}>
+              <View
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  borderRadius: 24,
+                  borderWidth: 1,
+                  borderColor: bundle.journal.newEntrySheetBorder,
+                  backgroundColor: bundle.journal.newEntrySheetBackground,
+                  overflow: "hidden",
+                  shadowColor: rc.popoverShadow,
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.14,
+                  shadowRadius: 16,
+                  elevation: 10,
+                }}
+              >
+                <View
+                  {...newEntryHandlePanResponder.panHandlers}
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingTop: 6,
+                    paddingBottom: 4,
+                    backgroundColor: bundle.journal.newEntryDragAreaBackground,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 56,
+                      height: 6,
+                      borderRadius: 999,
+                      backgroundColor: "rgba(123,106,86,0.35)",
+                    }}
+                  />
+                </View>
+                <View
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    paddingHorizontal: 0,
+                    paddingTop: 4,
+                    paddingBottom: 8,
+                  }}
+                >
+                  <JournalNewEntryForm
+                    ref={newEntryFormRef}
+                    key={newEntrySheetKey}
+                    initialParams={newEntryInitialParams ?? undefined}
+                    contentHorizontalPadding={10}
+                    readerNewEntryScrollable
+                    readerCardBottomLiftPx={readerNewEntrySheetBottomLiftPx}
+                    onDirtyChange={setNewEntryHasDraft}
+                    onAfterSave={() => {
+                      closeNewEntrySheet();
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={readerDropdown != null && readerDropdown !== "book"}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={closeReaderDropdown}
+      >
+        <View style={{ flex: 1 }}>
+          <Pressable
+            style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim }]}
+            onPress={closeReaderDropdown}
+            accessibilityLabel="Dismiss menu"
+          />
+          {readerDropdown != null && readerDropdown !== "book" && dropdownAnchor != null ? (
+            <Animated.View
+              pointerEvents="box-none"
+              style={{
+                position: "absolute",
+                top: readerDropdownTop,
+                left: readerDropdownLeft,
+                width: readerDropdownMaxW,
+                opacity: dropOpacityAnim,
+                transform: [
+                  {
+                    translateY: dropSlideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-READER_MENU_SLIDE_FROM_PX, 0],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <View
+                style={{
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: colors.borderSolid,
+                  backgroundColor: rc.popoverSurface,
+                  overflow: "hidden",
+                  shadowColor: rc.popoverShadow,
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.16,
+                  shadowRadius: 14,
+                  elevation: 8,
+                }}
+              >
+                {readerDropdown === "translation" ? (
+                  <View className="px-4 py-2.5" style={{ backgroundColor: rc.popoverSurface }}>
+                    <Text
+                      className="text-xs tracking-widest uppercase mb-2"
+                      style={{ fontFamily: "Inter_400Regular", color: settingsMutedTextColor }}
+                    >
+                      Translation
+                    </Text>
+                    <View className="gap-2">
+                      {TRANSLATION_IDS.map((id) => {
+                        const isActive = id === resolvedTranslationId;
+                        const label = formatTranslationDropdownLabel(id);
+                        const pad = { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 };
+                        return (
+                          <TouchableOpacity
+                            key={id}
+                            onPress={() => {
+                              hapticLightImpact();
+                              closeReaderDropdown();
+                              router.setParams({ translation: id });
+                            }}
+                            activeOpacity={0.75}
+                            accessibilityLabel={label}
+                            accessibilityState={{ selected: isActive }}
+                          >
+                            {isActive ? (
+                              <LinearGradient
+                                colors={rc.translationSelectedGradient}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={pad}
+                              >
+                                <Text
+                                  style={{ fontFamily: "Inter_400Regular", color: "#ffffff" }}
+                                >
+                                  {label}
+                                </Text>
+                              </LinearGradient>
+                            ) : (
+                              <View style={[pad, { backgroundColor: rc.popoverRow }]}>
+                                <Text style={{ fontFamily: "Inter_400Regular", color: settingsMutedTextColor }}>
+                                  {label}
+                                </Text>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : null}
+                {readerDropdown === "theme" ? (
+                  <View className="px-4 py-2.5" style={{ backgroundColor: rc.popoverSurface }}>
+                    <Text
+                      className="text-xs tracking-widest uppercase mb-2"
+                      style={{ fontFamily: "Inter_400Regular", color: settingsMutedTextColor }}
+                    >
+                      Theme
+                    </Text>
+                    <View className="gap-2">
+                      {mobileAppThemePickerOptions.map((opt) => {
+                        const isActive = opt.id === themeId;
+                        const pad = { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 };
+                        return (
+                          <TouchableOpacity
+                            key={opt.id}
+                            onPress={() => {
+                              hapticLightImpact();
+                              setThemeId(opt.id);
+                              closeReaderDropdown();
+                            }}
+                            activeOpacity={0.75}
+                            accessibilityLabel={opt.label}
+                            accessibilityState={{ selected: isActive }}
+                          >
+                            {isActive ? (
+                              <LinearGradient
+                                colors={rc.translationSelectedGradient}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={pad}
+                              >
+                                <View className="flex-row items-center gap-2.5">
+                                  <View
+                                    style={{
+                                      width: 14,
+                                      height: 14,
+                                      borderRadius: 7,
+                                      backgroundColor: opt.swatchColor,
+                                      borderWidth: 1,
+                                      borderColor: "rgba(255,255,255,0.45)",
+                                    }}
+                                  />
+                                  <Text style={{ fontFamily: "Inter_400Regular", color: "#ffffff" }}>
+                                    {opt.label}
+                                  </Text>
+                                </View>
+                              </LinearGradient>
+                            ) : (
+                              <View style={[pad, { backgroundColor: rc.popoverRow }]}>
+                                <View className="flex-row items-center gap-2.5">
+                                  <View
+                                    style={{
+                                      width: 14,
+                                      height: 14,
+                                      borderRadius: 7,
+                                      backgroundColor: opt.swatchColor,
+                                      borderWidth: 1,
+                                      borderColor: "rgba(0,0,0,0.12)",
+                                    }}
+                                  />
+                                  <Text style={{ fontFamily: "Inter_400Regular", color: settingsMutedTextColor }}>
+                                    {opt.label}
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            </Animated.View>
+          ) : null}
+        </View>
+      </Modal>
+
+      {readerDropdown === "book" ? (
+        <ReaderBookSheetWindowOverlay>
+          <View
+            style={[StyleSheet.absoluteFillObject, { zIndex: 9999, elevation: 32 }]}
+            pointerEvents="box-none"
+            accessibilityViewIsModal
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss book picker"
+              onPress={() => animateCloseBookSheet(0, 0)}
+              style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim }]}
+            />
+            <Animated.View
+              pointerEvents="box-none"
+              style={{
+                position: "absolute",
+                left: insets.left + readerBookSheetScreenEdgePad,
+                right: insets.right + readerBookSheetScreenEdgePad,
+                top: insets.top + 8,
+                bottom: readerBookSheetBottomPx,
+                transform: [{ translateY: bookSheetTranslateY }],
+              }}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  borderRadius: 20,
+                  backgroundColor: rc.sceneSurface,
+                  overflow: "hidden",
+                  shadowColor: rc.popoverShadow,
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.14,
+                  shadowRadius: 16,
+                  elevation: 10,
+                }}
+              >
+                <View style={{ flex: 1, minHeight: 0, paddingTop: 10 }}>
+              {/* Drag handle: swipe down to dismiss the sheet (same thresholds as journal sheet). */}
+              <View
+                {...bookSheetDragPanResponder.panHandlers}
+                style={{
+                  width: "100%",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  paddingTop: 0,
+                  paddingBottom: 5,
+                }}
+                accessibilityLabel="Close book picker"
+                accessibilityHint="Swipe down to return to the reader without changing book or chapter"
+              >
+                <View
+                  pointerEvents="none"
+                  style={{
+                    width: 40,
+                    height: 5,
+                    borderRadius: 3,
+                    backgroundColor: "rgba(0,0,0,0.22)",
+                  }}
+                />
+              </View>
+            {bookPickerStep === "books" ? (
+              <>
+                <View style={{ paddingHorizontal: readerBookSheetPad, paddingTop: 0, paddingBottom: 6 }}>
+                  <View style={{ minHeight: 48, justifyContent: "center", zIndex: 1 }}>
+                    <TouchableOpacity
+                      onPress={() => setBookViewMenuOpen((o) => !o)}
+                      delayPressIn={0}
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        minWidth: 48,
+                        minHeight: 44,
+                        paddingLeft: 10,
+                        paddingRight: 16,
+                        zIndex: 10,
+                        elevation: 10,
+                      }}
+                      /* Avoid a tall bottom hitSlop: it overlaps the book grid ScrollView and the OS
+                       * waits to disambiguate scroll vs tap, which feels like lag or missed taps. */
+                      hitSlop={{ top: 10, bottom: 4, left: 8, right: 8 }}
+                      accessibilityLabel="Choose book list view"
+                      accessibilityState={{ expanded: bookViewMenuOpen }}
+                    >
+                      <FilterListIcon size={22} color={colors.gold} />
+                    </TouchableOpacity>
+                    <Text
+                      className="text-[11px] tracking-widest uppercase"
+                      style={{ fontFamily: "Inter_400Regular", textAlign: "center", color: colors.brown800 }}
+                    >
+                      SELECT A BOOK
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      fontFamily: "Inter_400Regular",
+                      fontSize: 10,
+                      letterSpacing: 0.8,
+                      color: colors.gold,
+                      textAlign: "center",
+                      marginTop: 2,
+                    }}
+                  >
+                    {activeBookViewLabel}
+                  </Text>
+                </View>
+                <ScrollView
+                  key={`${bookSelectorViewMode}-${selectorTestamentTab}`}
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{
+                    paddingHorizontal: readerBookSheetPad,
+                    paddingBottom: 24,
+                  }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {bookSelectorViewMode === "grid"
+                    ? gridSectionsForPicker.map((section) => {
+                        if (!section.items.length) return null;
+                        return (
+                          <View key={section.id} style={{ marginBottom: 18 }}>
+                            <Text
+                              style={{
+                                fontFamily: "Inter_400Regular",
+                                fontSize: 10,
+                                letterSpacing: 2.2,
+                                color: colors.gold,
+                                marginBottom: 8,
+                                paddingHorizontal: 4,
+                              }}
+                            >
+                              {section.label}
+                            </Text>
+                            <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                              {section.items.map((b, index) => {
+                                const isCurrentBook = b.slug === chapter.bookSlug;
+                                const mr = index % 3 === 2 ? 0 : readerBookGridGap;
+                                return (
+                                  <TouchableOpacity
+                                    key={b.slug}
+                                    onPress={() => {
+                                      hapticLightImpact();
+                                      setBookPickerBook(b);
+                                      setBookPickerStep("chapters");
+                                    }}
+                                    style={{
+                                      width: readerBookGridCellW,
+                                      marginRight: mr,
+                                      marginBottom: readerBookGridGap,
+                                    }}
+                                    activeOpacity={0.75}
+                                    accessibilityLabel={`Choose chapter for ${b.name}`}
+                                  >
+                                    <View
+                                      style={{
+                                        borderRadius: 20,
+                                        overflow: "hidden",
+                                        borderWidth: isCurrentBook ? 0 : 2,
+                                        borderColor: "#ffffff",
+                                      }}
+                                    >
+                                      {isCurrentBook ? (
+                                        <LinearGradient
+                                          colors={rc.translationSelectedGradient}
+                                          start={{ x: 0, y: 0 }}
+                                          end={{ x: 1, y: 1 }}
+                                          style={{
+                                            paddingVertical: 8,
+                                            paddingHorizontal: 6,
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                          }}
+                                        >
+                                          <Text
+                                            numberOfLines={1}
+                                            style={{
+                                              fontFamily: "Lora_400Regular",
+                                              fontSize: 16,
+                                              color: rc.selectionText,
+                                              textAlign: "center",
+                                            }}
+                                          >
+                                            {b.name}
+                                          </Text>
+                                        </LinearGradient>
+                                      ) : (
+                                        <View
+                                          style={{
+                                            paddingVertical: 8,
+                                            paddingHorizontal: 6,
+                                            backgroundColor: "#ffffff",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                          }}
+                                        >
+                                          <Text
+                                            numberOfLines={1}
+                                            style={{
+                                              fontFamily: "Lora_400Regular",
+                                              fontSize: 16,
+                                              color: colors.brown800,
+                                              textAlign: "center",
+                                            }}
+                                          >
+                                            {b.name}
+                                          </Text>
+                                        </View>
+                                      )}
+                                    </View>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        );
+                      })
+                    : null}
+
+                  {bookSelectorViewMode === "az"
+                    ? azSortedBooks.map((b) => {
+                        const isCurrentBook = b.slug === chapter.bookSlug;
+                        const rowPad = {
+                          flexDirection: "row" as const,
+                          alignItems: "center" as const,
+                          justifyContent: "space-between" as const,
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                        };
+                        return (
+                          <TouchableOpacity
+                            key={b.slug}
+                            onPress={() => {
+                              hapticLightImpact();
+                              setBookPickerBook(b);
+                              setBookPickerStep("chapters");
+                            }}
+                            style={{ marginBottom: readerBookGridGap }}
+                            activeOpacity={0.75}
+                            accessibilityLabel={`Choose chapter for ${b.name}`}
+                          >
+                            <View
+                              style={{
+                                borderRadius: 20,
+                                overflow: "hidden",
+                                borderWidth: isCurrentBook ? 0 : 2,
+                                borderColor: "#ffffff",
+                              }}
+                            >
+                              {isCurrentBook ? (
+                                <LinearGradient
+                                  colors={rc.translationSelectedGradient}
+                                  start={{ x: 0, y: 0 }}
+                                  end={{ x: 1, y: 1 }}
+                                  style={rowPad}
+                                >
+                                  <Text
+                                    style={{
+                                      fontFamily: "Lora_400Regular",
+                                      fontSize: 18,
+                                      color: rc.selectionText,
+                                      flexShrink: 1,
+                                    }}
+                                  >
+                                    {b.name}
+                                  </Text>
+                                  <View
+                                    style={{
+                                      borderRadius: 999,
+                                      backgroundColor: "rgba(255,255,255,0.12)",
+                                      paddingHorizontal: 6,
+                                      paddingVertical: 2,
+                                    }}
+                                  >
+                                    <Text
+                                      style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.gold }}
+                                    >
+                                      {b.chapterCount} ch
+                                    </Text>
+                                  </View>
+                                </LinearGradient>
+                              ) : (
+                                <View style={[rowPad, { backgroundColor: "#ffffff" }]}>
+                                <Text
+                                  style={{
+                                    fontFamily: "Lora_400Regular",
+                                    fontSize: 18,
+                                    color: colors.brown800,
+                                    flexShrink: 1,
+                                  }}
+                                >
+                                  {b.name}
+                                </Text>
+                                <View
+                                  style={{
+                                    borderRadius: 999,
+                                    backgroundColor: "rgba(0,0,0,0.05)",
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 2,
+                                  }}
+                                >
+                                  <Text
+                                    style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.gold }}
+                                  >
+                                    {b.chapterCount} ch
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })
+                    : null}
+
+                  {bookSelectorViewMode === "testament"
+                    ? (selectorTestamentTab === "old"
+                        ? oldTestamentBooks
+                        : newTestamentBooks
+                      ).map(
+                        (b) => {
+                          const isCurrentBook = b.slug === chapter.bookSlug;
+                          const genre = BOOK_GENRE_BY_SLUG[b.slug] ?? "Book";
+                          const testamentRowPad = {
+                            flexDirection: "row" as const,
+                            alignItems: "center" as const,
+                            justifyContent: "space-between" as const,
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                          };
+                          return (
+                            <TouchableOpacity
+                              key={b.slug}
+                              onPress={() => {
+                                hapticLightImpact();
+                                setBookPickerBook(b);
+                                setBookPickerStep("chapters");
+                              }}
+                              style={{ marginBottom: readerBookGridGap }}
+                              activeOpacity={0.75}
+                              accessibilityLabel={`Choose chapter for ${b.name}`}
+                            >
+                              <View
+                                style={{
+                                  borderRadius: 20,
+                                  overflow: "hidden",
+                                  borderWidth: isCurrentBook ? 0 : 2,
+                                  borderColor: "#ffffff",
+                                }}
+                              >
+                                {isCurrentBook ? (
+                                  <LinearGradient
+                                    colors={rc.translationSelectedGradient}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={testamentRowPad}
+                                  >
+                                    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                      <Text
+                                        numberOfLines={1}
+                                        style={{
+                                          fontFamily: "Lora_400Regular",
+                                          fontSize: 18,
+                                          color: rc.selectionText,
+                                          flexShrink: 1,
+                                        }}
+                                      >
+                                        {b.name}
+                                      </Text>
+                                      <View
+                                        style={{
+                                          borderRadius: 999,
+                                          backgroundColor: "rgba(255,255,255,0.12)",
+                                          paddingHorizontal: 6,
+                                          paddingVertical: 2,
+                                        }}
+                                      >
+                                        <Text
+                                          style={{
+                                            fontFamily: "Inter_400Regular",
+                                            fontSize: 10,
+                                            letterSpacing: 0.4,
+                                            color: colors.gold,
+                                          }}
+                                        >
+                                          {genre}
+                                        </Text>
+                                      </View>
+                                    </View>
+                                    <View
+                                      style={{
+                                        borderRadius: 999,
+                                        backgroundColor: "rgba(255,255,255,0.12)",
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 2,
+                                      }}
+                                    >
+                                      <Text
+                                        style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.gold }}
+                                      >
+                                        {b.chapterCount} ch
+                                      </Text>
+                                    </View>
+                                  </LinearGradient>
+                                ) : (
+                                  <View style={[testamentRowPad, { backgroundColor: "#ffffff" }]}>
+                                    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                      <Text
+                                        numberOfLines={1}
+                                        style={{
+                                          fontFamily: "Lora_400Regular",
+                                          fontSize: 18,
+                                          color: colors.brown800,
+                                          flexShrink: 1,
+                                        }}
+                                      >
+                                        {b.name}
+                                      </Text>
+                                      <View
+                                        style={{
+                                          borderRadius: 999,
+                                          backgroundColor: "rgba(0,0,0,0.05)",
+                                          paddingHorizontal: 6,
+                                          paddingVertical: 2,
+                                        }}
+                                      >
+                                        <Text
+                                          style={{
+                                            fontFamily: "Inter_400Regular",
+                                            fontSize: 10,
+                                            letterSpacing: 0.4,
+                                            color: colors.gold,
+                                          }}
+                                        >
+                                          {genre}
+                                        </Text>
+                                      </View>
+                                    </View>
+                                    <View
+                                      style={{
+                                        borderRadius: 999,
+                                        backgroundColor: "rgba(0,0,0,0.05)",
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 2,
+                                      }}
+                                    >
+                                      <Text
+                                        style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.gold }}
+                                      >
+                                        {b.chapterCount} ch
+                                      </Text>
+                                    </View>
+                                  </View>
+                                )}
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        },
+                      )
+                    : null}
+                </ScrollView>
+              </>
+            ) : bookPickerBook ? (
+              <View style={{ flex: 1, paddingHorizontal: readerBookSheetPad }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      hapticLightImpact();
+                      setBookPickerStep("books");
+                      setBookPickerBook(null);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel="Back to books"
+                  >
+                    <Text style={{ fontFamily: "Inter_500Medium", fontSize: 13, color: colors.gold }}>
+                      ← Books
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text
+                  style={{
+                    fontFamily: "Inter_400Regular",
+                    fontSize: 12,
+                    letterSpacing: 2.5,
+                    color: colors.gold,
+                    textAlign: "center",
+                  }}
+                >
+                  SELECT A CHAPTER
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: "Inter_400Regular",
+                    fontSize: 12,
+                    letterSpacing: 1.8,
+                    color: colors.brown800,
+                    textAlign: "center",
+                    marginTop: 6,
+                    marginBottom: 18,
+                  }}
+                >
+                  {bookPickerBook.name.toUpperCase()}
+                </Text>
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingBottom: 20, flexDirection: "row", flexWrap: "wrap" }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {Array.from({ length: bookPickerBook.chapterCount }, (_, i) => i + 1).map((chNum, index) => {
+                    const isCurrent =
+                      bookPickerBook.slug === chapter.bookSlug && chNum === chapter.chapterNumber;
+                    const mr = index % readerChapterCols === readerChapterCols - 1 ? 0 : readerBookGridGap;
+                    return (
+                      <TouchableOpacity
+                        key={chNum}
+                        onPress={() => {
+                          hapticLightImpact();
+                          closeReaderDropdown();
+                          goToReaderChapter(bookPickerBook.slug, chNum, resolvedTranslationId);
+                        }}
+                        style={{
+                          width: readerChapterGridCellW,
+                          marginRight: mr,
+                          marginBottom: readerBookGridGap,
+                          borderRadius: 12,
+                          paddingVertical: 10,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "#ffffff",
+                          borderWidth: 2,
+                          borderColor: isCurrent ? colors.brown800 : "#ffffff",
+                        }}
+                        activeOpacity={0.75}
+                        accessibilityLabel={`Open ${bookPickerBook.name} chapter ${chNum}`}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: "Inter_500Medium",
+                            fontSize: 14,
+                            color: isCurrent ? colors.gold : colors.brown800,
+                          }}
+                        >
+                          {chNum}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : null}
+            </View>
+          {bookViewMenuOpen && bookPickerStep === "books" ? (
+            <View
+              pointerEvents="box-none"
+              style={[StyleSheet.absoluteFillObject, { zIndex: 300 }]}
+              collapsable={false}
+            >
+              <TouchableWithoutFeedback
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss view options"
+                onPress={() => setBookViewMenuOpen(false)}
+              >
+                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "transparent" }]} />
+              </TouchableWithoutFeedback>
+              <View
+                pointerEvents="auto"
+                style={{
+                  position: "absolute",
+                  top: 58,
+                  left: readerBookSheetPad,
+                  zIndex: 1,
+                  minWidth: 200,
+                  borderRadius: 12,
+                  backgroundColor: rc.sceneSurface,
+                  padding: 8,
+                  borderWidth: 1,
+                  borderColor: "#ffffff",
+                  shadowColor: rc.popoverShadow,
+                  shadowOffset: { width: 0, height: 10 },
+                  shadowOpacity: 0.22,
+                  shadowRadius: 5,
+                  elevation: 8,
+                }}
+              >
+                {(
+                  [
+                    { id: "grid" as const, label: "Grid" },
+                    { id: "az" as const, label: "A-Z" },
+                    { id: "old" as const, label: "Old Testament" },
+                    { id: "new" as const, label: "New Testament" },
+                  ] as const
+                ).map((option) => {
+                  const active =
+                    option.id === "grid"
+                      ? bookSelectorViewMode === "grid"
+                      : option.id === "az"
+                        ? bookSelectorViewMode === "az"
+                        : bookSelectorViewMode === "testament" && selectorTestamentTab === option.id;
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      onPress={() => applyBookSelectorView(option.id)}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: active ? 999 : 8,
+                        backgroundColor: active ? colors.brown800 : "transparent",
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: "Inter_400Regular",
+                          fontSize: 16,
+                          letterSpacing: 0.4,
+                          color: active ? "#f5e9d6" : colors.gold,
+                        }}
+                      >
+                        {option.label}
+                      </Text>
+                      {active ? <Text style={{ color: "#f5e9d6", fontSize: 16 }}>✓</Text> : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+              </View>
+            </Animated.View>
+          </View>
+        </ReaderBookSheetWindowOverlay>
+      ) : null}
+
+      <Modal
+        visible={fontSettingsSheetOpen}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={closeFontSettingsPopup}
+      >
+        <View style={{ flex: 1 }}>
+          <Pressable
+            style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim }]}
+            onPress={closeFontSettingsPopup}
+            accessibilityLabel="Dismiss font settings"
+          />
+          <View
+            pointerEvents="box-none"
+            style={{
+              flex: 1,
+              justifyContent: isTabletReaderLayout ? "flex-start" : "flex-end",
+              alignItems: "center",
+              paddingHorizontal: 12,
+              paddingTop: isTabletReaderLayout ? Math.max(insets.top, 12) + 16 : 0,
+              paddingBottom: isTabletReaderLayout ? 0 : nativeTabSheetBottomInsetPx(insets.bottom, 5),
+            }}
+          >
+            <Animated.View
+              style={{
+                width: fontSettingsPopupMaxW,
+                maxHeight: fontSettingsPopupMaxH,
+                opacity: fontSettingsPopupOpacityAnim,
+                transform: [
+                  {
+                    translateY: fontSettingsPopupSlideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-READER_MENU_SLIDE_FROM_PX, 0],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <View
+                style={{
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: colors.borderSolid,
+                  backgroundColor: rc.popoverSurface,
+                  overflow: "hidden",
+                  shadowColor: rc.popoverShadow,
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.16,
+                  shadowRadius: 14,
+                  elevation: 8,
+                }}
+              >
+                <ScrollView
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                  contentContainerStyle={{
+                    paddingHorizontal: fontSettingsPopupPadH,
+                    paddingTop: fontSettingsPopupPadTop,
+                    paddingBottom: fontSettingsPopupPadBottom,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: "Inter_400Regular",
+                      fontSize: fontSettingsSectionLabelSize,
+                      color: settingsMutedTextColor,
+                      marginBottom: 8 * fontSettingsScale,
+                    }}
+                  >
+                    Font size
+                  </Text>
+                  <ReaderFontSizeSlider
+                    variant="sheet"
+                    value={fontSizeScale}
+                    min={FONT_SCALE_MIN}
+                    max={FONT_SCALE_MAX}
+                    onValueChange={setFontSizeScalePersisted}
+                    accessibilityLabel={`Font size ${Math.round(fontSizeScale * 100)} percent`}
+                  />
+
+                  <Text
+                    style={{
+                      fontFamily: "Inter_400Regular",
+                      fontSize: fontSettingsSectionLabelSize,
+                      color: settingsMutedTextColor,
+                      marginTop: READER_FONT_CARD_GAP_AFTER_SIZE_SLIDER_PX * fontSettingsScale,
+                      marginBottom: 4 * fontSettingsScale,
+                    }}
+                  >
+                    Font spacing
+                  </Text>
+                  <ReaderFontSizeSlider
+                    variant="sheet"
+                    value={lineSpacingScale}
+                    min={LINE_SPACING_MIN}
+                    max={LINE_SPACING_MAX}
+                    onValueChange={setLineSpacingScalePersisted}
+                    accessibilityLabel={`Font spacing ${Math.round(lineSpacingScale * 100)} percent`}
+                  />
+
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "stretch",
+                      marginTop: READER_FONT_CARD_GAP_AFTER_SPACING_SLIDER_PX * fontSettingsScale,
+                      gap: 10 * fontSettingsScale,
+                    }}
+                  >
+                    {FONT_SHEET_ALIGN_ROW.map(({ align, Icon }) => {
+                      const isActive = verseTextAlign === align;
+                      const label = readerVerseTextAlignLabel(align);
+                      const cellStyle = {
+                        width: "100%" as const,
+                        minHeight: 48 * fontSettingsScale,
+                        alignItems: "center" as const,
+                        justifyContent: "center" as const,
+                        paddingVertical: 12 * fontSettingsScale,
+                        borderRadius: 12 * fontSettingsScale,
+                      };
+                      return (
+                        <TouchableOpacity
+                          key={align}
+                          onPress={() => setVerseTextAlignPersisted(align)}
+                          activeOpacity={0.75}
+                          accessibilityLabel={`Verse text ${label.toLowerCase()} aligned`}
+                          accessibilityState={{ selected: isActive }}
+                          style={{ flex: 1, minWidth: 0 }}
+                        >
+                          {isActive ? (
+                            <LinearGradient
+                              colors={rc.translationSelectedGradient}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={cellStyle}
+                            >
+                              <Icon size={fontSettingsAlignIconSize} color="#f5e9d6" />
+                            </LinearGradient>
+                          ) : (
+                            <View style={[cellStyle, { backgroundColor: rc.popoverRow }]}>
+                              <Icon size={fontSettingsAlignIconSize} color={colors.brown800} />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+            </Animated.View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={toolsMenuOpen}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={closeToolsMenu}
+      >
+        <View style={{ flex: 1 }}>
+          <Pressable
+            style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim }]}
+            onPress={closeToolsMenu}
+            accessibilityLabel="Dismiss reader tools"
+          />
+          {settingsMenuAnchor != null ? (
+            <Animated.View
+              pointerEvents="box-none"
+              style={{
+                position: "absolute",
+                top: settingsPopupTop,
+                left: settingsPopupLeft,
+                minWidth: READER_TOOLS_POPUP_MIN_W,
+                opacity: settingsPopupOpacityAnim,
+                transform: [
+                  {
+                    translateY: settingsPopupSlideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-READER_MENU_SLIDE_FROM_PX, 0],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  paddingHorizontal: READER_TOOLS_POPUP_PAD_H,
+                  paddingVertical: 8,
+                  gap: READER_TOOLS_POPUP_GAP,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: colors.borderSolid,
+                  backgroundColor: rc.popoverSurface,
+                  shadowColor: rc.popoverShadow,
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.16,
+                  shadowRadius: 14,
+                  elevation: 8,
+                }}
+              >
+                <View
+                  ref={fontSettingsFanRef}
+                  collapsable={false}
+                  style={{ flex: 1, minWidth: READER_TOOLS_COL_MIN_W, alignItems: "center" }}
+                >
+                  <TouchableOpacity
+                    className="items-center"
+                    style={{ width: "100%" }}
+                    onPress={openFontSettingsSheet}
+                    activeOpacity={0.65}
+                    accessibilityLabel="Font settings"
+                    accessibilityRole="button"
+                  >
+                    <View
+                      style={{
+                        height: READER_TOOLS_QUICK_ICON_ROW_H,
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <ReaderFontSettingsIcon size={READER_TOOLS_QUICK_ICON_SIZE} color={colors.brown800} />
+                    </View>
+                    <Text
+                      className="text-center"
+                      style={{
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 10,
+                        marginTop: 4,
+                        lineHeight: 13,
+                        color: settingsMutedTextColor,
+                      }}
+                      numberOfLines={2}
+                    >
+                      Font Settings
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View
+                  ref={translationFanRef}
+                  collapsable={false}
+                  style={{ flex: 1, minWidth: READER_TOOLS_COL_MIN_W, alignItems: "center" }}
+                >
+                  <TouchableOpacity
+                    className="items-center"
+                    style={{ width: "100%" }}
+                    onPress={() => {
+                      hapticLightImpact();
+                      measureAndSetDropdown(translationFanRef, "translation");
+                    }}
+                    activeOpacity={0.65}
+                    accessibilityLabel="Translation"
+                    accessibilityRole="button"
+                  >
+                    <View
+                      style={{
+                        height: READER_TOOLS_QUICK_ICON_ROW_H,
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <BookIcon size={READER_TOOLS_QUICK_ICON_SIZE} color={colors.brown800} />
+                    </View>
+                    <Text
+                      className="text-center"
+                      style={{
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 10,
+                        marginTop: 4,
+                        lineHeight: 13,
+                        color: settingsMutedTextColor,
+                      }}
+                      numberOfLines={2}
+                    >
+                      Translation
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View
+                  ref={themesFanRef}
+                  collapsable={false}
+                  style={{ flex: 1, minWidth: READER_TOOLS_COL_MIN_W, alignItems: "center" }}
+                >
+                  <TouchableOpacity
+                    className="items-center"
+                    style={{ width: "100%" }}
+                    onPress={() => {
+                      hapticLightImpact();
+                      measureAndSetDropdown(themesFanRef, "theme");
+                    }}
+                    activeOpacity={0.65}
+                    accessibilityLabel="Themes"
+                    accessibilityRole="button"
+                  >
+                    <View
+                      style={{
+                        height: READER_TOOLS_QUICK_ICON_ROW_H,
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <ReaderThemesPaletteIcon size={READER_TOOLS_QUICK_ICON_SIZE} color={colors.brown800} />
+                    </View>
+                    <Text
+                      className="text-center"
+                      style={{
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 10,
+                        marginTop: 4,
+                        lineHeight: 13,
+                        color: settingsMutedTextColor,
+                      }}
+                      numberOfLines={2}
+                    >
+                      Themes
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Animated.View>
+          ) : null}
+        </View>
+      </Modal>
+
+      <Modal visible={noteModalVisible} animationType="fade" transparent statusBarTranslucent>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={{ flex: 1, justifyContent: "center" }}>
+            <Pressable
+              style={[StyleSheet.absoluteFill, { backgroundColor: rc.denseModalScrim }]}
+              onPress={() => {
+                setNoteModalVisible(false);
+                setNoteTargetVerse(null);
+                setNoteDraft("");
+              }}
+            />
+            <View
+              style={{
+                marginHorizontal: 24,
+                backgroundColor: colors.parchmentMid,
+                borderRadius: 20,
+                padding: 20,
+                borderWidth: 1,
+                borderColor: colors.borderSolid,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "Lora_400Regular",
+                  fontSize: 18,
+                  color: colors.brown800,
+                  marginBottom: 12,
+                }}
+              >
+                Verse note
+                {noteTargetVerse != null ? ` · ${noteTargetVerse}` : ""}
+              </Text>
+              <TextInput
+                multiline
+                value={noteDraft}
+                onChangeText={setNoteDraft}
+                placeholder="Write a note…"
+                placeholderTextColor={colors.tan200}
+                style={{
+                  minHeight: 120,
+                  borderWidth: 1,
+                  borderColor: colors.borderSolid,
+                  borderRadius: 12,
+                  padding: 12,
+                  textAlignVertical: "top",
+                  fontFamily: "Inter_400Regular",
+                  fontSize: 16,
+                  color: colors.brown800,
+                  backgroundColor: colors.parchment,
+                }}
+              />
+              <View className="flex-row justify-end gap-3 mt-4">
+                <TouchableOpacity
+                  className="px-4 py-2 rounded-full"
+                  onPress={() => {
+                    setNoteModalVisible(false);
+                    setNoteTargetVerse(null);
+                    setNoteDraft("");
+                  }}
+                  accessibilityLabel="Cancel note"
+                >
+                  <Text style={{ fontFamily: "Inter_500Medium", color: colors.tan300 }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="px-5 py-2 rounded-full"
+                  style={{ backgroundColor: colors.parchmentDark }}
+                  onPress={saveNoteFromModal}
+                  accessibilityLabel="Save note"
+                >
+                  <Text style={{ fontFamily: "Inter_500Medium", color: colors.brown800 }}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+}

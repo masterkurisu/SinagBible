@@ -1,0 +1,16 @@
+{
+  "name": "@sinag-bible/tokens",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/tokens.ts",
+  "types": "./src/tokens.ts",
+  "exports": {
+    ".": "./src/tokens.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

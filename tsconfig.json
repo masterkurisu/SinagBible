@@ -1,0 +1,25 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": ["./*"],
+      "@sinag-bible/core": ["./packages/core"],
+      "@sinag-bible/core/*": ["./packages/core/src/*"],
+      "@sinag-bible/tokens": ["./packages/tokens"],
+      "@sinag-bible/tokens/*": ["./packages/tokens/src/*"],
+      "@sinag-bible/types": ["./packages/types"],
+      "@sinag-bible/types/*": ["./packages/types/src/*"],
+      "@sinag-bible/ui": ["./packages/ui"],
+      "@sinag-bible/ui/*": ["./packages/ui/src/*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "types/**/*.d.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
+  ]
+}
