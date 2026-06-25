@@ -6,6 +6,7 @@ import {
   Easing,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -94,7 +95,8 @@ export function CreditsSheet({
       /* User or OS blocked open; avoid uncaught promise in dev overlay */
     });
   }, []);
-  const showKofiSupport = KOFI_SUPPORT_URL.trim().length > 0;
+  const showKofiSupport =
+    Platform.OS !== "ios" && KOFI_SUPPORT_URL.trim().length > 0;
 
   return (
     <Modal
