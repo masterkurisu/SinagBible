@@ -38,10 +38,10 @@ export function ReaderHeader({
       <Stack.Screen
         options={{
           /**
-           * Keep the native header mounted on both platforms while reader overlays are shown.
-           * Toggling `headerShown` caused remount flicker; we fade chrome with `headerStyle.opacity` instead.
+           * iOS: native stack header + headerRight tools.
+           * Android: header hidden — tools are an in-screen overlay; native header intercepts taps there.
            */
-          headerShown: true,
+          headerShown: Platform.OS === "ios",
           /**
            * iOS: no custom header background — keeps `headerTransparent` so scrolling text shows through.
            * Android: opaque fill from `57f2fe3` avoids white flashes under the native stack header when params update.
@@ -99,7 +99,8 @@ export function ReaderHeader({
           ),
           headerTitleAlign: "center",
           headerLeft: () => null,
-          headerRight: () => readerHeaderToolsGroup,
+          /** Android: in-screen overlay (see reader chapter screen). iOS: native headerRight. */
+          headerRight: Platform.OS === "ios" ? () => readerHeaderToolsGroup : undefined,
           headerBackVisible: false,
           headerShadowVisible: false,
           headerStyle: {

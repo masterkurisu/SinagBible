@@ -92,7 +92,6 @@ import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
 import { hapticLightImpact, hapticSelection } from "@/lib/haptics";
 import { deleteAllUserData } from "@/lib/delete-my-data";
 import { LinearGradient } from "expo-linear-gradient";
-import { FullWindowOverlay } from "react-native-screens";
 import {
   buildReaderVerseFlashListData,
   readerVerseEstimatedFlashListItemSizePx,
@@ -2003,7 +2002,24 @@ export default function ReaderChapterScreen() {
     Platform.OS === "android" && toolsMenuOpen ? rc.selectionText : null;
   const readerHeaderToolsHidden = readerDropdown === "book" && !bookSheetExitAnimationStarted;
 
-  const readerSettingsToolsRow = (
+  const readerSettingsToolsRow =
+    Platform.OS === "android" ? (
+      <View collapsable={false} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+        <TouchableOpacity
+          onPress={toggleToolsMenu}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel={toolsMenuOpen ? "Close reader tools" : "Reader settings"}
+          accessibilityState={{ expanded: toolsMenuOpen }}
+          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+        >
+          <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", transform: [{ translateX: 2 }, { translateY: -4 }] }}>
+            <ReaderSettingsCogIcon size={26} color={androidMenuActiveHeaderIconColor ?? colors.brown800} />
+          </View>
+        </TouchableOpacity>
+      </View>
+    ) : (
     <View collapsable={false} className="h-11 w-11 items-center justify-center">
       <Pressable
         className="h-11 w-11 items-center justify-center rounded-full"
@@ -2018,9 +2034,32 @@ export default function ReaderChapterScreen() {
         </View>
       </Pressable>
     </View>
-  );
+    );
 
-  const readerHeaderBookButton = (
+  const readerHeaderBookButton =
+    Platform.OS === "android" ? (
+      <View ref={bookFanRef} collapsable={false} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+        <TouchableOpacity
+          onPress={openBookTools}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel={readerDropdown === "book" ? "Close book list" : "Choose a Bible book"}
+          accessibilityState={{ selected: readerDropdown === "book" }}
+          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+        >
+          <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", transform: [{ translateY: -4 }] }}>
+            <BibleBookIcon
+              size={21}
+              color={
+                androidMenuActiveHeaderIconColor ??
+                (readerDropdown === "book" ? colors.gold : colors.brown800)
+              }
+            />
+          </View>
+        </TouchableOpacity>
+      </View>
+    ) : (
     <View ref={bookFanRef} collapsable={false} className="h-11 w-11 items-center justify-center">
       <Pressable
         className="h-11 w-11 items-center justify-center rounded-full"
@@ -2041,14 +2080,14 @@ export default function ReaderChapterScreen() {
         </View>
       </Pressable>
     </View>
-  );
+    );
 
   const readerHeaderToolsGroup = (
     <View
       className="flex-row items-center rounded-full"
       style={{
         height: 44,
-        width: Platform.OS === "ios" ? 92 : undefined,
+        width: 92,
         justifyContent: "space-evenly",
         paddingHorizontal: 0,
         gap: 0,
@@ -2062,6 +2101,7 @@ export default function ReaderChapterScreen() {
     </View>
   );
 
+  /** Top of the Android in-screen tool pill (full-bleed layout — no native stack header). */
   const readerAndroidTopToolsTopPx = Math.max(insets.top, 8) + 2;
 
   /**
@@ -2396,6 +2436,24 @@ export default function ReaderChapterScreen() {
       ) : null}
 
       </Animated.View>
+
+      {Platform.OS === "android" && !readerHeaderToolsHidden ? (
+        <View
+          pointerEvents="box-none"
+          collapsable={false}
+          style={{
+            position: "absolute",
+            top: readerAndroidTopToolsTopPx,
+            right: Math.max(insets.right, 10),
+            zIndex: 100,
+            elevation: 100,
+          }}
+        >
+          <View pointerEvents="auto" collapsable={false}>
+            {readerHeaderToolsGroup}
+          </View>
+        </View>
+      ) : null}
 
       {hasVerseSelection ? (
         <Animated.View
