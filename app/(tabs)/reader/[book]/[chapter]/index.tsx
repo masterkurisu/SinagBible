@@ -1614,11 +1614,6 @@ export default function ReaderChapterScreen() {
     ],
   );
 
-  const stableVisualDataRef = useRef(stableVisualData);
-  useEffect(() => {
-    stableVisualDataRef.current = stableVisualData;
-  }, [stableVisualData]);
-
   const interactionData = useMemo(
     () => ({
       selectedVerseNumbers,
@@ -1630,11 +1625,16 @@ export default function ReaderChapterScreen() {
 
   type ReaderVerseInteractionData = typeof interactionData;
   type ReaderVerseStableVisualData = typeof stableVisualData;
+  const flashListExtraData = useMemo(
+    () => ({ interactionData, stableVisualData }),
+    [interactionData, stableVisualData],
+  );
+
   type ReaderVerseFlashRowProps = {
     item: Extract<ReaderVerseFlashItem, { kind: "verse" }>;
     index: number;
     interactionData: ReaderVerseInteractionData;
-    stableVisualDataRef: { current: ReaderVerseStableVisualData };
+    stableVisualData: ReaderVerseStableVisualData;
     readerTabletLandscapeTwoColumn: boolean;
     readerVersesOpacityAnim: Animated.Value;
     onVersePress: (verseNum: number) => void;
@@ -1648,14 +1648,13 @@ export default function ReaderChapterScreen() {
           item,
           index,
           interactionData,
-          stableVisualDataRef,
+          stableVisualData: vd,
           readerTabletLandscapeTwoColumn,
           readerVersesOpacityAnim,
           onVersePress,
           onVerseLongPress,
         }: ReaderVerseFlashRowProps) => {
           const verseNum = item.verseIndex + 1;
-          const vd = stableVisualDataRef.current;
           const twoColumnPaddingStyle =
             readerTabletLandscapeTwoColumn
               ? index % 2 === 0
@@ -1702,7 +1701,7 @@ export default function ReaderChapterScreen() {
           if (prevProps.readerVersesOpacityAnim !== nextProps.readerVersesOpacityAnim) return false;
           if (prevProps.onVersePress !== nextProps.onVersePress) return false;
           if (prevProps.onVerseLongPress !== nextProps.onVerseLongPress) return false;
-          if (prevProps.stableVisualDataRef !== nextProps.stableVisualDataRef) return false;
+          if (prevProps.stableVisualData !== nextProps.stableVisualData) return false;
 
           const verseNum = prevProps.item.verseIndex + 1;
           const prevSelected = prevProps.interactionData.selectedVerseNumbers.has(verseNum);
@@ -1738,7 +1737,7 @@ export default function ReaderChapterScreen() {
           item={item}
           index={index}
           interactionData={interactionData}
-          stableVisualDataRef={stableVisualDataRef}
+          stableVisualData={stableVisualData}
           readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
           readerVersesOpacityAnim={readerVersesOpacityAnim}
           onVersePress={handleVerseTap}
@@ -1749,7 +1748,7 @@ export default function ReaderChapterScreen() {
     [
       MemoizedReaderVerseFlashRow,
       interactionData,
-      stableVisualDataRef,
+      stableVisualData,
       readerVersesOpacityAnim,
       handleVerseTap,
       handleVerseLongPress,
@@ -2135,7 +2134,7 @@ export default function ReaderChapterScreen() {
         verseFlashListDataForList={verseFlashListDataForList}
         renderReaderVerseFlashItem={renderReaderVerseFlashItem}
         readerVerseFlashKeyExtractor={readerVerseFlashKeyExtractor}
-        flashListExtraData={interactionData}
+        flashListExtraData={flashListExtraData}
         readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
         listHeader={readerChapterPageHeading}
         readerChapterFlashListFooter={readerChapterFlashListFooter}
