@@ -108,7 +108,7 @@ import {
   type ReaderVerseFlashItem,
 } from "@/src/features/reader/useReaderGestures";
 import { useReaderSelection } from "@/src/features/reader/useReaderSelection";
-import { ReaderHeader } from "@/src/features/reader/ReaderHeader";
+import { ReaderHeader, READER_HEADER_TITLE_MAIN_PX, READER_HEADER_TITLE_TRANS_PX } from "@/src/features/reader/ReaderHeader";
 import {
   ReaderModals,
   ReaderMobileSettingsPanel,
@@ -2089,9 +2089,10 @@ export default function ReaderChapterScreen() {
         height: 44,
         width: 92,
         justifyContent: "space-evenly",
-        paddingHorizontal: 0,
+        paddingHorizontal: Platform.OS === "android" ? 2 : 0,
         gap: 0,
-        backgroundColor: "transparent",
+        backgroundColor:
+          Platform.OS === "android" ? (toolsMenuOpen ? "transparent" : rc.sceneSurface) : "transparent",
         borderWidth: 0,
         marginRight: 0,
       }}
@@ -2444,12 +2445,72 @@ export default function ReaderChapterScreen() {
           style={{
             position: "absolute",
             top: readerAndroidTopToolsTopPx,
+            left: Math.max(insets.left, 10),
             right: Math.max(insets.right, 10),
+            height: 44,
             zIndex: 100,
             elevation: 100,
           }}
         >
-          <View pointerEvents="auto" collapsable={false}>
+          {!toolsMenuOpen ? (
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: 0,
+              bottom: 0,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: readerHeaderTitleOpacityAnim,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: rc.sceneSurface,
+                borderRadius: 999,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                maxWidth: screenW * 0.42,
+              }}
+            >
+              <View className="flex-row items-baseline justify-center" style={{ flexShrink: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: "Inter_500Medium",
+                    fontSize: READER_HEADER_TITLE_MAIN_PX,
+                    lineHeight: Math.ceil(READER_HEADER_TITLE_MAIN_PX * 1.25),
+                    color: colors.brown800,
+                  }}
+                  numberOfLines={1}
+                >
+                  {readerHeaderBookName} {chapterNumber}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: "Inter_400Regular",
+                    fontSize: READER_HEADER_TITLE_TRANS_PX,
+                    lineHeight: Math.ceil(READER_HEADER_TITLE_TRANS_PX * 1.25),
+                    color: colors.gold,
+                  }}
+                  numberOfLines={1}
+                >{` (${readerHeaderTranslationId})`}</Text>
+              </View>
+            </View>
+          </Animated.View>
+          ) : null}
+          <View
+            pointerEvents="auto"
+            collapsable={false}
+            style={{
+              position: "absolute",
+              right: 0,
+              top: 0,
+              height: 44,
+              justifyContent: "center",
+            }}
+          >
             {readerHeaderToolsGroup}
           </View>
         </View>

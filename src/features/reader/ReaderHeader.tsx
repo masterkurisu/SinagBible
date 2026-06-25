@@ -3,8 +3,8 @@ import { Platform, StyleSheet, Text, View, Animated } from "react-native";
 import { Stack } from "expo-router";
 
 /** ~20% smaller than a typical ~17pt stack title; acronym another 20% smaller. */
-const READER_HEADER_TITLE_MAIN_PX = 17 * 0.8;
-const READER_HEADER_TITLE_TRANS_PX = READER_HEADER_TITLE_MAIN_PX * 0.8;
+export const READER_HEADER_TITLE_MAIN_PX = 17 * 0.8;
+export const READER_HEADER_TITLE_TRANS_PX = READER_HEADER_TITLE_MAIN_PX * 0.8;
 
 type ReaderHeaderProps = {
   /**
