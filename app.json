@@ -59,7 +59,7 @@
         "@sentry/react-native/expo",
         {
           "url": "https://sentry.io/",
-          "uploadSourceMaps": false
+          "disableAutoUpload": true
         }
       ]
     ],

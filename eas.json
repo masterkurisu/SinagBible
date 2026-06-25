@@ -8,12 +8,22 @@
       "node": "20.19.0",
       "pnpm": "10.32.1",
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
     },
     "preview": {
       "node": "20.19.0",
       "pnpm": "10.32.1",
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_USE_METRO_WORKSPACE_ROOT": "1",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "developmentClient": false,

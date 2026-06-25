@@ -83,6 +83,20 @@ def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
 
+// sentry.gradle hooks release bundles; disable uploads unless explicitly opted in.
+// uploadSourceMaps in app.json does not stop this Gradle task with a committed android/ folder.
+project.ext.shouldSentryAutoUploadGeneral = { ->
+    if (findProperty('sentryDisableAutoUpload') == 'true') return false
+    return System.getenv('SENTRY_DISABLE_AUTO_UPLOAD') != 'true'
+}
+project.ext.shouldSentryAutoUploadNative = { ->
+    if (findProperty('sentryDisableAutoUpload') == 'true') return false
+    return System.getenv('SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD') != 'true'
+}
+project.ext.shouldSentryAutoUpload = { ->
+    return shouldSentryAutoUploadGeneral() && shouldSentryAutoUploadNative()
+}
+
 android {
     ndkVersion rootProject.ext.ndkVersion
 
