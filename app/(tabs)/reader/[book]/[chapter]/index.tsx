@@ -437,14 +437,6 @@ export default function ReaderChapterScreen() {
   const [readerCreditsOpen, setReaderCreditsOpen] = useState(false);
   const [commentaryPanelOpen, setCommentaryPanelOpen] = useState(false);
   const mobileSettingsFollowUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const headerSettingsTapGuardRef = useRef(0);
-  const headerBookTapGuardRef = useRef(0);
-  const triggerHeaderButtonAction = useCallback((guardRef: { current: number }, action: () => void) => {
-    const now = Date.now();
-    if (now - guardRef.current < 120) return;
-    guardRef.current = now;
-    action();
-  }, []);
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
   const [readerDropdown, setReaderDropdown] = useState<ReaderToolsDropdown | null>(null);
   const [bookPickerStep, setBookPickerStep] = useState<"books" | "chapters">("books");
@@ -2010,14 +2002,14 @@ export default function ReaderChapterScreen() {
   const settingsMutedTextColor = themeId === "spectrum" ? colors.brown600 : colors.tan200;
   const androidMenuActiveHeaderIconColor =
     Platform.OS === "android" && toolsMenuOpen ? rc.selectionText : null;
+  const readerHeaderToolsHidden = readerDropdown === "book" && !bookSheetExitAnimationStarted;
 
   const readerSettingsToolsRow = (
     <View collapsable={false} className="h-11 w-11 items-center justify-center">
       <Pressable
         className="h-11 w-11 items-center justify-center rounded-full"
         hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-        onPressIn={() => triggerHeaderButtonAction(headerSettingsTapGuardRef, toggleToolsMenu)}
-        onPress={() => triggerHeaderButtonAction(headerSettingsTapGuardRef, toggleToolsMenu)}
+        onPress={toggleToolsMenu}
         accessibilityRole="button"
         accessibilityLabel={toolsMenuOpen ? "Close reader tools" : "Reader settings"}
         accessibilityState={{ expanded: toolsMenuOpen }}
@@ -2034,8 +2026,7 @@ export default function ReaderChapterScreen() {
       <Pressable
         className="h-11 w-11 items-center justify-center rounded-full"
         hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-        onPressIn={() => triggerHeaderButtonAction(headerBookTapGuardRef, openBookTools)}
-        onPress={() => triggerHeaderButtonAction(headerBookTapGuardRef, openBookTools)}
+        onPress={openBookTools}
         accessibilityRole="button"
         accessibilityLabel={readerDropdown === "book" ? "Close book list" : "Choose a Bible book"}
         accessibilityState={{ selected: readerDropdown === "book" }}
@@ -2119,7 +2110,7 @@ export default function ReaderChapterScreen() {
         }}
       >
       <ReaderHeader
-        readerHeaderChromeHidden={readerDropdown === "book" && !bookSheetExitAnimationStarted}
+        readerHeaderChromeHidden={readerHeaderToolsHidden}
         rc={rc}
         colors={colors}
         screenW={screenW}

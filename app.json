@@ -61,8 +61,7 @@
           "url": "https://sentry.io/",
           "uploadSourceMaps": false
         }
-      ],
-      "@sentry/react-native"
+      ]
     ],
     "experiments": {
       "typedRoutes": true

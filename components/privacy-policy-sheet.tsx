@@ -34,7 +34,7 @@ import { colors } from "@sinag-bible/ui";
  * `<PrivacyPolicySheet visible={open} onClose={() => setOpen(false)} />`
  */
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro asset module
-const privacyPolicyMdModule = require("../../../privacy_policy.md") as number;
+const privacyPolicyMdModule = require("../privacy_policy.md") as number;
 
 const UI_EMPHASIS_FONT = "Inter_500Medium" as const;
 

@@ -18,15 +18,15 @@
     "production": {
       "developmentClient": false,
       "env": {
-        "EXPO_USE_METRO_WORKSPACE_ROOT": "1"
+        "EXPO_USE_METRO_WORKSPACE_ROOT": "1",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "android": {
         "buildType": "app-bundle"
       },
       "node": "20.20.2",
       "pnpm": "10.32.1",
-      "autoIncrement": true,
-      "installCommand": "cd ../.. && pnpm install --frozen-lockfile"
+      "autoIncrement": true
     }
   },
   "submit": {

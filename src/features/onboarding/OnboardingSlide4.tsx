@@ -20,7 +20,7 @@ import { PRIVACY_POLICY_URL } from "@/lib/legal-urls";
 import { TermsOfServiceSheet } from "@/components/terms-of-service-sheet";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro asset module (repo root)
-const privacyPolicyMdModule = require("../../../../../privacy_policy.md") as number;
+const privacyPolicyMdModule = require("../../../privacy_policy.md") as number;
 
 const BG = "#FFFFFF";
 const STAGGER_MS = 100;
