@@ -10,8 +10,12 @@ export type { LocalJournalEntry };
 
 const STORAGE_KEY = "sinagbible_journal_entries";
 const SAMPLE_ENTRY_DISMISSED_KEY = "sinagbible_sample_journal_entry_dismissed";
-const DEFAULT_SAMPLE_ENTRY_ID = "local-sample-john-3-16";
+export const DEFAULT_SAMPLE_ENTRY_ID = "local-sample-john-3-16";
 const DEFAULT_SAMPLE_ENTRY_CREATED_AT = "2024-01-01T00:00:00.000Z";
+
+export function isSampleJournalEntry(id: string): boolean {
+  return id === DEFAULT_SAMPLE_ENTRY_ID;
+}
 
 function getDefaultSampleEntry(): LocalJournalEntry {
   return {
@@ -80,13 +84,22 @@ export async function refreshLocalEntriesCache(): Promise<LocalJournalEntry[]> {
   return getCachedLocalEntries();
 }
 
+function ensureSampleEntryIsImmutable(entries: LocalJournalEntry[]): LocalJournalEntry[] {
+  const defaultSample = getDefaultSampleEntry();
+  return entries.map((entry) =>
+    entry.id === DEFAULT_SAMPLE_ENTRY_ID
+      ? { ...defaultSample, is_favorite: entry.is_favorite ?? false }
+      : entry,
+  );
+}
+
 async function readEntries(): Promise<LocalJournalEntry[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return maybeWithSampleEntry([]);
     const parsed = JSON.parse(raw) as LocalJournalEntry[];
     if (!Array.isArray(parsed)) return maybeWithSampleEntry([]);
-    return maybeWithSampleEntry(parsed);
+    return maybeWithSampleEntry(ensureSampleEntryIsImmutable(parsed));
   } catch {
     return maybeWithSampleEntry([]);
   }
@@ -269,6 +282,10 @@ export async function updateLocalEntry(
   data: Partial<Omit<LocalJournalEntry, "id" | "created_at">>,
 ): Promise<void> {
   if (!id.startsWith("local-")) return;
+  if (isSampleJournalEntry(id)) {
+    const keys = Object.keys(data);
+    if (keys.length === 0 || keys.some((k) => k !== "is_favorite")) return;
+  }
   await enqueueStorageMutation((entries) => {
     const index = entries.findIndex((e) => e.id === id);
     if (index === -1) return entries;

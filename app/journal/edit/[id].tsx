@@ -19,7 +19,7 @@ import {
 } from "@/lib/journal-edit-bridge";
 import { resolveJournalEditRouteId } from "@/lib/journal-route-id";
 import { loadJournalEntryById, type MobileJournalListItem } from "@/lib/load-journal-entries";
-import { JOURNAL_LOCAL_STORAGE_USER_MESSAGE } from "@/lib/journal-local";
+import { isSampleJournalEntry, JOURNAL_LOCAL_STORAGE_USER_MESSAGE } from "@/lib/journal-local";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 
 function toEditDraft(item: MobileJournalListItem): JournalEditDraft {
@@ -158,6 +158,22 @@ export default function EditJournalEntryScreen() {
                 {storageAccessError
                   ? JOURNAL_LOCAL_STORAGE_USER_MESSAGE
                   : "This entry could not be loaded. It may have been removed."}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={() => router.back()}
+                className="mt-6 self-start rounded-full px-5 py-3"
+                style={{ backgroundColor: colors.parchmentDark }}
+              >
+                <Text style={{ fontFamily: "Inter_500Medium", color: colors.brown800 }}>Close</Text>
+              </Pressable>
+            </View>
+          ) : isSampleJournalEntry(entry.id) ? (
+            <View className="px-4 py-8">
+              <Text style={{ fontFamily: "Lora_400Regular", fontSize: 16, color: colors.tan300 }}>
+                This sample entry cannot be edited. Create your own journal entry to write and save
+                reflections.
               </Text>
               <Pressable
                 accessibilityRole="button"

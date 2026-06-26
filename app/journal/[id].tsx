@@ -28,7 +28,11 @@ import { setPendingJournalEditEntry } from "@/lib/journal-edit-bridge";
 import { resolveJournalEntryRouteId } from "@/lib/journal-route-id";
 import { loadJournalEntryById } from "@/lib/load-journal-entries";
 import type { MobileJournalListItem } from "@/lib/load-journal-entries";
-import { deleteLocalEntry, JOURNAL_LOCAL_STORAGE_USER_MESSAGE } from "@/lib/journal-local";
+import {
+  deleteLocalEntry,
+  isSampleJournalEntry,
+  JOURNAL_LOCAL_STORAGE_USER_MESSAGE,
+} from "@/lib/journal-local";
 import { hapticLightImpact } from "@/lib/haptics";
 import {
   getVersePreviewForTranslation,
@@ -942,46 +946,48 @@ export default function JournalEntryScreen() {
               </TouchableOpacity>
             </View>
 
-            <View
-              pointerEvents="box-none"
-              style={{
-                position: "absolute",
-                right: 18,
-                bottom: 24,
-                zIndex: 20,
-              }}
-            >
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Edit entry"
-                onPress={() => {
-                  if (!id || !entry) return;
-                  hapticLightImpact();
-                  setPendingJournalEditEntry(entry);
-                  router.push({
-                    pathname: "/journal/edit/[id]",
-                    params: { id },
-                  } as never);
+            {!isSampleJournalEntry(id) ? (
+              <View
+                pointerEvents="box-none"
+                style={{
+                  position: "absolute",
+                  right: 18,
+                  bottom: 24,
+                  zIndex: 20,
                 }}
-                activeOpacity={0.88}
-                style={{ borderRadius: 999, overflow: "hidden" }}
               >
-                <LinearGradient
-                  colors={[...j.saveReflectionGradient]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 999,
-                    alignItems: "center",
-                    justifyContent: "center",
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit entry"
+                  onPress={() => {
+                    if (!id || !entry) return;
+                    hapticLightImpact();
+                    setPendingJournalEditEntry(entry);
+                    router.push({
+                      pathname: "/journal/edit/[id]",
+                      params: { id },
+                    } as never);
                   }}
+                  activeOpacity={0.88}
+                  style={{ borderRadius: 999, overflow: "hidden" }}
                 >
-                  <PencilIcon />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+                  <LinearGradient
+                    colors={[...j.saveReflectionGradient]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 999,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <PencilIcon />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             <Animated.View
               pointerEvents={showScrollToTop ? "auto" : "none"}
