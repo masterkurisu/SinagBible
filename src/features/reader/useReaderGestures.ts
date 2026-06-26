@@ -332,8 +332,6 @@ export function useReaderGestures({
   }, [fontSettingsSheetOpen, fontSettingsPopupSlideAnim, fontSettingsPopupOpacityAnim]);
 
   useEffect(() => {
-    if (!readerPayload) return;
-
     if (!isReaderContentCurrent) {
       readerVersesHadDesyncRef.current = true;
       readerVersesOpacityAnim.stopAnimation();
@@ -342,6 +340,7 @@ export function useReaderGestures({
     }
 
     if (readerVersesHadDesyncRef.current) {
+      readerVersesHadDesyncRef.current = false;
       readerVersesOpacityAnim.stopAnimation();
       readerVersesOpacityAnim.setValue(0);
       Animated.timing(readerVersesOpacityAnim, {
@@ -353,7 +352,7 @@ export function useReaderGestures({
     } else {
       readerVersesOpacityAnim.setValue(1);
     }
-  }, [readerPayload, isReaderContentCurrent, readerVersesOpacityAnim]);
+  }, [isReaderContentCurrent, readerVersesOpacityAnim]);
 
   const chapterSwipePan = useMemo(() => {
     const tid = readerPayload?.resolvedTranslationId;

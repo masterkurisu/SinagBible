@@ -369,12 +369,16 @@ export default function ReaderChapterScreen() {
     };
   }, [requestedTranslationId, bookSlug, chapterNumber]);
 
+  const kjvInlineEnrichmentKey =
+    readerPayload?.resolvedTranslationId === "KJV" &&
+    !hasChapterInlineAnnotations(readerPayload.chapter)
+      ? `${readerPayload.chapter.bookSlug}:${readerPayload.chapter.chapterNumber}`
+      : null;
+
   useEffect(() => {
-    if (!readerPayload) return;
-    if (readerPayload.resolvedTranslationId !== "KJV") return;
-    if (hasChapterInlineAnnotations(readerPayload.chapter)) return;
-    const chapterBookSlug = readerPayload.chapter.bookSlug;
-    const chapterNum = readerPayload.chapter.chapterNumber;
+    if (!kjvInlineEnrichmentKey) return;
+    const [chapterBookSlug, chapterNumRaw] = kjvInlineEnrichmentKey.split(":");
+    const chapterNum = Number(chapterNumRaw);
     const usfm = getUsfmBookId(chapterBookSlug);
     if (!usfm) return;
     let cancelled = false;
@@ -408,7 +412,7 @@ export default function ReaderChapterScreen() {
       cancelled = true;
       task.cancel();
     };
-  }, [readerPayload]);
+  }, [kjvInlineEnrichmentKey]);
 
   const resolvedTranslationId = readerPayload?.resolvedTranslationId;
   const books = readerPayload?.books;
@@ -1486,8 +1490,6 @@ export default function ReaderChapterScreen() {
   );
 
   useEffect(() => {
-    if (!readerPayload) return;
-
     if (!isReaderContentCurrent) {
       readerVersesHadDesyncRef.current = true;
       readerVersesOpacityAnim.stopAnimation();
@@ -1496,6 +1498,7 @@ export default function ReaderChapterScreen() {
     }
 
     if (readerVersesHadDesyncRef.current) {
+      readerVersesHadDesyncRef.current = false;
       readerVersesOpacityAnim.stopAnimation();
       readerVersesOpacityAnim.setValue(0);
       Animated.timing(readerVersesOpacityAnim, {
@@ -1507,7 +1510,7 @@ export default function ReaderChapterScreen() {
     } else {
       readerVersesOpacityAnim.setValue(1);
     }
-  }, [readerPayload, isReaderContentCurrent, readerVersesOpacityAnim]);
+  }, [isReaderContentCurrent, readerVersesOpacityAnim]);
 
   const chapterNav = useMemo(() => {
     if (!readerPayload?.chapter || !readerPayload.books) {
