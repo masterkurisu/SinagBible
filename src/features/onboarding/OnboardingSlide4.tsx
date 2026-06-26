@@ -18,6 +18,7 @@ import { readAsStringAsync, EncodingType } from "expo-file-system/legacy";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { PRIVACY_POLICY_URL } from "@/lib/legal-urls";
 import { TermsOfServiceSheet } from "@/components/terms-of-service-sheet";
+import { OnboardingScrollScreen } from "./OnboardingScrollScreen";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro asset module (repo root)
 const privacyPolicyMdModule = require("../../../privacy_policy.md") as number;
@@ -213,123 +214,124 @@ export function OnboardingSlide4({ onFinish, onBack, onPrivacyPress: _onPrivacyP
   ];
 
   return (
-    <View
-      style={[
-        styles.root,
-        {
-          backgroundColor: BG,
-          paddingTop: insets.top + 24,
-        },
-      ]}
-    >
-      <View style={styles.upperBlock}>
-        <Animated.View
-          style={{
-            opacity: labelOpacity,
-            transform: [{ translateY: labelY }],
-          }}
-        >
-          <Text style={[styles.sectionLabel, { color: ui.brown600 }]}>{"BEFORE YOU BEGIN"}</Text>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.headlineWrap,
-            {
-              opacity: headlineOpacity,
-              transform: [{ translateY: headlineY }],
-            },
-          ]}
-        >
-          <Text style={[styles.headline, { color: ui.brown800 }]}>Your words stay yours.</Text>
-        </Animated.View>
-
-        <View style={styles.summaryBlock}>
-          {PRIVACY_SUMMARY_LINES.map((line, i) => {
-            const { opacity, y } = summaryAnimated[i]!;
-            return (
-              <Animated.View
-                key={line}
-                style={{
-                  opacity,
-                  transform: [{ translateY: y }],
-                }}
-              >
-                <Text style={[styles.summaryLine, { color: ui.tan300 }]}>{line}</Text>
-              </Animated.View>
-            );
-          })}
-        </View>
-
-        <Animated.View
-          style={[styles.finePrintWrap, { opacity: finePrintOpacity, transform: [{ translateY: finePrintY }] }]}
-        >
-          <Text style={[styles.finePrint, { color: ui.tan300 }]}>
-            By continuing, you agree to our{" "}
-            <Text
-              onPress={() => setTermsModalVisible(true)}
-              style={[styles.privacyLink, { color: ui.gold }]}
-              accessibilityRole="link"
-              accessibilityLabel="Terms of Use"
-            >
-              Terms of Use
-            </Text>{" "}
-            and{" "}
-            <Text
-              onPress={openPrivacyModal}
-              style={[styles.privacyLink, { color: ui.gold }]}
-              accessibilityRole="link"
-              accessibilityLabel="Privacy Policy"
-            >
-              Privacy Policy
-            </Text>.
-          </Text>
-        </Animated.View>
-      </View>
-
-      <View style={styles.beginReadingMiddle}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Begin Reading"
-          accessibilityState={{ disabled: !privacyAgreed }}
-          accessibilityHint={
-            privacyAgreed ? undefined : "Open the Privacy Policy and tap I agree to continue."
-          }
-          disabled={!privacyAgreed}
-          onPress={onFinish}
-          style={({ pressed }) => [
-            styles.beginButton,
-            privacyAgreed && pressed && styles.beginButtonPressed,
-          ]}
-        >
-          <Text
+    <>
+      <OnboardingScrollScreen
+        backgroundColor={BG}
+        paddingTop={insets.top + 24}
+        mainContentStyle={styles.mainColumn}
+        footer={
+          <View
             style={[
-              styles.beginButtonLabel,
-              { color: privacyAgreed ? ui.brown800 : ui.tan300 },
+              styles.backFooter,
+              {
+                paddingBottom: Math.max(insets.bottom, 28),
+              },
             ]}
           >
-            Begin Reading
-          </Text>
-        </Pressable>
-      </View>
-
-      <View
-        style={[
-          styles.backFooter,
-          {
-            paddingBottom: Math.max(insets.bottom, 28),
-          },
-        ]}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              onPress={onBack}
+              style={({ pressed }) => [styles.backLinkPressable, pressed && styles.backLinkPressed]}
+            >
+              <Text style={[styles.backLink, { color: ui.brown600 }]}>Back</Text>
+            </Pressable>
+          </View>
+        }
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          onPress={onBack}
-          style={({ pressed }) => [styles.backLinkPressable, pressed && styles.backLinkPressed]}
-        >
-          <Text style={[styles.backLink, { color: ui.brown600 }]}>Back</Text>
-        </Pressable>
-      </View>
+        <>
+          <View style={styles.upperBlock}>
+            <Animated.View
+              style={{
+                opacity: labelOpacity,
+                transform: [{ translateY: labelY }],
+              }}
+            >
+              <Text style={[styles.sectionLabel, { color: ui.brown600 }]}>{"BEFORE YOU BEGIN"}</Text>
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.headlineWrap,
+                {
+                  opacity: headlineOpacity,
+                  transform: [{ translateY: headlineY }],
+                },
+              ]}
+            >
+              <Text style={[styles.headline, { color: ui.brown800 }]}>Your words stay yours.</Text>
+            </Animated.View>
+
+            <View style={styles.summaryBlock}>
+              {PRIVACY_SUMMARY_LINES.map((line, i) => {
+                const { opacity, y } = summaryAnimated[i]!;
+                return (
+                  <Animated.View
+                    key={line}
+                    style={{
+                      opacity,
+                      transform: [{ translateY: y }],
+                    }}
+                  >
+                    <Text style={[styles.summaryLine, { color: ui.tan300 }]}>{line}</Text>
+                  </Animated.View>
+                );
+              })}
+            </View>
+
+            <Animated.View
+              style={[styles.finePrintWrap, { opacity: finePrintOpacity, transform: [{ translateY: finePrintY }] }]}
+            >
+              <Text style={[styles.finePrint, { color: ui.tan300 }]}>
+                By continuing, you agree to our{" "}
+                <Text
+                  onPress={() => setTermsModalVisible(true)}
+                  style={[styles.privacyLink, { color: ui.gold }]}
+                  accessibilityRole="link"
+                  accessibilityLabel="Terms of Use"
+                >
+                  Terms of Use
+                </Text>{" "}
+                and{" "}
+                <Text
+                  onPress={openPrivacyModal}
+                  style={[styles.privacyLink, { color: ui.gold }]}
+                  accessibilityRole="link"
+                  accessibilityLabel="Privacy Policy"
+                >
+                  Privacy Policy
+                </Text>.
+              </Text>
+            </Animated.View>
+          </View>
+
+          <View style={styles.beginReadingMiddle}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Begin Reading"
+              accessibilityState={{ disabled: !privacyAgreed }}
+              accessibilityHint={
+                privacyAgreed ? undefined : "Open the Privacy Policy and tap I agree to continue."
+              }
+              disabled={!privacyAgreed}
+              onPress={onFinish}
+              style={({ pressed }) => [
+                styles.beginButton,
+                privacyAgreed && pressed && styles.beginButtonPressed,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.beginButtonLabel,
+                  { color: privacyAgreed ? ui.brown800 : ui.tan300 },
+                ]}
+              >
+                Begin Reading
+              </Text>
+            </Pressable>
+          </View>
+        </>
+      </OnboardingScrollScreen>
 
       <Modal
         visible={privacyModalVisible}
@@ -401,13 +403,14 @@ export function OnboardingSlide4({ onFinish, onBack, onPrivacyPress: _onPrivacyP
         </SafeAreaView>
       </Modal>
       <TermsOfServiceSheet visible={termsModalVisible} onClose={() => setTermsModalVisible(false)} />
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
+  mainColumn: {
+    flexGrow: 1,
+    justifyContent: "space-between",
   },
   upperBlock: {
     flexShrink: 0,
@@ -416,7 +419,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   beginReadingMiddle: {
-    flex: 1,
+    flexGrow: 1,
     minHeight: 0,
     justifyContent: "center",
     paddingHorizontal: 36,

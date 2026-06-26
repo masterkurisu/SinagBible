@@ -5,9 +5,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { OnboardingScrollScreen } from "@/src/features/onboarding/OnboardingScrollScreen";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 
 const BG = "#FFFFFF";
@@ -66,8 +66,33 @@ export function OnboardingSlide1({ onNext }: OnboardingSlide1Props) {
   }, []);
 
   return (
-    <View style={[styles.root, { backgroundColor: BG, paddingTop: insets.top + 48 }]}>
-      <View style={styles.content}>
+    <OnboardingScrollScreen
+      backgroundColor={BG}
+      paddingTop={insets.top + 48}
+      mainContentStyle={styles.content}
+      footer={
+        <Animated.View
+          style={[
+            styles.footer,
+            {
+              paddingBottom: Math.max(insets.bottom, 28),
+              opacity: buttonOpacity,
+              transform: [{ translateY: buttonY }],
+            },
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Next"
+            onPress={onNext}
+            style={({ pressed }) => [styles.nextPressable, pressed && { opacity: 0.65 }]}
+          >
+            <Text style={[styles.nextLabel, { color: ui.gold }]}>Next</Text>
+          </Pressable>
+        </Animated.View>
+      }
+    >
+      <>
         <Animated.View
           style={{
             opacity: titleOpacity,
@@ -98,38 +123,13 @@ export function OnboardingSlide1({ onNext }: OnboardingSlide1Props) {
             A quiet space to read Scripture, highlight verses, and write what’s on your heart.
           </Text>
         </Animated.View>
-      </View>
-
-      <Animated.View
-        style={[
-          styles.footer,
-          {
-            paddingBottom: Math.max(insets.bottom, 28),
-            opacity: buttonOpacity,
-            transform: [{ translateY: buttonY }],
-          },
-        ]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Next"
-          onPress={onNext}
-          style={({ pressed }) => [styles.nextPressable, pressed && { opacity: 0.65 }]}
-        >
-          <Text style={[styles.nextLabel, { color: ui.gold }]}>Next</Text>
-        </Pressable>
-      </Animated.View>
-    </View>
+      </>
+    </OnboardingScrollScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: "space-between",
-  },
   content: {
-    flex: 1,
     paddingHorizontal: 36,
     paddingTop: 8,
   },

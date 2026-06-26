@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { OnboardingScrollScreen } from "./OnboardingScrollScreen";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 
 const BG = "#FFFFFF";
@@ -113,16 +114,41 @@ export function OnboardingSlide2({ onNext, onBack }: OnboardingSlide2Props) {
   ];
 
   return (
-    <View
-      style={[
-        styles.root,
-        {
-          backgroundColor: BG,
-          paddingTop: insets.top + 24,
-        },
-      ]}
+    <OnboardingScrollScreen
+      backgroundColor={BG}
+      paddingTop={insets.top + 24}
+      mainContentStyle={styles.centerBlock}
+      footer={
+        <Animated.View
+          style={[
+            styles.navRow,
+            {
+              paddingBottom: Math.max(insets.bottom, 28),
+              opacity: navOpacity,
+              transform: [{ translateY: navY }],
+            },
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={onBack}
+            style={({ pressed }) => [styles.navPressable, pressed && styles.navPressed]}
+          >
+            <Text style={[styles.navLabel, { color: ui.brown600 }]}>Back</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Next"
+            onPress={onNext}
+            style={({ pressed }) => [styles.navPressable, pressed && styles.navPressed]}
+          >
+            <Text style={[styles.navLabel, { color: ui.gold }]}>Next</Text>
+          </Pressable>
+        </Animated.View>
+      }
     >
-      <View style={styles.centerBlock}>
+      <>
         <Animated.View
           style={{
             opacity: labelOpacity,
@@ -172,45 +198,14 @@ export function OnboardingSlide2({ onNext, onBack }: OnboardingSlide2Props) {
             );
           })}
         </View>
-      </View>
-
-      <Animated.View
-        style={[
-          styles.navRow,
-          {
-            paddingBottom: Math.max(insets.bottom, 28),
-            opacity: navOpacity,
-            transform: [{ translateY: navY }],
-          },
-        ]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          onPress={onBack}
-          style={({ pressed }) => [styles.navPressable, pressed && styles.navPressed]}
-        >
-          <Text style={[styles.navLabel, { color: ui.brown600 }]}>Back</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Next"
-          onPress={onNext}
-          style={({ pressed }) => [styles.navPressable, pressed && styles.navPressed]}
-        >
-          <Text style={[styles.navLabel, { color: ui.gold }]}>Next</Text>
-        </Pressable>
-      </Animated.View>
-    </View>
+      </>
+    </OnboardingScrollScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
   centerBlock: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 36,
     gap: 24,
