@@ -1053,6 +1053,7 @@ export default function JournalIndexScreen() {
                     contentScrollMaxHeight={sheetMaxHeight - 42}
                     contentHorizontalPadding={10}
                     onDirtyChange={setNewEntryHasDraft}
+                    onSaveToast={showJournalToast}
                     onAfterSave={() => {
                       closeNewEntrySheet();
                       void load();
@@ -1128,7 +1129,10 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     paddingHorizontal: 18,
     paddingVertical: 11,
-    borderRadius: 999,
+    borderRadius: Platform.OS === "android" ? 24 : 999,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "rgba(44, 36, 22, 0.92)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -1139,8 +1143,11 @@ const styles = StyleSheet.create({
   toastText: {
     fontFamily: "Inter_500Medium",
     fontSize: 14,
+    lineHeight: 20,
     color: "#f5f2ec",
     textAlign: "center",
+    width: "100%",
+    ...(Platform.OS === "android" ? { alignSelf: "center" as const } : null),
   },
   fabOverlay: {
     zIndex: 200,

@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Alert,
   Animated,
+  Easing,
   Modal,
   Pressable,
   StyleSheet,
@@ -115,15 +116,35 @@ html, body, #content, .pell-content { -webkit-user-select: text !important; user
 
 /**
  * useContainer={false}: HTML template uses a fixed-height chain; scrolling is .pell-content overflow-y.
- * scrollEnabled={false} on WebView avoids WKWebView owning vertical pans (often blocks scrolling when
- * keyboard is dismissed). Reflection is **not** inside the form ScrollView so inner div scroll works;
- * nestedScrollEnabled follows the library (!useContainer → true) for Android.
+ * iOS: scrollEnabled={false} avoids WKWebView owning vertical pans (often blocks scrolling when the
+ * keyboard is dismissed). Android: scrollEnabled must be true or touch scroll inside the WebView fails
+ * when the keyboard is open. nestedScrollEnabled follows the library (!useContainer → true) on Android.
  */
 const REFLECTION_RICH_EDITOR_PROPS = {
   useContainer: false,
-  scrollEnabled: false,
+  scrollEnabled: Platform.OS === "android",
   bounces: false,
 } as const;
+
+/** Scroll the contenteditable caret into view inside .pell-content (Android inner scroll). */
+const REFLECTION_SCROLL_CARET_INTO_VIEW_DOM = `
+(function () {
+  var sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return;
+  var editor = document.querySelector('.pell-content');
+  if (!editor) return;
+  var rect = sel.getRangeAt(0).getBoundingClientRect();
+  if (!rect.height) return;
+  var er = editor.getBoundingClientRect();
+  var pad = 28;
+  if (rect.bottom > er.bottom - pad) {
+    editor.scrollTop += rect.bottom - er.bottom + pad;
+  } else if (rect.top < er.top + pad) {
+    editor.scrollTop -= er.top - rect.top + pad;
+  }
+})();
+true;
+`;
 
 /** Light text on save / primary gradient buttons */
 const SAVE_BUTTON_LABEL_COLOR = "#f5e9d6";
@@ -175,6 +196,8 @@ type Props = {
    * Lower on tablets so save-row padding is not over-subtracted.
    */
   readerCardBottomLiftPx?: number;
+  /** Android: show save confirmation via parent toast instead of a native alert dialog. */
+  onSaveToast?: (message: string) => void;
 };
 
 export type JournalNewEntryFormHandle = {
@@ -192,6 +215,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     contentHorizontalPadding,
     readerNewEntryScrollable,
     readerCardBottomLiftPx = READER_NEW_ENTRY_CARD_BOTTOM_LIFT_PX,
+    onSaveToast,
   }: Props,
   ref,
 ) {
@@ -281,6 +305,10 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const [passagePreview, setPassagePreview] = useState<string | null>(null);
   const [passagePreviewRef, setPassagePreviewRef] = useState<string | null>(null);
   const [passageSuggestion, setPassageSuggestion] = useState<string | null>(null);
+  const [saveToastMessage, setSaveToastMessage] = useState<string | null>(null);
+  const saveToastOpacity = useRef(new Animated.Value(0)).current;
+  const saveToastAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const pendingSaveAfterToastRef = useRef<(() => void) | null>(null);
 
   const formatAnchorRef = useRef<View>(null);
   const formatAnchorFullscreenRef = useRef<View>(null);
@@ -309,6 +337,11 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   };
 
   const reflectionTypingHapticLastRef = useRef(0);
+  const reflectionCaretScrollLastRef = useRef(0);
+  const scrollReflectionCaretIntoView = () => {
+    if (Platform.OS !== "android") return;
+    getActiveReflectionEditor()?.commandDOM(REFLECTION_SCROLL_CARET_INTO_VIEW_DOM);
+  };
   const onReflectionHtmlChangedFromEditor = (html: string) => {
     const t = Date.now();
     if (t - reflectionTypingHapticLastRef.current >= 48) {
@@ -316,6 +349,10 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       hapticSelection();
     }
     setReflectionHtml(normalizeReflectionHtml(html));
+    if (Platform.OS === "android" && t - reflectionCaretScrollLastRef.current >= 80) {
+      reflectionCaretScrollLastRef.current = t;
+      scrollReflectionCaretIntoView();
+    }
   };
 
   const reflectionPlainText = (html: string): string =>
@@ -330,6 +367,54 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   useEffect(() => {
     onDirtyChange?.(hasDraftInput);
   }, [hasDraftInput, onDirtyChange]);
+
+  useEffect(() => {
+    if (!saveToastMessage) {
+      saveToastOpacity.setValue(0);
+      return;
+    }
+    saveToastOpacity.setValue(0);
+    const anim = Animated.sequence([
+      Animated.timing(saveToastOpacity, {
+        toValue: 1,
+        duration: 160,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.delay(1200),
+      Animated.timing(saveToastOpacity, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]);
+    saveToastAnimRef.current = anim;
+    anim.start(({ finished }) => {
+      if (!finished) return;
+      const done = pendingSaveAfterToastRef.current;
+      pendingSaveAfterToastRef.current = null;
+      setSaveToastMessage(null);
+      done?.();
+    });
+    return () => {
+      anim.stop();
+    };
+  }, [saveToastMessage, saveToastOpacity]);
+
+  const confirmSaveSuccess = (message: string, onConfirmed: () => void) => {
+    if (Platform.OS === "android") {
+      if (onSaveToast) {
+        onSaveToast(message);
+        onConfirmed();
+        return;
+      }
+      pendingSaveAfterToastRef.current = onConfirmed;
+      setSaveToastMessage(message);
+      return;
+    }
+    Alert.alert(message, "", [{ text: "OK", onPress: onConfirmed }]);
+  };
 
   const closeFormatMenu = () => {
     setFormatMenuOpen(false);
@@ -674,12 +759,18 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
    * split layout as the journal tab so reflection gets flex height and the sheet is not half empty.
    */
   const readerMergedScrollMode = readerNewEntryFromReader && !isTabletForm;
+  /**
+   * Android phones: merged scroll keeps the reflection field reachable when the keyboard is open.
+   * iOS journal keeps the split layout (passage/title scroll + flex reflection viewport).
+   */
+  const androidPhoneMergedScrollMode = Platform.OS === "android" && !isTabletForm;
+  const mergedFormScrollMode = readerMergedScrollMode || androidPhoneMergedScrollMode;
 
   const trim = REFLECTION_FIELD_BOTTOM_TRIM_PX;
   const splitReflectionMinHeight =
-    isTabletForm && isLandscapeForm && !readerMergedScrollMode ? 200 : 0;
+    isTabletForm && isLandscapeForm && !mergedFormScrollMode ? 200 : 0;
 
-  const reflectionShellStyle = readerMergedScrollMode
+  const reflectionShellStyle = mergedFormScrollMode
     ? { backgroundColor: modalSurfaceColor }
     : {
         backgroundColor: modalSurfaceColor,
@@ -687,13 +778,13 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         minHeight: splitReflectionMinHeight,
         marginBottom: trim,
       };
-  const reflectionParchmentStyle = readerMergedScrollMode
+  const reflectionParchmentStyle = mergedFormScrollMode
     ? { marginTop: 5, minHeight: 240 - trim }
     : { marginTop: 5, flex: 1, minHeight: 0 };
-  const reflectionInnerPadStyle = readerMergedScrollMode
+  const reflectionInnerPadStyle = mergedFormScrollMode
     ? { minHeight: 220 - trim, paddingHorizontal: 8, paddingBottom: 19 }
     : { flex: 1, minHeight: 0, paddingHorizontal: 8, paddingBottom: 19 };
-  const reflectionRichEditorLayoutStyle = readerMergedScrollMode
+  const reflectionRichEditorLayoutStyle = mergedFormScrollMode
     ? {
         minHeight: 200 - trim,
         alignSelf: "stretch" as const,
@@ -740,7 +831,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           content,
           title: titleTrim,
         });
-        Alert.alert("Changes saved", "", [{ text: "OK", onPress: () => finishSave() }]);
+        confirmSaveSuccess("Changes saved", () => finishSave());
         return;
       }
 
@@ -755,7 +846,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         is_favorite: false,
       });
 
-      Alert.alert("Reflection saved", "", [{ text: "OK", onPress: () => finishSave(saved.id) }]);
+      confirmSaveSuccess("Reflection saved", () => finishSave(saved.id));
     } catch (e) {
       if (__DEV__) {
         console.error(e);
@@ -1078,31 +1169,15 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         }}
       >
       {/*
-        Keyboard avoidance around the scroll/edit region. Reader on phone: one ScrollView includes
-        save. Reader on tablet + journal: passage/title scroll + flex reflection + pinned save.
+        Keyboard avoidance around the scroll/edit region. Reader on phone + Android phones: one ScrollView
+        includes save. iOS journal tablet: passage/title scroll + flex reflection + pinned save.
       */}
       <KeyboardAvoidingView
         style={{ flex: 1, minHeight: 0 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior="padding"
         keyboardVerticalOffset={0}
       >
-        {isEditMode ? (
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-            <View
-              style={{
-                flex: 1,
-                minHeight: 0,
-                paddingLeft: padLeft,
-                paddingRight: padRight,
-                paddingBottom: 4,
-              }}
-            >
-              <View className="gap-2.5 pb-0" style={{ flex: 1, minHeight: 0 }}>
-                {formFields}
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
-        ) : readerMergedScrollMode ? (
+        {mergedFormScrollMode ? (
           <ScrollView
             style={{ flex: 1, minHeight: 0 }}
             contentContainerStyle={{
@@ -1122,6 +1197,22 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               <View style={saveFooterShellStyle}>{saveGradientButton}</View>
             </View>
           </ScrollView>
+        ) : isEditMode ? (
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View
+              style={{
+                flex: 1,
+                minHeight: 0,
+                paddingLeft: padLeft,
+                paddingRight: padRight,
+                paddingBottom: 4,
+              }}
+            >
+              <View className="gap-2.5 pb-0" style={{ flex: 1, minHeight: 0 }}>
+                {formFields}
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
         ) : (
           <View
             style={{
@@ -1151,7 +1242,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         )}
       </KeyboardAvoidingView>
 
-      {!readerMergedScrollMode ? (
+      {!mergedFormScrollMode ? (
         <View
           style={{
             paddingLeft: padLeft,
@@ -1176,7 +1267,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       <View style={{ flex: 1, backgroundColor: colors.parchment }} collapsable={false}>
         <KeyboardAvoidingView
           style={{ flex: 1, minHeight: 0 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior="padding"
           keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
         >
           <View style={{ flex: 1, minHeight: 0 }}>
@@ -1433,6 +1524,14 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         ) : null}
       </View>
     </Modal>
+
+    {saveToastMessage ? (
+      <Animated.View pointerEvents="none" style={[styles.saveToastWrap, { opacity: saveToastOpacity }]}>
+        <View style={styles.saveToastBubble}>
+          <Text style={styles.saveToastText}>{saveToastMessage}</Text>
+        </View>
+      </Animated.View>
+    ) : null}
     </>
   );
 });
@@ -1475,5 +1574,31 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 6,
     elevation: 5,
+  },
+  saveToastWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2000,
+    elevation: 2000,
+  },
+  saveToastBubble: {
+    maxWidth: 300,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(44, 36, 22, 0.92)",
+    elevation: 8,
+  },
+  saveToastText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#f5f2ec",
+    textAlign: "center",
+    width: "100%",
   },
 });
