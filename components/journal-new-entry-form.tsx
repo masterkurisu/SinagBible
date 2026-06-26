@@ -16,7 +16,6 @@ import {
   InteractionManager,
   ScrollView,
   useWindowDimensions,
-  TouchableWithoutFeedback,
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -57,6 +56,7 @@ import {
   ReflectionFormatStyleIcon,
   ReflectionFullscreenIcon,
   ReflectionImageIcon,
+  ReflectionKeyboardHideIcon,
   ReflectionItalicIcon,
   ReflectionNumberedListIcon,
 } from "@/components/journal-reflection-toolbar-icons";
@@ -148,6 +148,9 @@ true;
 
 /** Light text on save / primary gradient buttons */
 const SAVE_BUTTON_LABEL_COLOR = "#f5e9d6";
+
+/** iOS: avoid dismissing the keyboard when scrolling the form or reflection editor. */
+const FORM_SCROLL_KEYBOARD_DISMISS_MODE = Platform.OS === "ios" ? "none" : "on-drag";
 
 export type JournalNewEntryInitialParams = {
   book?: string;
@@ -309,6 +312,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const saveToastOpacity = useRef(new Animated.Value(0)).current;
   const saveToastAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const pendingSaveAfterToastRef = useRef<(() => void) | null>(null);
+  const [journalKeyboardOpen, setJournalKeyboardOpen] = useState(false);
 
   const formatAnchorRef = useRef<View>(null);
   const formatAnchorFullscreenRef = useRef<View>(null);
@@ -367,6 +371,17 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   useEffect(() => {
     onDirtyChange?.(hasDraftInput);
   }, [hasDraftInput, onDirtyChange]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => setJournalKeyboardOpen(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setJournalKeyboardOpen(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!saveToastMessage) {
@@ -469,10 +484,33 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     }
   };
 
-  const dismissJournalKeyboard = () => {
+  const dismissJournalKeyboardCore = () => {
     richEditorRef.current?.dismissKeyboard();
     fullscreenRichEditorRef.current?.dismissKeyboard();
     Keyboard.dismiss();
+  };
+
+  const dismissJournalKeyboard = () => {
+    hapticLightImpact();
+    dismissJournalKeyboardCore();
+  };
+
+  const toggleJournalKeyboard = () => {
+    hapticLightImpact();
+    closeFormatMenu();
+    if (journalKeyboardOpen) {
+      dismissJournalKeyboardCore();
+      return;
+    }
+    getActiveReflectionEditor()?.focusContentEditor();
+  };
+
+  const onReflectionEditorFocus = () => setJournalKeyboardOpen(true);
+
+  const onReflectionEditorBlur = () => {
+    const ed = getActiveReflectionEditor();
+    if (ed?.isKeyboardOpen) return;
+    setJournalKeyboardOpen(false);
   };
 
   const openReflectionFullscreen = () => {
@@ -912,6 +950,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             hapticSelection();
             setPassage(t);
           }}
+          returnKeyType="done"
+          blurOnSubmit
+          onSubmitEditing={dismissJournalKeyboard}
         />
         {passagePreview ? (
           <View
@@ -984,10 +1025,22 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             hapticSelection();
             setTitle(t);
           }}
+          returnKeyType="done"
+          blurOnSubmit
+          onSubmitEditing={dismissJournalKeyboard}
         />
       </View>
     </>
   );
+
+  const reflectionToolbarButtonStyle = {
+    width: TOOLBAR_BTN_SIZE,
+    height: TOOLBAR_BTN_SIZE,
+    borderRadius: 999,
+    backgroundColor: j.reflectionToolbarBackground,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  };
 
   const formReflectionSection = (
     <View style={reflectionShellStyle}>
@@ -1013,32 +1066,27 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             accessibilityLabel="Write reflection fullscreen"
             onPress={openReflectionFullscreen}
             activeOpacity={0.85}
-            style={{
-              width: TOOLBAR_BTN_SIZE,
-              height: TOOLBAR_BTN_SIZE,
-              borderRadius: 999,
-              backgroundColor: j.reflectionToolbarBackground,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            style={reflectionToolbarButtonStyle}
           >
             <ReflectionFullscreenIcon size={20} color="#ffffff" />
           </TouchableOpacity>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <TouchableOpacity
               accessibilityRole="button"
+              accessibilityLabel={journalKeyboardOpen ? "Hide keyboard" : "Show keyboard"}
+              accessibilityState={{ expanded: journalKeyboardOpen }}
+              onPress={toggleJournalKeyboard}
+              activeOpacity={0.85}
+              style={[reflectionToolbarButtonStyle, { marginRight: TOOLBAR_FAN_GAP }]}
+            >
+              <ReflectionKeyboardHideIcon size={20} color="#ffffff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
               accessibilityLabel="Undo"
               onPress={undoReflection}
               activeOpacity={0.85}
-              style={{
-                width: TOOLBAR_BTN_SIZE,
-                height: TOOLBAR_BTN_SIZE,
-                borderRadius: 999,
-                backgroundColor: j.reflectionToolbarBackground,
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: TOOLBAR_FAN_GAP,
-              }}
+              style={[reflectionToolbarButtonStyle, { marginRight: TOOLBAR_FAN_GAP }]}
             >
               <Ionicons name="arrow-undo" size={18} color="#ffffff" />
             </TouchableOpacity>
@@ -1050,14 +1098,10 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                 onPress={() => toggleFormatMenu(formatAnchorRef)}
                 activeOpacity={0.85}
                 style={{
-                  width: TOOLBAR_BTN_SIZE,
-                  height: TOOLBAR_BTN_SIZE,
-                  borderRadius: 999,
+                  ...reflectionToolbarButtonStyle,
                   backgroundColor: formatMenuOpen
                     ? j.reflectionFormatMenuOpenBackground
                     : j.reflectionToolbarBackground,
-                  alignItems: "center",
-                  justifyContent: "center",
                   opacity: formatMenuOpen ? 0.8 : 1,
                 }}
               >
@@ -1072,15 +1116,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               accessibilityLabel="Attach image"
               onPress={() => void attachReflectionImage()}
               activeOpacity={0.85}
-              style={{
-                width: TOOLBAR_BTN_SIZE,
-                height: TOOLBAR_BTN_SIZE,
-                borderRadius: 999,
-                backgroundColor: j.reflectionToolbarBackground,
-                alignItems: "center",
-                justifyContent: "center",
-                marginLeft: TOOLBAR_FAN_GAP,
-              }}
+              style={[reflectionToolbarButtonStyle, { marginLeft: TOOLBAR_FAN_GAP }]}
             >
               <ReflectionImageIcon size={18} color="#ffffff" />
             </TouchableOpacity>
@@ -1100,6 +1136,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               placeholder=""
               initialContentHTML={reflectionHtml}
               onChange={onReflectionHtmlChangedFromEditor}
+              onFocus={onReflectionEditorFocus}
+              onBlur={onReflectionEditorBlur}
             />
           </View>
         </View>
@@ -1185,7 +1223,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               paddingBottom: 8,
             }}
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
+            keyboardDismissMode={FORM_SCROLL_KEYBOARD_DISMISS_MODE}
             nestedScrollEnabled
             showsVerticalScrollIndicator
           >
@@ -1198,21 +1236,19 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             </View>
           </ScrollView>
         ) : isEditMode ? (
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-            <View
-              style={{
-                flex: 1,
-                minHeight: 0,
-                paddingLeft: padLeft,
-                paddingRight: padRight,
-                paddingBottom: 4,
-              }}
-            >
-              <View className="gap-2.5 pb-0" style={{ flex: 1, minHeight: 0 }}>
-                {formFields}
-              </View>
+          <View
+            style={{
+              flex: 1,
+              minHeight: 0,
+              paddingLeft: padLeft,
+              paddingRight: padRight,
+              paddingBottom: 4,
+            }}
+          >
+            <View className="gap-2.5 pb-0" style={{ flex: 1, minHeight: 0 }}>
+              {formFields}
             </View>
-          </TouchableWithoutFeedback>
+          </View>
         ) : (
           <View
             style={{
@@ -1231,7 +1267,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               }}
               contentContainerStyle={{ flexGrow: 0, paddingBottom: 8 }}
               keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
+              keyboardDismissMode={FORM_SCROLL_KEYBOARD_DISMISS_MODE}
               nestedScrollEnabled
               showsVerticalScrollIndicator
             >
@@ -1240,19 +1276,18 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             <View style={{ flex: 1, minHeight: 0 }}>{formReflectionSection}</View>
           </View>
         )}
+        {!mergedFormScrollMode ? (
+          <View
+            style={{
+              paddingLeft: padLeft,
+              paddingRight: padRight,
+              ...saveFooterShellStyle,
+            }}
+          >
+            {saveGradientButton}
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
-
-      {!mergedFormScrollMode ? (
-        <View
-          style={{
-            paddingLeft: padLeft,
-            paddingRight: padRight,
-            ...saveFooterShellStyle,
-          }}
-        >
-          {saveGradientButton}
-        </View>
-      ) : null}
       </View>
     </View>
 
@@ -1311,18 +1346,20 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           >
             <TouchableOpacity
               accessibilityRole="button"
+              accessibilityLabel={journalKeyboardOpen ? "Hide keyboard" : "Show keyboard"}
+              accessibilityState={{ expanded: journalKeyboardOpen }}
+              onPress={toggleJournalKeyboard}
+              activeOpacity={0.85}
+              style={[reflectionToolbarButtonStyle, { marginRight: TOOLBAR_FAN_GAP }]}
+            >
+              <ReflectionKeyboardHideIcon size={20} color="#ffffff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
               accessibilityLabel="Undo"
               onPress={undoReflection}
               activeOpacity={0.85}
-              style={{
-                width: TOOLBAR_BTN_SIZE,
-                height: TOOLBAR_BTN_SIZE,
-                borderRadius: 999,
-                backgroundColor: j.reflectionToolbarBackground,
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: TOOLBAR_FAN_GAP,
-              }}
+              style={[reflectionToolbarButtonStyle, { marginRight: TOOLBAR_FAN_GAP }]}
             >
               <Ionicons name="arrow-undo" size={18} color="#ffffff" />
             </TouchableOpacity>
@@ -1334,14 +1371,10 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                 onPress={() => toggleFormatMenu(formatAnchorFullscreenRef)}
                 activeOpacity={0.85}
                 style={{
-                  width: TOOLBAR_BTN_SIZE,
-                  height: TOOLBAR_BTN_SIZE,
-                  borderRadius: 999,
+                  ...reflectionToolbarButtonStyle,
                   backgroundColor: formatMenuOpen
                     ? j.reflectionFormatMenuOpenBackground
                     : j.reflectionToolbarBackground,
-                  alignItems: "center",
-                  justifyContent: "center",
                   opacity: formatMenuOpen ? 0.8 : 1,
                 }}
               >
@@ -1356,15 +1389,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               accessibilityLabel="Attach image"
               onPress={() => void attachReflectionImage()}
               activeOpacity={0.85}
-              style={{
-                width: TOOLBAR_BTN_SIZE,
-                height: TOOLBAR_BTN_SIZE,
-                borderRadius: 999,
-                backgroundColor: j.reflectionToolbarBackground,
-                alignItems: "center",
-                justifyContent: "center",
-                marginLeft: TOOLBAR_FAN_GAP,
-              }}
+              style={[reflectionToolbarButtonStyle, { marginLeft: TOOLBAR_FAN_GAP }]}
             >
               <ReflectionImageIcon size={18} color="#ffffff" />
             </TouchableOpacity>
@@ -1403,6 +1428,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                 placeholder=""
                 initialContentHTML={reflectionHtml}
                 onChange={onReflectionHtmlChangedFromEditor}
+                onFocus={onReflectionEditorFocus}
+                onBlur={onReflectionEditorBlur}
               />
             </View>
           </View>

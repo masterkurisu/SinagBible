@@ -1,4 +1,21 @@
-import Svg, { Path, Polygon } from "react-native-svg";
+import Svg, { Circle, Path, Polygon, Rect } from "react-native-svg";
+
+/** Hide keyboard — from `assets/icons/keyboard-svgrepo-com.svg` */
+export function ReflectionKeyboardHideIcon({ size = 20, color = "#ffffff" }: { size?: number; color?: string }) {
+  const keyXs = [5.25, 8.25, 11.25, 14.25, 17.25];
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="2.5" y="4.5" width="19" height="14" rx="3" stroke={color} strokeWidth={2} />
+      {keyXs.map((cx) => (
+        <Circle key={`top-${cx}`} cx={cx} cy={9} r={1.1} fill={color} />
+      ))}
+      {keyXs.map((cx) => (
+        <Circle key={`bottom-${cx}`} cx={cx} cy={12} r={1.1} fill={color} />
+      ))}
+      <Rect x={7} y={14.2} width={10} height={2.2} rx={1.1} fill={color} />
+    </Svg>
+  );
+}
 
 /** Style / format menu — from style-svgrepo-com.svg */
 export function ReflectionFormatStyleIcon({ size = 18, color = "#ffffff" }: { size?: number; color?: string }) {
