@@ -89,6 +89,8 @@ type ReaderVerseListProps = {
   readerVerseEstimatedItemSize: number;
   onScroll: NonNullable<ComponentProps<typeof AnimatedReaderChapterFlashList>["onScroll"]>;
   onScrollBeginDrag: () => void;
+  onScrollEndDrag?: () => void;
+  onMomentumScrollEnd?: () => void;
   dismissReaderChromeFromBackgroundPress: () => void;
   verseFlashListDataForList: ReaderVerseFlashItem[];
   renderReaderVerseFlashItem: (info: ListRenderItemInfo<ReaderVerseFlashItem>) => React.ReactElement | null;
@@ -109,6 +111,8 @@ export function ReaderVerseList({
   readerVerseEstimatedItemSize,
   onScroll,
   onScrollBeginDrag,
+  onScrollEndDrag,
+  onMomentumScrollEnd,
   dismissReaderChromeFromBackgroundPress,
   verseFlashListDataForList,
   renderReaderVerseFlashItem,
@@ -131,6 +135,8 @@ export function ReaderVerseList({
       scrollEventThrottle={16}
       onScroll={onScroll}
       onScrollBeginDrag={onScrollBeginDrag}
+      onScrollEndDrag={onScrollEndDrag}
+      onMomentumScrollEnd={onMomentumScrollEnd}
       data={verseFlashListDataForList}
       renderItem={renderReaderVerseFlashItem}
       keyExtractor={readerVerseFlashKeyExtractor}

@@ -110,6 +110,10 @@ import {
 import { useReaderSelection } from "@/src/features/reader/useReaderSelection";
 import { ReaderHeader, READER_HEADER_TITLE_MAIN_PX, READER_HEADER_TITLE_TRANS_PX } from "@/src/features/reader/ReaderHeader";
 import {
+  ReaderChapterNavArrows,
+  useReaderChapterNavArrowsVisibility,
+} from "@/src/features/reader/ReaderChapterNavArrows";
+import {
   ReaderModals,
   ReaderMobileSettingsPanel,
   type BookSelectorViewMode,
@@ -1526,6 +1530,81 @@ export default function ReaderChapterScreen() {
     return getReaderChapterNeighbors(readerPayload.books, navChapter, chapterNumber);
   }, [readerPayload, bookSlug, chapterNumber, requestedTranslationId]);
 
+  const chapterNavRouteKey = `${bookSlug ?? ""}:${chapterNumber}:${requestedTranslationId}`;
+  const chapterNavArrowsOverlayOpen =
+    toolsMenuOpen ||
+    fontSettingsSheetOpen ||
+    readerDropdown != null ||
+    readerPrivacyPolicyOpen ||
+    readerCreditsOpen ||
+    noteModalVisible ||
+    newEntrySheetOpen;
+  const chapterNavArrowsEnabled =
+    isReaderContentCurrent &&
+    !chapterNavArrowsOverlayOpen &&
+    selectedVerses.length === 0 &&
+    chapter != null;
+  const {
+    opacityAnim: chapterNavArrowsOpacityAnim,
+    pointerEventsEnabled: chapterNavArrowsPointerEventsEnabled,
+    onScrollBeginDrag: onChapterNavArrowsScrollBeginDrag,
+    onScrollEndDrag: onChapterNavArrowsScrollEndDrag,
+    onMomentumScrollEnd: onChapterNavArrowsMomentumScrollEnd,
+    onScroll: onChapterNavArrowsScroll,
+    hideFromMotion: hideChapterNavArrowsFromMotion,
+  } = useReaderChapterNavArrowsVisibility(chapterNavRouteKey, chapterNavArrowsEnabled);
+
+  const onReaderScrollBeginDragWithChapterNav = useCallback(() => {
+    onReaderScrollBeginDrag();
+    onChapterNavArrowsScrollBeginDrag();
+  }, [onReaderScrollBeginDrag, onChapterNavArrowsScrollBeginDrag]);
+
+  const onReaderScroll = useMemo(
+    () =>
+      Animated.event(
+        [{ nativeEvent: { contentOffset: { y: readerScrollYAnim } } }],
+        {
+          useNativeDriver: true,
+          listener: onChapterNavArrowsScroll,
+        },
+      ),
+    [readerScrollYAnim, onChapterNavArrowsScroll],
+  );
+
+  const goToPrevChapter = useCallback(() => {
+    const target = chapterNav.prevChapter;
+    if (!target) return;
+    closeToolsMenu();
+    goToReaderChapter(
+      target.slug,
+      target.chapter,
+      resolvedTranslationId ?? requestedTranslationId,
+    );
+  }, [
+    chapterNav.prevChapter,
+    closeToolsMenu,
+    goToReaderChapter,
+    resolvedTranslationId,
+    requestedTranslationId,
+  ]);
+
+  const goToNextChapter = useCallback(() => {
+    const target = chapterNav.nextChapter;
+    if (!target) return;
+    closeToolsMenu();
+    goToReaderChapter(
+      target.slug,
+      target.chapter,
+      resolvedTranslationId ?? requestedTranslationId,
+    );
+  }, [
+    chapterNav.nextChapter,
+    closeToolsMenu,
+    goToReaderChapter,
+    resolvedTranslationId,
+    requestedTranslationId,
+  ]);
+
   const chapterSwipePan = useMemo(() => {
     const tid = readerPayload?.resolvedTranslationId;
     if (!tid) return noopChapterSwipePan;
@@ -1541,10 +1620,16 @@ export default function ReaderChapterScreen() {
     };
     return PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_e: GestureResponderEvent, g: PanResponderGestureState) =>
-        chapterSwipeMoveShouldActivate(g),
-      onMoveShouldSetPanResponderCapture: (_e: GestureResponderEvent, g: PanResponderGestureState) =>
-        chapterSwipeMoveShouldSetCapture() && chapterSwipeMoveShouldActivate(g),
+      onMoveShouldSetPanResponder: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+        const active = chapterSwipeMoveShouldActivate(g);
+        if (active) hideChapterNavArrowsFromMotion();
+        return active;
+      },
+      onMoveShouldSetPanResponderCapture: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+        const active = chapterSwipeMoveShouldSetCapture() && chapterSwipeMoveShouldActivate(g);
+        if (active) hideChapterNavArrowsFromMotion();
+        return active;
+      },
       onPanResponderTerminationRequest: () => true,
       onPanResponderRelease: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
         tryChapterSwipeNavigate(g);
@@ -1553,7 +1638,7 @@ export default function ReaderChapterScreen() {
         tryChapterSwipeNavigate(g);
       },
     });
-  }, [chapterNav, readerPayload?.resolvedTranslationId, goToReaderChapter]);
+  }, [chapterNav, readerPayload?.resolvedTranslationId, goToReaderChapter, hideChapterNavArrowsFromMotion]);
 
   const readerTabletLandscapeTwoColumn =
     chapter != null &&
@@ -2166,11 +2251,10 @@ export default function ReaderChapterScreen() {
         readerScrollRef={readerScrollRef}
         chapterSwipePanHandlers={chapterSwipePanHandlers}
         readerVerseEstimatedItemSize={readerVerseEstimatedItemSize}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: readerScrollYAnim } } }],
-          { useNativeDriver: true },
-        )}
-        onScrollBeginDrag={onReaderScrollBeginDrag}
+        onScroll={onReaderScroll}
+        onScrollBeginDrag={onReaderScrollBeginDragWithChapterNav}
+        onScrollEndDrag={onChapterNavArrowsScrollEndDrag}
+        onMomentumScrollEnd={onChapterNavArrowsMomentumScrollEnd}
         dismissReaderChromeFromBackgroundPress={dismissReaderChromeFromBackgroundPress}
         verseFlashListDataForList={verseFlashListDataForList}
         renderReaderVerseFlashItem={renderReaderVerseFlashItem}
@@ -2182,6 +2266,18 @@ export default function ReaderChapterScreen() {
         hasVerseSelection={hasVerseSelection}
         actionBarMode={actionBarMode}
         actionBarBottomPx={actionBarBottomPx}
+      />
+
+      <ReaderChapterNavArrows
+        opacityAnim={chapterNavArrowsOpacityAnim}
+        pointerEventsEnabled={chapterNavArrowsPointerEventsEnabled}
+        prevChapter={chapterNav.prevChapter}
+        nextChapter={chapterNav.nextChapter}
+        onPrev={goToPrevChapter}
+        onNext={goToNextChapter}
+        colors={colors}
+        rc={rc}
+        insets={insets}
       />
 
       {copyToastVisible ? (
