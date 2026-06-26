@@ -9,7 +9,7 @@
 
 ## Policy + Store Compliance
 
-- [ ] iOS build hides Ko-fi support link in Credits.
+- [ ] Ko-fi support link is visible in Credits on iOS and Android.
 - [ ] Privacy policy URL is publicly reachable:
   - `https://doc-hosting.flycricket.io/sinag-bible-privacy-policy/14d3d32d-19f6-4899-8b43-c30f46a2f6d3/privacy`
 - [ ] Terms URL is reachable:
