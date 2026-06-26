@@ -176,6 +176,11 @@ export function getExternalApiId(id: TranslationId): string {
   return isApiTranslationId(id) ? API_TRANSLATION_ID_MAP[id] : id;
 }
 
+/** Translations whose text is fetched from bible.helloao.org `complete.json` (not bundled locally). */
+export function usesHelloaoCompleteJson(id: TranslationId): boolean {
+  return isApiTranslationId(id);
+}
+
 /**
  * Reverse-maps an external API ID back to an internal TranslationId, or
  * returns null if the ID is not yet registered in this app.

@@ -15,6 +15,7 @@ import {
   flattenHelloaoVerseText,
   parseHelloaoVerseContentArray,
 } from "@sinag-bible/core/helloao-verse-inline";
+import type { BibleChapter } from "@sinag-bible/types";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
 
 const BIBLE_API_BASE_URL = "https://bible.helloao.org/api";
@@ -264,6 +265,19 @@ export function fetchChapter(
   void p.catch(() => chapterFetchCache.delete(storageKey));
 
   return p;
+}
+
+/** Converts a fetched API chapter into the reader's `BibleChapter` shape. */
+export function apiChapterToBibleChapter(bookSlug: string, api: ApiChapter): BibleChapter {
+  const verseInlineContent = api.verses.map((v) => v.inlineContent ?? []);
+  const hasInline = verseInlineContent.some((row) => row.length > 0);
+  return {
+    bookName: api.bookName,
+    bookSlug,
+    chapterNumber: api.chapterNumber,
+    verses: api.verses.map((v) => v.text),
+    ...(hasInline ? { verseInlineContent } : {}),
+  };
 }
 
 /**

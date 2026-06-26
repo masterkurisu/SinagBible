@@ -44,6 +44,22 @@ import {
 } from "@sinag-bible/core/bible-translations";
 import { getUsfmBookId } from "@sinag-bible/core";
 import { fetchChapter as fetchApiChapter } from "@/lib/bible-api-service";
+import {
+  getCachedReaderChapter,
+  readerChapterCacheKey,
+  setCachedReaderChapter,
+} from "@/lib/reader-chapter-cache";
+import {
+  fetchReaderChapterContent,
+  primeReaderChapterFetch,
+  readerUsesPerChapterFetch,
+  resolveReaderBooksForTranslation,
+} from "@/lib/reader-chapter-load";
+import {
+  collectPrefetchChapterTargets,
+  getReaderChapterNeighbors,
+  type ChapterNavTarget,
+} from "@/lib/reader-chapter-nav";
 import { mergeVerseInlineFromHelloaoChapter } from "@/lib/merge-helloao-verse-inline";
 import { useTranslationPicker } from "@/lib/use-translation-picker";
 import { useFavoriteTranslations } from "@/lib/use-favorite-translations";
@@ -144,7 +160,7 @@ const TRANSLATION_LANGUAGE_BY_ID: Record<(typeof TRANSLATION_IDS)[number], strin
   ENG_WEBBE: "English",
 };
 
-type ChapterNavTarget = { slug: string; chapter: number };
+const READER_CHAPTER_PREFETCH_DEPTH = 2;
 
 const READER_FONT_SCALE_STORAGE_KEY = "sb:reader:fontScale";
 const READER_LINE_SPACING_STORAGE_KEY = "sb:reader:lineSpacingScale";
@@ -185,28 +201,6 @@ const FONT_SHEET_ALIGN_ROW: readonly {
   { align: "right", Icon: ReaderAlignRightIcon },
   { align: "justify", Icon: ReaderAlignJustifyIcon },
 ];
-
-function getReaderChapterNeighbors(
-  books: BibleBookNavItem[],
-  chapter: BibleChapter,
-  chapterNumber: number,
-): { prevChapter: ChapterNavTarget | null; nextChapter: ChapterNavTarget | null } {
-  const bookIndex = books.findIndex((b) => b.slug === chapter.bookSlug);
-  const currentBook = books[bookIndex];
-  const prevChapter: ChapterNavTarget | null =
-    chapterNumber > 1
-      ? { slug: chapter.bookSlug, chapter: chapterNumber - 1 }
-      : bookIndex > 0
-        ? { slug: books[bookIndex - 1]!.slug, chapter: books[bookIndex - 1]!.chapterCount }
-        : null;
-  const nextChapter: ChapterNavTarget | null =
-    currentBook && chapterNumber < currentBook.chapterCount
-      ? { slug: chapter.bookSlug, chapter: chapterNumber + 1 }
-      : bookIndex < books.length - 1
-        ? { slug: books[bookIndex + 1]!.slug, chapter: 1 }
-        : null;
-  return { prevChapter, nextChapter };
-}
 
 /** Font settings card: top inset inside the card (`ScrollView` content `paddingTop`). */
 const READER_FONT_CARD_PADDING_TOP_PX = 12;
@@ -299,50 +293,66 @@ export default function ReaderChapterScreen() {
     books: BibleBookNavItem[];
     chapter: BibleChapter;
   } | null>(null);
+  const readerPayloadRef = useRef(readerPayload);
+  readerPayloadRef.current = readerPayload;
   const [chapterMissing, setChapterMissing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
+    const slug = bookSlug ?? "";
+    const resolved = requestedTranslationId;
+    const cacheKey = readerChapterCacheKey(resolved, slug, chapterNumber);
+    const memHit = getCachedReaderChapter(cacheKey);
+    if (memHit) {
+      setReaderPayload(memHit);
+      return;
+    }
+
     void (async () => {
       try {
         setChapterMissing(false);
 
-        const slug = bookSlug ?? "";
-        let resolved: string = requestedTranslationId;
+        let resolvedTranslation = resolved;
+        const cachedPayload = readerPayloadRef.current;
+        const cachedBooks =
+          cachedPayload?.resolvedTranslationId === resolvedTranslation && cachedPayload.books.length > 0
+            ? cachedPayload.books
+            : null;
+
         let books: BibleBookNavItem[];
         let chapter: BibleChapter | null;
 
-        if (isTranslationId(resolved)) {
-          // Known translation: use core data layer (local JSON or API complete.json).
-          books = await getBookNavForTranslation(resolved);
-          chapter = await getChapterBySlugForTranslation(resolved, slug, chapterNumber);
-        } else {
-          // Brand-new API-only translation: fetch the single chapter directly and
-          // fall back to KJV's book nav (same Protestant canon order).
-          books = await getBookNavForTranslation("KJV");
-          const usfmCode = getUsfmBookId(slug);
-          chapter = null;
-          if (usfmCode) {
-            try {
-              const apiResult = await fetchApiChapter(resolved, usfmCode, chapterNumber);
-              const verseInlineContent = apiResult.verses.map((v) => v.inlineContent ?? []);
-              const hasInline = verseInlineContent.some((row) => row.length > 0);
-              chapter = {
-                bookName: apiResult.bookName,
-                bookSlug: slug,
-                chapterNumber: apiResult.chapterNumber,
-                verses: apiResult.verses.map((v) => v.text),
-                ...(hasInline ? { verseInlineContent } : {}),
-              };
-            } catch {
-              /* fall through to KJV fallback below */
+        if (resolvedTranslation === "KJV" || !readerUsesPerChapterFetch(resolvedTranslation)) {
+          if (isTranslationId(resolvedTranslation)) {
+            if (cachedBooks) {
+              books = cachedBooks;
+              chapter = await getChapterBySlugForTranslation(resolvedTranslation, slug, chapterNumber);
+            } else {
+              [books, chapter] = await Promise.all([
+                getBookNavForTranslation(resolvedTranslation),
+                getChapterBySlugForTranslation(resolvedTranslation, slug, chapterNumber),
+              ]);
             }
+          } else {
+            books = cachedBooks ?? (await resolveReaderBooksForTranslation(resolvedTranslation, null));
+            chapter = await fetchReaderChapterContent(resolvedTranslation, slug, chapterNumber);
           }
+        } else {
+          books = await resolveReaderBooksForTranslation(resolvedTranslation, cachedBooks);
+          if (!cachedBooks && isTranslationId(resolvedTranslation)) {
+            void getBookNavForTranslation(resolvedTranslation).then((nav) => {
+              if (cancelled) return;
+              setReaderPayload((curr) =>
+                curr?.resolvedTranslationId === resolvedTranslation ? { ...curr, books: nav } : curr,
+              );
+            });
+          }
+          chapter = await fetchReaderChapterContent(resolvedTranslation, slug, chapterNumber);
         }
 
         if (!chapter) {
-          resolved = "KJV";
+          resolvedTranslation = "KJV";
           books = await getBookNavForTranslation("KJV");
           chapter = await getChapterBySlugForTranslation("KJV", slug, chapterNumber);
         }
@@ -355,7 +365,9 @@ export default function ReaderChapterScreen() {
           return;
         }
 
-        setReaderPayload({ resolvedTranslationId: resolved, books, chapter });
+        const payload = { resolvedTranslationId: resolvedTranslation, books, chapter };
+        setCachedReaderChapter(cacheKey, payload);
+        setReaderPayload(payload);
       } catch {
         if (!cancelled) {
           setReaderPayload(null);
@@ -413,6 +425,24 @@ export default function ReaderChapterScreen() {
       task.cancel();
     };
   }, [kjvInlineEnrichmentKey]);
+
+  useEffect(() => {
+    const tid = requestedTranslationId;
+    if (tid === "KJV") return;
+    const booksForPrefetch =
+      readerPayload?.books ?? readerPayloadRef.current?.books ?? [];
+    if (booksForPrefetch.length === 0) return;
+    const slug = bookSlug ?? "";
+    const targets = collectPrefetchChapterTargets(
+      booksForPrefetch,
+      slug,
+      chapterNumber,
+      READER_CHAPTER_PREFETCH_DEPTH,
+    );
+    for (const target of targets) {
+      primeReaderChapterFetch(tid, target);
+    }
+  }, [requestedTranslationId, bookSlug, chapterNumber, readerPayload?.books]);
 
   const resolvedTranslationId = readerPayload?.resolvedTranslationId;
   const books = readerPayload?.books;
@@ -1543,10 +1573,10 @@ export default function ReaderChapterScreen() {
     noteModalVisible ||
     newEntrySheetOpen;
   const chapterNavArrowsEnabled =
-    isReaderContentCurrent &&
     !chapterNavArrowsOverlayOpen &&
     selectedVerses.length === 0 &&
-    chapter != null;
+    (chapterNav.prevChapter != null || chapterNav.nextChapter != null) &&
+    readerPayload?.resolvedTranslationId === requestedTranslationId;
   const {
     opacityAnim: chapterNavArrowsOpacityAnim,
     pointerEventsEnabled: chapterNavArrowsPointerEventsEnabled,
@@ -1577,16 +1607,25 @@ export default function ReaderChapterScreen() {
   const goToPrevChapter = useCallback(() => {
     const target = chapterNav.prevChapter;
     if (!target) return;
+    const tid = resolvedTranslationId ?? requestedTranslationId;
+    primeReaderChapterFetch(tid, target);
+    if (readerPayload?.books) {
+      primeReaderChapterFetch(
+        tid,
+        getReaderChapterNeighbors(
+          readerPayload.books,
+          { bookSlug: target.slug, chapterNumber: target.chapter },
+          target.chapter,
+        ).prevChapter,
+      );
+    }
     closeToolsMenu();
-    goToReaderChapter(
-      target.slug,
-      target.chapter,
-      resolvedTranslationId ?? requestedTranslationId,
-    );
+    goToReaderChapter(target.slug, target.chapter, tid);
   }, [
     chapterNav.prevChapter,
     closeToolsMenu,
     goToReaderChapter,
+    readerPayload?.books,
     resolvedTranslationId,
     requestedTranslationId,
   ]);
@@ -1594,16 +1633,25 @@ export default function ReaderChapterScreen() {
   const goToNextChapter = useCallback(() => {
     const target = chapterNav.nextChapter;
     if (!target) return;
+    const tid = resolvedTranslationId ?? requestedTranslationId;
+    primeReaderChapterFetch(tid, target);
+    if (readerPayload?.books) {
+      primeReaderChapterFetch(
+        tid,
+        getReaderChapterNeighbors(
+          readerPayload.books,
+          { bookSlug: target.slug, chapterNumber: target.chapter },
+          target.chapter,
+        ).nextChapter,
+      );
+    }
     closeToolsMenu();
-    goToReaderChapter(
-      target.slug,
-      target.chapter,
-      resolvedTranslationId ?? requestedTranslationId,
-    );
+    goToReaderChapter(target.slug, target.chapter, tid);
   }, [
     chapterNav.nextChapter,
     closeToolsMenu,
     goToReaderChapter,
+    readerPayload?.books,
     resolvedTranslationId,
     requestedTranslationId,
   ]);
@@ -1616,8 +1664,10 @@ export default function ReaderChapterScreen() {
     const tryChapterSwipeNavigate = (g: PanResponderGestureState) => {
       if (!chapterSwipeReleaseShouldNavigate(g, releaseThresholdPx)) return;
       if (g.dx <= -releaseThresholdPx && nextChapter) {
+        primeReaderChapterFetch(tid, nextChapter);
         goToReaderChapter(nextChapter.slug, nextChapter.chapter, tid);
       } else if (g.dx >= releaseThresholdPx && prevChapter) {
+        primeReaderChapterFetch(tid, prevChapter);
         goToReaderChapter(prevChapter.slug, prevChapter.chapter, tid);
       }
     };
@@ -1849,7 +1899,7 @@ export default function ReaderChapterScreen() {
   }, []);
 
   const readerChapterFlashListFooter = useCallback(() => {
-    if (!isReaderContentCurrent) return null;
+    if (readerPayload?.resolvedTranslationId !== requestedTranslationId) return null;
     const { prevChapter, nextChapter } = chapterNav;
     return (
       <Animated.View style={{ opacity: readerVersesOpacityAnim }}>
@@ -1905,7 +1955,8 @@ export default function ReaderChapterScreen() {
       </Animated.View>
     );
   }, [
-    isReaderContentCurrent,
+    readerPayload?.resolvedTranslationId,
+    requestedTranslationId,
     readerVersesOpacityAnim,
     chapterNav,
     colors.parchmentDark,
