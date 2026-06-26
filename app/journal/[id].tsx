@@ -333,6 +333,23 @@ function renderSavedReflection(contentHtml: string, bodyColor: string): React.Re
             contentFit="contain"
           />,
         );
+        const bodyAfterImg = block
+          .replace(/^<(?:p|div)[^>]*>/i, "")
+          .replace(/<\/(?:p|div)>$/i, "")
+          .replace(/<img\b[^>]*>/gi, "")
+          .replace(/&nbsp;/gi, " ");
+        const plainAfterImg = decodeHtmlEntities(bodyAfterImg.replace(/<[^>]*>/g, "").trim());
+        if (plainAfterImg) {
+          nodes.push(
+            <Text
+              key={`p-after-img-${i}`}
+              className="text-[17px] leading-8 mb-2"
+              style={{ fontFamily: "Lora_400Regular", color: bodyColor }}
+            >
+              {renderInlineHtml(bodyAfterImg)}
+            </Text>,
+          );
+        }
         return;
       }
       const body = block
