@@ -61,6 +61,9 @@ import {
   ReflectionNumberedListIcon,
 } from "@/components/journal-reflection-toolbar-icons";
 import { isTabletLayout, TABLET_NEW_ENTRY_MAX_WIDTH_PX } from "@/lib/tablet-layout";
+import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboardingLayer";
+import { useJournalEditorOnboarding } from "@/src/features/journal/useJournalEditorOnboarding";
+import type { JournalEditorOnboardingStepId } from "@/src/features/journal/journalEditorOnboardingSteps";
 
 const VERSE_PREVIEW_LIMIT = 150;
 const TOOLBAR_BTN_SIZE = 40;
@@ -316,6 +319,28 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const formatAnchorRef = useRef<View>(null);
   const formatAnchorFullscreenRef = useRef<View>(null);
+  const passageAnchorRef = useRef<View>(null);
+  const titleAnchorRef = useRef<View>(null);
+  const photoAnchorRef = useRef<View>(null);
+  const fullscreenAnchorRef = useRef<View>(null);
+
+  const editorOnboardingTargetRefs = useMemo(
+    (): Record<JournalEditorOnboardingStepId, React.RefObject<View | null>> => ({
+      "passage-anchoring": passageAnchorRef,
+      "optional-title": titleAnchorRef,
+      "rich-text-toolbar": formatAnchorRef,
+      "photo-attachment": photoAnchorRef,
+      "fullscreen-mode": fullscreenAnchorRef,
+    }),
+    [],
+  );
+
+  const editorOnboarding = useJournalEditorOnboarding({
+    enabled: !editDraft,
+    targetRefs: editorOnboardingTargetRefs,
+    screenW: windowWidth,
+    screenH: windowHeight,
+  });
   const popoverAnim = useRef(new Animated.Value(0)).current;
   const [formatMenuOpen, setFormatMenuOpen] = useState(false);
   const [popoverPlacement, setPopoverPlacement] = useState<{ top: number; left: number } | null>(null);
@@ -928,7 +953,12 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         </View>
       ) : null}
 
-      <View className="gap-1.5" style={{ paddingTop: 0, backgroundColor: modalSurfaceColor }}>
+      <View
+        ref={passageAnchorRef}
+        collapsable={false}
+        className="gap-1.5"
+        style={{ paddingTop: 0, backgroundColor: modalSurfaceColor }}
+      >
         <Text
           className="text-xs tracking-widest uppercase"
           style={{ fontFamily: "Inter_400Regular", color: colors.tan200 }}
@@ -1005,7 +1035,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         ) : null}
       </View>
 
-      <View className="gap-1.5" style={{ backgroundColor: modalSurfaceColor }}>
+      <View ref={titleAnchorRef} collapsable={false} className="gap-1.5" style={{ backgroundColor: modalSurfaceColor }}>
         <Text
           className="text-xs tracking-widest uppercase"
           style={{ fontFamily: "Inter_400Regular", color: colors.tan200 }}
@@ -1061,15 +1091,17 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             minHeight: TOOLBAR_BTN_SIZE,
           }}
         >
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Write reflection fullscreen"
-            onPress={openReflectionFullscreen}
-            activeOpacity={0.85}
-            style={reflectionToolbarButtonStyle}
-          >
-            <ReflectionFullscreenIcon size={20} color="#ffffff" />
-          </TouchableOpacity>
+          <View ref={fullscreenAnchorRef} collapsable={false}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Write reflection fullscreen"
+              onPress={openReflectionFullscreen}
+              activeOpacity={0.85}
+              style={reflectionToolbarButtonStyle}
+            >
+              <ReflectionFullscreenIcon size={20} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <TouchableOpacity
               accessibilityRole="button"
@@ -1111,15 +1143,17 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                 />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Attach image"
-              onPress={() => void attachReflectionImage()}
-              activeOpacity={0.85}
-              style={[reflectionToolbarButtonStyle, { marginLeft: TOOLBAR_FAN_GAP }]}
-            >
-              <ReflectionImageIcon size={18} color="#ffffff" />
-            </TouchableOpacity>
+            <View ref={photoAnchorRef} collapsable={false}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Attach image"
+                onPress={() => void attachReflectionImage()}
+                activeOpacity={0.85}
+                style={[reflectionToolbarButtonStyle, { marginLeft: TOOLBAR_FAN_GAP }]}
+              >
+                <ReflectionImageIcon size={18} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
         <View
@@ -1559,6 +1593,17 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         </View>
       </Animated.View>
     ) : null}
+
+    <JournalOnboardingLayer
+      visible={editorOnboarding.showLayer}
+      step={editorOnboarding.currentStep}
+      stepAnchor={editorOnboarding.stepAnchor}
+      colors={{
+        tooltipBackground: colors.brown800,
+        tooltipText: "#f5f2ec",
+        arrow: "#FFFFFF",
+      }}
+    />
     </>
   );
 });

@@ -10,7 +10,13 @@ import {
   StyleSheet,
   Text,
   View,
+  type Text as RNText,
 } from "react-native";
+import { FeatureOnboardingModal } from "@/src/components/feature-onboarding/FeatureOnboardingModal";
+import {
+  SpotlightOverlay,
+  type SpotlightTarget,
+} from "@/src/components/feature-onboarding/SpotlightOverlay";
 import Markdown from "react-native-markdown-display";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Asset } from "expo-asset";
@@ -67,7 +73,12 @@ export function OnboardingSlide4({ onFinish, onBack, onPrivacyPress: _onPrivacyP
   const [policyText, setPolicyText] = useState<string | null>(null);
   const [policyLoadError, setPolicyLoadError] = useState(false);
   const [privacyAgreed, setPrivacyAgreed] = useState(false);
+  const [privacySpotlightVisible, setPrivacySpotlightVisible] = useState(false);
+  const [privacySpotlightTarget, setPrivacySpotlightTarget] = useState<SpotlightTarget | null>(
+    null,
+  );
 
+  const privacyLinkRef = useRef<RNText>(null);
   const labelOpacity = useRef(new Animated.Value(0)).current;
   const labelY = useRef(new Animated.Value(SLIDE_START)).current;
   const headlineOpacity = useRef(new Animated.Value(0)).current;
@@ -131,9 +142,31 @@ export function OnboardingSlide4({ onFinish, onBack, onPrivacyPress: _onPrivacyP
     };
   }, []);
 
+  const dismissPrivacySpotlight = useCallback(() => {
+    setPrivacySpotlightVisible(false);
+  }, []);
+
   const openPrivacyModal = useCallback(() => {
+    setPrivacySpotlightVisible(false);
     setPrivacyModalVisible(true);
   }, []);
+
+  const showPrivacySpotlight = useCallback(() => {
+    privacyLinkRef.current?.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) {
+        openPrivacyModal();
+        return;
+      }
+      setPrivacySpotlightTarget({
+        x,
+        y,
+        width,
+        height,
+        shape: "pill",
+      });
+      setPrivacySpotlightVisible(true);
+    });
+  }, [openPrivacyModal]);
 
   const closePrivacyModal = useCallback(() => {
     setPrivacyModalVisible(false);
@@ -141,8 +174,17 @@ export function OnboardingSlide4({ onFinish, onBack, onPrivacyPress: _onPrivacyP
 
   const onPrivacyAgree = useCallback(() => {
     setPrivacyAgreed(true);
+    setPrivacySpotlightVisible(false);
     setPrivacyModalVisible(false);
   }, []);
+
+  const handleBeginReadingPress = useCallback(() => {
+    if (privacyAgreed) {
+      onFinish?.();
+      return;
+    }
+    showPrivacySpotlight();
+  }, [onFinish, privacyAgreed, showPrivacySpotlight]);
 
   const openLivePrivacyPolicy = useCallback(() => {
     void (async () => {
@@ -294,13 +336,15 @@ export function OnboardingSlide4({ onFinish, onBack, onPrivacyPress: _onPrivacyP
                 </Text>{" "}
                 and{" "}
                 <Text
+                  ref={privacyLinkRef}
                   onPress={openPrivacyModal}
                   style={[styles.privacyLink, { color: ui.gold }]}
                   accessibilityRole="link"
                   accessibilityLabel="Privacy Policy"
                 >
                   Privacy Policy
-                </Text>.
+                </Text>
+                .
               </Text>
             </Animated.View>
           </View>
@@ -309,12 +353,10 @@ export function OnboardingSlide4({ onFinish, onBack, onPrivacyPress: _onPrivacyP
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Begin Reading"
-              accessibilityState={{ disabled: !privacyAgreed }}
               accessibilityHint={
                 privacyAgreed ? undefined : "Open the Privacy Policy and tap I agree to continue."
               }
-              disabled={!privacyAgreed}
-              onPress={onFinish}
+              onPress={handleBeginReadingPress}
               style={({ pressed }) => [
                 styles.beginButton,
                 privacyAgreed && pressed && styles.beginButtonPressed,
@@ -403,6 +445,28 @@ export function OnboardingSlide4({ onFinish, onBack, onPrivacyPress: _onPrivacyP
         </SafeAreaView>
       </Modal>
       <TermsOfServiceSheet visible={termsModalVisible} onClose={() => setTermsModalVisible(false)} />
+
+      <FeatureOnboardingModal
+        visible={privacySpotlightVisible && privacySpotlightTarget != null}
+        animationType="fade"
+      >
+        {privacySpotlightTarget ? (
+          <SpotlightOverlay
+            targets={[privacySpotlightTarget]}
+            message="Agree to our Privacy Policy first"
+            subtitle="Tap Privacy Policy, then tap I agree to continue."
+            onDismiss={dismissPrivacySpotlight}
+            allowTargetInteraction
+            labelPosition="below"
+            labelGap={12}
+            targetPadding={6}
+            colors={{
+              tooltipBackground: ui.brown800,
+              tooltipText: PRIVACY_MODAL_BUTTON_LABEL,
+            }}
+          />
+        ) : null}
+      </FeatureOnboardingModal>
     </>
   );
 }

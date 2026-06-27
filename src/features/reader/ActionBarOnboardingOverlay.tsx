@@ -22,9 +22,15 @@ type OnboardingTooltipStep = {
   description: string;
 };
 
+type TooltipPlacement = "above" | "below";
+
 type ActionBarOnboardingOverlayProps = {
   step: OnboardingTooltipStep;
   buttonAnchor: LayoutRectangle;
+  /** Default `above`: tooltip sits above the target with a down arrow. */
+  tooltipPlacement?: TooltipPlacement;
+  /** Shifts the tooltip and arrow down (positive) or up (negative). */
+  verticalOffsetPx?: number;
   colors: {
     tooltipBackground: string;
     tooltipText: string;
@@ -35,6 +41,8 @@ type ActionBarOnboardingOverlayProps = {
 export function ActionBarOnboardingOverlay({
   step,
   buttonAnchor,
+  tooltipPlacement = "above",
+  verticalOffsetPx = 0,
   colors,
 }: ActionBarOnboardingOverlayProps) {
   const { width: screenW } = useWindowDimensions();
@@ -64,16 +72,24 @@ export function ActionBarOnboardingOverlay({
 
   const arrowTranslateY = arrowAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, ARROW_NUDGE_PX],
+    outputRange:
+      tooltipPlacement === "below" ? [0, -ARROW_NUDGE_PX] : [0, ARROW_NUDGE_PX],
   });
 
   const buttonCenterX = buttonAnchor.x + buttonAnchor.width / 2;
   const tooltipMaxWidth = Math.min(240, screenW - 32);
   const tooltipLeft = Math.max(16, Math.min(buttonCenterX - tooltipMaxWidth / 2, screenW - tooltipMaxWidth - 16));
-  const tooltipBottom = buttonAnchor.y - ARROW_GAP_PX - ARROW_SIZE_PX;
-  const tooltipTop = Math.max(20, tooltipBottom - TOOLTIP_EST_HEIGHT_PX);
   const arrowLeft = buttonCenterX - ARROW_SIZE_PX / 2;
-  const arrowTop = buttonAnchor.y - ARROW_GAP_PX - ARROW_SIZE_PX;
+
+  const arrowTop =
+    tooltipPlacement === "below"
+      ? buttonAnchor.y + buttonAnchor.height + ARROW_GAP_PX + verticalOffsetPx
+      : buttonAnchor.y - ARROW_GAP_PX - ARROW_SIZE_PX + verticalOffsetPx;
+
+  const tooltipTop =
+    tooltipPlacement === "below"
+      ? arrowTop + ARROW_SIZE_PX + ARROW_GAP_PX
+      : Math.max(20, arrowTop - TOOLTIP_EST_HEIGHT_PX);
 
   return (
     <View style={styles.root} pointerEvents="none">
@@ -107,7 +123,11 @@ export function ActionBarOnboardingOverlay({
           },
         ]}
       >
-        <Ionicons name="arrow-down" size={ARROW_SIZE_PX} color={colors.arrow} />
+        <Ionicons
+          name={tooltipPlacement === "below" ? "arrow-up" : "arrow-down"}
+          size={ARROW_SIZE_PX}
+          color={colors.arrow}
+        />
       </Animated.View>
     </View>
   );

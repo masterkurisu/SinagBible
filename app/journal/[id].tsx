@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import * as FileSystem from "expo-file-system";
@@ -40,6 +41,9 @@ import {
   resolvePassageBookSlugForTranslation,
   type TranslationId,
 } from "@sinag-bible/core/bible-translations";
+import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboardingLayer";
+import { useJournalDetailOnboarding } from "@/src/features/journal/useJournalDetailOnboarding";
+import type { JournalDetailOnboardingStepId } from "@/src/features/journal/journalDetailOnboardingSteps";
 
 const JOURNAL_TITLE_BOTTOM_MARGIN_PX = 10;
 const JOURNAL_DATE_BOTTOM_MARGIN_PX = 10;
@@ -385,6 +389,7 @@ function renderSavedReflection(contentHtml: string, bodyColor: string): React.Re
 export default function JournalEntryScreen() {
   const router = useRouter();
   const pathname = usePathname();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const { id: idParam } = useLocalSearchParams<{ id?: string | string[] }>();
   const id = resolveJournalEntryRouteId(idParam, pathname);
   const { bundle } = useMobileAppTheme();
@@ -394,6 +399,17 @@ export default function JournalEntryScreen() {
 
   const scrollRef = useRef<ScrollView>(null);
   const shareCaptureRef = useRef<View>(null);
+  const shareActionRef = useRef<View>(null);
+  const saveActionRef = useRef<View>(null);
+  const pdfActionRef = useRef<View>(null);
+  const detailOnboardingTargetRefs = useMemo(
+    (): Record<JournalDetailOnboardingStepId, React.RefObject<View | null>> => ({
+      "share-as-image": shareActionRef,
+      "save-to-library": saveActionRef,
+      "export-as-pdf": pdfActionRef,
+    }),
+    [],
+  );
   const [showScrollToTop, setShowScrollToTop] = useState(false);
   const [exportAction, setExportAction] = useState<null | "share" | "save" | "pdf">(null);
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -404,6 +420,13 @@ export default function JournalEntryScreen() {
   const [storageAccessError, setStorageAccessError] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [verseText, setVerseText] = useState<string | null>(null);
+
+  const detailOnboarding = useJournalDetailOnboarding({
+    entryReady: entry != null && !loadError,
+    targetRefs: detailOnboardingTargetRefs,
+    screenW,
+    screenH,
+  });
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -744,66 +767,72 @@ export default function JournalEntryScreen() {
             entry && !loadError
               ? () => (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 2, marginRight: 2 }}>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Share journal as image"
-                      onPress={() => void handleShareImage()}
-                      disabled={exportAction !== null}
-                      activeOpacity={0.85}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 999,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {exportAction === "share" ? (
-                        <ActivityIndicator color={headerIconColor} size="small" />
-                      ) : (
-                        <ShareOutlineIcon color={headerIconColor} />
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Save journal as image"
-                      onPress={() => void handleDownloadImage()}
-                      disabled={exportAction !== null}
-                      activeOpacity={0.85}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 999,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {exportAction === "save" ? (
-                        <ActivityIndicator color={headerIconColor} size="small" />
-                      ) : (
-                        <DownloadOutlineIcon color={headerIconColor} />
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Download journal as PDF"
-                      onPress={() => void handleDownloadPdf()}
-                      disabled={exportAction !== null}
-                      activeOpacity={0.85}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 999,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {exportAction === "pdf" ? (
-                        <ActivityIndicator color={headerIconColor} size="small" />
-                      ) : (
-                        <Ionicons name="document-text-outline" size={22} color={headerIconColor} />
-                      )}
-                    </TouchableOpacity>
+                    <View ref={shareActionRef} collapsable={false}>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Share journal as image"
+                        onPress={() => void handleShareImage()}
+                        disabled={exportAction !== null}
+                        activeOpacity={0.85}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 999,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {exportAction === "share" ? (
+                          <ActivityIndicator color={headerIconColor} size="small" />
+                        ) : (
+                          <ShareOutlineIcon color={headerIconColor} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                    <View ref={saveActionRef} collapsable={false}>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Save journal as image"
+                        onPress={() => void handleDownloadImage()}
+                        disabled={exportAction !== null}
+                        activeOpacity={0.85}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 999,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {exportAction === "save" ? (
+                          <ActivityIndicator color={headerIconColor} size="small" />
+                        ) : (
+                          <DownloadOutlineIcon color={headerIconColor} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                    <View ref={pdfActionRef} collapsable={false}>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Download journal as PDF"
+                        onPress={() => void handleDownloadPdf()}
+                        disabled={exportAction !== null}
+                        activeOpacity={0.85}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 999,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {exportAction === "pdf" ? (
+                          <ActivityIndicator color={headerIconColor} size="small" />
+                        ) : (
+                          <Ionicons name="document-text-outline" size={22} color={headerIconColor} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )
               : undefined,
@@ -1038,6 +1067,19 @@ export default function JournalEntryScreen() {
           </>
         )}
       </View>
+
+      <JournalOnboardingLayer
+        visible={detailOnboarding.showLayer}
+        step={detailOnboarding.currentStep}
+        stepAnchor={detailOnboarding.stepAnchor}
+        tooltipPlacement="below"
+        verticalOffsetPx={15}
+        colors={{
+          tooltipBackground: colors.brown800,
+          tooltipText: "#f5f2ec",
+          arrow: "#FFFFFF",
+        }}
+      />
     </>
   );
 }

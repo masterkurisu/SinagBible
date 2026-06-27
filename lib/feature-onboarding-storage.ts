@@ -6,6 +6,8 @@ export const FEATURE_ONBOARDING_STORAGE_KEYS = {
   readerSettings: "sb:featureOnboarding:readerSettings:v1",
   readerActionBar: "sb:featureOnboarding:readerActionBar:v1",
   journal: "sb:featureOnboarding:journal:v1",
+  journalEditor: "sb:featureOnboarding:journalEditor:v1",
+  journalDetail: "sb:featureOnboarding:journalDetail:v1",
 } as const;
 
 export type FeatureOnboardingPage = keyof typeof FEATURE_ONBOARDING_STORAGE_KEYS;

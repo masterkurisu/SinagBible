@@ -2,15 +2,22 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, type LayoutRectangle } from "react-native";
 import { FeatureOnboardingModal } from "@/src/components/feature-onboarding/FeatureOnboardingModal";
 import { ActionBarOnboardingOverlay } from "@/src/features/reader/ActionBarOnboardingOverlay";
-import type { JournalOnboardingStep } from "@/src/features/journal/journalOnboardingSteps";
 
 const FADE_IN_MS = 280;
 const FADE_OUT_MS = 320;
 
+type OnboardingTooltipStep = {
+  id: string;
+  title: string;
+  description: string;
+};
+
 type JournalOnboardingLayerProps = {
   visible: boolean;
-  step: JournalOnboardingStep | null;
+  step: OnboardingTooltipStep | null;
   stepAnchor: LayoutRectangle | null;
+  tooltipPlacement?: "above" | "below";
+  verticalOffsetPx?: number;
   colors: {
     tooltipBackground: string;
     tooltipText: string;
@@ -22,11 +29,13 @@ export function JournalOnboardingLayer({
   visible,
   step,
   stepAnchor,
+  tooltipPlacement = "above",
+  verticalOffsetPx = 0,
   colors,
 }: JournalOnboardingLayerProps) {
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);
-  const [displayStep, setDisplayStep] = useState<JournalOnboardingStep | null>(null);
+  const [displayStep, setDisplayStep] = useState<OnboardingTooltipStep | null>(null);
   const [displayAnchor, setDisplayAnchor] = useState<LayoutRectangle | null>(null);
   const displayStepIdRef = useRef<string | null>(null);
   const fadeOutAnimRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -113,6 +122,8 @@ export function JournalOnboardingLayer({
           <ActionBarOnboardingOverlay
             step={displayStep}
             buttonAnchor={displayAnchor}
+            tooltipPlacement={tooltipPlacement}
+            verticalOffsetPx={verticalOffsetPx}
             colors={colors}
           />
         </Animated.View>
