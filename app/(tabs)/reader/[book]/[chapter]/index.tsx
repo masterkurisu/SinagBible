@@ -137,7 +137,10 @@ import {
   type SelectorTestamentTab,
 } from "@/src/features/reader/ReaderModals";
 import { ReaderFeatureOnboardingLayer } from "@/src/features/reader/ReaderFeatureOnboardingLayer";
+import { ReaderSettingsOnboardingLayer } from "@/src/features/reader/ReaderSettingsOnboardingLayer";
 import { useReaderFeatureOnboarding, type ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
+import { useReaderSettingsOnboarding } from "@/src/features/reader/useReaderSettingsOnboarding";
+import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
 
 const TRANSLATION_IDS = [
   "KJV",
@@ -493,6 +496,23 @@ export default function ReaderChapterScreen() {
   const headerToolsGroupRef = useRef<View | null>(null);
   const [headerToolsPillRect, setHeaderToolsPillRect] = useState<LayoutRectangle | null>(null);
   const [headerToolsLayoutEpoch, setHeaderToolsLayoutEpoch] = useState(0);
+  const settingsOnboardingTranslationRef = useRef<View | null>(null);
+  const settingsOnboardingStudyNotesRef = useRef<View | null>(null);
+  const settingsOnboardingFontSettingsRef = useRef<View | null>(null);
+  const settingsOnboardingThemesRef = useRef<View | null>(null);
+  const settingsOnboardingCreditsRef = useRef<View | null>(null);
+  const settingsOnboardingDeleteMyDataRef = useRef<View | null>(null);
+  const settingsOnboardingRowRefs = useMemo(
+    (): Record<ReaderSettingsOnboardingStepId, React.RefObject<View | null>> => ({
+      translation: settingsOnboardingTranslationRef,
+      "study-notes": settingsOnboardingStudyNotesRef,
+      "font-settings": settingsOnboardingFontSettingsRef,
+      themes: settingsOnboardingThemesRef,
+      credits: settingsOnboardingCreditsRef,
+      "delete-my-data": settingsOnboardingDeleteMyDataRef,
+    }),
+    [],
+  );
   const translationFanRef = useRef<View | null>(null);
   const themesFanRef = useRef<View | null>(null);
   const fontSettingsFanRef = useRef<View | null>(null);
@@ -2026,6 +2046,18 @@ export default function ReaderChapterScreen() {
       : readerAndroidTopToolsTopPx + 44 + 10) +
     (isTabletLayout(windowWidth, windowHeight) ? 55 : 0);
 
+  /**
+   * Reader chrome (stack header + 44px tool pill) sits above the settings strip; pad past it.
+   * Extra clearance so the first row (Translation) is not under native `headerRight` / tools — that
+   * blocked taps. +10px lowers all menu rows together.
+   */
+  const readerMobileSettingsScrollPaddingTop =
+    (Platform.OS === "ios"
+      ? insets.top + 44 + 12
+      : Math.max(insets.top + 56, readerAndroidTopToolsTopPx + 44 + 12)) +
+    (isTabletReaderLayout ? 10 : 0) +
+    10;
+
   const measureHeaderToolsPill = useCallback(() => {
     headerToolsGroupRef.current?.measureInWindow((x, y, width, height) => {
       if (width <= 0 || height <= 0) return;
@@ -2071,6 +2103,15 @@ export default function ReaderChapterScreen() {
 
   onboardingStepRef.current = readerFeatureOnboarding.currentStep;
   completeOnboardingInteractionRef.current = readerFeatureOnboarding.completeInteractionStep;
+
+  const readerSettingsOnboarding = useReaderSettingsOnboarding({
+    toolsMenuOpen,
+    rowRefs: settingsOnboardingRowRefs,
+    scrollPaddingTop: readerMobileSettingsScrollPaddingTop,
+    screenW: windowWidth,
+    screenH: windowHeight,
+    insets,
+  });
 
   useEffect(() => {
     if (readerFeatureOnboarding.currentStep !== "clear-selection") {
@@ -2363,18 +2404,6 @@ export default function ReaderChapterScreen() {
     </View>
   );
 
-  /**
-   * Reader chrome (stack header + 44px tool pill) sits above the settings strip; pad past it.
-   * Extra clearance so the first row (Translation) is not under native `headerRight` / tools — that
-   * blocked taps. +10px lowers all menu rows together.
-   */
-  const readerMobileSettingsScrollPaddingTop =
-    (Platform.OS === "ios"
-      ? insets.top + 44 + 12
-      : Math.max(insets.top + 56, readerAndroidTopToolsTopPx + 44 + 12)) +
-    (isTabletReaderLayout ? 10 : 0) +
-    10;
-
   return (
     <View style={{ flex: 1, backgroundColor: rc.sceneSurface }}>
       <ReaderMobileSettingsPanel
@@ -2387,6 +2416,7 @@ export default function ReaderChapterScreen() {
         onSelectTranslation={openMobileReaderTranslationFromMenu}
         onSelectCommentary={openMobileReaderCommentaryFromMenu}
         onSelectDeleteMyData={openDeleteMyDataConfirmFromMenu}
+        settingsOnboardingRowRefs={settingsOnboardingRowRefs}
       />
       <Animated.View
         {...(toolsMenuOpen ? readerSettingsMenuPanResponder.panHandlers : {})}
@@ -3015,6 +3045,17 @@ export default function ReaderChapterScreen() {
           tooltipBackground: rc.selectionBackground,
           tooltipText: rc.selectionText,
           scrim: "rgba(0,0,0,0.45)",
+        }}
+      />
+
+      <ReaderSettingsOnboardingLayer
+        visible={readerSettingsOnboarding.showLayer}
+        step={readerSettingsOnboarding.currentStep}
+        rowAnchor={readerSettingsOnboarding.rowAnchor}
+        colors={{
+          tooltipBackground: rc.selectionBackground,
+          tooltipText: rc.selectionText,
+          arrow: "#FFFFFF",
         }}
       />
     </View>

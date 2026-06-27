@@ -4,20 +4,27 @@ import { Modal, Platform, StyleSheet, View } from "react-native";
 type FeatureOnboardingModalProps = {
   visible: boolean;
   children: ReactNode;
+  pointerEvents?: "auto" | "box-none" | "none";
+  animationType?: "none" | "fade" | "slide";
 };
 
 /** Full-screen modal so onboarding sits above native stack headers and tab bars. */
-export function FeatureOnboardingModal({ visible, children }: FeatureOnboardingModalProps) {
+export function FeatureOnboardingModal({
+  visible,
+  children,
+  pointerEvents = "auto",
+  animationType = "fade",
+}: FeatureOnboardingModalProps) {
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType={animationType}
       statusBarTranslucent
       onRequestClose={() => {}}
       presentationStyle="overFullScreen"
     >
-      <View style={styles.root} pointerEvents="auto">
+      <View style={styles.root} pointerEvents={pointerEvents}>
         {children}
       </View>
     </Modal>

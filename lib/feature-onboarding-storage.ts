@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 /** AsyncStorage keys for per-screen first-use feature tours. */
 export const FEATURE_ONBOARDING_STORAGE_KEYS = {
   reader: "sb:featureOnboarding:reader:v1",
+  readerSettings: "sb:featureOnboarding:readerSettings:v1",
 } as const;
 
 export type FeatureOnboardingPage = keyof typeof FEATURE_ONBOARDING_STORAGE_KEYS;

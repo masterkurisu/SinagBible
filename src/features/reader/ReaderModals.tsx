@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode, type RefObject } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -58,6 +58,7 @@ import { ReaderFontSettingsIcon } from "@/components/icons/ReaderFontSettingsIco
 import { CreditsIcon } from "@/components/icons/CreditsIcon";
 import { ReaderThemesPaletteIcon } from "@/components/icons/ReaderThemesPaletteIcon";
 import { DeleteMyDataIcon } from "@/components/icons/DeleteMyDataIcon";
+import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import {
   ReaderAlignCenterIcon,
   ReaderAlignJustifyIcon,
@@ -207,6 +208,9 @@ export type ReaderMobileSettingsPanelProps = {
   onSelectTranslation: () => void;
   onSelectCommentary: () => void;
   onSelectDeleteMyData: () => void;
+  settingsOnboardingRowRefs?: Partial<
+    Record<ReaderSettingsOnboardingStepId, RefObject<View | null>>
+  >;
 };
 
 const SETTINGS_MENU_ICON_COLOR = "#ffffff";
@@ -245,36 +249,51 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
     onSelectTranslation,
     onSelectCommentary,
     onSelectDeleteMyData,
+    settingsOnboardingRowRefs,
   } = props;
   const deleteMyDataBottomPx =
     nativeTabSheetBottomInsetPx(insets.bottom, 10) + (Platform.OS === "ios" ? 30 : 70);
 
   const rows: {
+    id: ReaderSettingsOnboardingStepId;
     label: string;
     onPress: () => void;
     Icon: ComponentType<ReaderSettingsMenuIconProps>;
     iconSize?: number;
   }[] = [
     {
+      id: "translation",
       label: "Translation",
       onPress: onSelectTranslation,
       Icon: BookIcon,
       iconSize: SETTINGS_MENU_OPTICAL_ICON_SIZE,
     },
-    { label: "Study Notes", onPress: onSelectCommentary, Icon: StudyNotesResearchIcon },
     {
+      id: "study-notes",
+      label: "Study Notes",
+      onPress: onSelectCommentary,
+      Icon: StudyNotesResearchIcon,
+    },
+    {
+      id: "font-settings",
       label: "Font settings",
       onPress: onSelectFontSettings,
       Icon: ReaderFontSettingsIcon,
       iconSize: SETTINGS_MENU_OPTICAL_ICON_SIZE,
     },
     {
+      id: "themes",
       label: "Themes",
       onPress: onSelectThemes,
       Icon: ReaderThemesPaletteIcon,
       iconSize: SETTINGS_MENU_OPTICAL_ICON_SIZE,
     },
-    { label: "Credits", onPress: onSelectCredits, Icon: CreditsIcon },
+    {
+      id: "credits",
+      label: "Credits",
+      onPress: onSelectCredits,
+      Icon: CreditsIcon,
+    },
   ];
 
   return (
@@ -293,9 +312,9 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
         }}
       >
         <View className="gap-2.5">
-        {rows.map(({ label, onPress, Icon, iconSize }) => (
+        {rows.map(({ id, label, onPress, Icon, iconSize }) => (
           <TouchableOpacity
-            key={label}
+            key={id}
             style={{ width: "100%" }}
             onPress={() => {
               hapticLightImpact();
@@ -306,6 +325,8 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
             accessibilityRole="button"
           >
             <View
+              ref={settingsOnboardingRowRefs?.[id]}
+              collapsable={false}
               style={[
                 READER_MOBILE_SETTINGS_MENU_ROW,
                 { backgroundColor: READER_MOBILE_SETTINGS_ROW },
@@ -342,7 +363,11 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
         accessibilityLabel="Delete My Data"
         accessibilityRole="button"
       >
-        <View style={[READER_MOBILE_SETTINGS_MENU_ROW, { backgroundColor: "rgba(193, 18, 31, 0.2)" }]}>
+        <View
+          ref={settingsOnboardingRowRefs?.["delete-my-data"]}
+          collapsable={false}
+          style={[READER_MOBILE_SETTINGS_MENU_ROW, { backgroundColor: "rgba(193, 18, 31, 0.2)" }]}
+        >
           <Text
             style={{
               fontFamily: "Inter_400Regular",
