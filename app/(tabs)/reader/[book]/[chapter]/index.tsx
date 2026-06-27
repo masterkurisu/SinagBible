@@ -136,6 +136,8 @@ import {
   type ReaderToolsDropdown,
   type SelectorTestamentTab,
 } from "@/src/features/reader/ReaderModals";
+import { ReaderFeatureOnboardingLayer } from "@/src/features/reader/ReaderFeatureOnboardingLayer";
+import { useReaderFeatureOnboarding, type ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 
 const TRANSLATION_IDS = [
   "KJV",
@@ -485,6 +487,12 @@ export default function ReaderChapterScreen() {
   const [dropdownAnchor, setDropdownAnchor] = useState<LayoutRectangle | null>(null);
 
   const bookFanRef = useRef<View | null>(null);
+  const settingsButtonRef = useRef<View | null>(null);
+  const selectionBannerAnchorRef = useRef<View | null>(null);
+  const selectionBannerLiveRef = useRef<View | null>(null);
+  const headerToolsGroupRef = useRef<View | null>(null);
+  const [headerToolsPillRect, setHeaderToolsPillRect] = useState<LayoutRectangle | null>(null);
+  const [headerToolsLayoutEpoch, setHeaderToolsLayoutEpoch] = useState(0);
   const translationFanRef = useRef<View | null>(null);
   const themesFanRef = useRef<View | null>(null);
   const fontSettingsFanRef = useRef<View | null>(null);
@@ -970,6 +978,34 @@ export default function ReaderChapterScreen() {
     closeToolsMenu,
   });
 
+  const onboardingStepRef = useRef<ReaderOnboardingStep | null>(null);
+  const completeOnboardingInteractionRef = useRef<() => void>(() => {});
+  const clearSelectionPrimedRef = useRef(false);
+
+  const handleVerseTapForOnboarding = useCallback(
+    (verseNum: number) => {
+      const onClearStep = onboardingStepRef.current === "clear-selection";
+      const wasSelected = selectedVerseNumbers.has(verseNum);
+      handleVerseTap(verseNum);
+      if (onboardingStepRef.current === "tap-select-verse") {
+        completeOnboardingInteractionRef.current();
+      } else if (onClearStep && wasSelected) {
+        completeOnboardingInteractionRef.current();
+      }
+    },
+    [handleVerseTap, selectedVerseNumbers],
+  );
+
+  const handleVerseLongPressForOnboarding = useCallback(
+    (verseNum: number) => {
+      handleVerseLongPress(verseNum);
+      if (onboardingStepRef.current === "long-press-highlight") {
+        completeOnboardingInteractionRef.current();
+      }
+    },
+    [handleVerseLongPress],
+  );
+
   /** `onPressIn` clears without waiting for lift; `onPress` covers VoiceOver. No time debounce — a missed tap must register immediately on retry. */
   const selectionToastHapticGuardRef = useRef(0);
   const dismissSelectionToast = useCallback(() => {
@@ -977,6 +1013,9 @@ export default function ReaderChapterScreen() {
     if (t - selectionToastHapticGuardRef.current > 55) {
       selectionToastHapticGuardRef.current = t;
       hapticSelection();
+    }
+    if (onboardingStepRef.current === "clear-selection") {
+      completeOnboardingInteractionRef.current();
     }
     clearVerseSelection();
   }, [clearVerseSelection]);
@@ -1877,8 +1916,8 @@ export default function ReaderChapterScreen() {
           stableVisualData={stableVisualData}
           readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
           readerVersesOpacityAnim={readerVersesOpacityAnim}
-          onVersePress={handleVerseTap}
-          onVerseLongPress={handleVerseLongPress}
+          onVersePress={handleVerseTapForOnboarding}
+          onVerseLongPress={handleVerseLongPressForOnboarding}
         />
       );
     },
@@ -1887,8 +1926,8 @@ export default function ReaderChapterScreen() {
       interactionData,
       stableVisualData,
       readerVersesOpacityAnim,
-      handleVerseTap,
-      handleVerseLongPress,
+      handleVerseTapForOnboarding,
+      handleVerseLongPressForOnboarding,
       readerTabletLandscapeTwoColumn,
     ],
   );
@@ -1969,6 +2008,96 @@ export default function ReaderChapterScreen() {
     insets.bottom,
   ]);
 
+  const readerOverlayOpen =
+    toolsMenuOpen ||
+    fontSettingsSheetOpen ||
+    readerDropdown != null ||
+    readerPrivacyPolicyOpen ||
+    readerCreditsOpen ||
+    noteModalVisible ||
+    newEntrySheetOpen;
+
+  const readerAndroidTopToolsTopPx = Math.max(insets.top, 8) + 2;
+
+  /** Below stack header / in-screen tool pill so the toast is not under native header touch targets. */
+  const selectionBannerTopPx =
+    (Platform.OS === "ios"
+      ? insets.top + 44 + 10
+      : readerAndroidTopToolsTopPx + 44 + 10) +
+    (isTabletLayout(windowWidth, windowHeight) ? 55 : 0);
+
+  const measureHeaderToolsPill = useCallback(() => {
+    headerToolsGroupRef.current?.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) return;
+      const next = { x, y, width, height };
+      setHeaderToolsPillRect((prev) => {
+        if (
+          prev &&
+          Math.abs(prev.x - next.x) < 1 &&
+          Math.abs(prev.y - next.y) < 1 &&
+          Math.abs(prev.width - next.width) < 1 &&
+          Math.abs(prev.height - next.height) < 1
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!headerToolsPillRect) return;
+    setHeaderToolsLayoutEpoch((epoch) => epoch + 1);
+  }, [headerToolsPillRect]);
+
+  const readerFeatureOnboarding = useReaderFeatureOnboarding({
+    readerContentReady: readerPayload != null && !chapterMissing,
+    readerOverlayOpen,
+    bookButtonRef: bookFanRef,
+    settingsButtonRef,
+    selectionBannerRef: selectionBannerLiveRef,
+    headerToolsPillRect,
+    headerToolsLayoutEpoch,
+    insets,
+    screenW: windowWidth,
+    screenH: windowHeight,
+    hasPrevChapter: chapterNav.prevChapter != null,
+    hasNextChapter: chapterNav.nextChapter != null,
+    selectionBannerTopPx,
+    androidTopToolsTopPx: readerAndroidTopToolsTopPx,
+    selectedVerseCount: selectedVerses.length,
+    onTourComplete: clearVerseSelection,
+  });
+
+  onboardingStepRef.current = readerFeatureOnboarding.currentStep;
+  completeOnboardingInteractionRef.current = readerFeatureOnboarding.completeInteractionStep;
+
+  useEffect(() => {
+    if (readerFeatureOnboarding.currentStep !== "clear-selection") {
+      clearSelectionPrimedRef.current = false;
+      return;
+    }
+    if (clearSelectionPrimedRef.current) return;
+    if (selectedVerses.length > 0) {
+      clearSelectionPrimedRef.current = true;
+      return;
+    }
+    if (!chapter?.verses?.length) return;
+    clearSelectionPrimedRef.current = true;
+    toggleVerseSelection(1);
+  }, [
+    readerFeatureOnboarding.currentStep,
+    selectedVerses.length,
+    chapter?.verses?.length,
+    toggleVerseSelection,
+  ]);
+
+  useEffect(() => {
+    if (readerFeatureOnboarding.forceChapterNavArrowsVisible) {
+      chapterNavArrowsOpacityAnim.setValue(1);
+    }
+  }, [readerFeatureOnboarding.forceChapterNavArrowsVisible, chapterNavArrowsOpacityAnim]);
+
   if (chapterMissing) {
     return (
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: rc.sceneSurface }}>
@@ -2028,14 +2157,6 @@ export default function ReaderChapterScreen() {
 
   const { prevChapter, nextChapter } = chapterNav;
 
-  const readerOverlayOpen =
-    toolsMenuOpen ||
-    fontSettingsSheetOpen ||
-    readerDropdown != null ||
-    readerPrivacyPolicyOpen ||
-    readerCreditsOpen ||
-    noteModalVisible ||
-    newEntrySheetOpen;
   /**
    * Do not tie chapter swipes to `isReaderContentCurrent`: after `setParams`, the route updates
    * immediately but `readerPayload` is still the previous chapter until the async load finishes.
@@ -2090,8 +2211,6 @@ export default function ReaderChapterScreen() {
       : newEntrySheetAvailableHeightPx;
   const newEntrySheetTopPx =
     windowHeight - newEntrySheetBottomInsetWithLiftPx - newEntrySheetTargetHeightPx;
-  const selectionBannerTopPx =
-    Math.max(insets.top, 12) + 4 + 30 + (isTabletLayout(windowWidth, windowHeight) ? 55 : 0);
   const copyToastTopPx = selectionBannerTopPx + (hasVerseSelection ? 22 : 36);
 
   const screenW = windowWidth;
@@ -2143,7 +2262,7 @@ export default function ReaderChapterScreen() {
 
   const readerSettingsToolsRow =
     Platform.OS === "android" ? (
-      <View collapsable={false} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+      <View ref={settingsButtonRef} collapsable={false} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
         <TouchableOpacity
           onPress={toggleToolsMenu}
           activeOpacity={0.7}
@@ -2159,7 +2278,7 @@ export default function ReaderChapterScreen() {
         </TouchableOpacity>
       </View>
     ) : (
-    <View collapsable={false} className="h-11 w-11 items-center justify-center">
+    <View ref={settingsButtonRef} collapsable={false} className="h-11 w-11 items-center justify-center">
       <Pressable
         className="h-11 w-11 items-center justify-center rounded-full"
         hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
@@ -2223,6 +2342,9 @@ export default function ReaderChapterScreen() {
 
   const readerHeaderToolsGroup = (
     <View
+      ref={headerToolsGroupRef}
+      collapsable={false}
+      onLayout={measureHeaderToolsPill}
       className="flex-row items-center rounded-full"
       style={{
         height: 44,
@@ -2240,9 +2362,6 @@ export default function ReaderChapterScreen() {
       {readerSettingsToolsRow}
     </View>
   );
-
-  /** Top of the Android in-screen tool pill (full-bleed layout — no native stack header). */
-  const readerAndroidTopToolsTopPx = Math.max(insets.top, 8) + 2;
 
   /**
    * Reader chrome (stack header + 44px tool pill) sits above the settings strip; pad past it.
@@ -2324,7 +2443,9 @@ export default function ReaderChapterScreen() {
 
       <ReaderChapterNavArrows
         opacityAnim={chapterNavArrowsOpacityAnim}
-        pointerEventsEnabled={chapterNavArrowsPointerEventsEnabled}
+        pointerEventsEnabled={
+          chapterNavArrowsPointerEventsEnabled || readerFeatureOnboarding.forceChapterNavArrowsVisible
+        }
         prevChapter={chapterNav.prevChapter}
         nextChapter={chapterNav.nextChapter}
         onPrev={goToPrevChapter}
@@ -2689,7 +2810,7 @@ export default function ReaderChapterScreen() {
               paddingHorizontal: Math.round(16 * 1.2),
             }}
           >
-            <View pointerEvents="auto" collapsable={false}>
+            <View ref={selectionBannerLiveRef} pointerEvents="auto" collapsable={false}>
               <Pressable
                 onPressIn={dismissSelectionToast}
                 onPress={dismissSelectionToast}
@@ -2704,6 +2825,11 @@ export default function ReaderChapterScreen() {
                 accessibilityHint="Clears the current verse selection"
                 style={({ pressed }) => ({
                   alignSelf: "center",
+                  // Match widest label width so a single-verse pill is not fully under the native title chip.
+                  minWidth: Math.min(220, screenW - 48),
+                  minHeight: 44,
+                  justifyContent: "center",
+                  alignItems: "center",
                   maxWidth: "100%",
                   borderRadius: 999,
                   opacity: pressed ? 0.82 : 1,
@@ -2857,6 +2983,40 @@ export default function ReaderChapterScreen() {
       />
       <PrivacyPolicySheet visible={readerPrivacyPolicyOpen} onClose={() => setReaderPrivacyPolicyOpen(false)} />
       <TermsOfServiceSheet visible={readerTermsOpen} onClose={() => setReaderTermsOpen(false)} />
+
+      <View
+        ref={selectionBannerAnchorRef}
+        pointerEvents="none"
+        collapsable={false}
+        style={{
+          position: "absolute",
+          top: selectionBannerTopPx,
+          alignSelf: "center",
+          left: "50%",
+          marginLeft: -90,
+          width: 180,
+          height: 44,
+          opacity: 0,
+          zIndex: 1,
+        }}
+      />
+
+      <ReaderFeatureOnboardingLayer
+        visible={readerFeatureOnboarding.showLayer}
+        step={readerFeatureOnboarding.currentStep}
+        isSpotlightStep={readerFeatureOnboarding.isSpotlightStep}
+        isInteractionCoachMark={readerFeatureOnboarding.isInteractionCoachMark}
+        message={readerFeatureOnboarding.message}
+        subtitle={readerFeatureOnboarding.subtitle}
+        spotlightTargets={readerFeatureOnboarding.spotlightTargets}
+        coachMarkAnchor={readerFeatureOnboarding.coachMarkAnchor}
+        onDismiss={readerFeatureOnboarding.dismissCurrentStep}
+        colors={{
+          tooltipBackground: rc.selectionBackground,
+          tooltipText: rc.selectionText,
+          scrim: "rgba(0,0,0,0.45)",
+        }}
+      />
     </View>
   );
 }
