@@ -42,7 +42,7 @@ export const READER_ONBOARDING_MESSAGES: Record<ReaderOnboardingStep, string> = 
   "page-turns": "Turn pages with these arrows, or swipe left and right.",
   "tap-select-verse": "Single tap a verse to select it.",
   "long-press-highlight": "Long press a verse to highlight it.",
-  "clear-selection": "Tap this to clear your selection.",
+  "clear-selection": "Tap anywhere to clear your selection.",
 };
 
 export const READER_ONBOARDING_SUBTITLES: Partial<Record<ReaderOnboardingStep, string>> = {
@@ -201,8 +201,6 @@ export function useReaderFeatureOnboarding({
       return;
     }
 
-    setTargetsReady(false);
-
     await new Promise<void>((resolve) => {
       InteractionManager.runAfterInteractions(() => resolve());
     });
@@ -326,7 +324,6 @@ export function useReaderFeatureOnboarding({
       return;
     }
     setStepIndex(nextIndex);
-    setTargetsReady(false);
   }, [onTourComplete, stepIndex]);
 
   const dismissCurrentStep = useCallback(() => {

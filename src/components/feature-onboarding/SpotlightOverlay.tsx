@@ -1,5 +1,7 @@
-import { useId, useMemo } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
   Pressable,
   StyleSheet,
   Text,
@@ -36,6 +38,9 @@ type SpotlightOverlayProps = {
     tooltipText: string;
   };
 };
+
+const TARGET_MORPH_MS = 380;
+const LABEL_CROSSFADE_MS = 220;
 
 function toCircleTarget(target: SpotlightTarget, pad: number): SpotlightTarget {
   const cx = target.x + target.width / 2;
@@ -74,6 +79,25 @@ function paddedTarget(target: SpotlightTarget, pad: number): SpotlightTarget {
     borderRadius: (target.borderRadius ?? 12) + pad * 0.5,
     shape: "rect",
   };
+}
+
+function targetsMatchForMorph(a: SpotlightTarget[], b: SpotlightTarget[]): boolean {
+  if (a.length !== b.length || a.length === 0) return false;
+  return a.every((target, index) => target.shape === b[index]?.shape);
+}
+
+function lerpTargets(from: SpotlightTarget[], to: SpotlightTarget[], t: number): SpotlightTarget[] {
+  return from.map((start, index) => {
+    const end = to[index]!;
+    return {
+      x: start.x + (end.x - start.x) * t,
+      y: start.y + (end.y - start.y) * t,
+      width: start.width + (end.width - start.width) * t,
+      height: start.height + (end.height - start.height) * t,
+      borderRadius: start.borderRadius ?? end.borderRadius,
+      shape: start.shape,
+    };
+  });
 }
 
 function pickLabelPlacement(
@@ -193,6 +217,118 @@ function SvgMaskedScrim({
   );
 }
 
+function useMorphingTargets(paddedTargets: SpotlightTarget[]): SpotlightTarget[] {
+  const prevTargetsRef = useRef<SpotlightTarget[]>(paddedTargets);
+  const morphAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const [renderTargets, setRenderTargets] = useState(paddedTargets);
+
+  useEffect(() => {
+    const previous = prevTargetsRef.current;
+    const next = paddedTargets;
+
+    if (
+      previous === next ||
+      (previous.length === next.length &&
+        previous.every(
+          (target, index) =>
+            target.x === next[index]?.x &&
+            target.y === next[index]?.y &&
+            target.width === next[index]?.width &&
+            target.height === next[index]?.height,
+        ))
+    ) {
+      prevTargetsRef.current = next;
+      setRenderTargets(next);
+      return;
+    }
+
+    morphAnimRef.current?.stop();
+
+    if (!targetsMatchForMorph(previous, next)) {
+      prevTargetsRef.current = next;
+      setRenderTargets(next);
+      return;
+    }
+
+    const progress = new Animated.Value(0);
+    const listenerId = progress.addListener(({ value }) => {
+      setRenderTargets(lerpTargets(previous, next, value));
+    });
+
+    morphAnimRef.current = Animated.timing(progress, {
+      toValue: 1,
+      duration: TARGET_MORPH_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+
+    morphAnimRef.current.start(({ finished }) => {
+      progress.removeListener(listenerId);
+      morphAnimRef.current = null;
+      if (finished) {
+        prevTargetsRef.current = next;
+        setRenderTargets(next);
+      }
+    });
+
+    return () => {
+      morphAnimRef.current?.stop();
+      progress.removeListener(listenerId);
+    };
+  }, [paddedTargets]);
+
+  return renderTargets;
+}
+
+function useCrossfadingLabel(message: string, subtitle?: string) {
+  const labelOpacity = useRef(new Animated.Value(1)).current;
+  const fadeAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const [displayMessage, setDisplayMessage] = useState(message);
+  const [displaySubtitle, setDisplaySubtitle] = useState(subtitle);
+  const contentKeyRef = useRef(`${message}|${subtitle ?? ""}`);
+
+  useEffect(() => {
+    const nextKey = `${message}|${subtitle ?? ""}`;
+    if (contentKeyRef.current === nextKey) return;
+
+    fadeAnimRef.current?.stop();
+    fadeAnimRef.current = Animated.timing(labelOpacity, {
+      toValue: 0,
+      duration: LABEL_CROSSFADE_MS,
+      easing: Easing.in(Easing.quad),
+      useNativeDriver: true,
+    });
+
+    fadeAnimRef.current.start(({ finished }) => {
+      fadeAnimRef.current = null;
+      if (!finished) return;
+
+      contentKeyRef.current = nextKey;
+      setDisplayMessage(message);
+      setDisplaySubtitle(subtitle);
+
+      fadeAnimRef.current = Animated.timing(labelOpacity, {
+        toValue: 1,
+        duration: LABEL_CROSSFADE_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      });
+      fadeAnimRef.current.start(({ finished: fadeInFinished }) => {
+        if (fadeInFinished) fadeAnimRef.current = null;
+      });
+    });
+  }, [labelOpacity, message, subtitle]);
+
+  useEffect(
+    () => () => {
+      fadeAnimRef.current?.stop();
+    },
+    [],
+  );
+
+  return { displayMessage, displaySubtitle, labelOpacity };
+}
+
 export function SpotlightOverlay({
   targets,
   message,
@@ -215,10 +351,13 @@ export function SpotlightOverlay({
     [targets, targetPadding],
   );
 
+  const renderTargets = useMorphingTargets(paddedTargets);
+  const { displayMessage, displaySubtitle, labelOpacity } = useCrossfadingLabel(message, subtitle);
+
   const labelTarget =
-    paddedTargets[labelAnchorTargetIndex] ?? paddedTargets[0];
-  const topTargetY = paddedTargets.length
-    ? Math.min(...paddedTargets.map((t) => t.y))
+    renderTargets[labelAnchorTargetIndex] ?? renderTargets[0];
+  const topTargetY = renderTargets.length
+    ? Math.min(...renderTargets.map((t) => t.y))
     : 0;
 
   const resolvedLabelPosition =
@@ -256,10 +395,10 @@ export function SpotlightOverlay({
 
   return (
     <View style={styles.root} pointerEvents="box-none" accessibilityViewIsModal>
-      <SvgMaskedScrim targets={paddedTargets} scrimOpacity={scrimOpacity} maskId={maskId} />
+      <SvgMaskedScrim targets={renderTargets} scrimOpacity={scrimOpacity} maskId={maskId} />
 
       {allowTargetInteraction ? (
-        paddedTargets.map((target, index) => (
+        renderTargets.map((target, index) => (
           <ScrimPressPanels key={`touch-${index}`} target={target} onPress={onDismiss} />
         ))
       ) : (
@@ -271,11 +410,11 @@ export function SpotlightOverlay({
         />
       )}
 
-      <View pointerEvents="none" style={[styles.labelWrap, labelStyle]}>
+      <Animated.View pointerEvents="none" style={[styles.labelWrap, labelStyle, { opacity: labelOpacity }]}>
         <View style={[onboardingTooltipStyles.card, { backgroundColor: colors.tooltipBackground }]}>
-          <Text style={[onboardingTooltipStyles.message, { color: colors.tooltipText }]}>{message}</Text>
-          {subtitle ? (
-            <Text style={[onboardingTooltipStyles.hint, { color: colors.tooltipText }]}>{subtitle}</Text>
+          <Text style={[onboardingTooltipStyles.message, { color: colors.tooltipText }]}>{displayMessage}</Text>
+          {displaySubtitle ? (
+            <Text style={[onboardingTooltipStyles.hint, { color: colors.tooltipText }]}>{displaySubtitle}</Text>
           ) : null}
           {showDismissHint ? (
             <Text style={[onboardingTooltipStyles.hint, { color: colors.tooltipText }]}>
@@ -283,7 +422,7 @@ export function SpotlightOverlay({
             </Text>
           ) : null}
         </View>
-      </View>
+      </Animated.View>
     </View>
   );
 }

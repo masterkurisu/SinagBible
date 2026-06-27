@@ -54,7 +54,7 @@ export function ReaderFeatureOnboardingLayer({
 
   return (
     <>
-      <FeatureOnboardingModal visible={spotlightVisible}>
+      <FeatureOnboardingModal visible={spotlightVisible} animationType="none">
         {spotlightVisible && step && labelConfig ? (
           <SpotlightOverlay
             targets={spotlightTargets}
@@ -69,8 +69,6 @@ export function ReaderFeatureOnboardingLayer({
             labelGap={labelConfig.labelGap}
             labelAnchorTargetIndex={labelConfig.labelAnchorTargetIndex}
             targetPadding={step === "book-selector" || step === "settings" ? 12 : 8}
-            showDismissHint={step !== "clear-selection"}
-            allowTargetInteraction={step === "clear-selection"}
           />
         ) : null}
       </FeatureOnboardingModal>
