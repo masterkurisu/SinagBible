@@ -136,8 +136,11 @@ import {
   type ReaderToolsDropdown,
   type SelectorTestamentTab,
 } from "@/src/features/reader/ReaderModals";
+import { ReaderActionBarOnboardingLayer } from "@/src/features/reader/ReaderActionBarOnboardingLayer";
 import { ReaderFeatureOnboardingLayer } from "@/src/features/reader/ReaderFeatureOnboardingLayer";
 import { ReaderSettingsOnboardingLayer } from "@/src/features/reader/ReaderSettingsOnboardingLayer";
+import type { ReaderActionBarOnboardingStepId } from "@/src/features/reader/readerActionBarOnboardingSteps";
+import { useReaderActionBarOnboarding } from "@/src/features/reader/useReaderActionBarOnboarding";
 import { useReaderFeatureOnboarding, type ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import { useReaderSettingsOnboarding } from "@/src/features/reader/useReaderSettingsOnboarding";
 import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
@@ -502,6 +505,11 @@ export default function ReaderChapterScreen() {
   const settingsOnboardingThemesRef = useRef<View | null>(null);
   const settingsOnboardingCreditsRef = useRef<View | null>(null);
   const settingsOnboardingDeleteMyDataRef = useRef<View | null>(null);
+  const actionBarOnboardingStudyNotesRef = useRef<View | null>(null);
+  const actionBarOnboardingHighlightRef = useRef<View | null>(null);
+  const actionBarOnboardingCopyRef = useRef<View | null>(null);
+  const actionBarOnboardingNoteRef = useRef<View | null>(null);
+  const actionBarOnboardingJournalRef = useRef<View | null>(null);
   const settingsOnboardingRowRefs = useMemo(
     (): Record<ReaderSettingsOnboardingStepId, React.RefObject<View | null>> => ({
       translation: settingsOnboardingTranslationRef,
@@ -510,6 +518,16 @@ export default function ReaderChapterScreen() {
       themes: settingsOnboardingThemesRef,
       credits: settingsOnboardingCreditsRef,
       "delete-my-data": settingsOnboardingDeleteMyDataRef,
+    }),
+    [],
+  );
+  const actionBarOnboardingButtonRefs = useMemo(
+    (): Record<ReaderActionBarOnboardingStepId, React.RefObject<View | null>> => ({
+      "study-notes": actionBarOnboardingStudyNotesRef,
+      highlight: actionBarOnboardingHighlightRef,
+      copy: actionBarOnboardingCopyRef,
+      note: actionBarOnboardingNoteRef,
+      journal: actionBarOnboardingJournalRef,
     }),
     [],
   );
@@ -2058,6 +2076,11 @@ export default function ReaderChapterScreen() {
     (isTabletReaderLayout ? 10 : 0) +
     10;
 
+  const actionBarBottomPx =
+    nativeTabFabOffsetPx(insets.bottom) +
+    (Platform.OS === "android" ? 52 : 0) +
+    (Platform.OS === "ios" && !isTabletReaderLayout ? 30 : 0);
+
   const measureHeaderToolsPill = useCallback(() => {
     headerToolsGroupRef.current?.measureInWindow((x, y, width, height) => {
       if (width <= 0 || height <= 0) return;
@@ -2111,6 +2134,16 @@ export default function ReaderChapterScreen() {
     screenW: windowWidth,
     screenH: windowHeight,
     insets,
+  });
+
+  const readerActionBarOnboarding = useReaderActionBarOnboarding({
+    hasVerseSelection: selectedVerses.length > 0,
+    actionBarMode,
+    readerOverlayOpen,
+    readerFeatureOnboardingActive: readerFeatureOnboarding.showLayer,
+    buttonRefs: actionBarOnboardingButtonRefs,
+    screenW: windowWidth,
+    actionBarBottomPx,
   });
 
   useEffect(() => {
@@ -2222,11 +2255,6 @@ export default function ReaderChapterScreen() {
       : selectedVerses.length === 1
         ? "1 verse selected"
         : `${selectedVerses.length} verses selected`;
-  // Keep the selection action bar clear of native tab chrome per-platform.
-  const actionBarBottomPx =
-    nativeTabFabOffsetPx(insets.bottom) +
-    (Platform.OS === "android" ? 52 : 0) +
-    (Platform.OS === "ios" && !isTabletReaderLayout ? 30 : 0);
   const newEntrySheetBottomPx = nativeTabSheetBottomInsetPx(insets.bottom, 10);
   /** Book picker sheet: 20px gap above the bottom safe area (full-window overlay; not tab-bar offset). */
   const readerBookSheetBottomPx = insets.bottom + 20;
@@ -2632,104 +2660,114 @@ export default function ReaderChapterScreen() {
                 </>
               ) : (
                 <>
-                  <TouchableOpacity
-                    onPress={openStudyNotesFromSelection}
-                    accessibilityLabel="Open study notes for selection"
-                    className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={{
-                        width: actionBarIconBoxPx,
-                        height: actionBarIconBoxPx,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transform: [{ scale: actionBarIconScale.studyNotes }],
-                      }}
+                  <View ref={actionBarOnboardingStudyNotesRef} collapsable={false} className="h-[47px] w-[47px]">
+                    <TouchableOpacity
+                      onPress={openStudyNotesFromSelection}
+                      accessibilityLabel="Open study notes for selection"
+                      className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                      activeOpacity={0.7}
                     >
-                      <StudyNotesBookmarkIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
-                    </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {
-                      const first = selectedVerses[0];
-                      const existing = first != null ? highlights[first] : undefined;
-                      if (existing) setPickedHighlightColor(existing);
-                      setActionBarMode("highlight");
-                    }}
-                    accessibilityLabel="Highlight"
-                    className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={{
-                        width: actionBarIconBoxPx,
-                        height: actionBarIconBoxPx,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transform: [{ scale: actionBarIconScale.highlight }],
+                      <View
+                        style={{
+                          width: actionBarIconBoxPx,
+                          height: actionBarIconBoxPx,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transform: [{ scale: actionBarIconScale.studyNotes }],
+                        }}
+                      >
+                        <StudyNotesBookmarkIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                  <View ref={actionBarOnboardingHighlightRef} collapsable={false} className="h-[47px] w-[47px]">
+                    <TouchableOpacity
+                      onPress={() => {
+                        const first = selectedVerses[0];
+                        const existing = first != null ? highlights[first] : undefined;
+                        if (existing) setPickedHighlightColor(existing);
+                        setActionBarMode("highlight");
                       }}
+                      accessibilityLabel="Highlight"
+                      className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                      activeOpacity={0.7}
                     >
-                      <ReaderHighlightIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
-                    </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {
-                      void copySelectedVerses();
-                    }}
-                    accessibilityLabel="Copy"
-                    className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={{
-                        width: actionBarIconBoxPx,
-                        height: actionBarIconBoxPx,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transform: [{ scale: actionBarIconScale.copy }],
+                      <View
+                        style={{
+                          width: actionBarIconBoxPx,
+                          height: actionBarIconBoxPx,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transform: [{ scale: actionBarIconScale.highlight }],
+                        }}
+                      >
+                        <ReaderHighlightIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                  <View ref={actionBarOnboardingCopyRef} collapsable={false} className="h-[47px] w-[47px]">
+                    <TouchableOpacity
+                      onPress={() => {
+                        void copySelectedVerses();
                       }}
+                      accessibilityLabel="Copy"
+                      className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                      activeOpacity={0.7}
                     >
-                      <ReaderCopyIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
-                    </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={openNoteForSelection}
-                    accessibilityLabel="Note"
-                    className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={{
-                        width: actionBarIconBoxPx,
-                        height: actionBarIconBoxPx,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transform: [{ scale: actionBarIconScale.note }],
-                      }}
+                      <View
+                        style={{
+                          width: actionBarIconBoxPx,
+                          height: actionBarIconBoxPx,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transform: [{ scale: actionBarIconScale.copy }],
+                        }}
+                      >
+                        <ReaderCopyIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                  <View ref={actionBarOnboardingNoteRef} collapsable={false} className="h-[47px] w-[47px]">
+                    <TouchableOpacity
+                      onPress={openNoteForSelection}
+                      accessibilityLabel="Note"
+                      className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                      activeOpacity={0.7}
                     >
-                      <ReaderNoteIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
-                    </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={openJournalFromSelection}
-                    accessibilityLabel="New journal entry from selection"
-                    className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                    style={{ backgroundColor: colors.brown800 }}
-                    activeOpacity={0.85}
-                  >
-                    <View
-                      style={{
-                        width: actionBarIconBoxPx,
-                        height: actionBarIconBoxPx,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transform: [{ scale: actionBarIconScale.journal }],
-                      }}
+                      <View
+                        style={{
+                          width: actionBarIconBoxPx,
+                          height: actionBarIconBoxPx,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transform: [{ scale: actionBarIconScale.note }],
+                        }}
+                      >
+                        <ReaderNoteIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                  <View ref={actionBarOnboardingJournalRef} collapsable={false} className="h-[47px] w-[47px]">
+                    <TouchableOpacity
+                      onPress={openJournalFromSelection}
+                      accessibilityLabel="New journal entry from selection"
+                      className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                      style={{ backgroundColor: colors.brown800 }}
+                      activeOpacity={0.85}
                     >
-                      <ReaderJournalIcon color={rc.selectionText} size={actionBarIconSizePx} />
-                    </View>
-                  </TouchableOpacity>
+                      <View
+                        style={{
+                          width: actionBarIconBoxPx,
+                          height: actionBarIconBoxPx,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transform: [{ scale: actionBarIconScale.journal }],
+                        }}
+                      >
+                        <ReaderJournalIcon color={rc.selectionText} size={actionBarIconSizePx} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
                 </>
               )}
             </View>
@@ -3052,6 +3090,17 @@ export default function ReaderChapterScreen() {
         visible={readerSettingsOnboarding.showLayer}
         step={readerSettingsOnboarding.currentStep}
         rowAnchor={readerSettingsOnboarding.rowAnchor}
+        colors={{
+          tooltipBackground: rc.selectionBackground,
+          tooltipText: rc.selectionText,
+          arrow: "#FFFFFF",
+        }}
+      />
+
+      <ReaderActionBarOnboardingLayer
+        visible={readerActionBarOnboarding.showLayer}
+        step={readerActionBarOnboarding.currentStep}
+        buttonAnchor={readerActionBarOnboarding.buttonAnchor}
         colors={{
           tooltipBackground: rc.selectionBackground,
           tooltipText: rc.selectionText,
