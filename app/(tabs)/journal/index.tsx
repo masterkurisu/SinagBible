@@ -38,6 +38,9 @@ import { JournalNewEntryForm, type JournalNewEntryFormHandle } from "@/component
 import { JournalSwipeableListRow } from "@/components/journal-swipeable-list-row";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
 import { hapticLightImpact } from "@/lib/haptics";
+import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboardingLayer";
+import { useJournalOnboarding } from "@/src/features/journal/useJournalOnboarding";
+import type { JournalOnboardingStepId } from "@/src/features/journal/journalOnboardingSteps";
 
 const SHEET_GAP_ABOVE_FAB_PX = 12;
 const FAB_SIZE_PX = 72;
@@ -365,6 +368,21 @@ export default function JournalIndexScreen() {
   const listRef = useRef<FlatList<JournalRow> | null>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const createFromBibleRef = useRef<View | null>(null);
+  const swipeActionsRef = useRef<View | null>(null);
+  const dateGroupingRef = useRef<View | null>(null);
+  const filtersRef = useRef<View | null>(null);
+  const sortRef = useRef<View | null>(null);
+  const journalOnboardingTargetRefs = useMemo(
+    (): Record<JournalOnboardingStepId, React.RefObject<View | null>> => ({
+      "create-from-bible": createFromBibleRef,
+      "swipe-actions": swipeActionsRef,
+      "date-grouping": dateGroupingRef,
+      filters: filtersRef,
+      sort: sortRef,
+    }),
+    [],
+  );
 
   const fabBottom =
     nativeTabFabOffsetPx(insets.bottom) +
@@ -728,6 +746,25 @@ export default function JournalIndexScreen() {
     return next;
   }, [filteredSorted]);
 
+  const firstEntryId = useMemo(
+    () => rows.find((row) => row.kind === "entry")?.item.id ?? null,
+    [rows],
+  );
+  const firstHeadingKey = useMemo(
+    () => rows.find((row) => row.kind === "heading")?.key ?? null,
+    [rows],
+  );
+
+  const journalOnboarding = useJournalOnboarding({
+    journalContentReady: !loading,
+    menuOpen,
+    setMenuOpen,
+    targetRefs: journalOnboardingTargetRefs,
+    screenW: windowWidth,
+    screenH: windowHeight,
+    newEntryFabBottomPx: fabBottom,
+  });
+
   const journalRowOffsets = useMemo(() => {
     const offsets: number[] = [];
     let runningOffset = 0;
@@ -813,7 +850,25 @@ export default function JournalIndexScreen() {
   const renderJournalRow = useCallback<ListRenderItem<JournalRow>>(
     ({ item: row }) => {
       if (row.kind === "heading") {
-        return <JournalListDateHeading label={row.label} />;
+        const isFirstHeading = row.key === firstHeadingKey;
+        return (
+          <View ref={isFirstHeading ? dateGroupingRef : undefined} collapsable={false}>
+            <JournalListDateHeading label={row.label} />
+          </View>
+        );
+      }
+      const isFirstEntry = row.item.id === firstEntryId;
+      if (isFirstEntry) {
+        return (
+          <View ref={swipeActionsRef} collapsable={false}>
+            <JournalListEntryCard
+              item={row.item}
+              onEntryPress={handleEntryPress}
+              onSwipeFavorite={commitToggleFavorite}
+              onSwipeDelete={requestDeleteEntry}
+            />
+          </View>
+        );
       }
       return (
         <JournalListEntryCard
@@ -824,8 +879,16 @@ export default function JournalIndexScreen() {
         />
       );
     },
-    [commitToggleFavorite, handleEntryPress, requestDeleteEntry],
+    [
+      commitToggleFavorite,
+      firstEntryId,
+      firstHeadingKey,
+      handleEntryPress,
+      requestDeleteEntry,
+    ],
   );
+
+  const journalListEmpty = useMemo(() => <JournalListEmpty />, []);
 
   const refreshControl = useMemo(
     () => <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brown800} />,
@@ -875,7 +938,10 @@ export default function JournalIndexScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Journal filter and sort options"
-          onPress={() => setMenuOpen((open) => !open)}
+          onPress={() => {
+            if (journalOnboarding.tourActive) return;
+            setMenuOpen((open) => !open);
+          }}
           className="mt-3 self-start rounded-full px-3 py-2 active:opacity-90"
           style={{ backgroundColor: j.filterOpenerBackground }}
         >
@@ -887,77 +953,82 @@ export default function JournalIndexScreen() {
           <View
             className="mt-2 w-full rounded-2xl border px-3 py-3"
             style={{ borderColor: j.panelBorder, backgroundColor: j.panelBackground }}
+            pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
           >
-            <Text
-              className="text-[11px] uppercase tracking-[0.16em]"
-              style={{ fontFamily: "Inter_500Medium", color: j.dateHeading }}
-            >
-              Filter
-            </Text>
-            <View className="mt-2 flex-row flex-wrap gap-2">
-              {FILTER_MENU_ITEMS.map((item) => {
-                const active = item.kind === filter;
-                return (
-                  <Pressable
-                    key={item.kind}
-                    onPress={() => {
-                      setFilter(item.kind);
-                      setMenuOpen(false);
-                    }}
-                    className="rounded-full border px-3 py-1.5"
-                    style={{
-                      borderColor: active ? j.chipActiveBorder : j.chipInactiveBorder,
-                      backgroundColor: active ? j.chipActiveBackground : j.chipInactiveBackground,
-                    }}
-                  >
-                    <Text
+            <View ref={filtersRef} collapsable={false}>
+              <Text
+                className="text-[11px] uppercase tracking-[0.16em]"
+                style={{ fontFamily: "Inter_500Medium", color: j.dateHeading }}
+              >
+                Filter
+              </Text>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                {FILTER_MENU_ITEMS.map((item) => {
+                  const active = item.kind === filter;
+                  return (
+                    <Pressable
+                      key={item.kind}
+                      onPress={() => {
+                        setFilter(item.kind);
+                        setMenuOpen(false);
+                      }}
+                      className="rounded-full border px-3 py-1.5"
                       style={{
-                        fontFamily: "Inter_500Medium",
-                        fontSize: 12,
-                        color: active ? j.chipActiveText : j.chipInactiveText,
+                        borderColor: active ? j.chipActiveBorder : j.chipInactiveBorder,
+                        backgroundColor: active ? j.chipActiveBackground : j.chipInactiveBackground,
                       }}
                     >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                      <Text
+                        style={{
+                          fontFamily: "Inter_500Medium",
+                          fontSize: 12,
+                          color: active ? j.chipActiveText : j.chipInactiveText,
+                        }}
+                      >
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
 
-            <Text
-              className="mt-3 text-[11px] uppercase tracking-[0.16em]"
-              style={{ fontFamily: "Inter_500Medium", color: j.dateHeading }}
-            >
-              Sort
-            </Text>
-            <View className="mt-2 flex-row flex-wrap gap-2">
-              {SORT_MENU_ITEMS.map((item) => {
-                const active = item.kind === sort;
-                return (
-                  <Pressable
-                    key={item.kind}
-                    onPress={() => {
-                      setSort(item.kind);
-                      setMenuOpen(false);
-                    }}
-                    className="rounded-full border px-3 py-1.5"
-                    style={{
-                      borderColor: active ? j.chipActiveBorder : j.chipInactiveBorder,
-                      backgroundColor: active ? j.chipActiveBackground : j.chipInactiveBackground,
-                    }}
-                  >
-                    <Text
+            <View ref={sortRef} collapsable={false}>
+              <Text
+                className="mt-3 text-[11px] uppercase tracking-[0.16em]"
+                style={{ fontFamily: "Inter_500Medium", color: j.dateHeading }}
+              >
+                Sort
+              </Text>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                {SORT_MENU_ITEMS.map((item) => {
+                  const active = item.kind === sort;
+                  return (
+                    <Pressable
+                      key={item.kind}
+                      onPress={() => {
+                        setSort(item.kind);
+                        setMenuOpen(false);
+                      }}
+                      className="rounded-full border px-3 py-1.5"
                       style={{
-                        fontFamily: "Inter_500Medium",
-                        fontSize: 12,
-                        color: active ? j.chipActiveText : j.chipInactiveText,
+                        borderColor: active ? j.chipActiveBorder : j.chipInactiveBorder,
+                        backgroundColor: active ? j.chipActiveBackground : j.chipInactiveBackground,
                       }}
                     >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                      <Text
+                        style={{
+                          fontFamily: "Inter_500Medium",
+                          fontSize: 12,
+                          color: active ? j.chipActiveText : j.chipInactiveText,
+                        }}
+                      >
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           </View>
         ) : null}
@@ -980,7 +1051,7 @@ export default function JournalIndexScreen() {
           scrollEventThrottle={16}
           refreshControl={refreshControl}
           contentContainerStyle={listContentContainerStyle}
-          ListEmptyComponent={JournalListEmpty}
+          ListEmptyComponent={journalListEmpty}
           renderItem={renderJournalRow}
         />
       )}
@@ -1071,6 +1142,7 @@ export default function JournalIndexScreen() {
           collapsable={false}
         >
           <Pressable
+            ref={createFromBibleRef}
             accessibilityRole="button"
             accessibilityLabel={newEntryOpen ? "Close new entry" : "New journal entry"}
             onPress={toggleNewEntrySheet}
@@ -1113,6 +1185,17 @@ export default function JournalIndexScreen() {
           </Animated.View>
         ) : null}
       </View>
+
+      <JournalOnboardingLayer
+        visible={journalOnboarding.showLayer}
+        step={journalOnboarding.currentStep}
+        stepAnchor={journalOnboarding.stepAnchor}
+        colors={{
+          tooltipBackground: colors.brown800,
+          tooltipText: "#f5f2ec",
+          arrow: "#FFFFFF",
+        }}
+      />
     </View>
   );
 }

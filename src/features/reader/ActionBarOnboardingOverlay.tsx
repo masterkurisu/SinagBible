@@ -10,15 +10,20 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { onboardingTooltipStyles } from "@/src/components/feature-onboarding/onboarding-tooltip-styles";
-import type { ReaderActionBarOnboardingStep } from "@/src/features/reader/readerActionBarOnboardingSteps";
 
 const ARROW_SIZE_PX = 24;
 const ARROW_GAP_PX = 10;
 const ARROW_NUDGE_PX = 8;
 const TOOLTIP_EST_HEIGHT_PX = 88;
 
+type OnboardingTooltipStep = {
+  id: string;
+  title: string;
+  description: string;
+};
+
 type ActionBarOnboardingOverlayProps = {
-  step: ReaderActionBarOnboardingStep;
+  step: OnboardingTooltipStep;
   buttonAnchor: LayoutRectangle;
   colors: {
     tooltipBackground: string;
