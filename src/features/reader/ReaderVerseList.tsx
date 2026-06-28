@@ -63,6 +63,18 @@ export function buildReaderVerseFlashListData(
   return out;
 }
 
+/** FlashList row index for a 1-based verse number (handles two-column interleaving). */
+export function findFlashListIndexForVerseNumber(
+  items: ReaderVerseFlashItem[],
+  verseNumber: number,
+): number | null {
+  const targetIndex = verseNumber - 1;
+  const idx = items.findIndex(
+    (item) => item.kind === "verse" && item.verseIndex === targetIndex,
+  );
+  return idx >= 0 ? idx : null;
+}
+
 /** Index of first verse in the right column; left column is verse indices [0, index). */
 export function splitVerseIndexForBalancedColumns(verses: readonly string[]): number {
   const n = verses.length;

@@ -5,15 +5,21 @@ import type {
   BookSuggestion,
   KJVData,
   SearchResult,
+  TranslationSearchOutcome,
 } from "@sinag-bible/types";
 import {
   flattenHelloaoVerseText,
   parseHelloaoVerseContentArray,
 } from "./helloao-verse-inline";
+import { getPassageMisspellingSuggestion } from "./book-aliases";
+import { expandReferenceQuery } from "./reference-aliases";
+import { lookupNamedPassage } from "./search-named-passages";
 import {
   getPopularVerseRefsForKeyword,
+  getVagueKeywordMaxPerBook,
   keywordHasPopularVerses,
 } from "./search-keyword-popular";
+import { levenshtein } from "./text-utils";
 
 type TranslationData = KJVData;
 
@@ -365,29 +371,16 @@ const MAX_SEARCH_RESULTS = 80;
 /** Cap for general / book-name queries with no chapter or verse (most clients use this path). */
 const VAGUE_SEARCH_MAX_RESULTS = 20;
 const VAGUE_BOOK_ANCHORS_MAX = 2;
-/** At most one hit per book in vague search (popular + anchors + keyword) for broader coverage. */
-const VAGUE_KEYWORD_MAX_PER_BOOK = 1;
-const MAX_FUZZY_BOOK_DISTANCE = 3;
+const MAX_FUZZY_BOOK_DISTANCE = 4;
 
-function levenshtein(a: string, b: string): number {
-  const m = a.length;
-  const n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () =>
-    Array(n + 1).fill(0),
-  );
-  for (let i = 0; i <= m; i++) dp[i]![0] = i;
-  for (let j = 0; j <= n; j++) dp[0]![j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      dp[i]![j] = Math.min(
-        dp[i - 1]![j]! + 1,
-        dp[i]![j - 1]! + 1,
-        dp[i - 1]![j - 1]! + cost,
-      );
-    }
-  }
-  return dp[m]![n]!;
+/** Allow more edit distance for longer queries (e.g. "zacchriah" → Zechariah). */
+function maxFuzzyBookDistanceForQuery(q: string): number {
+  const len = q.trim().length;
+  if (len < 4) return 0;
+  if (len < 6) return 1;
+  if (len < 9) return 2;
+  if (len < 12) return 3;
+  return MAX_FUZZY_BOOK_DISTANCE;
 }
 
 /**
@@ -429,23 +422,34 @@ function normalizeTranslationSearchQuery(raw: string): string {
  * (datasets use a single canonical `book.name` per translation).
  */
 function expandCommonReferenceAliases(q: string): string {
-  let s = q;
-  // "Psalm 23" / "Psalm 23:1" → "Psalms …" (KJV/WEB/etc. use plural title).
-  s = s.replace(/^psalm(\s+\d)/, "psalms$1");
-  // Alternate name for Song of Solomon.
-  s = s.replace(/^song\s+of\s+songs(\s+\d)/, "song of solomon$1");
-  return s;
+  return expandReferenceQuery(q);
 }
 
-/** Single-token hints for vague search (book titles use plural, etc.). */
+/** Single-token hints for vague search (book titles use plural, common misspellings, etc.). */
 function expandVagueBookQueryForMatching(q: string): string {
   const t = q.trim().toLowerCase();
+  if (!t) return t;
+
+  const firstWord = t.split(/\s+/)[0] ?? t;
+  const corrected = getPassageMisspellingSuggestion(firstWord);
+  if (corrected) {
+    return corrected.toLowerCase() + t.slice(firstWord.length);
+  }
+
   if (t === "psalm") return "psalms";
-  return t;
+
+  return expandReferenceQuery(t);
 }
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** True when `fragment` is a typed prefix of the full title or any title token ("mat" → Matthew). */
+function bookTitleMatchesPrefix(nameLower: string, fragment: string): boolean {
+  if (!fragment || fragment.length < 2) return false;
+  if (nameLower.startsWith(fragment)) return true;
+  return nameLower.split(/\s+/).some((token) => token.startsWith(fragment));
 }
 
 /**
@@ -462,20 +466,31 @@ function scoreBookNameForVagueQuery(nameLower: string, q: string): number | null
 
   if (nameLower.startsWith(q + " ")) return 1;
 
-  if (tokens[0] === q) return 3;
+  // Incomplete book names while typing ("mat" → Matthew, "2 cor" → 2 Corinthians).
+  if (nameLower.startsWith(q)) return 3;
+
+  if (tokens[0] === q) return 4;
+
+  for (const token of tokens) {
+    if (token.startsWith(q)) return 5;
+  }
 
   if (q.length >= 3) {
     try {
-      if (new RegExp(`\\b${escapeRegExp(q)}\\b`, "i").test(nameLower)) return 4;
+      if (new RegExp(`\\b${escapeRegExp(q)}\\b`, "i").test(nameLower)) return 6;
     } catch {
       /* ignore */
     }
   }
 
-  // Single-edit typo only for longer titles (avoids “love” ≈ “Luke”, “job”, etc.).
-  if (q.length >= 5 && nameLower.length >= 5) {
-    const d = levenshtein(q, nameLower);
-    if (d === 1) return 8;
+  // Fuzzy typo for longer titles (scaled by query length; avoids “love” ≈ “Luke”).
+  const fuzzyTarget = tokens.find((t) => !/^\d+$/.test(t)) ?? nameLower;
+  if (q.length >= 4 && fuzzyTarget.length >= 4) {
+    const maxD = maxFuzzyBookDistanceForQuery(q);
+    if (maxD > 0) {
+      const d = levenshtein(q, fuzzyTarget);
+      if (d >= 1 && d <= maxD) return 7 + d;
+    }
   }
 
   return null;
@@ -502,6 +517,7 @@ function collectVagueKeywordHitsInRange(
   bookStart: number,
   bookEndInclusive: number,
   limit: number,
+  maxPerBook: number,
 ): SearchResult[] {
   const matches: SearchResult[] = [];
   for (
@@ -524,7 +540,7 @@ function collectVagueKeywordHitsInRange(
         if (seen.has(key)) continue;
 
         const slug = navItem.slug;
-        if ((keywordHitsPerBook.get(slug) ?? 0) >= VAGUE_KEYWORD_MAX_PER_BOOK) continue;
+        if ((keywordHitsPerBook.get(slug) ?? 0) >= maxPerBook) continue;
 
         const verseText = verses[v] ?? "";
         if (!verseMatchesVagueKeyword(verseText.toLowerCase(), qKeyword)) continue;
@@ -580,6 +596,7 @@ function spillVagueKeywordRemainder(
   bookStart: number,
   bookEnd: number,
   cap: number,
+  maxPerBook: number,
 ): void {
   for (let bookIndex = bookStart; bookIndex <= bookEnd && into.length < cap; bookIndex++) {
     const book = data.books[bookIndex];
@@ -596,7 +613,7 @@ function spillVagueKeywordRemainder(
         const slug = navItem.slug;
         const key = `${slug}:${chapterNumber}:${verseNumber}`;
         if (spillSeen.has(key)) continue;
-        if ((keywordHitsPerBook.get(slug) ?? 0) >= VAGUE_KEYWORD_MAX_PER_BOOK) continue;
+        if ((keywordHitsPerBook.get(slug) ?? 0) >= maxPerBook) continue;
 
         const verseText = verses[v] ?? "";
         if (!verseMatchesVagueKeyword(verseText.toLowerCase(), qKeyword)) continue;
@@ -665,7 +682,7 @@ function pickVerseAtCanonicalRef(
  * General search with no chapter/verse in the query: curated “popular” verses (when defined),
  * else up to two opening verses of matching books, then whole-word keyword hits interleaved
  * NT/OT (NT first in each pair; odd slot favors NT), capped at {@link VAGUE_SEARCH_MAX_RESULTS}.
- * At most {@link VAGUE_KEYWORD_MAX_PER_BOOK} hits per book (including the prefix) so keyword
+ * At most one hit per book by default (up to three for curated keywords) so keyword
  * lists spread across more books.
  */
 async function vagueSearchTranslation(
@@ -675,15 +692,22 @@ async function vagueSearchTranslation(
 ): Promise<SearchResult[]> {
   const data = await loadTranslationData(id);
   const nav = await getBookNavForTranslationData(id);
+  const maxPerBook = getVagueKeywordMaxPerBook(qKeyword);
 
   const seen = new Set<string>();
   const out: SearchResult[] = [];
   const keywordHitsPerBook = new Map<string, number>();
   const roomForBookSlug = (slug: string): boolean =>
-    (keywordHitsPerBook.get(slug) ?? 0) < VAGUE_KEYWORD_MAX_PER_BOOK;
+    (keywordHitsPerBook.get(slug) ?? 0) < maxPerBook;
   const recordBookSlug = (slug: string): void => {
     keywordHitsPerBook.set(slug, (keywordHitsPerBook.get(slug) ?? 0) + 1);
   };
+
+  const namedRef = lookupNamedPassage(qKeyword);
+  if (namedRef) {
+    const namedRow = pickVerseAtCanonicalRef(data, nav, namedRef.slug, namedRef.chapter, namedRef.verse);
+    if (namedRow) return [namedRow];
+  }
 
   for (const ref of getPopularVerseRefsForKeyword(qKeyword)) {
     const row = pickVerseAtCanonicalRef(data, nav, ref.slug, ref.chapter, ref.verse);
@@ -697,6 +721,7 @@ async function vagueSearchTranslation(
   }
 
   // Book openers only when the query isn’t a curated thematic keyword (e.g. "love" → no Luke 1:1).
+  let strongBookNameMatch = false;
   if (!keywordHasPopularVerses(qKeyword)) {
     const scored: { bookIndex: number; score: number }[] = [];
     for (let i = 0; i < data.books.length; i++) {
@@ -705,9 +730,11 @@ async function vagueSearchTranslation(
       if (sc != null) scored.push({ bookIndex: i, score: sc });
     }
     scored.sort((a, b) => a.score - b.score || a.bookIndex - b.bookIndex);
+    strongBookNameMatch = scored.length > 0 && scored[0]!.score <= 5;
+    const bookAnchorLimit = scored[0]?.score === 0 ? 1 : VAGUE_BOOK_ANCHORS_MAX;
 
     const usedBookIndices = new Set<number>();
-    for (const { bookIndex } of scored.slice(0, VAGUE_BOOK_ANCHORS_MAX)) {
+    for (const { bookIndex } of scored.slice(0, bookAnchorLimit)) {
       if (usedBookIndices.has(bookIndex)) continue;
       usedBookIndices.add(bookIndex);
       const row = firstVerseSearchResult(data, nav, bookIndex);
@@ -719,6 +746,11 @@ async function vagueSearchTranslation(
       recordBookSlug(row.bookSlug);
       out.push(row);
     }
+  }
+
+  // Skip scanning every verse when the query clearly targets a book title.
+  if (strongBookNameMatch && out.length > 0) {
+    return out;
   }
 
   const remainingKeywordSlots = VAGUE_SEARCH_MAX_RESULTS - out.length;
@@ -743,6 +775,7 @@ async function vagueSearchTranslation(
           KJV_NT_FIRST_BOOK_INDEX,
           lastBook,
           ntCollectTarget,
+          maxPerBook,
         )
       : [];
 
@@ -757,6 +790,7 @@ async function vagueSearchTranslation(
           0,
           otEnd,
           otCollectTarget,
+          maxPerBook,
         )
       : [];
 
@@ -778,6 +812,7 @@ async function vagueSearchTranslation(
         KJV_NT_FIRST_BOOK_INDEX,
         lastBook,
         remainingKeywordSlots,
+        maxPerBook,
       );
     }
     if (mergedKeyword.length < remainingKeywordSlots && otEnd >= 0) {
@@ -791,12 +826,34 @@ async function vagueSearchTranslation(
         0,
         otEnd,
         remainingKeywordSlots,
+        maxPerBook,
       );
     }
   }
 
   out.push(...mergedKeyword);
   return out;
+}
+
+const MAX_SPECIFIC_SEARCH_COLLECT = 500;
+
+/** Lower score = higher relevance for specific/reference search ordering. */
+function scoreSpecificSearchMatch(
+  q: string,
+  bookNameLower: string,
+  chapterNumber: number,
+  verseNumber: number,
+  bookChapterLabel: string,
+  matchesText: boolean,
+): number | null {
+  const exactRef = `${bookNameLower} ${chapterNumber}:${verseNumber}`;
+  if (exactRef === q) return 0;
+  const exactChapter = `${bookNameLower} ${chapterNumber}`;
+  if (exactChapter === q) return 1;
+  if (bookChapterLabel.startsWith(q)) return 2;
+  if (bookNameLower.includes(q)) return 3;
+  if (matchesText) return 4;
+  return null;
 }
 
 async function collectSearchResultsForTranslation(
@@ -806,7 +863,8 @@ async function collectSearchResultsForTranslation(
 ): Promise<SearchResult[]> {
   const data = await loadTranslationData(id);
   const nav = await getBookNavForTranslationData(id);
-  const results: SearchResult[] = [];
+  type Scored = SearchResult & { score: number; bookIndex: number };
+  const candidates: Scored[] = [];
 
   for (let bookIndex = 0; bookIndex < data.books.length; bookIndex++) {
     const book = data.books[bookIndex]!;
@@ -821,34 +879,183 @@ async function collectSearchResultsForTranslation(
       const bookChapterLabel = `${bookNameLower} ${chapterNumber}`;
 
       for (let v = 0; v < verses.length; v++) {
-        if (results.length >= maxResults) return results;
+        if (candidates.length >= MAX_SPECIFIC_SEARCH_COLLECT) break;
 
         const verseNumber = v + 1;
         const verseText = verses[v] ?? "";
         const verseTextLower = verseText.toLowerCase();
-
-        const matchesReference =
-          bookNameLower.includes(q) ||
-          bookChapterLabel.startsWith(q) ||
-          `${bookNameLower} ${chapterNumber}` === q ||
-          `${bookNameLower} ${chapterNumber}:${verseNumber}` === q;
-
         const matchesText = verseTextLower.includes(q);
+        const score = scoreSpecificSearchMatch(
+          q,
+          bookNameLower,
+          chapterNumber,
+          verseNumber,
+          bookChapterLabel,
+          matchesText,
+        );
+        if (score == null) continue;
 
-        if (matchesReference || matchesText) {
-          results.push({
-            bookName: book.name,
-            bookSlug: navItem.slug,
-            chapterNumber,
-            verseNumber,
-            verseText,
-          });
-        }
+        candidates.push({
+          bookName: book.name,
+          bookSlug: navItem.slug,
+          chapterNumber,
+          verseNumber,
+          verseText,
+          score,
+          bookIndex,
+        });
       }
+      if (candidates.length >= MAX_SPECIFIC_SEARCH_COLLECT) break;
     }
+    if (candidates.length >= MAX_SPECIFIC_SEARCH_COLLECT) break;
   }
 
-  return results;
+  candidates.sort(
+    (a, b) =>
+      a.score - b.score ||
+      a.bookIndex - b.bookIndex ||
+      a.chapterNumber - b.chapterNumber ||
+      a.verseNumber - b.verseNumber,
+  );
+
+  return candidates.slice(0, maxResults).map(({ score: _s, bookIndex: _b, ...result }) => result);
+}
+
+function emptySearchOutcome(effectiveQuery: string): TranslationSearchOutcome {
+  return { results: [], bookSuggestion: null, nearbyBooks: [], effectiveQuery };
+}
+
+function queryMatchesBookName(query: string, bookName: string): boolean {
+  return query.trim().toLowerCase() === bookName.trim().toLowerCase();
+}
+
+function shouldRecommendBookSuggestion(
+  suggestion: BookSuggestion | null,
+  originalQuery: string,
+): suggestion is BookSuggestion {
+  if (!suggestion || suggestion.distance === 0) return false;
+  if (queryMatchesBookName(originalQuery, suggestion.bookName)) return false;
+  return true;
+}
+
+function bookSuggestionMatchesResults(suggestion: BookSuggestion, results: SearchResult[]): boolean {
+  if (results.length === 0) return true;
+  const primaryBook = results[0]?.bookName.toLowerCase();
+  return suggestion.bookName.toLowerCase() === primaryBook;
+}
+
+function collectClosestBookSuggestions(
+  data: TranslationData,
+  nav: BibleBookNavItem[],
+  query: string,
+  options?: { limit?: number; maxDistance?: number },
+): BookSuggestion[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  const firstWord = q.split(/\s+/)[0] ?? q;
+  const refMatch = q.match(/^(.+?)\s+(\d.*)$/);
+  const bookPrefix = refMatch?.[1]?.trim() ?? "";
+  const maxDistance =
+    options?.maxDistance ??
+    maxFuzzyBookDistanceForQuery(bookPrefix || firstWord) + 1;
+  const limit = options?.limit ?? 3;
+
+  const matches: BookSuggestion[] = [];
+
+  for (let i = 0; i < data.books.length; i++) {
+    const book = data.books[i]!;
+    const nameLower = book.name.toLowerCase();
+    const dFull = levenshtein(q, nameLower);
+    const dFirst = levenshtein(firstWord, nameLower);
+    const dPrefix =
+      bookPrefix.length > 0 ? levenshtein(bookPrefix, nameLower) : Number.POSITIVE_INFINITY;
+    const dTypedPrefix =
+      bookTitleMatchesPrefix(nameLower, firstWord) ||
+      (bookPrefix.length > 0 && bookTitleMatchesPrefix(nameLower, bookPrefix))
+        ? 0
+        : Number.POSITIVE_INFINITY;
+    const d = Math.min(dFull, dFirst, dPrefix, dTypedPrefix);
+    if (d > maxDistance) continue;
+
+    const correctedQuery =
+      refMatch && refMatch[2] != null
+        ? `${nameLower} ${refMatch[2]}`.replace(/\s+/g, " ").trim()
+        : firstWord.length < q.length
+          ? nameLower + q.slice(firstWord.length)
+          : nameLower;
+
+    matches.push({
+      bookName: book.name,
+      bookSlug: nav[i]?.slug,
+      distance: d,
+      correctedQuery,
+    });
+  }
+
+  matches.sort(
+    (a, b) => a.distance - b.distance || a.bookName.localeCompare(b.bookName),
+  );
+
+  const seen = new Set<string>();
+  const unique: BookSuggestion[] = [];
+  for (const match of matches) {
+    const key = match.bookName.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(match);
+    if (unique.length >= limit) break;
+  }
+
+  return unique;
+}
+
+async function tryNamedPassageResults(
+  id: TranslationId,
+  query: string,
+): Promise<SearchResult[] | null> {
+  const ref = lookupNamedPassage(query);
+  if (!ref) return null;
+  const data = await loadTranslationData(id);
+  const nav = await getBookNavForTranslationData(id);
+  const row = pickVerseAtCanonicalRef(data, nav, ref.slug, ref.chapter, ref.verse);
+  return row ? [row] : null;
+}
+
+async function vagueSearchWithBookFallback(
+  id: TranslationId,
+  trimmed: string,
+  q: string,
+): Promise<Pick<TranslationSearchOutcome, "results" | "effectiveQuery"> & { appliedSuggestion: BookSuggestion | null }> {
+  const qBook = expandVagueBookQueryForMatching(q);
+  let results = await vagueSearchTranslation(id, q, qBook);
+  if (results.length > 0) {
+    return { results, appliedSuggestion: null, effectiveQuery: q };
+  }
+
+  const data = await loadTranslationData(id);
+  const nav = await getBookNavForTranslationData(id);
+  const suggestions = collectClosestBookSuggestions(data, nav, trimmed, { limit: 1 });
+  const suggestion = suggestions[0] ?? null;
+  if (!suggestion) {
+    return { results: [], appliedSuggestion: null, effectiveQuery: q };
+  }
+
+  const correctedQ = normalizeTranslationSearchQuery(suggestion.correctedQuery);
+  if (!correctedQ || correctedQ === q) {
+    return { results: [], appliedSuggestion: suggestion.distance > 0 ? suggestion : null, effectiveQuery: q };
+  }
+
+  results = await vagueSearchTranslation(
+    id,
+    correctedQ,
+    expandVagueBookQueryForMatching(correctedQ),
+  );
+  return {
+    results,
+    appliedSuggestion: suggestion.distance > 0 ? suggestion : null,
+    effectiveQuery: correctedQ,
+  };
 }
 
 /**
@@ -862,35 +1069,83 @@ async function collectSearchResultsForTranslation(
 export async function getSearchResultsForTranslation(
   id: TranslationId,
   query: string,
-): Promise<SearchResult[]> {
+): Promise<TranslationSearchOutcome> {
   const trimmed = query.trim();
   const q = normalizeTranslationSearchQuery(trimmed);
-  if (!q) return [];
+  if (!q) return emptySearchOutcome(q);
+
+  const namedResults = await tryNamedPassageResults(id, trimmed);
+  if (namedResults && namedResults.length > 0) {
+    return { results: namedResults, bookSuggestion: null, nearbyBooks: [], effectiveQuery: q };
+  }
+
+  let results: SearchResult[] = [];
+  let bookSuggestion: BookSuggestion | null = null;
+  let effectiveQuery = q;
 
   if (!/\d/.test(q)) {
-    const qBook = expandVagueBookQueryForMatching(q);
-    return await vagueSearchTranslation(id, q, qBook);
+    const vague = await vagueSearchWithBookFallback(id, trimmed, q);
+    results = vague.results;
+    effectiveQuery = vague.effectiveQuery;
+    bookSuggestion = vague.appliedSuggestion;
+
+    if (!bookSuggestion && results.length > 0 && !keywordHasPopularVerses(q)) {
+      const data = await loadTranslationData(id);
+      const nav = await getBookNavForTranslationData(id);
+      const closest = collectClosestBookSuggestions(data, nav, trimmed, { limit: 1 })[0] ?? null;
+      if (
+        closest &&
+        shouldRecommendBookSuggestion(closest, trimmed) &&
+        bookSuggestionMatchesResults(closest, results)
+      ) {
+        bookSuggestion = closest;
+      }
+    }
+  } else {
+    const qExpanded = expandCommonReferenceAliases(q);
+    results = await collectSearchResultsForTranslation(id, qExpanded);
+    effectiveQuery = qExpanded;
+
+    if (results.length === 0 && qExpanded !== q) {
+      results = await collectSearchResultsForTranslation(id, q);
+      effectiveQuery = q;
+    }
+
+    if (results.length === 0) {
+      const data = await loadTranslationData(id);
+      const nav = await getBookNavForTranslationData(id);
+      const suggestion = collectClosestBookSuggestions(data, nav, trimmed, { limit: 1 })[0] ?? null;
+      if (suggestion && suggestion.distance > 0) {
+        const correctedQ = normalizeTranslationSearchQuery(suggestion.correctedQuery);
+        const correctedExpanded = expandCommonReferenceAliases(correctedQ);
+        if (correctedQ && correctedExpanded !== qExpanded && correctedQ !== q) {
+          results = await collectSearchResultsForTranslation(id, correctedExpanded);
+          if (results.length > 0) {
+            bookSuggestion = suggestion;
+            effectiveQuery = correctedExpanded;
+          }
+        }
+      }
+    }
   }
 
-  const qExpanded = expandCommonReferenceAliases(q);
-  let results = await collectSearchResultsForTranslation(id, qExpanded);
-  if (results.length > 0) return results;
-
-  if (qExpanded !== q) {
-    results = await collectSearchResultsForTranslation(id, q);
-    if (results.length > 0) return results;
+  let nearbyBooks: BookSuggestion[] = [];
+  if (results.length === 0) {
+    const data = await loadTranslationData(id);
+    const nav = await getBookNavForTranslationData(id);
+    nearbyBooks = collectClosestBookSuggestions(data, nav, trimmed, { limit: 3 }).filter(
+      (s) => shouldRecommendBookSuggestion(s, trimmed),
+    );
+    if (!bookSuggestion) {
+      bookSuggestion = nearbyBooks[0] ?? null;
+    }
   }
 
-  const suggestion = await getClosestBookSuggestionForTranslation(id, trimmed);
-  if (!suggestion) return [];
+  if (!shouldRecommendBookSuggestion(bookSuggestion, trimmed)) {
+    bookSuggestion = null;
+  }
 
-  const correctedQ = normalizeTranslationSearchQuery(suggestion.correctedQuery);
-  const correctedExpanded = expandCommonReferenceAliases(correctedQ);
-  if (!correctedQ) return [];
-  if (correctedExpanded === qExpanded || correctedQ === q) return [];
-
-  results = await collectSearchResultsForTranslation(id, correctedExpanded);
-  return results;
+  return { results, bookSuggestion, nearbyBooks, effectiveQuery };
 }
 
 export async function getTextMentionsForTranslation(
@@ -941,41 +1196,18 @@ export async function getClosestBookSuggestionForTranslation(
   id: TranslationId,
   query: string,
 ): Promise<BookSuggestion | null> {
-  const q = query.trim().toLowerCase();
-  if (!q) return null;
-
   const data = await loadTranslationData(id);
+  const nav = await getBookNavForTranslationData(id);
+  return collectClosestBookSuggestions(data, nav, query, { limit: 1 })[0] ?? null;
+}
 
-  const firstWord = q.split(/\s+/)[0] ?? q;
-  /** Book-shaped prefix before chapter number: "psalm 23:1" → "psalm"; "1 john 3:16" → "1 john". */
-  const refMatch = q.match(/^(.+?)\s+(\d.*)$/);
-  const bookPrefix = refMatch?.[1]?.trim() ?? "";
-
-  let best: BookSuggestion | null = null;
-
-  for (let i = 0; i < data.books.length; i++) {
-    const book = data.books[i]!;
-    const nameLower = book.name.toLowerCase();
-    const dFull = levenshtein(q, nameLower);
-    const dFirst = levenshtein(firstWord, nameLower);
-    const dPrefix =
-      bookPrefix.length > 0 ? levenshtein(bookPrefix, nameLower) : Number.POSITIVE_INFINITY;
-    const d = Math.min(dFull, dFirst, dPrefix);
-    if (d > MAX_FUZZY_BOOK_DISTANCE) continue;
-    if (best && d >= best.distance) continue;
-
-    const correctedQuery =
-      refMatch && refMatch[2] != null
-        ? `${nameLower} ${refMatch[2]}`.replace(/\s+/g, " ").trim()
-        : firstWord.length < q.length
-          ? nameLower + q.slice(firstWord.length)
-          : nameLower;
-    best = {
-      bookName: book.name,
-      distance: d,
-      correctedQuery,
-    };
-  }
-
-  return best;
+/** Ranked near-miss book titles for “Did you mean?” UI when search returns nothing. */
+export async function getClosestBookSuggestionsForTranslation(
+  id: TranslationId,
+  query: string,
+  options?: { limit?: number; maxDistance?: number },
+): Promise<BookSuggestion[]> {
+  const data = await loadTranslationData(id);
+  const nav = await getBookNavForTranslationData(id);
+  return collectClosestBookSuggestions(data, nav, query, options);
 }

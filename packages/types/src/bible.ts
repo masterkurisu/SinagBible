@@ -76,7 +76,20 @@ export type PassageReference = {
 /** Fuzzy book name match suggestion */
 export type BookSuggestion = {
   bookName: string;
+  /** Canonical slug when available (for genre hints in UI). */
+  bookSlug?: string;
   distance: number;
   /** Query to use for search (e.g. "john 3:16" when user typed "jhon 3:16") */
   correctedQuery: string;
+};
+
+/** Bible / journal search payload with optional spelling recommendations. */
+export type TranslationSearchOutcome = {
+  results: SearchResult[];
+  /** Closest book-name match when the query looks misspelled. */
+  bookSuggestion: BookSuggestion | null;
+  /** Additional book-name near-matches when there are no results. */
+  nearbyBooks: BookSuggestion[];
+  /** Normalized query used to produce `results` (after any book-name correction). */
+  effectiveQuery: string;
 };

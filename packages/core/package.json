@@ -10,7 +10,8 @@
     "./bible-translations": "./src/bible-translations.ts",
     "./bible-meta": "./src/bible-meta.ts",
     "./helloao-verse-inline": "./src/helloao-verse-inline.ts",
-    "./journal": "./src/journal.ts"
+    "./journal": "./src/journal.ts",
+    "./text-utils": "./src/text-utils.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

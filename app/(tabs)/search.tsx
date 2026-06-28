@@ -26,13 +26,15 @@ import {
   type TranslationId,
 } from "@sinag-bible/core/bible-translations";
 import { formatPassageReference } from "@sinag-bible/core";
-import type { LocalJournalEntry, SearchResult } from "@sinag-bible/types";
+import type { BookSuggestion, LocalJournalEntry, SearchResult } from "@sinag-bible/types";
 import { readerChapterHref } from "@/lib/reader-navigation";
 import {
   loadSearchHistory,
   prependSearchHistory,
   removeSearchHistoryItem,
 } from "@/lib/search-history";
+import { buildSearchQuickPicks } from "@/lib/search-quick-picks";
+import { formatBookSuggestionChipLabel } from "@/lib/book-genre-display";
 import {
   getPreferredReaderTranslationId,
   peekReaderLastPosition,
@@ -52,14 +54,6 @@ function translationFromPeek(): TranslationId {
   const t = peekReaderLastPosition()?.translationId;
   return t && isTranslationId(t) ? t : FALLBACK_TRANSLATION;
 }
-
-const QUICK_PICKS = [
-  { ref: "Mark 11:22", excerpt: "And Jesus answering saith…" },
-  { ref: "John 3:16", excerpt: "For God so loved…" },
-  { ref: "Psalm 23", excerpt: "The Lord is my shepherd…" },
-  { ref: "Romans 8", excerpt: "No condemnation…" },
-  { ref: "Philippians 4:13", excerpt: "I can do all things…" },
-] as const;
 
 const DEBOUNCE_MS = 280;
 
@@ -269,6 +263,50 @@ export default function SearchScreen() {
           fontSize: 15,
           color: s.muted,
         },
+        suggestionBanner: {
+          flexDirection: "row",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 6,
+          marginBottom: 12,
+          paddingVertical: 10,
+          paddingHorizontal: 14,
+          borderRadius: 12,
+          backgroundColor: s.cardBackground,
+          borderWidth: 0.5,
+          borderColor: s.cardBorder,
+        },
+        suggestionLabel: {
+          fontFamily: "Inter_400Regular",
+          fontSize: 13,
+          color: s.muted,
+        },
+        suggestionChip: {
+          paddingVertical: 4,
+          paddingHorizontal: 10,
+          borderRadius: 999,
+          backgroundColor: s.pageBackground,
+          borderWidth: 0.5,
+          borderColor: s.cardBorder,
+        },
+        suggestionChipPressed: { opacity: 0.85 },
+        suggestionChipText: {
+          fontFamily: "Inter_500Medium",
+          fontSize: 13,
+          color: s.tint,
+        },
+        nearbySection: {
+          marginTop: 20,
+          alignItems: "center",
+          gap: 12,
+          paddingHorizontal: 8,
+        },
+        nearbyChips: {
+          flexDirection: "row",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: 8,
+        },
       }),
     [s],
   );
@@ -289,10 +327,13 @@ export default function SearchScreen() {
   const [query, setQuery] = useState(initialQ);
   const [verseResults, setVerseResults] = useState<SearchResult[]>([]);
   const [journalResults, setJournalResults] = useState<LocalJournalEntry[]>([]);
+  const [bookSuggestion, setBookSuggestion] = useState<BookSuggestion | null>(null);
+  const [nearbyBooks, setNearbyBooks] = useState<BookSuggestion[]>([]);
   const [pending, setPending] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [recentQueries, setRecentQueries] = useState<string[]>([]);
   const [searchTranslationId, setSearchTranslationId] = useState<TranslationId>(translationFromPeek);
+  const [quickPicksSeed, setQuickPicksSeed] = useState(0);
 
   const recordNextRef = useRef(false);
   const skipNextDebounceRef = useRef(false);
@@ -306,6 +347,7 @@ export default function SearchScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setQuickPicksSeed((n) => n + 1);
       void getPreferredReaderTranslationId()
         .then(setSearchTranslationId)
         .catch(() => {
@@ -326,15 +368,19 @@ export default function SearchScreen() {
     if (!q) {
       setVerseResults([]);
       setJournalResults([]);
+      setBookSuggestion(null);
+      setNearbyBooks([]);
       setSearchError(null);
       return;
     }
     setPending(true);
     setSearchError(null);
     try {
-      const verses = await getSearchResultsForTranslation(searchTranslationId, q);
+      const outcome = await getSearchResultsForTranslation(searchTranslationId, q);
       if (requestId !== latestSearchRequestIdRef.current) return;
-      setVerseResults(verses);
+      setVerseResults(outcome.results);
+      setBookSuggestion(outcome.bookSuggestion);
+      setNearbyBooks(outcome.nearbyBooks);
       const journalEntries = getCachedLocalEntries();
       if (requestId !== latestSearchRequestIdRef.current) return;
       setJournalResults(filterLocalJournalEntriesByQuery(journalEntries, q));
@@ -347,6 +393,8 @@ export default function SearchScreen() {
       if (requestId !== latestSearchRequestIdRef.current) return;
       setVerseResults([]);
       setJournalResults([]);
+      setBookSuggestion(null);
+      setNearbyBooks([]);
       setSearchError("Search is unavailable right now. Please try again.");
     } finally {
       if (requestId === latestSearchRequestIdRef.current) {
@@ -382,9 +430,11 @@ export default function SearchScreen() {
       setPending(true);
       setSearchError(null);
       try {
-        const verses = await getSearchResultsForTranslation(searchTranslationId, q);
+        const outcome = await getSearchResultsForTranslation(searchTranslationId, q);
         if (cancelled) return;
-        setVerseResults(verses);
+        setVerseResults(outcome.results);
+        setBookSuggestion(outcome.bookSuggestion);
+        setNearbyBooks(outcome.nearbyBooks);
         if (!cancelled) {
           const journalEntries = getCachedLocalEntries();
           setJournalResults(filterLocalJournalEntriesByQuery(journalEntries, q));
@@ -393,6 +443,8 @@ export default function SearchScreen() {
         if (!cancelled) {
           setVerseResults([]);
           setJournalResults([]);
+          setBookSuggestion(null);
+          setNearbyBooks([]);
           setSearchError("Search is unavailable right now. Please try again.");
         }
       } finally {
@@ -485,7 +537,20 @@ export default function SearchScreen() {
     setQuery("");
     setVerseResults([]);
     setJournalResults([]);
+    setBookSuggestion(null);
+    setNearbyBooks([]);
   }, [flushDebouncedSearch]);
+
+  const onPickBookSuggestion = useCallback(
+    (suggestion: BookSuggestion) => {
+      recordNextRef.current = true;
+      skipNextDebounceRef.current = true;
+      setQuery(suggestion.correctedQuery);
+      flushDebouncedSearch();
+      void runSearchInternal(suggestion.correctedQuery);
+    },
+    [flushDebouncedSearch, runSearchInternal],
+  );
 
   const onSearchQueryChange = useCallback((q: string) => {
     hapticSelection();
@@ -496,7 +561,15 @@ export default function SearchScreen() {
 
   const onPressVerseResult = useCallback(
     (item: SearchResult) => {
-      router.push(readerChapterHref(item.bookSlug, item.chapterNumber, searchTranslationId) as Href);
+      router.push(
+        readerChapterHref(
+          item.bookSlug,
+          item.chapterNumber,
+          searchTranslationId,
+          undefined,
+          item.verseNumber,
+        ) as Href,
+      );
     },
     [router, searchTranslationId],
   );
@@ -513,6 +586,16 @@ export default function SearchScreen() {
   const noMatches =
     hasQuery && !pending && journalResults.length === 0 && verseResults.length === 0;
 
+  const showBookSuggestionBanner =
+    bookSuggestion != null &&
+    bookSuggestion.distance > 0 &&
+    verseResults.length > 0;
+
+  const emptyNearbyBooks = useMemo(
+    () => nearbyBooks.filter((book) => book.distance > 0),
+    [nearbyBooks],
+  );
+
   const searchSections = useMemo(() => {
     const sections: { title: string; data: (SearchResult | LocalJournalEntry)[] }[] = [];
     if (journalResults.length > 0) {
@@ -524,6 +607,38 @@ export default function SearchScreen() {
     return sections;
   }, [journalResults, verseResults]);
   const recentShown = recentQueries.slice(0, 3);
+
+  const quickPicks = useMemo(
+    () =>
+      buildSearchQuickPicks({
+        recentQueries,
+        lastReaderPosition: peekReaderLastPosition(),
+      }),
+    [recentQueries, quickPicksSeed],
+  );
+
+  const renderBookSuggestionChip = (suggestion: BookSuggestion, key: string) => {
+    const chipLabel = formatBookSuggestionChipLabel(suggestion.bookName, suggestion.bookSlug);
+    return (
+    <Pressable
+      key={key}
+      onPress={() => onPickBookSuggestion(suggestion)}
+      style={({ pressed }) => [styles.suggestionChip, pressed && styles.suggestionChipPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={`Search for ${chipLabel}`}
+    >
+      <Text style={styles.suggestionChipText}>{chipLabel}</Text>
+    </Pressable>
+  );
+  };
+
+  const suggestionBanner = showBookSuggestionBanner && bookSuggestion ? (
+    <View style={styles.suggestionBanner}>
+      <Text style={styles.suggestionLabel}>Did you mean</Text>
+      {renderBookSuggestionChip(bookSuggestion, bookSuggestion.bookName)}
+      <Text style={styles.suggestionLabel}>?</Text>
+    </View>
+  ) : null;
 
   if (!fontsLoaded) {
     return <View style={[styles.root, styles.fontsPending, { paddingTop: insets.top + 24 }]} />;
@@ -588,7 +703,7 @@ export default function SearchScreen() {
           >
             <Text style={[styles.sectionLabel, styles.quickPicksSectionLabel]}>QUICK PICKS</Text>
             <View style={styles.grid}>
-              {QUICK_PICKS.map((pick) => (
+              {quickPicks.map((pick) => (
                 <Pressable
                   key={pick.ref}
                   onPress={() => onPickQuick(pick.ref)}
@@ -644,6 +759,14 @@ export default function SearchScreen() {
         ) : noMatches ? (
           <Pressable style={[styles.bodyTapDismiss, styles.bodyScrollGrow]} onPress={Keyboard.dismiss}>
             <Text style={styles.empty}>No matches.</Text>
+            {emptyNearbyBooks.length > 0 ? (
+              <View style={styles.nearbySection}>
+                <Text style={styles.suggestionLabel}>Did you mean</Text>
+                <View style={styles.nearbyChips}>
+                  {emptyNearbyBooks.map((book) => renderBookSuggestionChip(book, book.bookName))}
+                </View>
+              </View>
+            ) : null}
           </Pressable>
         ) : searchError ? (
           <Pressable style={[styles.bodyTapDismiss, styles.bodyScrollGrow]} onPress={Keyboard.dismiss}>
@@ -658,6 +781,7 @@ export default function SearchScreen() {
                 ? `v-${item.bookSlug}-${item.chapterNumber}-${item.verseNumber}-${index}`
                 : `j-${item.id}`
             }
+            ListHeaderComponent={suggestionBanner}
             renderSectionHeader={({ section: { title } }) => (
               <Text style={[styles.sectionLabel, styles.resultsSectionHeader]}>{title}</Text>
             )}

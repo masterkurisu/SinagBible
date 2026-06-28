@@ -1,29 +1,6 @@
 import type { PassageReference } from "@sinag-bible/types";
 
-/** Common Bible book misspellings (lowercase) -> corrected display value */
-export const BIBLE_BOOK_MISSPELLINGS: Record<string, string> = {
-  genisis: "Genesis",
-  geneses: "Genesis",
-  exodis: "Exodus",
-  pslams: "Psalms",
-  psams: "Psalms",
-  mathew: "Matthew",
-  revelations: "Revelation",
-  phillipians: "Philippians",
-  galations: "Galatians",
-  ephisians: "Ephesians",
-  isiah: "Isaiah",
-  jerimiah: "Jeremiah",
-  ezikiel: "Ezekiel",
-  johnn: "John",
-};
-
-/** Returns corrected book name if the first word is a known misspelling, else null. */
-export function getPassageMisspellingSuggestion(firstWord: string): string | null {
-  if (!firstWord || typeof firstWord !== "string") return null;
-  const key = firstWord.trim().toLowerCase();
-  return BIBLE_BOOK_MISSPELLINGS[key] ?? null;
-}
+export { BIBLE_BOOK_MISSPELLINGS, getPassageMisspellingSuggestion } from "./book-aliases";
 
 /**
  * Parse a passage string like "John 3:16", "Romans 8", or "Genesis 1:1-3" into

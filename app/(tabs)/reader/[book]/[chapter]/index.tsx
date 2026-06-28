@@ -110,6 +110,7 @@ import { deleteAllUserData } from "@/lib/delete-my-data";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   buildReaderVerseFlashListData,
+  findFlashListIndexForVerseNumber,
   readerVerseEstimatedFlashListItemSizePx,
   ReaderVerseList,
   READER_TABLET_TWO_COLUMN_GAP,
@@ -263,10 +264,11 @@ const readerVerseListStyles = StyleSheet.create({
 export default function ReaderChapterScreen() {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isTabletReaderLayout = isTabletLayout(windowWidth, windowHeight);
-  const { book: bookSlug, chapter: chapterParam, translation } = useLocalSearchParams<{
+  const { book: bookSlug, chapter: chapterParam, translation, verse: verseParam } = useLocalSearchParams<{
     book: string;
     chapter: string;
     translation?: string;
+    verse?: string;
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -275,6 +277,12 @@ export default function ReaderChapterScreen() {
   const rc = bundle.reader;
 
   const chapterNumber = parseInt(chapterParam ?? "1", 10);
+  const initialScrollVerse = useMemo(() => {
+    if (typeof verseParam !== "string" || !verseParam.trim()) return null;
+    const n = parseInt(verseParam, 10);
+    return Number.isFinite(n) && n >= 1 ? n : null;
+  }, [verseParam]);
+  const pendingScrollVerseRef = useRef<number | null>(null);
   const requestedTranslationRaw = translation?.trim() ?? "";
   // Prefer the internal TranslationId (uppercase) for known translations so the
   // existing core data layer handles them. Fall through to the raw API ID for
@@ -761,9 +769,14 @@ export default function ReaderChapterScreen() {
   }, []);
 
   useEffect(() => {
+    pendingScrollVerseRef.current = initialScrollVerse;
+  }, [bookSlug, chapterNumber, requestedTranslationId, initialScrollVerse]);
+
+  useEffect(() => {
+    if (pendingScrollVerseRef.current != null) return;
     readerScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
     readerScrollYAnim.setValue(0);
-  }, [bookSlug, chapterNumber, requestedTranslationId, readerScrollYAnim]);
+  }, [bookSlug, chapterNumber, requestedTranslationId, readerScrollYAnim, initialScrollVerse]);
 
   const setFontSizeScalePersisted = useCallback((v: number) => {
     fontScaleUserTouchedRef.current = true;
@@ -1739,6 +1752,43 @@ export default function ReaderChapterScreen() {
 
   /** Typical single-line verse row height; FlashList v2 measures real layouts (no `estimatedItemSize` prop). */
   const readerVerseEstimatedItemSize = readerVerseEstimatedFlashListItemSizePx(readerVerseLineHeight);
+
+  useEffect(() => {
+    const targetVerse = pendingScrollVerseRef.current;
+    if (targetVerse == null || !isReaderContentCurrent || verseFlashListDataForList.length === 0) {
+      return;
+    }
+
+    const listIndex = findFlashListIndexForVerseNumber(verseFlashListDataForList, targetVerse);
+    if (listIndex == null) return;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        try {
+          readerScrollRef.current?.scrollToIndex({
+            index: listIndex,
+            animated: true,
+            viewOffset: 48,
+          });
+        } catch {
+          readerScrollRef.current?.scrollToOffset({
+            offset: Math.max(0, listIndex * readerVerseEstimatedItemSize),
+            animated: true,
+          });
+        }
+        pendingScrollVerseRef.current = null;
+      });
+    });
+
+    return () => task.cancel();
+  }, [
+    isReaderContentCurrent,
+    verseFlashListDataForList,
+    bookSlug,
+    chapterNumber,
+    initialScrollVerse,
+    readerVerseEstimatedItemSize,
+  ]);
 
   const stableVisualData = useMemo(
     () => ({
