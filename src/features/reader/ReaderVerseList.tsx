@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode, RefObject } from "react";
-import { Animated, Pressable, type GestureResponderHandlers } from "react-native";
+import { Pressable, type GestureResponderHandlers } from "react-native";
 import type { ListRenderItemInfo } from "@shopify/flash-list";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
 import { AnimatedReaderChapterFlashList, type ReaderVerseFlashItem } from "./useReaderGestures";
@@ -139,6 +139,7 @@ export function ReaderVerseList({
 }: ReaderVerseListProps) {
   return (
     <AnimatedReaderChapterFlashList
+      key={readerTabletLandscapeTwoColumn ? "reader-verse-2col" : "reader-verse-1col"}
       ref={readerScrollRef}
       {...chapterSwipePanHandlers}
       {...({ estimatedItemSize: readerVerseEstimatedItemSize } as Record<string, unknown>)}

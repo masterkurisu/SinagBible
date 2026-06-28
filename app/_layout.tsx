@@ -18,9 +18,11 @@ import {
 } from "@/lib/onboarding-storage";
 import { MobileAppThemeProvider, useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { initCrashReporting } from "@/lib/crash-reporting";
+import { applyPlatformOrientationLock } from "@/lib/apply-platform-orientation-lock";
 
 SplashScreen.preventAutoHideAsync();
 initCrashReporting();
+void applyPlatformOrientationLock();
 
 function ThemedStatusBar() {
   const { themeId } = useMobileAppTheme();

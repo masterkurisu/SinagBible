@@ -3,7 +3,7 @@
     "name": "Sinag Bible",
     "slug": "sinag-bible",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "sinagbible",
     "userInterfaceStyle": "light",
@@ -13,7 +13,17 @@
       "bundleIdentifier": "com.sinagbible.app",
       "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
       }
     },
     "android": {
@@ -60,6 +70,12 @@
         {
           "url": "https://sentry.io/",
           "disableAutoUpload": true
+        }
+      ],
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "DEFAULT"
         }
       ]
     ],

@@ -55,7 +55,7 @@ import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
 import { nativeTabFabOffsetPx, nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
-import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
+import { isTabletLayout, isReaderTabletLandscapeTwoColumn, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 import {
   JournalNewEntryForm,
   type JournalNewEntryFormHandle,
@@ -1028,9 +1028,7 @@ export default function ReaderChapterScreen() {
   ]);
 
   const readerTabletLandscapeTwoColumn =
-    chapter != null &&
-    isTabletLayout(windowWidth, windowHeight) &&
-    windowWidth > windowHeight;
+    chapter != null && isReaderTabletLandscapeTwoColumn(windowWidth, windowHeight);
 
   const readerTwoColumnSplitIndex = useMemo(
     () => (chapter ? splitVerseIndexForBalancedColumns(chapter.verses) : 0),

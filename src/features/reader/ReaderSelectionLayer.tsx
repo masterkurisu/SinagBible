@@ -37,6 +37,12 @@ import type { ReaderVerseTextAlign } from "@/src/features/reader/useReaderPrefer
 const readerVerseListStyles = StyleSheet.create({
   flashItemBase: {
     flex: 1,
+    ...Platform.select({
+      android: {
+        alignSelf: "stretch",
+        width: "100%",
+      },
+    }),
   },
   leftColumnPadding: {
     paddingRight: READER_TABLET_TWO_COLUMN_GAP / 2,
