@@ -80,6 +80,9 @@ export function journalTabNewEntryFabBottomPx(
   return nativeTabFabOffsetPx(0) + platformLiftPx;
 }
 
+/** Push new-entry sheet content down so the title is not clipped at the screen top. */
+export const JOURNAL_NEW_ENTRY_FORM_TOP_OFFSET_PX = 30;
+
 /**
  * iPad landscape: expo-router `NativeTabs` can render as a top-centered floating pill that sits
  * below the status bar but is not included in `SafeAreaInsets.top`. Add this so modal sheets clear it.

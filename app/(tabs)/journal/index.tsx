@@ -32,6 +32,7 @@ import {
 import { stripHtmlPreview } from "@/lib/journal-preview";
 import {
   journalTabNewEntryFabBottomPx,
+  JOURNAL_NEW_ENTRY_FORM_TOP_OFFSET_PX,
   nativeFloatingTabBarTopReservePx,
   nativeTabJournalListPaddingBottomPx,
 } from "@/lib/native-tab-chrome";
@@ -47,6 +48,8 @@ import type { JournalOnboardingStepId } from "@/src/features/journal/journalOnbo
 
 const SHEET_GAP_ABOVE_FAB_PX = 12;
 const FAB_SIZE_PX = 72;
+/** Journal tab new-entry sheet: total drop from screen top (base offset + extra clearance). */
+const JOURNAL_TAB_NEW_ENTRY_TOP_OFFSET_PX = JOURNAL_NEW_ENTRY_FORM_TOP_OFFSET_PX + 30;
 /**
  * Lift above the native tab bar. Reduced by 40px after the SDK 56 NativeTabs upgrade, which
  * already insets tab content from the bottom safe area.
@@ -412,10 +415,13 @@ export default function JournalIndexScreen() {
       windowWidth > windowHeight,
       isTablet,
     );
-  const sheetMaxHeight = Math.min(
-    600,
-    windowHeight * 0.72 + 80,
-    Math.max(280, windowHeight - cardBottom - insets.top - sheetTopGutter),
+  const sheetMaxHeight = Math.max(
+    280,
+    Math.min(
+      600,
+      windowHeight * 0.72 + 80,
+      Math.max(280, windowHeight - cardBottom - insets.top - sheetTopGutter),
+    ) - JOURNAL_TAB_NEW_ENTRY_TOP_OFFSET_PX,
   );
 
   const fabSpin = useRef(new Animated.Value(0)).current;

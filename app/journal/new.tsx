@@ -3,6 +3,7 @@ import { Alert, Pressable, View, useWindowDimensions } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { JournalNewEntryForm, type JournalNewEntryInitialParams } from "@/components/journal-new-entry-form";
+import { JOURNAL_NEW_ENTRY_FORM_TOP_OFFSET_PX } from "@/lib/native-tab-chrome";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 
@@ -35,7 +36,7 @@ export default function NewJournalEntryScreen() {
   }, [hasDraftInput, router]);
 
   const bottomGutter = Math.max(insets.bottom + 12, 16);
-  const topGutter = insets.top + 8;
+  const topGutter = insets.top + 8 + JOURNAL_NEW_ENTRY_FORM_TOP_OFFSET_PX;
   const sheetShellMaxHeight = Math.min(windowHeight * 0.78, windowHeight - topGutter - bottomGutter);
   const sheetHorizontalInset = insets.left + 2;
   const sheetWidth = Math.min(
