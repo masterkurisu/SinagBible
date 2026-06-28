@@ -87,13 +87,18 @@ export function ReaderSettingsOnboardingLayer({
     if (!visible || !step || !rowAnchor) return;
 
     const isFirstPaint = displayStepIdRef.current == null;
-    if (isFirstPaint || displayStepIdRef.current === step.id) {
+    if (isFirstPaint) {
       displayStepIdRef.current = step.id;
       setDisplayStep(step);
       setDisplayAnchor(rowAnchor);
       stopFadeAnims();
       opacityAnim.setValue(0);
       fadeIn();
+      return;
+    }
+
+    if (displayStepIdRef.current === step.id) {
+      setDisplayAnchor(rowAnchor);
       return;
     }
 

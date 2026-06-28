@@ -79,6 +79,8 @@ export function useReaderSettingsOnboarding({
   const [presentedStepIndex, setPresentedStepIndex] = useState(0);
   const [rowAnchor, setRowAnchor] = useState<LayoutRectangle | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tourStartedRef = useRef(false);
+  const measureRequestRef = useRef(0);
 
   const clearTimer = useCallback(() => {
     if (intervalRef.current != null) {
@@ -95,12 +97,14 @@ export function useReaderSettingsOnboarding({
 
   const measureCurrentStep = useCallback(
     async (index: number) => {
+      const requestId = ++measureRequestRef.current;
       const step = READER_SETTINGS_ONBOARDING_STEPS[index];
       if (!step) return;
       const measured = await measureOnboardingTarget(rowRefs[step.id], {
         minWidth: 40,
         minHeight: 20,
       });
+      if (requestId !== measureRequestRef.current) return;
       const anchor = adjustAnchorForOnboardingModal(
         resolveSettingsRowAnchor(
           step.id,
@@ -126,12 +130,16 @@ export function useReaderSettingsOnboarding({
   useEffect(() => {
     if (!toolsMenuOpen) {
       clearTimer();
+      tourStartedRef.current = false;
+      measureRequestRef.current += 1;
       setActive(false);
       setStepIndex(0);
       setPresentedStepIndex(0);
       setRowAnchor(null);
       return;
     }
+
+    if (tourStartedRef.current) return;
 
     let cancelled = false;
 
@@ -140,6 +148,7 @@ export function useReaderSettingsOnboarding({
         const done = await isFeatureOnboardingDone("readerSettings");
         if (cancelled || done) return;
 
+        tourStartedRef.current = true;
         setStepIndex(0);
         setActive(true);
 
@@ -159,9 +168,10 @@ export function useReaderSettingsOnboarding({
     return () => {
       cancelled = true;
       clearTimeout(startTimeout);
-      clearTimer();
     };
   }, [clearTimer, finishTour, toolsMenuOpen]);
+
+  useEffect(() => () => clearTimer(), [clearTimer]);
 
   const currentStep = active ? (READER_SETTINGS_ONBOARDING_STEPS[presentedStepIndex] ?? null) : null;
   const showLayer = active && toolsMenuOpen && currentStep != null && rowAnchor != null;
