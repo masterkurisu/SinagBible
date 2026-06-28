@@ -3,13 +3,7 @@ import { AppState, Platform } from "react-native";
 import { usePathname } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  Badge,
-  Icon,
-  Label,
-  NativeTabs,
-  VectorIcon,
-} from "expo-router/unstable-native-tabs";
+import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { getTabTint } from "@sinag-bible/tokens";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { hapticLightImpact } from "@/lib/haptics";
@@ -191,48 +185,60 @@ export default function TabLayout() {
         selected: { color: TAB_TINT, fontSize: labelFontSize, fontWeight: "600" },
       }}
     >
-      <NativeTabs.Trigger name="index" href="/" disablePopToTop disableScrollToTop>
-        <Label selectedStyle={{ color: getTabTint(chrome, 0) }}>Home</Label>
-        <Icon
+      <NativeTabs.Trigger name="index" disablePopToTop disableScrollToTop>
+        <NativeTabs.Trigger.Label selectedStyle={{ color: getTabTint(chrome, 0) }}>
+          Home
+        </NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
           selectedColor={getTabTint(chrome, 0)}
           sf={{ default: "house", selected: "house.fill" }}
-          androidSrc={{
-            default: <VectorIcon family={MaterialCommunityIcons} name="home-outline" />,
-            selected: <VectorIcon family={MaterialCommunityIcons} name="home" />,
+          src={{
+            default: <NativeTabs.Trigger.VectorIcon family={MaterialCommunityIcons} name="home-outline" />,
+            selected: <NativeTabs.Trigger.VectorIcon family={MaterialCommunityIcons} name="home" />,
           }}
         />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="reader" href="/reader" disablePopToTop disableScrollToTop>
-        <Label selectedStyle={{ color: getTabTint(chrome, 1) }}>Bible</Label>
-        <Icon
+      <NativeTabs.Trigger name="reader" disablePopToTop disableScrollToTop>
+        <NativeTabs.Trigger.Label selectedStyle={{ color: getTabTint(chrome, 1) }}>
+          Bible
+        </NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
           selectedColor={getTabTint(chrome, 1)}
           sf={{ default: "book.closed", selected: "book.closed.fill" }}
-          androidSrc={{
-            default: <VectorIcon family={MaterialCommunityIcons} name="book-outline" />,
-            selected: <VectorIcon family={MaterialCommunityIcons} name="book" />,
+          src={{
+            default: <NativeTabs.Trigger.VectorIcon family={MaterialCommunityIcons} name="book-outline" />,
+            selected: <NativeTabs.Trigger.VectorIcon family={MaterialCommunityIcons} name="book" />,
           }}
         />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="journal" href="/journal" disablePopToTop disableScrollToTop>
-        <Label selectedStyle={{ color: getTabTint(chrome, 2) }}>Journal</Label>
-        <Icon
+      <NativeTabs.Trigger name="journal" disablePopToTop disableScrollToTop>
+        <NativeTabs.Trigger.Label selectedStyle={{ color: getTabTint(chrome, 2) }}>
+          Journal
+        </NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
           selectedColor={getTabTint(chrome, 2)}
           sf={{ default: "square.and.pencil", selected: "square.and.pencil" }}
-          androidSrc={{
-            default: <VectorIcon family={MaterialCommunityIcons} name="square-edit-outline" />,
-            selected: <VectorIcon family={MaterialCommunityIcons} name="square-edit-outline" />,
+          src={{
+            default: (
+              <NativeTabs.Trigger.VectorIcon family={MaterialCommunityIcons} name="square-edit-outline" />
+            ),
+            selected: (
+              <NativeTabs.Trigger.VectorIcon family={MaterialCommunityIcons} name="square-edit-outline" />
+            ),
           }}
         />
-        {hasJournalDraft ? <Badge>{" "}</Badge> : null}
+        {hasJournalDraft ? <NativeTabs.Trigger.Badge>{" "}</NativeTabs.Trigger.Badge> : null}
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="search" href="/search" disablePopToTop disableScrollToTop>
-        <Label selectedStyle={{ color: getTabTint(chrome, 3) }}>Search</Label>
-        <Icon
+      <NativeTabs.Trigger name="search" disablePopToTop disableScrollToTop>
+        <NativeTabs.Trigger.Label selectedStyle={{ color: getTabTint(chrome, 3) }}>
+          Search
+        </NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
           selectedColor={getTabTint(chrome, 3)}
           sf={{ default: "magnifyingglass", selected: "magnifyingglass" }}
-          androidSrc={{
-            default: <VectorIcon family={MaterialCommunityIcons} name="magnify" />,
-            selected: <VectorIcon family={MaterialCommunityIcons} name="magnify" />,
+          src={{
+            default: <NativeTabs.Trigger.VectorIcon family={MaterialCommunityIcons} name="magnify" />,
+            selected: <NativeTabs.Trigger.VectorIcon family={MaterialCommunityIcons} name="magnify" />,
           }}
         />
       </NativeTabs.Trigger>

@@ -757,7 +757,7 @@ export function TranslationPickerSheet({
       <View
         pointerEvents="box-none"
         style={{
-          ...StyleSheet.absoluteFillObject,
+          ...StyleSheet.absoluteFill,
           zIndex: 5,
         }}
       >

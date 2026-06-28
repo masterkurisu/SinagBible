@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   underlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     flexDirection: "row",
   },
   laneNeutral: {

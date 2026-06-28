@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { FlatList } from "react-native-gesture-handler";
 import { useRouter } from "expo-router";
-import { useFocusEffect, useIsFocused } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "expo-router/react-navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
@@ -1072,7 +1072,7 @@ export default function JournalIndexScreen() {
       {/* Full-screen layer so the FAB/sheet sit above FlatList native stacking (iOS/Android native tabs). */}
       <View
         pointerEvents="box-none"
-        style={[StyleSheet.absoluteFillObject, styles.fabOverlay]}
+        style={[StyleSheet.absoluteFill, styles.fabOverlay]}
         collapsable={false}
       >
         {newEntryOpen ? (
@@ -1080,7 +1080,7 @@ export default function JournalIndexScreen() {
             accessibilityLabel="Dismiss new entry"
             accessibilityRole="button"
             onPress={requestCloseNewEntrySheet}
-            style={[styles.sheetBackdrop, StyleSheet.absoluteFillObject]}
+            style={[styles.sheetBackdrop, StyleSheet.absoluteFill]}
           />
         ) : null}
 

@@ -429,7 +429,7 @@ export function SpotlightOverlay({
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   scrimPanel: {
     position: "absolute",

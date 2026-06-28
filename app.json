@@ -7,7 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "sinagbible",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.sinagbible.app",
@@ -77,7 +76,9 @@
         {
           "initialOrientation": "DEFAULT"
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-splash-screen"
     ],
     "experiments": {
       "typedRoutes": true

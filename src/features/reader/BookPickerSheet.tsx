@@ -362,7 +362,7 @@ export function BookPickerSheet({
     onRequestClose={() => animateClose(0, 0)}
   >
     <View
-      style={[StyleSheet.absoluteFillObject, { zIndex: 9999, elevation: 32 }]}
+      style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 32 }]}
       pointerEvents="box-none"
       accessibilityViewIsModal
     >
@@ -945,7 +945,7 @@ export function BookPickerSheet({
     {bookViewMenuOpen && step === "books" ? (
       <View
         pointerEvents="box-none"
-        style={[StyleSheet.absoluteFillObject, { zIndex: 300 }]}
+        style={[StyleSheet.absoluteFill, { zIndex: 300 }]}
         collapsable={false}
       >
         <TouchableWithoutFeedback
@@ -953,7 +953,7 @@ export function BookPickerSheet({
           accessibilityLabel="Dismiss view options"
           onPress={() => setBookViewMenuOpen(false)}
         >
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "transparent" }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "transparent" }]} />
         </TouchableWithoutFeedback>
         <View
           pointerEvents="auto"

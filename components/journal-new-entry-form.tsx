@@ -1615,7 +1615,7 @@ const styles = StyleSheet.create({
   },
   /** In-tree overlay: a second Modal does not reliably stack above this fullscreen Modal. */
   fsFormatOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000,
     elevation: 1000,
   },
@@ -1648,7 +1648,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   saveToastWrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2000,

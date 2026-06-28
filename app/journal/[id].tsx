@@ -13,12 +13,12 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import * as FileSystem from "expo-file-system";
-import * as MediaLibrary from "expo-media-library";
+import { Asset, requestPermissionsAsync } from "expo-media-library";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { captureRef } from "react-native-view-shot";
 import { useLocalSearchParams, Stack, useRouter, usePathname } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router/react-navigation";
 import { formatBookLabel } from "@sinag-bible/core";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { UpCircleIcon } from "@/components/icons/UpCircleIcon";
@@ -631,8 +631,8 @@ export default function JournalEntryScreen() {
     try {
       const perm =
         Platform.OS === "android"
-          ? await MediaLibrary.requestPermissionsAsync(false, ["photo"])
-          : await MediaLibrary.requestPermissionsAsync();
+          ? await requestPermissionsAsync(false, ["photo"])
+          : await requestPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
           "Photos access needed",
@@ -645,7 +645,7 @@ export default function JournalEntryScreen() {
         Alert.alert("Could not save", "Unable to create an image of this entry.");
         return;
       }
-      await MediaLibrary.saveToLibraryAsync(capturedUri);
+      await Asset.create(capturedUri);
       Alert.alert("Saved", "The image was saved to your photo library.");
     } catch (e) {
       if (__DEV__) {

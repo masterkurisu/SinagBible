@@ -72,7 +72,7 @@ export function CoachMarkOverlay({
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   cardWrap: {
     alignItems: "center",

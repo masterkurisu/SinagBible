@@ -226,7 +226,7 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
 
   return (
     <View
-      style={[StyleSheet.absoluteFillObject, { backgroundColor: READER_MOBILE_SETTINGS_PANEL_BG, zIndex: 0 }]}
+      style={[StyleSheet.absoluteFill, { backgroundColor: READER_MOBILE_SETTINGS_PANEL_BG, zIndex: 0 }]}
       onLayout={onSettingsPanelLayout}
     >
       <ScrollView
@@ -1020,7 +1020,7 @@ bundle,
 >
   <View style={{ flex: 1, justifyContent: "flex-end" }}>
     <Pressable
-      style={StyleSheet.absoluteFillObject}
+      style={StyleSheet.absoluteFill}
       onPress={onCommentaryBackdropPress}
       accessibilityRole="button"
       accessibilityLabel="Dismiss study notes"

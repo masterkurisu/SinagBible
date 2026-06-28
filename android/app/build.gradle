@@ -11,7 +11,7 @@ def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 react {
     entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
     reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
-    hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
+    hermesCommand = new File(["node", "--print", "require.resolve('hermes-compiler/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/hermesc/%OS-BIN%/hermesc"
     codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
 
     enableBundleCompression = (findProperty('android.enableBundleCompression') ?: false).toBoolean()
@@ -82,20 +82,6 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
-
-// sentry.gradle hooks release bundles; disable uploads unless explicitly opted in.
-// uploadSourceMaps in app.json does not stop this Gradle task with a committed android/ folder.
-project.ext.shouldSentryAutoUploadGeneral = { ->
-    if (findProperty('sentryDisableAutoUpload') == 'true') return false
-    return System.getenv('SENTRY_DISABLE_AUTO_UPLOAD') != 'true'
-}
-project.ext.shouldSentryAutoUploadNative = { ->
-    if (findProperty('sentryDisableAutoUpload') == 'true') return false
-    return System.getenv('SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD') != 'true'
-}
-project.ext.shouldSentryAutoUpload = { ->
-    return shouldSentryAutoUploadGeneral() && shouldSentryAutoUploadNative()
-}
 
 android {
     ndkVersion rootProject.ext.ndkVersion

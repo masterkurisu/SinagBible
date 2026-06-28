@@ -101,7 +101,7 @@ export function ReaderFeatureOnboardingLayer({
 
 const styles = StyleSheet.create({
   interactionLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 10000,
     elevation: 100,
   },

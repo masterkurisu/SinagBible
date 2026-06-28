@@ -108,7 +108,7 @@ export function SettingsOnboardingOverlay({
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   arrowWrap: {
     position: "absolute",

@@ -350,7 +350,7 @@ export function CreditsSheet({
 const styles = StyleSheet.create({
   root: { flex: 1 },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(44,36,22,0.52)",
   },
   sheetWrap: {

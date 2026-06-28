@@ -305,7 +305,7 @@ export function PrivacyPolicySheet({ visible, onClose }: PrivacyPolicySheetProps
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(44,36,22,0.52)" },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(44,36,22,0.52)" },
   sheetWrap: {
     flex: 1,
     justifyContent: "flex-end",

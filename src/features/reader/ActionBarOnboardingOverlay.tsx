@@ -135,7 +135,7 @@ export function ActionBarOnboardingOverlay({
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   tooltipWrap: {
     position: "absolute",
