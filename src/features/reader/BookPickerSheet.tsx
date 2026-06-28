@@ -4,6 +4,7 @@ import {
   BackHandler,
   Dimensions,
   Easing,
+  InteractionManager,
   Modal,
   Platform,
   Pressable,
@@ -25,6 +26,7 @@ import {
   PanGestureHandler,
   ScrollView as GHScrollView,
   State,
+  type ScrollView as GHScrollViewRef,
 } from "react-native-gesture-handler";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
@@ -68,6 +70,9 @@ export function ReaderBookSheetWindowOverlay({
 }
 
 const BOOK_SELECTOR_VIEW_STORAGE_KEY = "sb:reader:bookSelectorView";
+const OT_BOOK_COUNT = 39;
+/** Space above the scrolled-to book so it is not flush with the sheet header. */
+const BOOK_LIST_SCROLL_TOP_INSET = 40;
 
 export type BookPickerSheetProps = {
   isOpen: boolean;
@@ -126,6 +131,9 @@ export function BookPickerSheet({
   const bookSheetDragStartYRef = useRef(0);
   const bookSheetPanRef = useRef<PanGestureHandler>(null);
   const bookSheetScrollNativeRef = useRef<NativeViewGestureHandler>(null);
+  const bookListScrollRef = useRef<GHScrollViewRef>(null);
+  const bookListContentRef = useRef<View>(null);
+  const currentBookItemRef = useRef<View>(null);
 
   const getBookAzSortKey = useCallback(
     (bookName: string) => bookName.replace(/^[0-9]+\s*/u, "").trim().toLowerCase(),
@@ -133,10 +141,9 @@ export function BookPickerSheet({
   );
 
   const { oldTestamentBooks, newTestamentBooks } = useMemo(() => {
-    const OT_COUNT = 39;
     return {
-      oldTestamentBooks: books.slice(0, OT_COUNT),
-      newTestamentBooks: books.slice(OT_COUNT),
+      oldTestamentBooks: books.slice(0, OT_BOOK_COUNT),
+      newTestamentBooks: books.slice(OT_BOOK_COUNT),
     };
   }, [books]);
 
@@ -238,6 +245,24 @@ export function BookPickerSheet({
     setBookSheetDismissPanEnabled(true);
   }, []);
 
+  const scrollBookListToCurrentBook = useCallback(() => {
+    const scrollView = bookListScrollRef.current;
+    const content = bookListContentRef.current;
+    const currentItem = currentBookItemRef.current;
+    if (!scrollView || !content || !currentItem) return;
+
+    currentItem.measureLayout(
+      content,
+      (_x, y) => {
+        scrollView.scrollTo({
+          y: Math.max(0, y - BOOK_LIST_SCROLL_TOP_INSET),
+          animated: false,
+        });
+      },
+      () => {},
+    );
+  }, []);
+
   useEffect(() => {
     if (!isOpen) {
       resetPickerState();
@@ -247,6 +272,10 @@ export function BookPickerSheet({
       return;
     }
     resetPickerState();
+    const currentBookIndex = books.findIndex((b) => b.slug === chapter.bookSlug);
+    if (currentBookIndex >= 0 && bookSelectorViewMode === "testament") {
+      setSelectorTestamentTab(currentBookIndex < OT_BOOK_COUNT ? "old" : "new");
+    }
     bookSheetClosingRef.current = false;
     bookSheetTranslateY.stopAnimation();
     if (Platform.OS === "android") {
@@ -266,7 +295,33 @@ export function BookPickerSheet({
       tension: 68,
       useNativeDriver: true,
     }).start();
-  }, [isOpen, bookSheetTranslateY, resetPickerState]);
+  }, [
+    isOpen,
+    bookSheetTranslateY,
+    resetPickerState,
+    books,
+    chapter.bookSlug,
+    bookSelectorViewMode,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen || step !== "books") return;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        scrollBookListToCurrentBook();
+      });
+    });
+
+    return () => task.cancel();
+  }, [
+    isOpen,
+    step,
+    bookSelectorViewMode,
+    selectorTestamentTab,
+    chapter.bookSlug,
+    scrollBookListToCurrentBook,
+  ]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -491,6 +546,7 @@ export function BookPickerSheet({
             simultaneousHandlers={bookSheetPanRef}
           >
             <GHScrollView
+              ref={bookListScrollRef}
               key={`${bookSelectorViewMode}-${selectorTestamentTab}`}
               style={{ flex: 1 }}
               nestedScrollEnabled={Platform.OS === "android"}
@@ -503,6 +559,7 @@ export function BookPickerSheet({
               scrollEventThrottle={16}
               onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
             >
+            <View ref={bookListContentRef} collapsable={false}>
             {bookSelectorViewMode === "grid"
               ? gridSectionsForPicker.map((section) => {
                   if (!section.items.length) return null;
@@ -527,6 +584,7 @@ export function BookPickerSheet({
                           return (
                             <TouchableOpacity
                               key={b.slug}
+                              ref={isCurrentBook ? currentBookItemRef : undefined}
                               onPress={() => {
                                 hapticLightImpact();
                                 setPickerBook(b);
@@ -616,6 +674,7 @@ export function BookPickerSheet({
                   return (
                     <TouchableOpacity
                       key={b.slug}
+                      ref={isCurrentBook ? currentBookItemRef : undefined}
                       onPress={() => {
                         hapticLightImpact();
                         setPickerBook(b);
@@ -715,6 +774,7 @@ export function BookPickerSheet({
                     return (
                       <TouchableOpacity
                         key={b.slug}
+                        ref={isCurrentBook ? currentBookItemRef : undefined}
                         onPress={() => {
                           hapticLightImpact();
                           setPickerBook(b);
@@ -840,6 +900,7 @@ export function BookPickerSheet({
                   },
                 )
               : null}
+            </View>
             </GHScrollView>
           </NativeViewGestureHandler>
         </>
