@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { GestureResponderEvent, PanResponderGestureState } from "react-native";
 import {
   View,
@@ -27,7 +27,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useReaderStorage } from "@/lib/use-reader-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import type { FlashListRef, ListRenderItemInfo } from "@shopify/flash-list";
+import type { FlashListRef } from "@shopify/flash-list";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type {
   PanGestureHandlerGestureEvent,
@@ -48,20 +48,11 @@ import {
 import { useTranslationPicker } from "@/lib/use-translation-picker";
 import { useFavoriteTranslations } from "@/lib/use-favorite-translations";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
-import { highlightColorOptions } from "@sinag-bible/ui";
 import { mobileAppThemePickerOptions } from "@sinag-bible/tokens";
-import {
-  ReaderCopyIcon,
-  ReaderHighlightIcon,
-  ReaderJournalIcon,
-  ReaderNoteIcon,
-} from "@/components/reader-action-icons";
 import { BibleBookIcon } from "@/components/icons/BibleBookIcon";
 import { ReaderSettingsCogIcon } from "@/components/icons/ReaderSettingsCogIcon";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
-import { StudyNotesBookmarkIcon } from "@/components/icons/StudyNotesBookmarkIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
-import { ReaderVerseRow } from "@/components/reader-verse-row";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
 import { nativeTabFabOffsetPx, nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
@@ -81,8 +72,6 @@ import {
   buildReaderVerseFlashListData,
   findFlashListIndexForVerseNumber,
   readerVerseEstimatedFlashListItemSizePx,
-  ReaderVerseList,
-  READER_TABLET_TWO_COLUMN_GAP,
   splitVerseIndexForBalancedColumns,
 } from "@/src/features/reader/ReaderVerseList";
 import {
@@ -93,7 +82,10 @@ import {
   READER_VERSES_FADE_IN_MS,
   type ReaderVerseFlashItem,
 } from "@/src/features/reader/useReaderGestures";
-import { useReaderSelection } from "@/src/features/reader/useReaderSelection";
+import {
+  ReaderSelectionLayer,
+  type ReaderSelectionActivity,
+} from "@/src/features/reader/ReaderSelectionLayer";
 import { ReaderHeader, READER_HEADER_TITLE_MAIN_PX, READER_HEADER_TITLE_TRANS_PX } from "@/src/features/reader/ReaderHeader";
 import {
   ReaderChapterNavArrows,
@@ -102,18 +94,15 @@ import {
 import {
   ReaderModals,
   ReaderMobileSettingsPanel,
-  type BookSelectorViewMode,
   type ReaderToolsDropdown,
-  type SelectorTestamentTab,
 } from "@/src/features/reader/ReaderModals";
-import { ReaderActionBarOnboardingLayer } from "@/src/features/reader/ReaderActionBarOnboardingLayer";
 import { ReaderFeatureOnboardingLayer } from "@/src/features/reader/ReaderFeatureOnboardingLayer";
 import { ReaderSettingsOnboardingLayer } from "@/src/features/reader/ReaderSettingsOnboardingLayer";
-import type { ReaderActionBarOnboardingStepId } from "@/src/features/reader/readerActionBarOnboardingSteps";
-import { useReaderActionBarOnboarding } from "@/src/features/reader/useReaderActionBarOnboarding";
 import { useReaderFeatureOnboarding, type ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import { useReaderSettingsOnboarding } from "@/src/features/reader/useReaderSettingsOnboarding";
 import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
+import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
+import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
 
@@ -142,8 +131,6 @@ const TRANSLATION_LANGUAGE_BY_ID: Record<(typeof TRANSLATION_IDS)[number], strin
 
 const READER_FONT_CARD_PADDING_TOP_PX = 12;
 
-const BOOK_SELECTOR_VIEW_STORAGE_KEY = "sb:reader:bookSelectorView";
-
 function persistReaderPref(key: string, value: string): void {
   void AsyncStorage.setItem(key, value).catch(() => {
     /* ignore storage write errors */
@@ -163,18 +150,6 @@ const READER_MOBILE_SETTINGS_TABLET_LANDSCAPE_SLIDE_RATIO = 0.2;
 
 /** Present follow-up sheets after the phone settings strip finishes sliding away. */
 const READER_MOBILE_MENU_CLOSE_MS = 260;
-
-const readerVerseListStyles = StyleSheet.create({
-  flashItemBase: {
-    flex: 1,
-  },
-  leftColumnPadding: {
-    paddingRight: READER_TABLET_TWO_COLUMN_GAP / 2,
-  },
-  rightColumnPadding: {
-    paddingLeft: READER_TABLET_TWO_COLUMN_GAP / 2,
-  },
-});
 
 export default function ReaderChapterScreen() {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -248,7 +223,7 @@ export default function ReaderChapterScreen() {
     persistNoteForVerse,
   } = useReaderStorage(chapter, resolvedTranslationId);
 
-  const { items: translationPickerItems, loading: translationPickerLoading } = useTranslationPicker();
+  const { items: translationPickerItems } = useTranslationPicker();
   const { favoriteTranslationIds, toggleFavoriteTranslation } = useFavoriteTranslations();
 
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
@@ -259,18 +234,13 @@ export default function ReaderChapterScreen() {
   const mobileSettingsFollowUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
   const [readerDropdown, setReaderDropdown] = useState<ReaderToolsDropdown | null>(null);
-  const [bookPickerStep, setBookPickerStep] = useState<"books" | "chapters">("books");
-  const [bookPickerBook, setBookPickerBook] = useState<BibleBookNavItem | null>(null);
-  const [bookSelectorViewMode, setBookSelectorViewMode] = useState<BookSelectorViewMode>("testament");
-  const [selectorTestamentTab, setSelectorTestamentTab] = useState<SelectorTestamentTab>("new");
-  const [bookViewMenuOpen, setBookViewMenuOpen] = useState(false);
-  const [bookSelectorStorageReady, setBookSelectorStorageReady] = useState(false);
   const [dropdownAnchor, setDropdownAnchor] = useState<LayoutRectangle | null>(null);
 
   const bookFanRef = useRef<View | null>(null);
   const settingsButtonRef = useRef<View | null>(null);
   const selectionBannerAnchorRef = useRef<View | null>(null);
   const selectionBannerLiveRef = useRef<View | null>(null);
+  const clearVerseSelectionRef = useRef<(() => void) | null>(null);
   const headerToolsGroupRef = useRef<View | null>(null);
   const chapterNavPrevArrowRef = useRef<View | null>(null);
   const chapterNavNextArrowRef = useRef<View | null>(null);
@@ -282,11 +252,6 @@ export default function ReaderChapterScreen() {
   const settingsOnboardingThemesRef = useRef<View | null>(null);
   const settingsOnboardingCreditsRef = useRef<View | null>(null);
   const settingsOnboardingDeleteMyDataRef = useRef<View | null>(null);
-  const actionBarOnboardingStudyNotesRef = useRef<View | null>(null);
-  const actionBarOnboardingHighlightRef = useRef<View | null>(null);
-  const actionBarOnboardingCopyRef = useRef<View | null>(null);
-  const actionBarOnboardingNoteRef = useRef<View | null>(null);
-  const actionBarOnboardingJournalRef = useRef<View | null>(null);
   const settingsOnboardingRowRefs = useMemo(
     (): Record<ReaderSettingsOnboardingStepId, React.RefObject<View | null>> => ({
       translation: settingsOnboardingTranslationRef,
@@ -298,31 +263,14 @@ export default function ReaderChapterScreen() {
     }),
     [],
   );
-  const actionBarOnboardingButtonRefs = useMemo(
-    (): Record<ReaderActionBarOnboardingStepId, React.RefObject<View | null>> => ({
-      "study-notes": actionBarOnboardingStudyNotesRef,
-      highlight: actionBarOnboardingHighlightRef,
-      copy: actionBarOnboardingCopyRef,
-      note: actionBarOnboardingNoteRef,
-      journal: actionBarOnboardingJournalRef,
-    }),
-    [],
-  );
   const translationFanRef = useRef<View | null>(null);
   const themesFanRef = useRef<View | null>(null);
-  const fontSettingsFanRef = useRef<View | null>(null);
 
   const dropSlideAnim = useRef(new Animated.Value(0)).current;
   const dropOpacityAnim = useRef(new Animated.Value(0)).current;
-  const bookSheetTranslateY = useRef(new Animated.Value(0)).current;
-  const bookSheetClosingRef = useRef(false);
-  const bookSheetDragStartYRef = useRef(0);
   /** When false, vertical list has scrolled — swipe-to-dismiss stays off so scrolling wins. */
-  const [bookSheetDismissPanEnabled, setBookSheetDismissPanEnabled] = useState(true);
   /** True from the moment the sheet close animation starts until `closeReaderDropdown` runs — shows native header chrome during the slide-out. */
   const [bookSheetExitAnimationStarted, setBookSheetExitAnimationStarted] = useState(false);
-  const fontSettingsPopupSlideAnim = useRef(new Animated.Value(0)).current;
-  const fontSettingsPopupOpacityAnim = useRef(new Animated.Value(0)).current;
   const readerVersesOpacityAnim = useRef(new Animated.Value(1)).current;
   /** True after we've shown synced content then lost sync (chapter change), not initial null payload. */
   const readerVersesHadDesyncRef = useRef(false);
@@ -332,6 +280,29 @@ export default function ReaderChapterScreen() {
   const [newEntryInitialParams, setNewEntryInitialParams] =
     useState<JournalNewEntryInitialParams | null>(null);
   const [newEntryHasDraft, setNewEntryHasDraft] = useState(false);
+  const [selectionActivity, setSelectionActivity] = useState<ReaderSelectionActivity>(() => ({
+    selectedVerses: [],
+    noteModalVisible: false,
+    noteDraft: "",
+    noteTargetVerse: null,
+    saveNoteFromModal: () => {},
+    setNoteModalVisible: () => {},
+    setNoteDraft: () => {},
+    setNoteTargetVerse: () => {},
+  }));
+  const handleSelectionActivityChange = useCallback((activity: ReaderSelectionActivity) => {
+    setSelectionActivity(activity);
+  }, []);
+  const {
+    selectedVerses,
+    noteModalVisible,
+    noteDraft,
+    noteTargetVerse,
+    saveNoteFromModal,
+    setNoteModalVisible,
+    setNoteDraft,
+    setNoteTargetVerse,
+  } = selectionActivity;
   const readerScrollRef = useRef<FlashListRef<ReaderVerseFlashItem> | null>(null);
   /** Drives cross-fade between in-content heading and stack header title (native scroll events). */
   const readerScrollYAnim = useRef(new Animated.Value(0)).current;
@@ -417,61 +388,6 @@ export default function ReaderChapterScreen() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const rawBookSelectorView = await AsyncStorage.getItem(BOOK_SELECTOR_VIEW_STORAGE_KEY);
-        if (cancelled) return;
-
-        let nextBookSelectorViewMode: BookSelectorViewMode | null = null;
-        let nextSelectorTestamentTab: SelectorTestamentTab | null = null;
-        if (rawBookSelectorView) {
-          try {
-            const parsed = JSON.parse(rawBookSelectorView) as {
-              mode?: BookSelectorViewMode;
-              testamentTab?: SelectorTestamentTab;
-            };
-            if (parsed.mode === "grid" || parsed.mode === "az" || parsed.mode === "testament") {
-              nextBookSelectorViewMode = parsed.mode;
-            }
-            if (parsed.testamentTab === "old" || parsed.testamentTab === "new") {
-              nextSelectorTestamentTab = parsed.testamentTab;
-            }
-          } catch {
-            // ignore corrupt storage
-          }
-        }
-
-        unstable_batchedUpdates(() => {
-          if (nextBookSelectorViewMode != null) setBookSelectorViewMode(nextBookSelectorViewMode);
-          if (nextSelectorTestamentTab != null) setSelectorTestamentTab(nextSelectorTestamentTab);
-          setBookSelectorStorageReady(true);
-        });
-      } catch {
-        if (!cancelled) {
-          unstable_batchedUpdates(() => {
-            setBookSelectorStorageReady(true);
-          });
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!bookSelectorStorageReady) return;
-    persistReaderPref(
-      BOOK_SELECTOR_VIEW_STORAGE_KEY,
-      JSON.stringify({
-        mode: bookSelectorViewMode,
-        testamentTab: selectorTestamentTab,
-      }),
-    );
-  }, [bookSelectorStorageReady, bookSelectorViewMode, selectorTestamentTab]);
-
-  useEffect(() => {
     const task = InteractionManager.runAfterInteractions(() => {
       registerTabScrollRef("reader", {
         scrollToOffset: ({ offset, animated = true }) => {
@@ -518,9 +434,6 @@ export default function ReaderChapterScreen() {
     setFontSettingsSheetOpen(false);
     setReaderDropdown(null);
     setDropdownAnchor(null);
-    setBookPickerStep("books");
-    setBookPickerBook(null);
-    setBookViewMenuOpen(false);
   }, [clearMobileSettingsFollowUp]);
 
   const closeFontSettingsPopup = useCallback(() => {
@@ -534,9 +447,6 @@ export default function ReaderChapterScreen() {
     setToolsMenuOpen(false);
     setReaderDropdown(null);
     setDropdownAnchor(null);
-    setBookPickerStep("books");
-    setBookPickerBook(null);
-    setBookViewMenuOpen(false);
     setFontSettingsSheetOpen(true);
   }, [isTabletReaderLayout]);
 
@@ -680,110 +590,18 @@ export default function ReaderChapterScreen() {
     });
   }, [toolsMenuOpen, windowWidth, closeToolsMenu, readerSettingsSlideProgress, readerMobileSettingsSlidePx]);
 
-  const {
-    selectedVerseNumbers,
-    noteModalVisible,
-    setNoteModalVisible,
-    noteTargetVerse,
-    setNoteTargetVerse,
-    noteDraft,
-    setNoteDraft,
-    actionBarMode,
-    setActionBarMode,
-    suppressNextVerseTapRef,
-    pickedHighlightColor,
-    setPickedHighlightColor,
-    copyToastVisible,
-    setCopyToastVisible,
-    clearVerseSelection,
-    toggleVerseSelection,
-    handleVerseTap,
-    handleVerseLongPress,
-    selectedVerses,
-    copySelectedVerses,
-    removeHighlightsFromSelection,
-    applyPickedHighlightToSelection,
-    openNoteForSelection,
-    saveNoteFromModal,
-  } = useReaderSelection({
-    chapter: chapter ?? null,
-    resolvedTranslationId,
-    highlights,
-    notes,
-    removeHighlightsFromVerses,
-    applyHighlightToVerses,
-    persistNoteForVerse,
-    bookSlug,
-    chapterNumber,
-    requestedTranslationId,
-    toolsMenuOpen,
-    closeToolsMenu,
-  });
-
   const onboardingStepRef = useRef<ReaderOnboardingStep | null>(null);
   const completeOnboardingInteractionRef = useRef<() => void>(() => {});
-  const clearSelectionPrimedRef = useRef(false);
 
-  const handleVerseTapForOnboarding = useCallback(
-    (verseNum: number) => {
-      const onClearStep = onboardingStepRef.current === "clear-selection";
-      const wasSelected = selectedVerseNumbers.has(verseNum);
-      handleVerseTap(verseNum);
-      if (onboardingStepRef.current === "tap-select-verse") {
-        completeOnboardingInteractionRef.current();
-      } else if (onClearStep && wasSelected) {
-        completeOnboardingInteractionRef.current();
-      }
-    },
-    [handleVerseTap, selectedVerseNumbers],
-  );
-
-  const handleVerseLongPressForOnboarding = useCallback(
-    (verseNum: number) => {
-      handleVerseLongPress(verseNum);
-      if (onboardingStepRef.current === "long-press-highlight") {
-        completeOnboardingInteractionRef.current();
-      }
-    },
-    [handleVerseLongPress],
-  );
-
-  /** `onPressIn` clears without waiting for lift; `onPress` covers VoiceOver. No time debounce — a missed tap must register immediately on retry. */
-  const selectionToastHapticGuardRef = useRef(0);
-  const dismissSelectionToast = useCallback(() => {
-    const t = Date.now();
-    if (t - selectionToastHapticGuardRef.current > 55) {
-      selectionToastHapticGuardRef.current = t;
-      hapticSelection();
-    }
-    if (onboardingStepRef.current === "clear-selection") {
-      completeOnboardingInteractionRef.current();
-    }
-    clearVerseSelection();
-  }, [clearVerseSelection]);
-
-  const openJournalFromSelection = useCallback(() => {
-    if (!chapter || !resolvedTranslationId || selectedVerses.length === 0) return;
-    hapticLightImpact();
-    const first = selectedVerses[0]!;
-    const last = selectedVerses[selectedVerses.length - 1]!;
-    setNewEntryInitialParams({
-      book: chapter.bookSlug,
-      chapter: String(chapter.chapterNumber),
-      verseStart: String(first),
-      verseEnd: String(last),
-      translation: resolvedTranslationId,
-    });
+  const handleOpenJournalFromSelection = useCallback((params: JournalNewEntryInitialParams) => {
+    setNewEntryInitialParams(params);
     setNewEntrySheetKey((k) => k + 1);
     setNewEntrySheetOpen(true);
-    clearVerseSelection();
-  }, [chapter, resolvedTranslationId, selectedVerses, clearVerseSelection]);
+  }, []);
 
-  const openStudyNotesFromSelection = useCallback(() => {
-    if (selectedVerses.length === 0) return;
-    hapticLightImpact();
+  const handleOpenStudyNotesFromSelection = useCallback(() => {
     setCommentaryPanelOpen(true);
-  }, [selectedVerses.length]);
+  }, []);
 
   const animateCloseNewEntrySheet = useCallback(
     (velocityY = 0, draggedY = 0) => {
@@ -979,9 +797,6 @@ export default function ReaderChapterScreen() {
         setBookSheetExitAnimationStarted(false);
         setReaderDropdown(null);
         setDropdownAnchor(null);
-        setBookPickerStep("books");
-        setBookPickerBook(null);
-        setBookViewMenuOpen(false);
         return;
       }
       if (kind === "book") {
@@ -1004,60 +819,10 @@ export default function ReaderChapterScreen() {
     [readerDropdown, isTabletReaderLayout],
   );
 
-  const getBookAzSortKey = useCallback(
-    (bookName: string) => bookName.replace(/^[0-9]+\s*/u, "").trim().toLowerCase(),
-    [],
-  );
-
-  const { oldTestamentBooks, newTestamentBooks } = useMemo(() => {
-    const b = books ?? [];
-    const OT_COUNT = 39;
-    return {
-      oldTestamentBooks: b.slice(0, OT_COUNT),
-      newTestamentBooks: b.slice(OT_COUNT),
-    };
-  }, [books]);
-
-  const azSortedBooks = useMemo(
-    () =>
-      [...(books ?? [])].sort((a, b) =>
-        getBookAzSortKey(a.name).localeCompare(getBookAzSortKey(b.name)),
-      ),
-    [books, getBookAzSortKey],
-  );
-
-  const gridSectionsForPicker = useMemo(
-    () =>
-      [
-        { id: "ot" as const, label: "OLD TESTAMENT", items: oldTestamentBooks },
-        { id: "nt" as const, label: "NEW TESTAMENT", items: newTestamentBooks },
-      ] as const,
-    [oldTestamentBooks, newTestamentBooks],
-  );
-
-  const activeBookViewLabel = useMemo(() => {
-    if (bookSelectorViewMode === "grid") return "Grid view";
-    if (bookSelectorViewMode === "az") return "A-Z view";
-    return selectorTestamentTab === "old" ? "Old Testament view" : "New Testament view";
-  }, [bookSelectorViewMode, selectorTestamentTab]);
-
-  const applyBookSelectorView = useCallback((view: "grid" | "az" | "old" | "new") => {
-    hapticLightImpact();
-    if (view === "grid" || view === "az") {
-      setBookSelectorViewMode(view);
-    } else {
-      setBookSelectorViewMode("testament");
-      setSelectorTestamentTab(view);
-    }
-    setBookViewMenuOpen(false);
-  }, []);
-
   const openBookTools = useCallback(() => {
     hapticLightImpact();
     setToolsMenuOpen(false);
     setFontSettingsSheetOpen(false);
-    setBookPickerStep("books");
-    setBookPickerBook(null);
     setBookSheetExitAnimationStarted(false);
     measureAndSetDropdown(bookFanRef, "book");
   }, [measureAndSetDropdown]);
@@ -1094,34 +859,22 @@ export default function ReaderChapterScreen() {
         setFontSettingsSheetOpen(false);
         setReaderDropdown(null);
         setDropdownAnchor(null);
-        setBookPickerStep("books");
-        setBookPickerBook(null);
-        setBookViewMenuOpen(false);
         return false;
       }
       clearMobileSettingsFollowUp();
       setFontSettingsSheetOpen(false);
       setReaderDropdown(null);
       setDropdownAnchor(null);
-      setBookPickerStep("books");
-      setBookPickerBook(null);
-      setBookViewMenuOpen(false);
       return true;
     });
   }, [clearMobileSettingsFollowUp]);
 
   const closeReaderDropdown = useCallback(() => {
     clearMobileSettingsFollowUp();
-    bookSheetTranslateY.stopAnimation();
-    bookSheetClosingRef.current = false;
-    bookSheetTranslateY.setValue(0);
     setBookSheetExitAnimationStarted(false);
     setReaderDropdown(null);
     setDropdownAnchor(null);
-    setBookPickerStep("books");
-    setBookPickerBook(null);
-    setBookViewMenuOpen(false);
-  }, [bookSheetTranslateY, clearMobileSettingsFollowUp]);
+  }, [clearMobileSettingsFollowUp]);
 
   const dismissReaderChromeFromBackgroundPress = useCallback(() => {
     if (toolsMenuOpen) closeToolsMenu();
@@ -1146,118 +899,6 @@ export default function ReaderChapterScreen() {
     dismissReaderChromeFromBackgroundPress();
   }, [dismissReaderChromeFromBackgroundPress]);
 
-  const onBookSheetScroll = useCallback((scrollY: number) => {
-    // Android often reports a small positive offset near top; keep dismiss enabled within a tolerance.
-    const atTop = scrollY <= (Platform.OS === "android" ? 16 : 2);
-    setBookSheetDismissPanEnabled((prev) => (prev === atTop ? prev : atTop));
-  }, []);
-
-  const animateCloseBookSheet = useCallback(
-    (velocityY = 0, draggedY = 0) => {
-      if (bookSheetClosingRef.current) return;
-      bookSheetClosingRef.current = true;
-      setBookSheetExitAnimationStarted(true);
-      const h = Dimensions.get("window").height;
-      const targetY = h + 56;
-      const vel = Math.max(0, velocityY);
-      const duration = Math.max(170, Math.min(340, Math.round(300 - Math.min(1.85, vel) * 88)));
-      bookSheetTranslateY.stopAnimation();
-      const clamped = Math.max(0, draggedY);
-      if (clamped > 0) {
-        bookSheetTranslateY.setValue(clamped);
-      }
-      Animated.timing(bookSheetTranslateY, {
-        toValue: targetY,
-        duration,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start(() => {
-        bookSheetClosingRef.current = false;
-        bookSheetTranslateY.setValue(0);
-        closeReaderDropdown();
-      });
-    },
-    [bookSheetTranslateY, closeReaderDropdown],
-  );
-
-  const onBookSheetDismissGestureEvent = useCallback(
-    (e: PanGestureHandlerGestureEvent) => {
-      if (bookSheetClosingRef.current) return;
-      const ty = e.nativeEvent.translationY;
-      bookSheetTranslateY.setValue(Math.max(0, bookSheetDragStartYRef.current + ty));
-    },
-    [bookSheetTranslateY],
-  );
-
-  const onBookSheetDismissGestureStateChange = useCallback(
-    (e: PanGestureHandlerStateChangeEvent) => {
-      const { state, oldState, velocityY, translationY } = e.nativeEvent;
-      if (state === State.ACTIVE && oldState !== State.ACTIVE) {
-        setBookViewMenuOpen(false);
-        bookSheetTranslateY.stopAnimation((value: number) => {
-          bookSheetDragStartYRef.current = value;
-        });
-      }
-      if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
-        if (bookSheetClosingRef.current) return;
-        const ty = translationY ?? 0;
-        const y = Math.max(0, bookSheetDragStartYRef.current + ty);
-        const vyPxPerS = Math.abs(velocityY ?? 0);
-        const velForCloseAnim = Math.min(1.85, vyPxPerS / 520);
-        if (y > 90 || vyPxPerS > 520) {
-          animateCloseBookSheet(velForCloseAnim, y);
-          return;
-        }
-        Animated.spring(bookSheetTranslateY, {
-          toValue: 0,
-          velocity: Math.max(0, (velocityY ?? 0) / 1000),
-          friction: 9,
-          tension: 75,
-          useNativeDriver: true,
-        }).start();
-      }
-    },
-    [animateCloseBookSheet, bookSheetTranslateY, setBookViewMenuOpen],
-  );
-
-  useEffect(() => {
-    if (readerDropdown !== "book") return;
-    bookSheetClosingRef.current = false;
-    bookSheetTranslateY.stopAnimation();
-    if (Platform.OS === "android") {
-      // Keep Android open transition snappy to remove perceived tap lag.
-      bookSheetTranslateY.setValue(28);
-      Animated.timing(bookSheetTranslateY, {
-        toValue: 0,
-        duration: 120,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-      return;
-    }
-    bookSheetTranslateY.setValue(Dimensions.get("window").height);
-    Animated.spring(bookSheetTranslateY, {
-      toValue: 0,
-      friction: 9,
-      tension: 68,
-      useNativeDriver: true,
-    }).start();
-  }, [readerDropdown, bookSheetTranslateY]);
-
-  useEffect(() => {
-    if (readerDropdown !== "book") return;
-    setBookSheetDismissPanEnabled(true);
-  }, [readerDropdown, bookPickerStep, bookSelectorViewMode, selectorTestamentTab]);
-
-  useEffect(() => {
-    if (readerDropdown !== "book") return;
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      animateCloseBookSheet(0.45, 0);
-      return true;
-    });
-    return () => sub.remove();
-  }, [readerDropdown, animateCloseBookSheet]);
-
   useEffect(() => {
     if (!toolsMenuOpen) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -1266,30 +907,6 @@ export default function ReaderChapterScreen() {
     });
     return () => sub.remove();
   }, [toolsMenuOpen, closeToolsMenu]);
-
-  useEffect(() => {
-    if (!fontSettingsSheetOpen) {
-      fontSettingsPopupSlideAnim.setValue(0);
-      fontSettingsPopupOpacityAnim.setValue(0);
-      return;
-    }
-    fontSettingsPopupSlideAnim.setValue(0);
-    fontSettingsPopupOpacityAnim.setValue(0);
-    Animated.parallel([
-      Animated.timing(fontSettingsPopupSlideAnim, {
-        toValue: 1,
-        duration: 280,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(fontSettingsPopupOpacityAnim, {
-        toValue: 1,
-        duration: 240,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [fontSettingsSheetOpen, fontSettingsPopupSlideAnim, fontSettingsPopupOpacityAnim]);
 
   const isReaderContentCurrent = Boolean(
     chapter &&
@@ -1475,180 +1092,6 @@ export default function ReaderChapterScreen() {
     readerVerseEstimatedItemSize,
   ]);
 
-  const stableVisualData = useMemo(
-    () => ({
-      themeId,
-      selectionBackground: rc.selectionBackground,
-      selectionText: rc.selectionText,
-      verseNumberColor: rc.verseNumberColor,
-      noteBelowVerseBackground: rc.noteBelowVerseBackground,
-      bodyTextColor: colors.brown800,
-      readerVerseFontSize,
-      readerVerseLineHeight,
-      readerVerseBodyFontFamily,
-      verseTextAlign,
-    }),
-    [
-      themeId,
-      rc.selectionBackground,
-      rc.selectionText,
-      rc.verseNumberColor,
-      rc.noteBelowVerseBackground,
-      colors.brown800,
-      readerVerseFontSize,
-      readerVerseLineHeight,
-      readerVerseBodyFontFamily,
-      verseTextAlign,
-    ],
-  );
-
-  const interactionData = useMemo(
-    () => ({
-      selectedVerseNumbers,
-      highlights,
-      notes,
-    }),
-    [selectedVerseNumbers, highlights, notes],
-  );
-
-  type ReaderVerseInteractionData = typeof interactionData;
-  type ReaderVerseStableVisualData = typeof stableVisualData;
-  const flashListExtraData = useMemo(
-    () => ({ interactionData, stableVisualData }),
-    [interactionData, stableVisualData],
-  );
-
-  type ReaderVerseFlashRowProps = {
-    item: Extract<ReaderVerseFlashItem, { kind: "verse" }>;
-    index: number;
-    interactionData: ReaderVerseInteractionData;
-    stableVisualData: ReaderVerseStableVisualData;
-    readerTabletLandscapeTwoColumn: boolean;
-    readerVersesOpacityAnim: Animated.Value;
-    onVersePress: (verseNum: number) => void;
-    onVerseLongPress: (verseNum: number) => void;
-  };
-
-  const MemoizedReaderVerseFlashRow = useMemo(
-    () =>
-      memo(
-        ({
-          item,
-          index,
-          interactionData,
-          stableVisualData: vd,
-          readerTabletLandscapeTwoColumn,
-          readerVersesOpacityAnim,
-          onVersePress,
-          onVerseLongPress,
-        }: ReaderVerseFlashRowProps) => {
-          const verseNum = item.verseIndex + 1;
-          const twoColumnPaddingStyle =
-            readerTabletLandscapeTwoColumn
-              ? index % 2 === 0
-                ? readerVerseListStyles.leftColumnPadding
-                : readerVerseListStyles.rightColumnPadding
-              : null;
-          return (
-            <Animated.View
-              style={[
-                readerVerseListStyles.flashItemBase,
-                twoColumnPaddingStyle,
-                { opacity: readerVersesOpacityAnim },
-              ]}
-            >
-              <ReaderVerseRow
-                verseNum={verseNum}
-                verseText={item.verseText}
-                verseInlineContent={item.verseInlineContent}
-                isSelected={interactionData.selectedVerseNumbers.has(verseNum)}
-                highlight={interactionData.highlights[verseNum]}
-                noteText={interactionData.notes[verseNum]?.trim()}
-                themeId={vd.themeId}
-                selectionBackground={vd.selectionBackground}
-                selectionText={vd.selectionText}
-                verseNumberColor={vd.verseNumberColor}
-                noteBelowVerseBackground={vd.noteBelowVerseBackground}
-                bodyTextColor={vd.bodyTextColor}
-                readerVerseFontSize={vd.readerVerseFontSize}
-                readerVerseLineHeight={vd.readerVerseLineHeight}
-                readerVerseBodyFontFamily={vd.readerVerseBodyFontFamily}
-                verseTextAlign={vd.verseTextAlign}
-                onVersePress={onVersePress}
-                onVerseLongPress={onVerseLongPress}
-              />
-            </Animated.View>
-          );
-        },
-        (prevProps, nextProps) => {
-          if (prevProps.item.verseIndex !== nextProps.item.verseIndex) return false;
-          if (prevProps.item.verseText !== nextProps.item.verseText) return false;
-          if (prevProps.item.verseInlineContent !== nextProps.item.verseInlineContent) return false;
-          if (prevProps.index !== nextProps.index) return false;
-          if (prevProps.readerTabletLandscapeTwoColumn !== nextProps.readerTabletLandscapeTwoColumn) return false;
-          if (prevProps.readerVersesOpacityAnim !== nextProps.readerVersesOpacityAnim) return false;
-          if (prevProps.onVersePress !== nextProps.onVersePress) return false;
-          if (prevProps.onVerseLongPress !== nextProps.onVerseLongPress) return false;
-          if (prevProps.stableVisualData !== nextProps.stableVisualData) return false;
-
-          const verseNum = prevProps.item.verseIndex + 1;
-          const prevSelected = prevProps.interactionData.selectedVerseNumbers.has(verseNum);
-          const nextSelected = nextProps.interactionData.selectedVerseNumbers.has(verseNum);
-          if (prevSelected !== nextSelected) return false;
-          if (prevProps.interactionData.highlights[verseNum] !== nextProps.interactionData.highlights[verseNum]) {
-            return false;
-          }
-          const prevNote = prevProps.interactionData.notes[verseNum]?.trim();
-          const nextNote = nextProps.interactionData.notes[verseNum]?.trim();
-          if (prevNote !== nextNote) return false;
-          return true;
-        },
-      ),
-    [],
-  );
-
-  const renderReaderVerseFlashItem = useCallback(
-    ({ item, index }: ListRenderItemInfo<ReaderVerseFlashItem>) => {
-      if (item.kind === "empty") {
-        const twoColumnPaddingStyle =
-          readerTabletLandscapeTwoColumn
-            ? index % 2 === 0
-              ? readerVerseListStyles.leftColumnPadding
-              : readerVerseListStyles.rightColumnPadding
-            : null;
-        return (
-          <View style={[readerVerseListStyles.flashItemBase, twoColumnPaddingStyle]} />
-        );
-      }
-      return (
-        <MemoizedReaderVerseFlashRow
-          item={item}
-          index={index}
-          interactionData={interactionData}
-          stableVisualData={stableVisualData}
-          readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
-          readerVersesOpacityAnim={readerVersesOpacityAnim}
-          onVersePress={handleVerseTapForOnboarding}
-          onVerseLongPress={handleVerseLongPressForOnboarding}
-        />
-      );
-    },
-    [
-      MemoizedReaderVerseFlashRow,
-      interactionData,
-      stableVisualData,
-      readerVersesOpacityAnim,
-      handleVerseTapForOnboarding,
-      handleVerseLongPressForOnboarding,
-      readerTabletLandscapeTwoColumn,
-    ],
-  );
-
-  const readerVerseFlashKeyExtractor = useCallback((item: ReaderVerseFlashItem) => {
-    if (item.kind === "verse") return `v-${item.verseIndex}`;
-    return `e-${item.side}-${item.row}`;
-  }, []);
-
   const readerChapterFlashListFooter = useCallback(() => {
     if (resolvedTranslationId !== requestedTranslationId) return null;
     const { prevChapter, nextChapter } = chapterNav;
@@ -1779,7 +1222,7 @@ export default function ReaderChapterScreen() {
     selectionBannerTopPx,
     androidTopToolsTopPx: readerAndroidTopToolsTopPx,
     selectedVerseCount: selectedVerses.length,
-    onTourComplete: clearVerseSelection,
+    onTourComplete: () => clearVerseSelectionRef.current?.(),
   });
 
   onboardingStepRef.current = readerFeatureOnboarding.currentStep;
@@ -1865,36 +1308,6 @@ export default function ReaderChapterScreen() {
     settingsRevealedStripWidthPx: readerMobileSettingsSlidePx,
   });
 
-  const readerActionBarOnboarding = useReaderActionBarOnboarding({
-    hasVerseSelection: selectedVerses.length > 0,
-    actionBarMode,
-    readerOverlayOpen,
-    readerFeatureOnboardingActive: readerFeatureOnboarding.showLayer,
-    buttonRefs: actionBarOnboardingButtonRefs,
-    screenW: windowWidth,
-    actionBarBottomPx,
-  });
-
-  useEffect(() => {
-    if (readerFeatureOnboarding.currentStep !== "clear-selection") {
-      clearSelectionPrimedRef.current = false;
-      return;
-    }
-    if (clearSelectionPrimedRef.current) return;
-    if (selectedVerses.length > 0) {
-      clearSelectionPrimedRef.current = true;
-      return;
-    }
-    if (!chapter?.verses?.length) return;
-    clearSelectionPrimedRef.current = true;
-    toggleVerseSelection(1);
-  }, [
-    readerFeatureOnboarding.currentStep,
-    selectedVerses.length,
-    chapter?.verses?.length,
-    toggleVerseSelection,
-  ]);
-
   if (readerChapterError) {
     return (
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: rc.sceneSurface }}>
@@ -1962,22 +1375,6 @@ export default function ReaderChapterScreen() {
    */
   const chapterSwipePanHandlers = (readerOverlayOpen ? noopChapterSwipePan : chapterSwipePan).panHandlers;
 
-  const hasVerseSelection = selectedVerses.length > 0;
-  const actionBarIconBoxPx = 24;
-  const actionBarIconSizePx = 22;
-  const actionBarIconScale = {
-    studyNotes: 1.01,
-    highlight: 1.19,
-    copy: 1.31,
-    note: 1.08,
-    journal: 1.08,
-  } as const;
-  const selectedVerseFeedbackLabel =
-    selectedVerses.length === 0
-      ? ""
-      : selectedVerses.length === 1
-        ? "1 verse selected"
-        : `${selectedVerses.length} verses selected`;
   const newEntrySheetBottomPx = nativeTabSheetBottomInsetPx(insets.bottom, 10);
   /** Book picker sheet: 20px gap above the bottom safe area (full-window overlay; not tab-bar offset). */
   const readerBookSheetBottomPx = insets.bottom + 20;
@@ -2003,7 +1400,6 @@ export default function ReaderChapterScreen() {
       : newEntrySheetAvailableHeightPx;
   const newEntrySheetTopPx =
     windowHeight - newEntrySheetBottomInsetWithLiftPx - newEntrySheetTargetHeightPx;
-  const copyToastTopPx = selectionBannerTopPx + (hasVerseSelection ? 22 : 36);
 
   const screenW = windowWidth;
   /** Horizontal gap between sheet card and window edge. */
@@ -2029,13 +1425,7 @@ export default function ReaderChapterScreen() {
   /** Keep a floor so theme/translation popovers always get a sane width (avoids 0‑width tiles when `screenW` is briefly 0). */
   const readerDropdownMaxW = Math.min(340, Math.max(200, screenW - 24));
   const fontSettingsScale = isTabletReaderLayout ? 1.5 : 1;
-  const fontSettingsPopupMaxW = Math.min(isTabletReaderLayout ? 510 : 340, screenW - 24);
-  const fontSettingsPopupMaxH = Dimensions.get("window").height * (isTabletReaderLayout ? 0.7 : 0.78);
   const fontSettingsPopupPadH = 16 * fontSettingsScale;
-  const fontSettingsPopupPadTop = READER_FONT_CARD_PADDING_TOP_PX * fontSettingsScale;
-  const fontSettingsPopupPadBottom = 12 * fontSettingsScale;
-  const fontSettingsSectionLabelSize = 10 * fontSettingsScale;
-  const fontSettingsAlignIconSize = 22 * fontSettingsScale;
   const readerDropdownTop =
     dropdownAnchor != null ? dropdownAnchor.y + dropdownAnchor.height + 8 : 0;
   const readerDropdownLeft =
@@ -2201,8 +1591,26 @@ export default function ReaderChapterScreen() {
         readerHeaderToolsGroup={readerHeaderToolsGroup}
       />
 
-      <ReaderVerseList
+      <ReaderSelectionLayer
+        chapter={chapter}
+        resolvedTranslationId={resolvedTranslationId}
+        highlights={highlights}
+        notes={notes}
+        removeHighlightsFromVerses={removeHighlightsFromVerses}
+        applyHighlightToVerses={applyHighlightToVerses}
+        persistNoteForVerse={persistNoteForVerse}
+        bookSlug={bookSlug}
+        chapterNumber={chapterNumber}
+        requestedTranslationId={requestedTranslationId}
+        toolsMenuOpen={toolsMenuOpen}
+        closeToolsMenu={closeToolsMenu}
+        themeId={themeId}
+        colors={colors}
         rc={rc}
+        readerVerseFontSize={readerVerseFontSize}
+        readerVerseLineHeight={readerVerseLineHeight}
+        readerVerseBodyFontFamily={readerVerseBodyFontFamily}
+        verseTextAlign={verseTextAlign}
         readerScrollRef={readerScrollRef}
         chapterSwipePanHandlers={chapterSwipePanHandlers}
         readerVerseEstimatedItemSize={readerVerseEstimatedItemSize}
@@ -2212,278 +1620,32 @@ export default function ReaderChapterScreen() {
         onMomentumScrollEnd={onChapterNavArrowsMomentumScrollEnd}
         dismissReaderChromeFromBackgroundPress={dismissReaderChromeFromBackgroundPress}
         verseFlashListDataForList={verseFlashListDataForList}
-        renderReaderVerseFlashItem={renderReaderVerseFlashItem}
-        readerVerseFlashKeyExtractor={readerVerseFlashKeyExtractor}
-        flashListExtraData={flashListExtraData}
         readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
+        readerVersesOpacityAnim={readerVersesOpacityAnim}
         listHeader={readerChapterPageHeading}
         readerChapterFlashListFooter={readerChapterFlashListFooter}
-        hasVerseSelection={hasVerseSelection}
-        actionBarMode={actionBarMode}
         actionBarBottomPx={actionBarBottomPx}
+        selectionBannerTopPx={selectionBannerTopPx}
+        screenW={screenW}
+        readerMobileSettingsSlideTranslateX={readerMobileSettingsSlideTranslateX}
+        readerOverlayOpenFromParent={
+          toolsMenuOpen ||
+          fontSettingsSheetOpen ||
+          readerDropdown != null ||
+          readerPrivacyPolicyOpen ||
+          readerCreditsOpen ||
+          newEntrySheetOpen
+        }
+        readerFeatureOnboardingActive={readerFeatureOnboarding.showLayer}
+        featureOnboardingStep={readerFeatureOnboarding.currentStep}
+        selectionBannerRef={selectionBannerLiveRef}
+        onboardingStepRef={onboardingStepRef}
+        completeOnboardingInteractionRef={completeOnboardingInteractionRef}
+        clearVerseSelectionRef={clearVerseSelectionRef}
+        onOpenJournal={handleOpenJournalFromSelection}
+        onOpenStudyNotes={handleOpenStudyNotesFromSelection}
+        onSelectionActivityChange={handleSelectionActivityChange}
       />
-
-      {copyToastVisible ? (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 51 }]}>
-          <View
-            style={{
-              position: "absolute",
-              top: copyToastTopPx,
-              left: 0,
-              right: 0,
-              alignItems: "center",
-              paddingHorizontal: 16,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                backgroundColor: colors.brown800,
-                borderRadius: 999,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                shadowColor: rc.popoverShadow,
-                shadowOffset: { width: 0, height: 3 },
-                shadowOpacity: 0.2,
-                shadowRadius: 8,
-                elevation: 4,
-              }}
-            >
-              <Text style={{ color: rc.selectionText, fontSize: 15 }}>✓</Text>
-              <Text
-                style={{
-                  fontFamily: "Inter_500Medium",
-                  fontSize: 12,
-                  color: rc.selectionText,
-                }}
-              >
-                Copied
-              </Text>
-            </View>
-          </View>
-        </View>
-      ) : null}
-
-      {hasVerseSelection ? (
-        <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: 45 }]}>
-          <View
-            pointerEvents="box-none"
-            style={{
-              position: "absolute",
-              bottom: actionBarBottomPx,
-              left: 0,
-              right: 0,
-              alignItems: "center",
-              paddingLeft: 16,
-              paddingRight: actionBarMode === "highlight" ? 4 : 16,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                flexWrap: "wrap",
-                rowGap: 10,
-                columnGap: 6,
-                backgroundColor: colors.parchmentMid,
-                borderRadius: 999,
-                paddingLeft: actionBarMode === "highlight" ? 12 : 10,
-                paddingRight: actionBarMode === "highlight" ? 12 : 10,
-                paddingVertical: actionBarMode === "highlight" ? 7 : 3,
-                borderWidth: 1,
-                borderColor: colors.borderSolid,
-                shadowColor: "#242423",
-                shadowOffset: { width: 0, height: 3 },
-                shadowOpacity: 0.2,
-                shadowRadius: 4,
-                elevation: 4,
-                maxWidth: "100%",
-              }}
-            >
-              {actionBarMode === "highlight" ? (
-                <>
-                  <TouchableOpacity
-                    onPress={() => setActionBarMode("default")}
-                    accessibilityLabel="Back from highlight"
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      borderWidth: 1,
-                      borderColor: colors.borderSolid,
-                      borderRadius: 999,
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={{ fontFamily: "Inter_400Regular", color: colors.tan300 }}>←</Text>
-                    <Text style={{ fontFamily: "Inter_500Medium", color: colors.brown800 }}>Back</Text>
-                  </TouchableOpacity>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    {highlightColorOptions.map((opt) => {
-                      const picked = pickedHighlightColor === opt.id;
-                      return (
-                        <TouchableOpacity
-                          key={opt.id}
-                          onPress={() => setPickedHighlightColor(opt.id)}
-                          accessibilityLabel={`Use ${opt.id} highlight`}
-                          style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: 14,
-                            backgroundColor: opt.swatch,
-                            borderWidth: picked ? 3 : 1,
-                            borderColor: picked ? opt.ring : "rgba(0,0,0,0.06)",
-                          }}
-                        />
-                      );
-                    })}
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
-                    <TouchableOpacity
-                      onPress={removeHighlightsFromSelection}
-                      accessibilityLabel="Remove highlight"
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                    >
-                      <Text style={{ fontFamily: "Inter_400Regular", color: colors.tan300 }}>Remove</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={applyPickedHighlightToSelection}
-                      accessibilityLabel="Apply highlight"
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: "Inter_500Medium",
-                          color: colors.brown800,
-                          fontWeight: "600",
-                        }}
-                      >
-                        Apply
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <View ref={actionBarOnboardingStudyNotesRef} collapsable={false} className="h-[47px] w-[47px]">
-                    <TouchableOpacity
-                      onPress={openStudyNotesFromSelection}
-                      accessibilityLabel="Open study notes for selection"
-                      className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                      activeOpacity={0.7}
-                    >
-                      <View
-                        style={{
-                          width: actionBarIconBoxPx,
-                          height: actionBarIconBoxPx,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          transform: [{ scale: actionBarIconScale.studyNotes }],
-                        }}
-                      >
-                        <StudyNotesBookmarkIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                  <View ref={actionBarOnboardingHighlightRef} collapsable={false} className="h-[47px] w-[47px]">
-                    <TouchableOpacity
-                      onPress={() => {
-                        const first = selectedVerses[0];
-                        const existing = first != null ? highlights[first] : undefined;
-                        if (existing) setPickedHighlightColor(existing);
-                        setActionBarMode("highlight");
-                      }}
-                      accessibilityLabel="Highlight"
-                      className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                      activeOpacity={0.7}
-                    >
-                      <View
-                        style={{
-                          width: actionBarIconBoxPx,
-                          height: actionBarIconBoxPx,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          transform: [{ scale: actionBarIconScale.highlight }],
-                        }}
-                      >
-                        <ReaderHighlightIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                  <View ref={actionBarOnboardingCopyRef} collapsable={false} className="h-[47px] w-[47px]">
-                    <TouchableOpacity
-                      onPress={() => {
-                        void copySelectedVerses();
-                      }}
-                      accessibilityLabel="Copy"
-                      className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                      activeOpacity={0.7}
-                    >
-                      <View
-                        style={{
-                          width: actionBarIconBoxPx,
-                          height: actionBarIconBoxPx,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          transform: [{ scale: actionBarIconScale.copy }],
-                        }}
-                      >
-                        <ReaderCopyIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                  <View ref={actionBarOnboardingNoteRef} collapsable={false} className="h-[47px] w-[47px]">
-                    <TouchableOpacity
-                      onPress={openNoteForSelection}
-                      accessibilityLabel="Note"
-                      className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                      activeOpacity={0.7}
-                    >
-                      <View
-                        style={{
-                          width: actionBarIconBoxPx,
-                          height: actionBarIconBoxPx,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          transform: [{ scale: actionBarIconScale.note }],
-                        }}
-                      >
-                        <ReaderNoteIcon color={rc.actionIconMuted} size={actionBarIconSizePx} />
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                  <View ref={actionBarOnboardingJournalRef} collapsable={false} className="h-[47px] w-[47px]">
-                    <TouchableOpacity
-                      onPress={openJournalFromSelection}
-                      accessibilityLabel="New journal entry from selection"
-                      className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                      style={{ backgroundColor: colors.brown800 }}
-                      activeOpacity={0.85}
-                    >
-                      <View
-                        style={{
-                          width: actionBarIconBoxPx,
-                          height: actionBarIconBoxPx,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          transform: [{ scale: actionBarIconScale.journal }],
-                        }}
-                      >
-                        <ReaderJournalIcon color={rc.selectionText} size={actionBarIconSizePx} />
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
-          </View>
-        </View>
-      ) : null}
 
       </Animated.View>
 
@@ -2581,109 +1743,10 @@ export default function ReaderChapterScreen() {
         </View>
       ) : null}
 
-      {hasVerseSelection ? (
-        <Animated.View
-          pointerEvents="box-none"
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              zIndex: 4000,
-              transform: [{ translateX: readerMobileSettingsSlideTranslateX }],
-              ...Platform.select({ android: { elevation: 48 } }),
-            },
-          ]}
-        >
-          <View
-            pointerEvents="box-none"
-            style={{
-              position: "absolute",
-              top: selectionBannerTopPx,
-              left: 0,
-              right: 0,
-              alignItems: "center",
-              paddingHorizontal: Math.round(16 * 1.2),
-            }}
-          >
-            <View ref={selectionBannerLiveRef} pointerEvents="auto" collapsable={false}>
-              <Pressable
-                onPressIn={dismissSelectionToast}
-                onPress={dismissSelectionToast}
-                pressRetentionOffset={{ top: 32, bottom: 32, left: 48, right: 48 }}
-                hitSlop={{ top: 20, bottom: 20, left: 24, right: 24 }}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  selectedVerses.length === 1
-                    ? "1 verse selected, clear selection"
-                    : `${selectedVerses.length} verses selected, clear selection`
-                }
-                accessibilityHint="Clears the current verse selection"
-                style={({ pressed }) => ({
-                  alignSelf: "center",
-                  // Match widest label width so a single-verse pill is not fully under the native title chip.
-                  minWidth: Math.min(220, screenW - 48),
-                  minHeight: 44,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  maxWidth: "100%",
-                  borderRadius: 999,
-                  opacity: pressed ? 0.82 : 1,
-                })}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: rc.selectionBackground,
-                    borderRadius: 999,
-                    paddingHorizontal: Math.round(12 * 1.2),
-                    paddingVertical: Math.round(4 * 1.2),
-                    shadowColor: rc.popoverShadow,
-                    shadowOffset: { width: 0, height: Math.round(3 * 1.2) },
-                    shadowOpacity: 0.2,
-                    shadowRadius: Math.round(10 * 1.2),
-                    elevation: Math.round(4 * 1.2),
-                  }}
-                >
-                  <Text
-                    pointerEvents="none"
-                    style={{
-                      fontFamily: "Inter_400Regular",
-                      fontSize: Math.round(11 * 1.2),
-                      lineHeight: Math.round(11 * 1.2 * 1.35),
-                      color: rc.selectionText,
-                      paddingVertical: Math.round(2 * 1.2),
-                      textAlign: "center",
-                    }}
-                    numberOfLines={1}
-                  >
-                    {selectedVerseFeedbackLabel}
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          </View>
-        </Animated.View>
-      ) : null}
-
       <ReaderModals
         bundle={bundle}
-        activeBookViewLabel={activeBookViewLabel}
-        animateCloseBookSheet={animateCloseBookSheet}
-        applyBookSelectorView={applyBookSelectorView}
-        azSortedBooks={azSortedBooks}
-        bookPickerBook={bookPickerBook}
-        bookPickerStep={bookPickerStep}
-        bookSelectorViewMode={bookSelectorViewMode}
-        bookSheetDismissPanEnabled={bookSheetDismissPanEnabled}
-        onBookSheetScroll={onBookSheetScroll}
-        onBookSheetDismissGestureEvent={onBookSheetDismissGestureEvent}
-        onBookSheetDismissGestureStateChange={onBookSheetDismissGestureStateChange}
-        bookSheetTranslateY={bookSheetTranslateY}
-        bookViewMenuOpen={bookViewMenuOpen}
         chapter={chapter}
         commentaryPanelOpen={commentaryPanelOpen}
-        closeFontSettingsPopup={closeFontSettingsPopup}
         closeCommentaryPanel={() => setCommentaryPanelOpen(false)}
         closeNewEntrySheet={closeNewEntrySheet}
         closeReaderDropdown={closeReaderDropdown}
@@ -2691,26 +1754,11 @@ export default function ReaderChapterScreen() {
         dropOpacityAnim={dropOpacityAnim}
         dropSlideAnim={dropSlideAnim}
         dropdownAnchor={dropdownAnchor}
-        fontSettingsFanRef={fontSettingsFanRef}
-        fontSettingsPopupMaxH={fontSettingsPopupMaxH}
-        fontSettingsPopupMaxW={fontSettingsPopupMaxW}
-        fontSettingsPopupOpacityAnim={fontSettingsPopupOpacityAnim}
-        fontSettingsPopupPadBottom={fontSettingsPopupPadBottom}
-        fontSettingsPopupPadH={fontSettingsPopupPadH}
-        fontSettingsPopupPadTop={fontSettingsPopupPadTop}
-        fontSettingsPopupSlideAnim={fontSettingsPopupSlideAnim}
-        fontSettingsSectionLabelSize={fontSettingsSectionLabelSize}
-        fontSettingsAlignIconSize={fontSettingsAlignIconSize}
-        fontSettingsScale={fontSettingsScale}
-        fontSettingsSheetOpen={fontSettingsSheetOpen}
-        fontSizeScale={fontSizeScale}
-        readerVerseBodyFontId={readerVerseBodyFontId}
-        setReaderVerseBodyFontIdPersisted={setReaderVerseBodyFontIdPersisted}
         goToReaderChapter={goToReaderChapter}
-        gridSectionsForPicker={gridSectionsForPicker}
+        books={books}
+        setBookSheetExitAnimationStarted={setBookSheetExitAnimationStarted}
         insets={insets}
         isTabletReaderLayout={isTabletReaderLayout}
-        lineSpacingScale={lineSpacingScale}
         measureAndSetDropdown={measureAndSetDropdown}
         newEntryFormRef={newEntryFormRef}
         newEntryHandlePanResponder={newEntryHandlePanResponder}
@@ -2726,9 +1774,6 @@ export default function ReaderChapterScreen() {
         noteDraft={noteDraft}
         noteModalVisible={noteModalVisible}
         noteTargetVerse={noteTargetVerse}
-        oldTestamentBooks={oldTestamentBooks}
-        newTestamentBooks={newTestamentBooks}
-        openFontSettingsSheet={openFontSettingsSheet}
         rc={rc}
         readerBookGridCellW={readerBookGridCellW}
         readerBookGridGap={readerBookGridGap}
@@ -2744,30 +1789,45 @@ export default function ReaderChapterScreen() {
         readerNewEntrySheetBottomLiftPx={readerNewEntrySheetBottomLiftPx}
         requestCloseReaderNewEntrySheet={requestCloseReaderNewEntrySheet}
         resolvedTranslationId={resolvedTranslationId}
-        router={router}
         saveNoteFromModal={saveNoteFromModal}
         selectedVerses={selectedVerses}
-        selectorTestamentTab={selectorTestamentTab}
-        setBookPickerBook={setBookPickerBook}
-        setBookPickerStep={setBookPickerStep}
-        setBookViewMenuOpen={setBookViewMenuOpen}
-        setFontSizeScalePersisted={setFontSizeScalePersisted}
-        setLineSpacingScalePersisted={setLineSpacingScalePersisted}
         setNewEntryHasDraft={setNewEntryHasDraft}
         setNoteDraft={setNoteDraft}
         setNoteModalVisible={setNoteModalVisible}
         setNoteTargetVerse={setNoteTargetVerse}
         setThemeId={setThemeId}
         settingsMutedTextColor={settingsMutedTextColor}
-        setVerseTextAlignPersisted={setVerseTextAlignPersisted}
         themesFanRef={themesFanRef}
         themeId={themeId}
         translationFanRef={translationFanRef}
+      />
+      <TranslationPickerSheet
+        isOpen={readerDropdown === "translation"}
+        onClose={closeReaderDropdown}
+        onSelectTranslation={(translationId) => router.setParams({ translation: translationId })}
+        sheetTopPx={readerDropdownTop}
+        bundle={bundle}
+        insets={insets}
         translationPickerItems={translationPickerItems}
-        translationPickerLoading={translationPickerLoading}
         favoriteTranslationIds={favoriteTranslationIds}
         toggleFavoriteTranslation={toggleFavoriteTranslation}
+        resolvedTranslationId={resolvedTranslationId}
+      />
+      <ReaderFontSettingsSheet
+        isOpen={fontSettingsSheetOpen}
+        onClose={closeFontSettingsPopup}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
+        fontSizeScale={fontSizeScale}
+        setFontSizeScalePersisted={setFontSizeScalePersisted}
+        lineSpacingScale={lineSpacingScale}
+        setLineSpacingScalePersisted={setLineSpacingScalePersisted}
         verseTextAlign={verseTextAlign}
+        setVerseTextAlignPersisted={setVerseTextAlignPersisted}
+        readerVerseBodyFontId={readerVerseBodyFontId}
+        setReaderVerseBodyFontIdPersisted={setReaderVerseBodyFontIdPersisted}
+        settingsMutedTextColor={settingsMutedTextColor}
       />
       <CreditsSheet
         visible={readerCreditsOpen}
@@ -2823,16 +1883,6 @@ export default function ReaderChapterScreen() {
         }}
       />
 
-      <ReaderActionBarOnboardingLayer
-        visible={readerActionBarOnboarding.showLayer}
-        step={readerActionBarOnboarding.currentStep}
-        buttonAnchor={readerActionBarOnboarding.buttonAnchor}
-        colors={{
-          tooltipBackground: rc.selectionBackground,
-          tooltipText: rc.selectionText,
-          arrow: "#FFFFFF",
-        }}
-      />
     </View>
   );
 }
