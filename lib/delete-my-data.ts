@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { clearBibleApiMemoryCaches } from "@/lib/bible-api-service";
-import { clearLocalEntriesMemoryCache } from "@/lib/journal-local";
+import { clearLocalEntriesMemoryCache, deleteAllJournalImages } from "@/lib/journal-local";
 import { ONBOARDING_DONE_STORAGE_KEY, publishOnboardingState } from "@/lib/onboarding-storage";
 import { clearReaderLastPositionMemoryCache } from "@/lib/reader-last-position";
 
@@ -10,6 +10,7 @@ import { clearReaderLastPositionMemoryCache } from "@/lib/reader-last-position";
  */
 export async function deleteAllUserData(): Promise<void> {
   await AsyncStorage.clear();
+  await deleteAllJournalImages();
   clearLocalEntriesMemoryCache();
   clearReaderLastPositionMemoryCache();
   clearBibleApiMemoryCaches();

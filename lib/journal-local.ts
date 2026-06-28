@@ -5,6 +5,12 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { LocalJournalEntry } from "@sinag-bible/types";
+import {
+  deleteAllJournalImages,
+  deleteEntryImages,
+  externalizeContentImages,
+  externalizeEntryImages,
+} from "@/lib/journal-content-images";
 
 export type { LocalJournalEntry };
 
@@ -12,6 +18,28 @@ const STORAGE_KEY = "sinagbible_journal_entries";
 const SAMPLE_ENTRY_DISMISSED_KEY = "sinagbible_sample_journal_entry_dismissed";
 export const DEFAULT_SAMPLE_ENTRY_ID = "local-sample-john-3-16";
 const DEFAULT_SAMPLE_ENTRY_CREATED_AT = "2024-01-01T00:00:00.000Z";
+
+/** Older builds / sibling apps that may have stored entries under different keys. */
+const LEGACY_JOURNAL_ENTRIES_KEYS = [
+  "quietword_journal_entries",
+  "qs:journal:entries",
+  "sb:journal:entries",
+  "journal_entries",
+] as const;
+
+export class JournalLocalStorageError extends Error {
+  readonly kind: "read" | "parse" | "write" | "guard";
+
+  constructor(
+    message: string,
+    kind: "read" | "parse" | "write" | "guard",
+    readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = "JournalLocalStorageError";
+    this.kind = kind;
+  }
+}
 
 export function isSampleJournalEntry(id: string): boolean {
   return id === DEFAULT_SAMPLE_ENTRY_ID;
@@ -57,6 +85,7 @@ export const JOURNAL_LOCAL_STORAGE_USER_MESSAGE =
 /** Newest-first snapshot for search and other readers; avoid AsyncStorage on every debounced query. */
 let lastLoadedEntriesCache: LocalJournalEntry[] | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
+let legacyMigrationChecked = false;
 
 function sortEntriesNewestFirst(entries: LocalJournalEntry[]): LocalJournalEntry[] {
   return [...entries].sort(
@@ -68,6 +97,42 @@ function setLastLoadedEntriesCache(entries: LocalJournalEntry[]): void {
   lastLoadedEntriesCache = sortEntriesNewestFirst(entries);
 }
 
+function countRealEntries(entries: LocalJournalEntry[]): number {
+  return entries.filter((entry) => !isSampleJournalEntry(entry.id)).length;
+}
+
+function devLogJournalStorage(event: string, detail?: Record<string, unknown>): void {
+  if (!__DEV__) return;
+  if (detail) {
+    console.log(`[journal-local] ${event}`, detail);
+    return;
+  }
+  console.log(`[journal-local] ${event}`);
+}
+
+function devLogStorageRead(rawBytes: number, entryCount: number): void {
+  devLogJournalStorage("read ok", {
+    rawBytes,
+    rawKB: Math.round(rawBytes / 1024),
+    entryCount,
+    realEntryCount: entryCount,
+  });
+}
+
+function devLogStorageReadFailure(error: unknown): void {
+  devLogJournalStorage("read failed", {
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+
+function devLogStorageWrite(rawBytes: number, entryCount: number): void {
+  devLogJournalStorage("write ok", {
+    rawBytes,
+    rawKB: Math.round(rawBytes / 1024),
+    entryCount,
+  });
+}
+
 /** Synchronous read of the last loaded list (e.g. journal search). */
 export function getCachedLocalEntries(): LocalJournalEntry[] {
   return lastLoadedEntriesCache ?? [];
@@ -75,13 +140,7 @@ export function getCachedLocalEntries(): LocalJournalEntry[] {
 
 export function clearLocalEntriesMemoryCache(): void {
   lastLoadedEntriesCache = null;
-}
-
-/** Loads from storage and updates {@link lastLoadedEntriesCache}. */
-export async function refreshLocalEntriesCache(): Promise<LocalJournalEntry[]> {
-  const entries = await readEntries();
-  setLastLoadedEntriesCache(entries);
-  return getCachedLocalEntries();
+  legacyMigrationChecked = false;
 }
 
 function ensureSampleEntryIsImmutable(entries: LocalJournalEntry[]): LocalJournalEntry[] {
@@ -93,26 +152,180 @@ function ensureSampleEntryIsImmutable(entries: LocalJournalEntry[]): LocalJourna
   );
 }
 
-async function readEntries(): Promise<LocalJournalEntry[]> {
+function parseStoredEntries(raw: string): LocalJournalEntry[] {
+  let parsed: unknown;
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return maybeWithSampleEntry([]);
-    const parsed = JSON.parse(raw) as LocalJournalEntry[];
-    if (!Array.isArray(parsed)) return maybeWithSampleEntry([]);
-    return maybeWithSampleEntry(ensureSampleEntryIsImmutable(parsed));
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new JournalLocalStorageError("Journal data is corrupted.", "parse", error);
+  }
+  if (!Array.isArray(parsed)) {
+    throw new JournalLocalStorageError("Journal data has an invalid format.", "parse");
+  }
+  return parsed as LocalJournalEntry[];
+}
+
+function hasStoredJournalPayload(raw: string | null): boolean {
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) && parsed.length > 0;
   } catch {
-    return maybeWithSampleEntry([]);
+    return false;
   }
 }
 
-async function writeEntries(entries: LocalJournalEntry[]): Promise<void> {
+async function maybeMigrateLegacyJournalEntries(): Promise<void> {
+  if (legacyMigrationChecked) return;
+  legacyMigrationChecked = true;
+
+  const currentRaw = await AsyncStorage.getItem(STORAGE_KEY);
+  if (hasStoredJournalPayload(currentRaw)) return;
+
+  for (const legacyKey of LEGACY_JOURNAL_ENTRIES_KEYS) {
+    const legacyRaw = await AsyncStorage.getItem(legacyKey);
+    if (!hasStoredJournalPayload(legacyRaw)) continue;
+
+    devLogJournalStorage("migrating legacy journal storage key", { legacyKey });
+    await AsyncStorage.setItem(STORAGE_KEY, legacyRaw!);
+    await AsyncStorage.removeItem(legacyKey);
+    return;
+  }
+}
+
+async function compactEmbeddedImages(
+  entries: LocalJournalEntry[],
+  options: { persist?: boolean },
+): Promise<LocalJournalEntry[]> {
+  let changed = false;
+  const compacted = await Promise.all(
+    entries.map(async (entry) => {
+      if (isSampleJournalEntry(entry.id) || !/data:image\//i.test(entry.content)) {
+        return entry;
+      }
+      const result = await externalizeEntryImages(entry);
+      if (result.changed) changed = true;
+      return { ...entry, content: result.content };
+    }),
+  );
+
+  if (!changed) return entries;
+
+  devLogJournalStorage("compacted embedded journal images", {
+    entryCount: compacted.length,
+  });
+
+  if (options.persist) {
+    scheduleCompactionPersist(compacted);
+  }
+
+  return compacted;
+}
+
+function scheduleCompactionPersist(entries: LocalJournalEntry[]): void {
+  writeQueue = writeQueue.then(async () => {
+    await writeEntries(entries);
+    setLastLoadedEntriesCache(entries);
+  });
+}
+
+type ReadEntriesOptions = {
+  /** When true, return the last loaded snapshot instead of failing (display-only reads). */
+  allowCacheFallback?: boolean;
+  /** Skip image compaction (used while a storage mutation is in progress). */
+  skipCompaction?: boolean;
+};
+
+async function readEntriesFromStorage(options: ReadEntriesOptions = {}): Promise<LocalJournalEntry[]> {
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    await maybeMigrateLegacyJournalEntries();
+
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return maybeWithSampleEntry([]);
+    }
+
+    const parsed = parseStoredEntries(raw);
+    const withSample = await maybeWithSampleEntry(ensureSampleEntryIsImmutable(parsed));
+    const compacted = options.skipCompaction
+      ? withSample
+      : await compactEmbeddedImages(withSample, { persist: true });
+    devLogStorageRead(raw.length, compacted.length);
+    return compacted;
   } catch (error) {
+    devLogStorageReadFailure(error);
+
+    if (options.allowCacheFallback && lastLoadedEntriesCache) {
+      devLogJournalStorage("using in-memory cache fallback", {
+        cachedEntryCount: lastLoadedEntriesCache.length,
+      });
+      return lastLoadedEntriesCache;
+    }
+
+    if (error instanceof JournalLocalStorageError) throw error;
+    throw new JournalLocalStorageError("Could not read journal storage.", "read", error);
+  }
+}
+
+function guardAgainstDestructiveWrite(
+  current: LocalJournalEntry[],
+  next: LocalJournalEntry[],
+): void {
+  const cache = lastLoadedEntriesCache;
+  if (!cache) return;
+
+  const cacheReal = countRealEntries(cache);
+  const currentReal = countRealEntries(current);
+  const nextReal = countRealEntries(next);
+
+  if (currentReal === 0 && cacheReal > 0 && nextReal < cacheReal) {
+    throw new JournalLocalStorageError(
+      "Refusing journal write: storage read did not match the last loaded entries.",
+      "guard",
+    );
+  }
+
+  if (currentReal >= 2 && nextReal === 0) {
+    throw new JournalLocalStorageError(
+      "Refusing journal write: too many entries would be removed at once.",
+      "guard",
+    );
+  }
+
+  if (currentReal > 0 && nextReal === 0 && currentReal !== 1) {
+    throw new JournalLocalStorageError(
+      "Refusing journal write: all entries would be removed.",
+      "guard",
+    );
+  }
+}
+
+async function externalizeEntriesForWrite(entries: LocalJournalEntry[]): Promise<LocalJournalEntry[]> {
+  return Promise.all(
+    entries.map(async (entry) => {
+      if (!/data:image\//i.test(entry.content)) return entry;
+      return {
+        ...entry,
+        content: await externalizeContentImages(entry.content, entry.id),
+      };
+    }),
+  );
+}
+
+async function writeEntries(entries: LocalJournalEntry[]): Promise<void> {
+  const payload = JSON.stringify(entries);
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, payload);
+    devLogStorageWrite(payload.length, entries.length);
+  } catch (error) {
+    devLogJournalStorage("write failed", {
+      error: error instanceof Error ? error.message : String(error),
+      rawKB: Math.round(payload.length / 1024),
+    });
     if (__DEV__) {
       console.error("[journal-local] Failed to write journal entries to AsyncStorage:", error);
     }
-    throw error;
+    throw new JournalLocalStorageError("Could not save journal storage.", "write", error);
   }
 }
 
@@ -121,13 +334,25 @@ async function enqueueStorageMutation(
 ): Promise<LocalJournalEntry[]> {
   let nextEntries: LocalJournalEntry[] = [];
   writeQueue = writeQueue.then(async () => {
-    const current = await readEntries();
+    const current = await readEntriesFromStorage({
+      allowCacheFallback: false,
+      skipCompaction: true,
+    });
     nextEntries = mutate(current);
+    guardAgainstDestructiveWrite(current, nextEntries);
+    nextEntries = await externalizeEntriesForWrite(nextEntries);
     await writeEntries(nextEntries);
     setLastLoadedEntriesCache(nextEntries);
   });
   await writeQueue;
   return nextEntries;
+}
+
+/** Loads from storage and updates {@link lastLoadedEntriesCache}. */
+export async function refreshLocalEntriesCache(): Promise<LocalJournalEntry[]> {
+  const entries = await readEntriesFromStorage({ allowCacheFallback: true });
+  setLastLoadedEntriesCache(entries);
+  return getCachedLocalEntries();
 }
 
 export async function getLocalEntries(): Promise<LocalJournalEntry[]> {
@@ -136,9 +361,13 @@ export async function getLocalEntries(): Promise<LocalJournalEntry[]> {
 
 export async function getLocalEntry(id: string): Promise<LocalJournalEntry | null> {
   if (!id.startsWith("local-")) return null;
-  const entries = await readEntries();
-  setLastLoadedEntriesCache(entries);
-  return entries.find((e) => e.id === id) ?? null;
+  try {
+    const entries = await readEntriesFromStorage({ allowCacheFallback: true });
+    setLastLoadedEntriesCache(entries);
+    return entries.find((e) => e.id === id) ?? null;
+  } catch {
+    return getCachedLocalEntries().find((e) => e.id === id) ?? null;
+  }
 }
 
 function escapeXml(s: string): string {
@@ -263,12 +492,19 @@ function generateLocalId(): string {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
+async function prepareEntryForStorage(entry: LocalJournalEntry): Promise<LocalJournalEntry> {
+  return {
+    ...entry,
+    content: await externalizeContentImages(entry.content, entry.id),
+  };
+}
+
 export async function saveLocalEntry(
   entry: Omit<LocalJournalEntry, "id" | "created_at">,
 ): Promise<LocalJournalEntry> {
   const created_at = new Date().toISOString();
   const id = generateLocalId();
-  const full: LocalJournalEntry = { ...entry, id, created_at };
+  const full = await prepareEntryForStorage({ ...entry, id, created_at });
   await enqueueStorageMutation((entries) => {
     const next = [...entries];
     next.unshift(full);
@@ -286,11 +522,16 @@ export async function updateLocalEntry(
     const keys = Object.keys(data);
     if (keys.length === 0 || keys.some((k) => k !== "is_favorite")) return;
   }
+
+  const patch = data.content
+    ? { ...data, content: await externalizeContentImages(data.content, id) }
+    : data;
+
   await enqueueStorageMutation((entries) => {
     const index = entries.findIndex((e) => e.id === id);
     if (index === -1) return entries;
     const next = [...entries];
-    next[index] = { ...next[index], ...data };
+    next[index] = { ...next[index], ...patch };
     return next;
   });
 }
@@ -305,4 +546,7 @@ export async function deleteLocalEntry(id: string): Promise<void> {
     }
   }
   await enqueueStorageMutation((entries) => entries.filter((e) => e.id !== id));
+  await deleteEntryImages(id);
 }
+
+export { deleteAllJournalImages };
