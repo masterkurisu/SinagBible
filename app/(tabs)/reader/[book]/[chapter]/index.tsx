@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { GestureResponderEvent, PanResponderGestureState } from "react-native";
+import type { GestureResponderEvent, PanResponderGestureState, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import {
   View,
   Text,
@@ -53,7 +53,8 @@ import { ReaderSettingsCogIcon } from "@/components/icons/ReaderSettingsCogIcon"
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
-import { nativeTabFabOffsetPx, nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import { nativeTabFabOffsetPx, nativeTabSheetBottomInsetPx, readerAndroidListBottomPaddingPx, readerAndroidTabBarClearancePx } from "@/lib/native-tab-chrome";
+import { useReaderTabBarHideProgress, useSetReaderTabBarCoverFromReaderMenu } from "@/lib/reader-tab-bar-visibility-context";
 import { isTabletLayout, isReaderTabletLandscapeTwoColumn, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 import {
   JournalNewEntryForm,
@@ -105,6 +106,7 @@ import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerS
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
+import { useReaderTabBarAutoHide } from "@/src/features/reader/useReaderTabBarAutoHide";
 
 const TRANSLATION_IDS = [
   "KJV",
@@ -1197,6 +1199,23 @@ export default function ReaderChapterScreen() {
     (Platform.OS === "android" ? 52 : 0) +
     (Platform.OS === "ios" && !isTabletReaderLayout ? 30 : 0);
 
+  const actionBarBottomPxHidden =
+    Platform.OS === "android" ? readerAndroidTabBarClearancePx(insets.bottom, true) : actionBarBottomPx;
+
+  const androidListPaddingBottomHidden =
+    Platform.OS === "android"
+      ? readerAndroidListBottomPaddingPx(insets.bottom, true, false, 0)
+      : 40;
+
+  const tabBarHideProgress = useReaderTabBarHideProgress();
+  const setReaderTabBarCover = useSetReaderTabBarCoverFromReaderMenu();
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || setReaderTabBarCover == null) return;
+    setReaderTabBarCover(toolsMenuOpen);
+    return () => setReaderTabBarCover(false);
+  }, [toolsMenuOpen, setReaderTabBarCover]);
+
   const bumpHeaderToolsLayoutEpoch = useCallback(() => {
     setHeaderToolsLayoutEpoch((epoch) => epoch + 1);
   }, []);
@@ -1227,6 +1246,21 @@ export default function ReaderChapterScreen() {
   onboardingStepRef.current = readerFeatureOnboarding.currentStep;
   completeOnboardingInteractionRef.current = readerFeatureOnboarding.completeInteractionStep;
 
+  const tabBarAutoHideForceVisible =
+    readerOverlayOpen ||
+    selectedVerses.length > 0 ||
+    readerFeatureOnboarding.showLayer;
+
+  const {
+    onTabBarScroll,
+    onTabBarContentSizeChange,
+    onTabBarListLayout,
+  } = useReaderTabBarAutoHide({
+    chapterRouteKey: chapterNavRouteKey,
+    enabled: Platform.OS === "android",
+    forceVisible: tabBarAutoHideForceVisible,
+  });
+
   const {
     opacityAnim: chapterNavArrowsOpacityAnim,
     scaleAnim: chapterNavArrowsScaleAnim,
@@ -1253,10 +1287,13 @@ export default function ReaderChapterScreen() {
         [{ nativeEvent: { contentOffset: { y: readerScrollYAnim } } }],
         {
           useNativeDriver: true,
-          listener: onChapterNavArrowsScroll,
+          listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+            onChapterNavArrowsScroll(event);
+            onTabBarScroll(event);
+          },
         },
       ),
-    [readerScrollYAnim, onChapterNavArrowsScroll],
+    [readerScrollYAnim, onChapterNavArrowsScroll, onTabBarScroll],
   );
 
   const chapterSwipePan = useMemo(() => {
@@ -1618,6 +1655,11 @@ export default function ReaderChapterScreen() {
         listHeader={readerChapterPageHeading}
         readerChapterFlashListFooter={readerChapterFlashListFooter}
         actionBarBottomPx={actionBarBottomPx}
+        actionBarBottomPxHidden={actionBarBottomPxHidden}
+        tabBarHideProgress={Platform.OS === "android" ? tabBarHideProgress : null}
+        androidListPaddingBottomHidden={androidListPaddingBottomHidden}
+        onListContentSizeChange={onTabBarContentSizeChange}
+        onListLayoutHeight={onTabBarListLayout}
         selectionBannerTopPx={selectionBannerTopPx}
         screenW={screenW}
         readerMobileSettingsSlideTranslateX={readerMobileSettingsSlideTranslateX}

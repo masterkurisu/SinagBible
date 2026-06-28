@@ -92,7 +92,7 @@ type ReaderThemeBundle = {
 
 type ReaderSelectionActionBarProps = {
   actionBarMode: "default" | "highlight";
-  actionBarBottomPx: number;
+  actionBarBottom: number | AnimatedType.AnimatedInterpolation<number>;
   colors: ReaderThemeColors;
   rc: ReaderThemeBundle;
   highlights: Record<number, HighlightColor | undefined>;
@@ -111,7 +111,7 @@ type ReaderSelectionActionBarProps = {
 
 const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
   actionBarMode,
-  actionBarBottomPx,
+  actionBarBottom,
   colors,
   rc,
   highlights,
@@ -129,11 +129,11 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
 }: ReaderSelectionActionBarProps) {
   return (
     <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: 45 }]}>
-      <View
+      <Animated.View
         pointerEvents="box-none"
         style={{
           position: "absolute",
-          bottom: actionBarBottomPx,
+          bottom: actionBarBottom,
           left: 0,
           right: 0,
           alignItems: "center",
@@ -342,7 +342,7 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
             </>
           )}
         </View>
-      </View>
+      </Animated.View>
     </View>
   );
 });
@@ -490,6 +490,11 @@ export type ReaderSelectionLayerProps = {
   listHeader: ReactNode;
   readerChapterFlashListFooter: () => React.ReactElement | null;
   actionBarBottomPx: number;
+  actionBarBottomPxHidden?: number;
+  tabBarHideProgress?: AnimatedType.Value | null;
+  androidListPaddingBottomHidden?: number;
+  onListContentSizeChange?: (width: number, height: number) => void;
+  onListLayoutHeight?: (height: number) => void;
   selectionBannerTopPx: number;
   screenW: number;
   readerMobileSettingsSlideTranslateX: AnimatedType.AnimatedInterpolation<number>;
@@ -539,6 +544,11 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   listHeader,
   readerChapterFlashListFooter,
   actionBarBottomPx,
+  actionBarBottomPxHidden,
+  tabBarHideProgress,
+  androidListPaddingBottomHidden,
+  onListContentSizeChange,
+  onListLayoutHeight,
   selectionBannerTopPx,
   screenW,
   readerMobileSettingsSlideTranslateX,
@@ -798,6 +808,20 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   const hasVerseSelection = selectedVerses.length > 0;
   const readerOverlayOpen = readerOverlayOpenFromParent || noteModalVisible;
 
+  const actionBarBottom = useMemo(() => {
+    if (
+      tabBarHideProgress != null &&
+      actionBarBottomPxHidden != null &&
+      Platform.OS === "android"
+    ) {
+      return tabBarHideProgress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [actionBarBottomPx, actionBarBottomPxHidden],
+      });
+    }
+    return actionBarBottomPx;
+  }, [actionBarBottomPx, actionBarBottomPxHidden, tabBarHideProgress]);
+
   const readerActionBarOnboarding = useReaderActionBarOnboarding({
     hasVerseSelection,
     actionBarMode,
@@ -839,6 +863,10 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
         hasVerseSelection={hasVerseSelection}
         actionBarMode={actionBarMode}
         actionBarBottomPx={actionBarBottomPx}
+        tabBarHideProgress={tabBarHideProgress}
+        androidListPaddingBottomHidden={androidListPaddingBottomHidden}
+        onListContentSizeChange={onListContentSizeChange}
+        onListLayoutHeight={onListLayoutHeight}
       />
 
       {copyToastVisible ? (
@@ -887,7 +915,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
       {hasVerseSelection ? (
         <ReaderSelectionActionBar
           actionBarMode={actionBarMode}
-          actionBarBottomPx={actionBarBottomPx}
+          actionBarBottom={actionBarBottom}
           colors={colors}
           rc={rc}
           highlights={highlights}

@@ -11,12 +11,46 @@ const NATIVE_TAB_BAR_CORE_PX = Platform.select({
   default: 40,
 });
 
+/** Material bottom nav body height (labels visible); excludes gesture inset. */
+export const ANDROID_NATIVE_TAB_BAR_BODY_PX = 52;
+
+/**
+ * When `NativeTabs hidden` is true on Android, BottomNavigationView can still block touches
+ * in this strip — keep interactive content above it via bottom padding.
+ */
+export const ANDROID_TAB_BAR_HIDDEN_TOUCH_GUARD_PX = 56;
+
 /**
  * Offset from the bottom of the screen to place floating controls (FAB, reader action bar)
  * above the native tab bar.
  */
 export function nativeTabFabOffsetPx(safeAreaBottom: number): number {
   return NATIVE_TAB_BAR_CORE_PX + safeAreaBottom + 12;
+}
+
+/** Reader FAB / action bar clearance above the Android native tab bar (or gesture inset when hidden). */
+export function readerAndroidTabBarClearancePx(
+  safeAreaBottom: number,
+  tabBarHidden: boolean,
+): number {
+  if (Platform.OS !== "android") return 0;
+  if (tabBarHidden) return Math.max(safeAreaBottom, 8) + 12;
+  return ANDROID_NATIVE_TAB_BAR_BODY_PX + safeAreaBottom + 12;
+}
+
+/** FlashList bottom padding while reading on Android (tab visible vs hidden). */
+export function readerAndroidListBottomPaddingPx(
+  safeAreaBottom: number,
+  tabBarHidden: boolean,
+  hasVerseSelection: boolean,
+  selectionExtraPx: number,
+): number {
+  if (Platform.OS !== "android") {
+    return hasVerseSelection ? selectionExtraPx : 40;
+  }
+  if (hasVerseSelection) return selectionExtraPx;
+  if (tabBarHidden) return Math.max(safeAreaBottom, 8) + ANDROID_TAB_BAR_HIDDEN_TOUCH_GUARD_PX;
+  return 40;
 }
 
 /** Bottom inset so a sheet’s bottom edge sits `gapPx` above the native tab bar. */

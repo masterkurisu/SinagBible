@@ -8,6 +8,10 @@ import { getTabTint } from "@sinag-bible/tokens";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { hapticLightImpact } from "@/lib/haptics";
 import { loadReaderLastPosition, peekReaderLastPosition } from "@/lib/reader-last-position";
+import {
+  ReaderTabBarVisibilityProvider,
+  useReaderTabBarScrollHidden,
+} from "@/lib/reader-tab-bar-visibility-context";
 
 /** Path segments map to the primary tab (`(tabs)` group may or may not appear in the path). */
 function tabHapticKeyFromPathname(pathname: string | null): string | null {
@@ -26,6 +30,17 @@ function tabHapticKeyFromPathname(pathname: string | null): string | null {
   return null;
 }
 
+/** True when the active reader tab is showing a chapter (not the redirect index). */
+function isReaderChapterRoute(pathname: string | null): boolean {
+  if (pathname == null || pathname === "") return false;
+  const parts = pathname.split("/").filter(Boolean);
+  let i = 0;
+  if (parts[0] === "(tabs)") i = 1;
+  if (parts[i] !== "reader") return false;
+  const afterReader = parts.slice(i + 1);
+  return afterReader.length >= 2 && afterReader[0] !== "index";
+}
+
 const JOURNAL_DRAFT_KEY_CANDIDATES = [
   "sinagbible_journal_draft",
   "sb:journal:draft",
@@ -38,10 +53,25 @@ const JOURNAL_DRAFT_KEY_CANDIDATES = [
 const DRAFT_DISCOVERY_INTERVAL_MS = 60_000;
 
 export default function TabLayout() {
+  return (
+    <ReaderTabBarVisibilityProvider>
+      <TabLayoutInner />
+    </ReaderTabBarVisibilityProvider>
+  );
+}
+
+function TabLayoutInner() {
   const pathname = usePathname();
+  const readerTabBarScrollHidden = useReaderTabBarScrollHidden();
   const prevTabHapticKeyRef = useRef<string | null>(null);
   const activeTabKey = tabHapticKeyFromPathname(pathname);
-  const hideTabBarOnAndroid = Platform.OS === "android" && activeTabKey === "index";
+  const hideTabBarOnAndroidHome = Platform.OS === "android" && activeTabKey === "index";
+  const hideTabBarOnAndroidReaderScroll =
+    Platform.OS === "android" &&
+    activeTabKey === "reader" &&
+    isReaderChapterRoute(pathname) &&
+    readerTabBarScrollHidden;
+  const hideTabBarOnAndroid = hideTabBarOnAndroidHome || hideTabBarOnAndroidReaderScroll;
   const { bundle } = useMobileAppTheme();
   const chrome = bundle.chrome;
   const reader = bundle.reader;

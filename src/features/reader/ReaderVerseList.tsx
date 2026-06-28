@@ -1,5 +1,5 @@
 import { useCallback, useMemo, type ComponentProps, type ReactNode, type RefObject } from "react";
-import { Pressable, StyleSheet, type GestureResponderHandlers } from "react-native";
+import { Animated, Pressable, StyleSheet, type GestureResponderHandlers } from "react-native";
 import type { ListRenderItemInfo } from "@shopify/flash-list";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
 import { AnimatedReaderChapterFlashList, type ReaderVerseFlashItem } from "./useReaderGestures";
@@ -146,6 +146,10 @@ type ReaderVerseListProps = {
   hasVerseSelection: boolean;
   actionBarMode: "default" | "highlight";
   actionBarBottomPx: number;
+  tabBarHideProgress?: Animated.Value | null;
+  androidListPaddingBottomHidden?: number;
+  onListContentSizeChange?: (width: number, height: number) => void;
+  onListLayoutHeight?: (height: number) => void;
 };
 
 export function ReaderVerseList({
@@ -168,19 +172,51 @@ export function ReaderVerseList({
   hasVerseSelection,
   actionBarMode,
   actionBarBottomPx,
+  tabBarHideProgress,
+  androidListPaddingBottomHidden,
+  onListContentSizeChange,
+  onListLayoutHeight,
 }: ReaderVerseListProps) {
   const readerVerseFlashGetItemType = useCallback((item: ReaderVerseFlashItem) => item.kind, []);
 
-  const flashListContentContainerStyle = useMemo(
-    () => ({
+  const selectionPaddingBottom =
+    actionBarBottomPx + (actionBarMode === "highlight" ? 112 : 88);
+
+  const flashListContentContainerStyle = useMemo(() => {
+    if (hasVerseSelection) {
+      return {
+        flexGrow: 1,
+        paddingLeft: 10,
+        paddingRight: 15,
+        paddingTop: 94,
+        paddingBottom: selectionPaddingBottom,
+      };
+    }
+    if (tabBarHideProgress != null && androidListPaddingBottomHidden != null) {
+      return {
+        flexGrow: 1,
+        paddingLeft: 10,
+        paddingRight: 15,
+        paddingTop: 94,
+        paddingBottom: tabBarHideProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [40, androidListPaddingBottomHidden],
+        }),
+      };
+    }
+    return {
       flexGrow: 1,
       paddingLeft: 10,
       paddingRight: 15,
       paddingTop: 94,
-      paddingBottom: hasVerseSelection ? actionBarBottomPx + (actionBarMode === "highlight" ? 112 : 88) : 40,
-    }),
-    [hasVerseSelection, actionBarBottomPx, actionBarMode],
-  );
+      paddingBottom: 40,
+    };
+  }, [
+    hasVerseSelection,
+    selectionPaddingBottom,
+    tabBarHideProgress,
+    androidListPaddingBottomHidden,
+  ]);
 
   const renderFlashListHeader = useCallback(
     () => (
@@ -207,6 +243,12 @@ export function ReaderVerseList({
       onScrollBeginDrag={onScrollBeginDrag}
       onScrollEndDrag={onScrollEndDrag}
       onMomentumScrollEnd={onMomentumScrollEnd}
+      onContentSizeChange={onListContentSizeChange}
+      onLayout={
+        onListLayoutHeight
+          ? (event) => onListLayoutHeight(event.nativeEvent.layout.height)
+          : undefined
+      }
       data={verseFlashListDataForList}
       renderItem={renderReaderVerseFlashItem}
       keyExtractor={readerVerseFlashKeyExtractor}
