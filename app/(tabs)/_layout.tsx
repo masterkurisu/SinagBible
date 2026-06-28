@@ -10,8 +10,11 @@ import { hapticLightImpact } from "@/lib/haptics";
 import { loadReaderLastPosition, peekReaderLastPosition } from "@/lib/reader-last-position";
 import {
   ReaderTabBarVisibilityProvider,
+  READER_TOOLS_MENU_TAB_BAR_COLOR,
+  useReaderSettingsTabBarTint,
   useReaderTabBarScrollHidden,
 } from "@/lib/reader-tab-bar-visibility-context";
+import { mixHexColors } from "@/lib/mix-hex-color";
 
 /** Path segments map to the primary tab (`(tabs)` group may or may not appear in the path). */
 function tabHapticKeyFromPathname(pathname: string | null): string | null {
@@ -63,6 +66,7 @@ export default function TabLayout() {
 function TabLayoutInner() {
   const pathname = usePathname();
   const readerTabBarScrollHidden = useReaderTabBarScrollHidden();
+  const readerSettingsTabBarTint = useReaderSettingsTabBarTint();
   const prevTabHapticKeyRef = useRef<string | null>(null);
   const activeTabKey = tabHapticKeyFromPathname(pathname);
   const hideTabBarOnAndroidHome = Platform.OS === "android" && activeTabKey === "index";
@@ -78,7 +82,9 @@ function TabLayoutInner() {
   const { tabTint: TAB_TINT, tabMuted: TAB_MUTED, tabBarBackground: TAB_BAR_BACKGROUND, androidRipple, androidIndicator } =
     chrome;
   const tabBarBackgroundColor =
-    Platform.OS === "android" && activeTabKey === "reader" ? reader.sceneSurface : TAB_BAR_BACKGROUND;
+    Platform.OS === "android" && activeTabKey === "reader"
+      ? mixHexColors(reader.sceneSurface, READER_TOOLS_MENU_TAB_BAR_COLOR, readerSettingsTabBarTint)
+      : TAB_BAR_BACKGROUND;
   const [hasJournalDraft, setHasJournalDraft] = useState(false);
   const discoveredDraftKeysRef = useRef<string[]>([]);
   const lastDraftDiscoveryAtRef = useRef(0);

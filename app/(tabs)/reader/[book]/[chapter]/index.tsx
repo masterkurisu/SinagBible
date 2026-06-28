@@ -54,7 +54,11 @@ import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
 import { nativeTabFabOffsetPx, nativeTabSheetBottomInsetPx, readerAndroidListBottomPaddingPx, readerAndroidTabBarClearancePx } from "@/lib/native-tab-chrome";
-import { useReaderTabBarHideProgress, useSetReaderTabBarCoverFromReaderMenu } from "@/lib/reader-tab-bar-visibility-context";
+import { useReaderTabBarHideProgress, useRegisterReaderSettingsSlideProgress } from "@/lib/reader-tab-bar-visibility-context";
+import {
+  READER_SETTINGS_MENU_SPRING_CLOSE,
+  READER_SETTINGS_MENU_SPRING_OPEN,
+} from "@/lib/reader-settings-menu-motion";
 import { isTabletLayout, isReaderTabletLandscapeTwoColumn, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 import {
   JournalNewEntryForm,
@@ -362,13 +366,14 @@ export default function ReaderChapterScreen() {
   );
 
   useEffect(() => {
-    Animated.timing(readerSettingsSlideProgress, {
+    readerSettingsSlideProgress.stopAnimation();
+    Animated.spring(readerSettingsSlideProgress, {
+      ...(toolsMenuOpen ? READER_SETTINGS_MENU_SPRING_OPEN : READER_SETTINGS_MENU_SPRING_CLOSE),
       toValue: toolsMenuOpen ? 1 : 0,
-      duration: toolsMenuOpen ? 280 : 240,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
     }).start();
   }, [toolsMenuOpen, readerSettingsSlideProgress]);
+
+  useRegisterReaderSettingsSlideProgress(readerSettingsSlideProgress);
 
   /** When orientation (or breakpoint) changes with the menu open, re-apply full slide so `translateX` matches the new distance. */
   const readerMenuSlidePxWhileOpenRef = useRef<number | null>(null);
@@ -553,10 +558,8 @@ export default function ReaderChapterScreen() {
         closeToolsMenu();
       } else {
         Animated.spring(readerSettingsSlideProgress, {
+          ...READER_SETTINGS_MENU_SPRING_OPEN,
           toValue: 1,
-          friction: 9,
-          tension: 88,
-          useNativeDriver: true,
         }).start();
       }
     };
@@ -1208,13 +1211,6 @@ export default function ReaderChapterScreen() {
       : 40;
 
   const tabBarHideProgress = useReaderTabBarHideProgress();
-  const setReaderTabBarCover = useSetReaderTabBarCoverFromReaderMenu();
-
-  useEffect(() => {
-    if (Platform.OS !== "android" || setReaderTabBarCover == null) return;
-    setReaderTabBarCover(toolsMenuOpen);
-    return () => setReaderTabBarCover(false);
-  }, [toolsMenuOpen, setReaderTabBarCover]);
 
   const bumpHeaderToolsLayoutEpoch = useCallback(() => {
     setHeaderToolsLayoutEpoch((epoch) => epoch + 1);
@@ -1247,7 +1243,12 @@ export default function ReaderChapterScreen() {
   completeOnboardingInteractionRef.current = readerFeatureOnboarding.completeInteractionStep;
 
   const tabBarAutoHideForceVisible =
-    readerOverlayOpen ||
+    (fontSettingsSheetOpen ||
+      readerDropdown != null ||
+      readerPrivacyPolicyOpen ||
+      readerCreditsOpen ||
+      noteModalVisible ||
+      newEntrySheetOpen) ||
     selectedVerses.length > 0 ||
     readerFeatureOnboarding.showLayer;
 

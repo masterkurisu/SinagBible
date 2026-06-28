@@ -13,8 +13,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 
-/** Matches `READER_MOBILE_SETTINGS_PANEL_BG` in ReaderModals (settings strip + tab cover). */
-const READER_TOOLS_MENU_TAB_COVER_COLOR = "#2e2e2e";
+/** Matches `READER_MOBILE_SETTINGS_PANEL_BG` in ReaderModals (settings strip + tab bar). */
+export const READER_TOOLS_MENU_TAB_BAR_COLOR = "#2e2e2e";
 
 const TAB_BAR_HIDE_MS = 240;
 const TAB_BAR_SHOW_MS = 280;
@@ -22,18 +22,26 @@ const TAB_BAR_SHOW_MS = 280;
 type ReaderTabBarVisibilityContextValue = {
   /** Native tab bar hidden while reading mid-chapter (Android). */
   scrollHidden: boolean;
-  /** 0 = tab bar visible, 1 = hidden — drives list padding / action bar motion. */
+  /** 0–1 tint for the reader settings menu tab bar (Android, tab bar visible only). */
+  settingsTabBarTint: number;
+  /** Reader settings menu slide (0 = closed, 1 = open) when on the chapter screen. */
+  settingsSlideProgress: Animated.Value | null;
+  /** 0 = tab bar visible, 1 = hidden — drives list padding / action bar motion (layout / JS driver). */
   hideProgress: Animated.Value;
   setScrollHidden: (hidden: boolean) => void;
-  setToolsMenuCoversNativeTabBar: (covers: boolean) => void;
+  registerReaderSettingsSlideProgress: (progress: Animated.Value | null) => void;
 };
 
 const ReaderTabBarVisibilityContext = createContext<ReaderTabBarVisibilityContextValue | null>(null);
 
 export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNode }) {
   const [scrollHidden, setScrollHiddenState] = useState(false);
-  const [toolsMenuCoverVisible, setToolsMenuCoverVisible] = useState(false);
+  const [settingsSlideProgress, setSettingsSlideProgress] = useState<Animated.Value | null>(null);
+  const [settingsTabBarTint, setSettingsTabBarTint] = useState(0);
+  /** Layout-driven hide progress (padding, action bar bottom) — JS driver only. */
   const hideProgress = useRef(new Animated.Value(0)).current;
+  /** Opacity-only hide progress for the brief scroll cover — native driver. */
+  const hideScrollCoverProgress = useRef(new Animated.Value(0)).current;
   const scrollHiddenRef = useRef(false);
 
   const setScrollHidden = useCallback(
@@ -42,35 +50,75 @@ export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNo
       scrollHiddenRef.current = hidden;
       setScrollHiddenState(hidden);
 
-      Animated.timing(hideProgress, {
-        toValue: hidden ? 1 : 0,
-        duration: hidden ? TAB_BAR_HIDE_MS : TAB_BAR_SHOW_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
+      const toValue = hidden ? 1 : 0;
+      Animated.parallel([
+        Animated.timing(hideProgress, {
+          toValue,
+          duration: hidden ? TAB_BAR_HIDE_MS : TAB_BAR_SHOW_MS,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(hideScrollCoverProgress, {
+          toValue,
+          duration: hidden ? TAB_BAR_HIDE_MS : TAB_BAR_SHOW_MS,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
     },
-    [hideProgress],
+    [hideProgress, hideScrollCoverProgress],
   );
 
-  const setToolsMenuCoversNativeTabBar = useCallback((covers: boolean) => {
-    setToolsMenuCoverVisible(covers);
+  const registerReaderSettingsSlideProgress = useCallback((progress: Animated.Value | null) => {
+    setSettingsSlideProgress(progress);
   }, []);
+
+  useEffect(() => {
+    if (scrollHidden || settingsSlideProgress == null) {
+      setSettingsTabBarTint(0);
+      return;
+    }
+
+    const syncTint = (value: number) => {
+      setSettingsTabBarTint(value);
+    };
+
+    const listenerId = settingsSlideProgress.addListener(({ value }) => {
+      syncTint(value);
+    });
+
+    settingsSlideProgress.stopAnimation(syncTint);
+
+    return () => {
+      settingsSlideProgress.removeListener(listenerId);
+      setSettingsTabBarTint(0);
+    };
+  }, [scrollHidden, settingsSlideProgress]);
 
   const value = useMemo(
     () => ({
       scrollHidden,
+      settingsTabBarTint,
+      settingsSlideProgress,
       hideProgress,
       setScrollHidden,
-      setToolsMenuCoversNativeTabBar,
+      registerReaderSettingsSlideProgress,
     }),
-    [scrollHidden, hideProgress, setScrollHidden, setToolsMenuCoversNativeTabBar],
+    [
+      scrollHidden,
+      settingsTabBarTint,
+      settingsSlideProgress,
+      hideProgress,
+      setScrollHidden,
+      registerReaderSettingsSlideProgress,
+    ],
   );
 
   return (
     <ReaderTabBarVisibilityContext.Provider value={value}>
       <View style={{ flex: 1 }}>
         {children}
-        <ReaderTabBarChromeOverlays toolsMenuCoverVisible={toolsMenuCoverVisible} />
+        <ReaderTabBarChromeOverlays hideScrollCoverProgress={hideScrollCoverProgress} />
       </View>
     </ReaderTabBarVisibilityContext.Provider>
   );
@@ -88,6 +136,11 @@ export function useReaderTabBarScrollHidden(): boolean {
   return useReaderTabBarVisibilityContext().scrollHidden;
 }
 
+export function useReaderSettingsTabBarTint(): number {
+  const ctx = useContext(ReaderTabBarVisibilityContext);
+  return ctx?.settingsTabBarTint ?? 0;
+}
+
 export function useReaderTabBarHideProgress(): Animated.Value {
   return useReaderTabBarVisibilityContext().hideProgress;
 }
@@ -96,10 +149,19 @@ export function useSetReaderTabBarScrollHidden(): (hidden: boolean) => void {
   return useReaderTabBarVisibilityContext().setScrollHidden;
 }
 
-/** Tools menu: dark strip slides up over the native tab bar. */
-export function useSetReaderTabBarCoverFromReaderMenu(): ((covers: boolean) => void) | null {
+export function useRegisterReaderSettingsSlideProgress(slideProgress: Animated.Value): void {
   const ctx = useContext(ReaderTabBarVisibilityContext);
-  return ctx?.setToolsMenuCoversNativeTabBar ?? null;
+  const register = ctx?.registerReaderSettingsSlideProgress;
+
+  useEffect(() => {
+    register?.(slideProgress);
+    return () => register?.(null);
+  }, [register, slideProgress]);
+}
+
+/** @deprecated Settings slide progress is registered via useRegisterReaderSettingsSlideProgress. */
+export function useSetReaderTabBarCoverFromReaderMenu(): ((covers: boolean) => void) | null {
+  return null;
 }
 
 /** @deprecated Use ReaderTabBarVisibilityProvider */
@@ -110,31 +172,18 @@ export function useSetReaderTabBarCoverFromReaderMenuDeprecated(): ((covers: boo
   return useSetReaderTabBarCoverFromReaderMenu();
 }
 
-function ReaderTabBarChromeOverlays({ toolsMenuCoverVisible }: { toolsMenuCoverVisible: boolean }) {
+function ReaderTabBarChromeOverlays({
+  hideScrollCoverProgress,
+}: {
+  hideScrollCoverProgress: Animated.Value;
+}) {
   const insets = useSafeAreaInsets();
   const { bundle } = useMobileAppTheme();
-  const { hideProgress } = useReaderTabBarVisibilityContext();
   const tabBarHeight = nativeTabSheetBottomInsetPx(insets.bottom, 0);
   const readerSurface = bundle.reader.sceneSurface;
 
-  const toolsCoverProgress = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(toolsCoverProgress, {
-      toValue: toolsMenuCoverVisible ? 1 : 0,
-      duration: toolsMenuCoverVisible ? 280 : 240,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [toolsMenuCoverVisible, toolsCoverProgress]);
-
-  const toolsCoverTranslateY = toolsCoverProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [tabBarHeight, 0],
-  });
-
   /** Brief cover during the native tab bar show/hide layout change. */
-  const scrollCoverOpacity = hideProgress.interpolate({
+  const scrollCoverOpacity = hideScrollCoverProgress.interpolate({
     inputRange: [0, 0.35, 1],
     outputRange: [0, 1, 0],
   });
@@ -150,19 +199,6 @@ function ReaderTabBarChromeOverlays({ toolsMenuCoverVisible }: { toolsMenuCoverV
             height: tabBarHeight,
             backgroundColor: readerSurface,
             opacity: scrollCoverOpacity,
-          },
-        ]}
-      />
-      <Animated.View
-        pointerEvents={toolsMenuCoverVisible ? "auto" : "none"}
-        style={[
-          styles.overlay,
-          {
-            height: tabBarHeight,
-            backgroundColor: READER_TOOLS_MENU_TAB_COVER_COLOR,
-            transform: [{ translateY: toolsCoverTranslateY }],
-            zIndex: 2,
-            elevation: 2,
           },
         ]}
       />
