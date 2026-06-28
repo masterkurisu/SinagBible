@@ -1,10 +1,42 @@
-import type { ComponentProps, ReactNode, RefObject } from "react";
-import { Pressable, type GestureResponderHandlers } from "react-native";
+import { useCallback, useMemo, type ComponentProps, type ReactNode, type RefObject } from "react";
+import { Pressable, StyleSheet, type GestureResponderHandlers } from "react-native";
 import type { ListRenderItemInfo } from "@shopify/flash-list";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
 import { AnimatedReaderChapterFlashList, type ReaderVerseFlashItem } from "./useReaderGestures";
 
 export const READER_TABLET_TWO_COLUMN_GAP = 18;
+
+/** Static styles for FlashList chrome (header/footer) — avoids NativeWind resolution during scroll. */
+export const readerFlashListChromeStyles = StyleSheet.create({
+  list: { flex: 1 },
+  pageHeading: { marginBottom: 12 },
+  pageHeadingTranslation: {
+    fontSize: 12,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  pageHeadingChapter: {
+    fontSize: 14,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    marginTop: 2,
+  },
+  footerNavRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 32,
+    gap: 12,
+  },
+  footerNavSpacer: { flex: 1 },
+  footerNavButton: {
+    flex: 1,
+    borderRadius: 9999,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+});
 
 /** FlashList v2 auto-measures cells; this matches a typical single-line verse row (Lora line + number + padding). */
 export function readerVerseEstimatedFlashListItemSizePx(lineHeightPx: number): number {
@@ -137,14 +169,39 @@ export function ReaderVerseList({
   actionBarMode,
   actionBarBottomPx,
 }: ReaderVerseListProps) {
+  const readerVerseFlashGetItemType = useCallback((item: ReaderVerseFlashItem) => item.kind, []);
+
+  const flashListContentContainerStyle = useMemo(
+    () => ({
+      flexGrow: 1,
+      paddingLeft: 10,
+      paddingRight: 15,
+      paddingTop: 94,
+      paddingBottom: hasVerseSelection ? actionBarBottomPx + (actionBarMode === "highlight" ? 112 : 88) : 40,
+    }),
+    [hasVerseSelection, actionBarBottomPx, actionBarMode],
+  );
+
+  const renderFlashListHeader = useCallback(
+    () => (
+      <Pressable
+        onPress={dismissReaderChromeFromBackgroundPress}
+        android_ripple={null}
+        accessible={false}
+      >
+        {listHeader}
+      </Pressable>
+    ),
+    [dismissReaderChromeFromBackgroundPress, listHeader],
+  );
+
   return (
     <AnimatedReaderChapterFlashList
       key={readerTabletLandscapeTwoColumn ? "reader-verse-2col" : "reader-verse-1col"}
       ref={readerScrollRef}
       {...chapterSwipePanHandlers}
       {...({ estimatedItemSize: readerVerseEstimatedItemSize } as Record<string, unknown>)}
-      className="flex-1"
-      style={{ backgroundColor: rc.sceneSurface }}
+      style={{ ...readerFlashListChromeStyles.list, backgroundColor: rc.sceneSurface }}
       scrollEventThrottle={16}
       onScroll={onScroll}
       onScrollBeginDrag={onScrollBeginDrag}
@@ -154,25 +211,11 @@ export function ReaderVerseList({
       renderItem={renderReaderVerseFlashItem}
       keyExtractor={readerVerseFlashKeyExtractor}
       extraData={flashListExtraData}
-      getItemType={(item) => item.kind}
+      getItemType={readerVerseFlashGetItemType}
       numColumns={readerTabletLandscapeTwoColumn ? 2 : 1}
-      ListHeaderComponent={() => (
-        <Pressable
-          onPress={dismissReaderChromeFromBackgroundPress}
-          android_ripple={null}
-          accessible={false}
-        >
-          {listHeader}
-        </Pressable>
-      )}
+      ListHeaderComponent={renderFlashListHeader}
       ListFooterComponent={readerChapterFlashListFooter}
-      contentContainerStyle={{
-        flexGrow: 1,
-        paddingLeft: 10,
-        paddingRight: 15,
-        paddingTop: 94,
-        paddingBottom: hasVerseSelection ? actionBarBottomPx + (actionBarMode === "highlight" ? 112 : 88) : 40,
-      }}
+      contentContainerStyle={flashListContentContainerStyle}
     />
   );
 }

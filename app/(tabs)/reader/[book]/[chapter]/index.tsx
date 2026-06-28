@@ -3,7 +3,6 @@ import type { GestureResponderEvent, PanResponderGestureState } from "react-nati
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   TouchableWithoutFeedback,
   ActivityIndicator,
@@ -71,6 +70,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   buildReaderVerseFlashListData,
   findFlashListIndexForVerseNumber,
+  readerFlashListChromeStyles,
   readerVerseEstimatedFlashListItemSizePx,
   splitVerseIndexForBalancedColumns,
 } from "@/src/features/reader/ReaderVerseList";
@@ -307,6 +307,9 @@ export default function ReaderChapterScreen() {
   /** Drives cross-fade between in-content heading and stack header title (native scroll events). */
   const readerScrollYAnim = useRef(new Animated.Value(0)).current;
   const [readerPageHeadingHeight, setReaderPageHeadingHeight] = useState(96);
+  const onReaderPageHeadingLayout = useCallback((height: number) => {
+    setReaderPageHeadingHeight((prev) => (Math.abs(prev - height) > 1 ? height : prev));
+  }, []);
   const readerHeadingFadeEndPx = Math.max(40, Math.round(readerPageHeadingHeight * 0.82));
   const readerPageHeadingOpacityAnim = useMemo(
     () =>
@@ -1095,11 +1098,10 @@ export default function ReaderChapterScreen() {
     const { prevChapter, nextChapter } = chapterNav;
     return (
       <Animated.View style={{ opacity: readerVersesOpacityAnim }}>
-        <View className="flex-row justify-between mt-8 gap-3">
+        <View style={readerFlashListChromeStyles.footerNavRow}>
           {prevChapter ? (
             <TouchableOpacity
-              className="flex-1 rounded-full py-3 px-4 items-center"
-              style={{ backgroundColor: colors.parchmentDark }}
+              style={[readerFlashListChromeStyles.footerNavButton, { backgroundColor: colors.parchmentDark }]}
               onPress={() => {
                 closeToolsMenu();
                 goToReaderChapter(
@@ -1114,13 +1116,12 @@ export default function ReaderChapterScreen() {
               </Text>
             </TouchableOpacity>
           ) : (
-            <View className="flex-1" />
+            <View style={readerFlashListChromeStyles.footerNavSpacer} />
           )}
 
           {nextChapter ? (
             <TouchableOpacity
-              className="flex-1 rounded-full py-3 px-4 items-center"
-              style={{ backgroundColor: colors.parchmentDark }}
+              style={[readerFlashListChromeStyles.footerNavButton, { backgroundColor: colors.parchmentDark }]}
               onPress={() => {
                 closeToolsMenu();
                 goToReaderChapter(
@@ -1135,7 +1136,7 @@ export default function ReaderChapterScreen() {
               </Text>
             </TouchableOpacity>
           ) : (
-            <View className="flex-1" />
+            <View style={readerFlashListChromeStyles.footerNavSpacer} />
           )}
         </View>
         <Pressable
@@ -1335,16 +1336,11 @@ export default function ReaderChapterScreen() {
 
   const readerChapterPageHeading = (
     <Animated.View
-      className="mb-3"
-      style={{ opacity: readerPageHeadingOpacityAnim }}
-      onLayout={(e) => {
-        const h = e.nativeEvent.layout.height;
-        setReaderPageHeadingHeight((prev) => (Math.abs(prev - h) > 1 ? h : prev));
-      }}
+      style={[readerFlashListChromeStyles.pageHeading, { opacity: readerPageHeadingOpacityAnim }]}
+      onLayout={(e) => onReaderPageHeadingLayout(e.nativeEvent.layout.height)}
     >
       <Text
-        className="text-xs tracking-widest uppercase mb-1.5"
-        style={{ fontFamily: "Inter_400Regular", color: colors.gold }}
+        style={[readerFlashListChromeStyles.pageHeadingTranslation, { fontFamily: "Inter_400Regular", color: colors.gold }]}
       >
         {readerHeaderTranslationId} ({TRANSLATION_LANGUAGE_BY_ID[readerHeaderTranslationId as keyof typeof TRANSLATION_LANGUAGE_BY_ID] ?? "English"})
       </Text>
@@ -1355,8 +1351,7 @@ export default function ReaderChapterScreen() {
         {readerHeaderBookName}
       </Text>
       <Text
-        className="text-sm tracking-widest uppercase mt-0.5"
-        style={{ fontFamily: "Inter_400Regular", color: colors.tan200 }}
+        style={[readerFlashListChromeStyles.pageHeadingChapter, { fontFamily: "Inter_400Regular", color: colors.tan200 }]}
       >
         Chapter {chapterNumber}
       </Text>

@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { FlatList } from "react-native-gesture-handler";
 import { useRouter } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
@@ -349,6 +349,8 @@ function FabPlusIcon() {
 
 export default function JournalIndexScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
+  const [hasVisitedJournalTab, setHasVisitedJournalTab] = useState(false);
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { bundle } = useMobileAppTheme();
@@ -684,6 +686,7 @@ export default function JournalIndexScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setHasVisitedJournalTab(true);
       let cancelled = false;
       setLoading(true);
       const task = InteractionManager.runAfterInteractions(() => {
@@ -693,6 +696,9 @@ export default function JournalIndexScreen() {
       return () => {
         cancelled = true;
         task.cancel();
+        // Release RichEditor WebViews when leaving the tab (Hermes / native memory).
+        setNewEntryOpen(false);
+        setNewEntryHasDraft(false);
       };
     }, [load]),
   );
@@ -916,6 +922,12 @@ export default function JournalIndexScreen() {
       },
     });
   }, []);
+
+  if (!isFocused || !hasVisitedJournalTab) {
+    return (
+      <View style={{ flex: 1, backgroundColor: bundle.journal.listPageBackground }} />
+    );
+  }
 
   return (
     <View className="flex-1" style={{ overflow: "visible", backgroundColor: bundle.journal.listPageBackground }}>

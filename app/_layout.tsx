@@ -8,6 +8,7 @@ import { useFonts } from "expo-font";
 import { STARTUP_FONT_MAP } from "@/lib/app-font-map";
 import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useState } from "react";
+import { Platform } from "react-native";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { ScreenLoadingSkeleton } from "@/components/loading-skeleton";
 import { OnboardingContainer } from "@/src/features/onboarding/OnboardingContainer";
@@ -40,8 +41,8 @@ function ThemedStack() {
         headerTintColor: ui.brown800,
         headerTitleStyle: { fontFamily: "Lora_400Regular" },
         contentStyle: { flex: 1, backgroundColor: ui.parchmentMid },
-        animation: "ios_from_right",
-        animationDuration: 340,
+        animation: Platform.OS === "android" ? "fade_from_bottom" : "ios_from_right",
+        animationDuration: Platform.OS === "android" ? 200 : 340,
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

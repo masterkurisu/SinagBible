@@ -753,6 +753,11 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     [interactionData, stableVisualData],
   );
 
+  const interactionDataRef = useRef(interactionData);
+  interactionDataRef.current = interactionData;
+  const stableVisualDataRef = useRef(stableVisualData);
+  stableVisualDataRef.current = stableVisualData;
+
   const renderReaderVerseFlashItem = useCallback(
     ({ item, index }: ListRenderItemInfo<ReaderVerseFlashItem>) => {
       if (item.kind === "empty") {
@@ -768,8 +773,8 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
         <MemoizedReaderVerseFlashRow
           item={item}
           index={index}
-          interactionData={interactionData}
-          stableVisualData={stableVisualData}
+          interactionData={interactionDataRef.current}
+          stableVisualData={stableVisualDataRef.current}
           readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
           readerVersesOpacityAnim={readerVersesOpacityAnim}
           onVersePress={handleVerseTapForOnboarding}
@@ -778,8 +783,6 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
       );
     },
     [
-      interactionData,
-      stableVisualData,
       readerVersesOpacityAnim,
       handleVerseTapForOnboarding,
       handleVerseLongPressForOnboarding,

@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { View, Text, Pressable } from "react-native";
+import { StyleSheet, View, Text, Pressable } from "react-native";
 import type { BibleVerseInlineItem, HighlightColor } from "@sinag-bible/types";
 import { highlightColors } from "@sinag-bible/ui";
 
@@ -15,6 +15,40 @@ const HIGHLIGHT_BG: Record<HighlightColor, string> = {
   green: highlightColors.green,
   purple: highlightColors.purple,
 };
+
+const styles = StyleSheet.create({
+  versePressable: {
+    flexDirection: "row",
+    marginHorizontal: -4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    gap: 7,
+  },
+  verseNumber: {
+    fontSize: 12,
+    minWidth: 18,
+    paddingTop: 4,
+  },
+  verseBody: {
+    flex: 1,
+  },
+  noteContainer: {
+    marginTop: 6,
+    marginBottom: 8,
+    marginHorizontal: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  noteText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  inlineHeading: {
+    fontWeight: "600",
+  },
+});
 
 export type ReaderVerseTextAlignProp = "left" | "right" | "center" | "justify";
 
@@ -60,7 +94,7 @@ function renderVerseBodyInline(items: BibleVerseInlineItem[], wordsOfJesusColor:
     }
     if ("heading" in item && typeof item.heading === "string") {
       return (
-        <Text key={key} style={{ fontWeight: "600" }}>
+        <Text key={key} style={styles.inlineHeading}>
           {item.heading}
         </Text>
       );
@@ -120,8 +154,7 @@ function ReaderVerseRowInner({
         onPress={() => onVersePress(verseNum)}
         onLongPress={() => onVerseLongPress(verseNum)}
         delayLongPress={260}
-        className="flex-row -mx-1 px-2 rounded-xl"
-        style={{ backgroundColor: rowBg, gap: 7 }}
+        style={[styles.versePressable, { backgroundColor: rowBg }]}
         hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
         accessibilityRole="button"
         accessibilityState={{ selected: isSelected }}
@@ -130,20 +163,21 @@ function ReaderVerseRowInner({
         }
       >
         <Text
-          className="text-xs min-w-[18px] pt-1"
-          style={{ fontFamily: "Inter_400Regular", color: numCol }}
+          style={[styles.verseNumber, { fontFamily: "Inter_400Regular", color: numCol }]}
         >
           {verseNum}
         </Text>
         <Text
-          className="flex-1"
-          style={{
-            fontFamily: readerVerseBodyFontFamily,
-            fontSize: readerVerseFontSize,
-            lineHeight: readerVerseLineHeight,
-            color: textCol,
-            textAlign: verseTextAlign,
-          }}
+          style={[
+            styles.verseBody,
+            {
+              fontFamily: readerVerseBodyFontFamily,
+              fontSize: readerVerseFontSize,
+              lineHeight: readerVerseLineHeight,
+              color: textCol,
+              textAlign: verseTextAlign,
+            },
+          ]}
         >
           {useInlineBody && verseInlineContent
             ? renderVerseBodyInline(verseInlineContent, wordsOfJesusInk)
@@ -151,25 +185,8 @@ function ReaderVerseRowInner({
         </Text>
       </Pressable>
       {noteText ? (
-        <View
-          style={{
-            marginTop: 6,
-            marginBottom: 8,
-            marginHorizontal: 2,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            backgroundColor: noteBelowVerseBackground,
-            borderRadius: 12,
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: "Inter_400Regular",
-              fontSize: 14,
-              lineHeight: 20,
-              color: bodyTextColor,
-            }}
-          >
+        <View style={[styles.noteContainer, { backgroundColor: noteBelowVerseBackground }]}>
+          <Text style={[styles.noteText, { color: bodyTextColor }]}>
             {noteText}
           </Text>
         </View>
@@ -178,4 +195,24 @@ function ReaderVerseRowInner({
   );
 }
 
-export const ReaderVerseRow = memo(ReaderVerseRowInner);
+export const ReaderVerseRow = memo(ReaderVerseRowInner, (prev, next) => {
+  if (prev.verseNum !== next.verseNum) return false;
+  if (prev.verseText !== next.verseText) return false;
+  if (prev.verseInlineContent !== next.verseInlineContent) return false;
+  if (prev.isSelected !== next.isSelected) return false;
+  if (prev.highlight !== next.highlight) return false;
+  if (prev.noteText !== next.noteText) return false;
+  if (prev.themeId !== next.themeId) return false;
+  if (prev.selectionBackground !== next.selectionBackground) return false;
+  if (prev.selectionText !== next.selectionText) return false;
+  if (prev.verseNumberColor !== next.verseNumberColor) return false;
+  if (prev.noteBelowVerseBackground !== next.noteBelowVerseBackground) return false;
+  if (prev.bodyTextColor !== next.bodyTextColor) return false;
+  if (prev.readerVerseFontSize !== next.readerVerseFontSize) return false;
+  if (prev.readerVerseLineHeight !== next.readerVerseLineHeight) return false;
+  if (prev.readerVerseBodyFontFamily !== next.readerVerseBodyFontFamily) return false;
+  if (prev.verseTextAlign !== next.verseTextAlign) return false;
+  if (prev.onVersePress !== next.onVersePress) return false;
+  if (prev.onVerseLongPress !== next.onVerseLongPress) return false;
+  return true;
+});
