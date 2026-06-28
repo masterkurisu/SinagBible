@@ -30,6 +30,17 @@ import type { ReaderVerseFlashItem } from "@/src/features/reader/useReaderGestur
 import { useReaderSelection } from "@/src/features/reader/useReaderSelection";
 import { ReaderActionBarOnboardingLayer } from "@/src/features/reader/ReaderActionBarOnboardingLayer";
 import type { ReaderActionBarOnboardingStepId } from "@/src/features/reader/readerActionBarOnboardingSteps";
+import {
+  READER_ACTION_BAR_BUTTON_GAP_PX,
+  READER_ACTION_BAR_BUTTON_PX,
+  READER_ACTION_BAR_ICON_BOX_PX,
+  READER_ACTION_BAR_ICON_SIZE_PX,
+  READER_ACTION_BAR_PILL_PAD_H_HIGHLIGHT_PX,
+  READER_ACTION_BAR_PILL_PAD_H_PX,
+  READER_ACTION_BAR_PILL_PAD_V_DEFAULT_PX,
+  READER_ACTION_BAR_PILL_PAD_V_HIGHLIGHT_PX,
+  READER_ACTION_BAR_ROW_GAP_PX,
+} from "@/src/features/reader/readerActionBarOnboardingSteps";
 import { useReaderActionBarOnboarding } from "@/src/features/reader/useReaderActionBarOnboarding";
 import type { ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import type { ReaderVerseTextAlign } from "@/src/features/reader/useReaderPreferences";
@@ -52,8 +63,11 @@ const readerVerseListStyles = StyleSheet.create({
   },
 });
 
-const ACTION_BAR_ICON_BOX_PX = 24;
-const ACTION_BAR_ICON_SIZE_PX = 22;
+const ACTION_BAR_BUTTON_STYLE = {
+  width: READER_ACTION_BAR_BUTTON_PX,
+  height: READER_ACTION_BAR_BUTTON_PX,
+} as const;
+
 const ACTION_BAR_ICON_SCALE = {
   studyNotes: 1.01,
   highlight: 1.19,
@@ -147,13 +161,16 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
             alignItems: "center",
             justifyContent: "center",
             flexWrap: "wrap",
-            rowGap: 10,
-            columnGap: 6,
+            rowGap: READER_ACTION_BAR_ROW_GAP_PX,
+            columnGap: READER_ACTION_BAR_BUTTON_GAP_PX,
             backgroundColor: colors.parchmentMid,
             borderRadius: 999,
-            paddingLeft: actionBarMode === "highlight" ? 12 : 10,
-            paddingRight: actionBarMode === "highlight" ? 12 : 10,
-            paddingVertical: actionBarMode === "highlight" ? 7 : 3,
+            paddingLeft: actionBarMode === "highlight" ? READER_ACTION_BAR_PILL_PAD_H_HIGHLIGHT_PX : READER_ACTION_BAR_PILL_PAD_H_PX,
+            paddingRight: actionBarMode === "highlight" ? READER_ACTION_BAR_PILL_PAD_H_HIGHLIGHT_PX : READER_ACTION_BAR_PILL_PAD_H_PX,
+            paddingVertical:
+              actionBarMode === "highlight"
+                ? READER_ACTION_BAR_PILL_PAD_V_HIGHLIGHT_PX
+                : READER_ACTION_BAR_PILL_PAD_V_DEFAULT_PX,
             borderWidth: 1,
             borderColor: colors.borderSolid,
             shadowColor: "#242423",
@@ -231,27 +248,28 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
             </>
           ) : (
             <>
-              <View ref={actionBarButtonRefs["study-notes"]} collapsable={false} className="h-[47px] w-[47px]">
+              <View ref={actionBarButtonRefs["study-notes"]} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
                 <TouchableOpacity
                   onPress={openStudyNotesFromSelection}
                   accessibilityLabel="Open study notes for selection"
-                  className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                  className="rounded-full items-center justify-center"
+                  style={ACTION_BAR_BUTTON_STYLE}
                   activeOpacity={0.7}
                 >
                   <View
                     style={{
-                      width: ACTION_BAR_ICON_BOX_PX,
-                      height: ACTION_BAR_ICON_BOX_PX,
+                      width: READER_ACTION_BAR_ICON_BOX_PX,
+                      height: READER_ACTION_BAR_ICON_BOX_PX,
                       alignItems: "center",
                       justifyContent: "center",
                       transform: [{ scale: ACTION_BAR_ICON_SCALE.studyNotes }],
                     }}
                   >
-                    <StudyNotesBookmarkIcon color={rc.actionIconMuted} size={ACTION_BAR_ICON_SIZE_PX} />
+                    <StudyNotesBookmarkIcon color={rc.actionIconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
                   </View>
                 </TouchableOpacity>
               </View>
-              <View ref={actionBarButtonRefs.highlight} collapsable={false} className="h-[47px] w-[47px]">
+              <View ref={actionBarButtonRefs.highlight} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
                 <TouchableOpacity
                   onPress={() => {
                     const first = selectedVerses[0];
@@ -260,82 +278,85 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
                     setActionBarMode("highlight");
                   }}
                   accessibilityLabel="Highlight"
-                  className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                  className="rounded-full items-center justify-center"
+                  style={ACTION_BAR_BUTTON_STYLE}
                   activeOpacity={0.7}
                 >
                   <View
                     style={{
-                      width: ACTION_BAR_ICON_BOX_PX,
-                      height: ACTION_BAR_ICON_BOX_PX,
+                      width: READER_ACTION_BAR_ICON_BOX_PX,
+                      height: READER_ACTION_BAR_ICON_BOX_PX,
                       alignItems: "center",
                       justifyContent: "center",
                       transform: [{ scale: ACTION_BAR_ICON_SCALE.highlight }],
                     }}
                   >
-                    <ReaderHighlightIcon color={rc.actionIconMuted} size={ACTION_BAR_ICON_SIZE_PX} />
+                    <ReaderHighlightIcon color={rc.actionIconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
                   </View>
                 </TouchableOpacity>
               </View>
-              <View ref={actionBarButtonRefs.copy} collapsable={false} className="h-[47px] w-[47px]">
+              <View ref={actionBarButtonRefs.copy} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
                 <TouchableOpacity
                   onPress={() => {
                     void copySelectedVerses();
                   }}
                   accessibilityLabel="Copy"
-                  className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                  className="rounded-full items-center justify-center"
+                  style={ACTION_BAR_BUTTON_STYLE}
                   activeOpacity={0.7}
                 >
                   <View
                     style={{
-                      width: ACTION_BAR_ICON_BOX_PX,
-                      height: ACTION_BAR_ICON_BOX_PX,
+                      width: READER_ACTION_BAR_ICON_BOX_PX,
+                      height: READER_ACTION_BAR_ICON_BOX_PX,
                       alignItems: "center",
                       justifyContent: "center",
                       transform: [{ scale: ACTION_BAR_ICON_SCALE.copy }],
                     }}
                   >
-                    <ReaderCopyIcon color={rc.actionIconMuted} size={ACTION_BAR_ICON_SIZE_PX} />
+                    <ReaderCopyIcon color={rc.actionIconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
                   </View>
                 </TouchableOpacity>
               </View>
-              <View ref={actionBarButtonRefs.note} collapsable={false} className="h-[47px] w-[47px]">
+              <View ref={actionBarButtonRefs.note} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
                 <TouchableOpacity
                   onPress={openNoteForSelection}
                   accessibilityLabel="Note"
-                  className="h-[47px] w-[47px] rounded-full items-center justify-center"
+                  className="rounded-full items-center justify-center"
+                  style={ACTION_BAR_BUTTON_STYLE}
                   activeOpacity={0.7}
                 >
                   <View
                     style={{
-                      width: ACTION_BAR_ICON_BOX_PX,
-                      height: ACTION_BAR_ICON_BOX_PX,
+                      width: READER_ACTION_BAR_ICON_BOX_PX,
+                      height: READER_ACTION_BAR_ICON_BOX_PX,
                       alignItems: "center",
                       justifyContent: "center",
                       transform: [{ scale: ACTION_BAR_ICON_SCALE.note }],
                     }}
                   >
-                    <ReaderNoteIcon color={rc.actionIconMuted} size={ACTION_BAR_ICON_SIZE_PX} />
+                    <ReaderNoteIcon color={rc.actionIconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
                   </View>
                 </TouchableOpacity>
               </View>
-              <View ref={actionBarButtonRefs.journal} collapsable={false} className="h-[47px] w-[47px]">
+              <View ref={actionBarButtonRefs.journal} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
                 <TouchableOpacity
                   onPress={openJournalFromSelection}
                   accessibilityLabel="New journal entry from selection"
-                  className="h-[47px] w-[47px] rounded-full items-center justify-center"
-                  style={{ backgroundColor: colors.brown800 }}
+                  className="rounded-full items-center justify-center"
+                  style={[ACTION_BAR_BUTTON_STYLE, { backgroundColor: colors.brown800 }]}
                   activeOpacity={0.85}
                 >
                   <View
                     style={{
-                      width: ACTION_BAR_ICON_BOX_PX,
-                      height: ACTION_BAR_ICON_BOX_PX,
+                      width: READER_ACTION_BAR_ICON_BOX_PX,
+                      height: READER_ACTION_BAR_ICON_BOX_PX,
                       alignItems: "center",
                       justifyContent: "center",
                       transform: [{ scale: ACTION_BAR_ICON_SCALE.journal }],
                     }}
                   >
-                    <ReaderJournalIcon color={rc.selectionText} size={ACTION_BAR_ICON_SIZE_PX} />
+                    <ReaderJournalIcon color={rc.selectionText} size={READER_ACTION_BAR_ICON_SIZE_PX} />
                   </View>
                 </TouchableOpacity>
               </View>

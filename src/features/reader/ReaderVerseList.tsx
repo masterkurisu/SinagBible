@@ -2,6 +2,10 @@ import { useCallback, useMemo, type ComponentProps, type ReactNode, type RefObje
 import { Animated, Pressable, StyleSheet, type GestureResponderHandlers } from "react-native";
 import type { ListRenderItemInfo } from "@shopify/flash-list";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
+import {
+  READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX,
+  READER_ACTION_BAR_SELECTION_CLEARANCE_HIGHLIGHT_PX,
+} from "@/src/features/reader/readerActionBarOnboardingSteps";
 import { AnimatedReaderChapterFlashList, type ReaderVerseFlashItem } from "./useReaderGestures";
 
 export const READER_TABLET_TWO_COLUMN_GAP = 18;
@@ -180,7 +184,10 @@ export function ReaderVerseList({
   const readerVerseFlashGetItemType = useCallback((item: ReaderVerseFlashItem) => item.kind, []);
 
   const selectionPaddingBottom =
-    actionBarBottomPx + (actionBarMode === "highlight" ? 112 : 88);
+    actionBarBottomPx +
+    (actionBarMode === "highlight"
+      ? READER_ACTION_BAR_SELECTION_CLEARANCE_HIGHLIGHT_PX
+      : READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX);
 
   const flashListContentContainerStyle = useMemo(() => {
     if (hasVerseSelection) {

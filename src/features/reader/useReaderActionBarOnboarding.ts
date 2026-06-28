@@ -13,6 +13,7 @@ import {
   READER_ACTION_BAR_ONBOARDING_STEP_MS,
   READER_ACTION_BAR_ONBOARDING_STEPS,
   READER_ACTION_BAR_PILL_PAD_H_PX,
+  READER_ACTION_BAR_PILL_PAD_V_DEFAULT_PX,
   type ReaderActionBarOnboardingStepId,
 } from "@/src/features/reader/readerActionBarOnboardingSteps";
 
@@ -43,8 +44,7 @@ function fallbackActionBarButtonTarget(
     barLeft +
     READER_ACTION_BAR_PILL_PAD_H_PX +
     buttonIndex * (READER_ACTION_BAR_BUTTON_PX + READER_ACTION_BAR_BUTTON_GAP_PX);
-  const pillPadV = 3;
-  const y = actionBarBottomPx + pillPadV;
+  const y = actionBarBottomPx + READER_ACTION_BAR_PILL_PAD_V_DEFAULT_PX;
   return { x, y, width: READER_ACTION_BAR_BUTTON_PX, height: READER_ACTION_BAR_BUTTON_PX };
 }
 
