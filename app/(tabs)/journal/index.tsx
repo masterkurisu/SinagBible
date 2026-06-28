@@ -30,8 +30,11 @@ import {
   updateLocalEntry,
 } from "@/lib/journal-local";
 import { stripHtmlPreview } from "@/lib/journal-preview";
-import { useSbJournalTabPadding } from "@/lib/use-sb-bottom-padding";
-import { nativeTabFabOffsetPx, nativeFloatingTabBarTopReservePx } from "@/lib/native-tab-chrome";
+import {
+  journalTabNewEntryFabBottomPx,
+  nativeFloatingTabBarTopReservePx,
+  nativeTabJournalListPaddingBottomPx,
+} from "@/lib/native-tab-chrome";
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 import { ScreenLoadingSkeleton } from "@/components/loading-skeleton";
 import { JournalNewEntryForm, type JournalNewEntryFormHandle } from "@/components/journal-new-entry-form";
@@ -44,10 +47,12 @@ import type { JournalOnboardingStepId } from "@/src/features/journal/journalOnbo
 
 const SHEET_GAP_ABOVE_FAB_PX = 12;
 const FAB_SIZE_PX = 72;
-/** Android native tab bar overlaps the journal FAB slightly; nudge FAB (and matching list pad) up. */
-const ANDROID_JOURNAL_FAB_EXTRA_BOTTOM_PX = Platform.OS === "android" ? 50 : 0;
-/** On iOS the FAB sits too close to the bottom; lift it to match Android visual placement. */
-const IOS_JOURNAL_FAB_EXTRA_BOTTOM_PX = Platform.OS === "ios" ? 30 : 0;
+/**
+ * Lift above the native tab bar. Reduced by 40px after the SDK 56 NativeTabs upgrade, which
+ * already insets tab content from the bottom safe area.
+ */
+const JOURNAL_FAB_PLATFORM_LIFT_PX =
+  Platform.OS === "android" ? 10 : Platform.OS === "ios" ? -10 : 0;
 
 function formatDate(iso: string): string {
   const parsed = new Date(iso);
@@ -356,7 +361,8 @@ export default function JournalIndexScreen() {
   const { bundle } = useMobileAppTheme();
   const colors = bundle.ui;
   const j = bundle.journal;
-  const listPadBottom = useSbJournalTabPadding() + ANDROID_JOURNAL_FAB_EXTRA_BOTTOM_PX;
+  const listPadBottom =
+    nativeTabJournalListPaddingBottomPx(0) + Math.max(0, JOURNAL_FAB_PLATFORM_LIFT_PX);
   const [entries, setEntries] = useState<MobileJournalListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -386,10 +392,7 @@ export default function JournalIndexScreen() {
     [],
   );
 
-  const fabBottom =
-    nativeTabFabOffsetPx(insets.bottom) +
-    ANDROID_JOURNAL_FAB_EXTRA_BOTTOM_PX +
-    IOS_JOURNAL_FAB_EXTRA_BOTTOM_PX;
+  const fabBottom = journalTabNewEntryFabBottomPx(insets.bottom, JOURNAL_FAB_PLATFORM_LIFT_PX);
   const cardBottom = fabBottom + FAB_SIZE_PX + SHEET_GAP_ABOVE_FAB_PX;
   const isTablet = isTabletLayout(windowWidth, windowHeight);
   const sheetHorizontalInset = insets.left + 2;

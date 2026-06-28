@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import * as FileSystem from "expo-file-system";
-import { Asset, requestPermissionsAsync } from "expo-media-library";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { captureRef } from "react-native-view-shot";
@@ -629,6 +628,9 @@ export default function JournalEntryScreen() {
     setExportAction("save");
     let capturedUri: string | null = null;
     try {
+      const { createAssetAsync, requestPermissionsAsync } = await import(
+        "expo-media-library/legacy"
+      );
       const perm =
         Platform.OS === "android"
           ? await requestPermissionsAsync(false, ["photo"])
@@ -645,7 +647,7 @@ export default function JournalEntryScreen() {
         Alert.alert("Could not save", "Unable to create an image of this entry.");
         return;
       }
-      await Asset.create(capturedUri);
+      await createAssetAsync(capturedUri);
       Alert.alert("Saved", "The image was saved to your photo library.");
     } catch (e) {
       if (__DEV__) {

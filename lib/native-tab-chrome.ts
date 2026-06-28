@@ -69,6 +69,18 @@ export function nativeTabJournalListPaddingBottomPx(safeAreaBottom: number): num
 }
 
 /**
+ * Journal new-entry FAB on tab screens. NativeTabs (SDK 56+) already applies bottom safe-area
+ * on tab content (`SafeAreaView` on Android; scroll inset adjustment on iOS), so pass 0 for
+ * `safeAreaBottom` to avoid pushing the FAB up twice after the upgrade.
+ */
+export function journalTabNewEntryFabBottomPx(
+  _safeAreaBottom: number,
+  platformLiftPx: number,
+): number {
+  return nativeTabFabOffsetPx(0) + platformLiftPx;
+}
+
+/**
  * iPad landscape: expo-router `NativeTabs` can render as a top-centered floating pill that sits
  * below the status bar but is not included in `SafeAreaInsets.top`. Add this so modal sheets clear it.
  */
