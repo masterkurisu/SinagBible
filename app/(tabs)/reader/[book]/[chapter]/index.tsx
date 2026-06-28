@@ -36,37 +36,20 @@ import type {
 import { State } from "react-native-gesture-handler";
 import {
   formatTranslationDropdownLabel,
-  getBookNavForTranslation,
-  getChapterBySlugForTranslation,
   getInternalIdFromApiId,
   isTranslationId,
   type TranslationId,
 } from "@sinag-bible/core/bible-translations";
-import { getUsfmBookId } from "@sinag-bible/core";
-import { fetchChapter as fetchApiChapter } from "@/lib/bible-api-service";
+import { primeReaderChapterFetch } from "@/lib/reader-chapter-load";
 import {
-  getCachedReaderChapter,
-  readerChapterCacheKey,
-  setCachedReaderChapter,
-} from "@/lib/reader-chapter-cache";
-import {
-  fetchReaderChapterContent,
-  primeReaderChapterFetch,
-  readerUsesPerChapterFetch,
-  resolveReaderBooksForTranslation,
-} from "@/lib/reader-chapter-load";
-import {
-  collectPrefetchChapterTargets,
   getReaderChapterNeighbors,
   type ChapterNavTarget,
 } from "@/lib/reader-chapter-nav";
-import { mergeVerseInlineFromHelloaoChapter } from "@/lib/merge-helloao-verse-inline";
 import { useTranslationPicker } from "@/lib/use-translation-picker";
 import { useFavoriteTranslations } from "@/lib/use-favorite-translations";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import { highlightColorOptions } from "@sinag-bible/ui";
 import { mobileAppThemePickerOptions } from "@sinag-bible/tokens";
-import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import {
   ReaderCopyIcon,
   ReaderHighlightIcon,
@@ -77,21 +60,7 @@ import { BibleBookIcon } from "@/components/icons/BibleBookIcon";
 import { ReaderSettingsCogIcon } from "@/components/icons/ReaderSettingsCogIcon";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { StudyNotesBookmarkIcon } from "@/components/icons/StudyNotesBookmarkIcon";
-import {
-  ReaderAlignCenterIcon,
-  ReaderAlignJustifyIcon,
-  ReaderAlignLeftIcon,
-  ReaderAlignRightIcon,
-} from "@/components/icons/ReaderFontSheetAlignIcons";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
-import {
-  DEFAULT_READER_VERSE_BODY_FONT_ID,
-  isReaderVerseBodyFontId,
-  READER_VERSE_BODY_FONT_STORAGE_KEY,
-  readerVerseBodyFontFamily,
-  type ReaderVerseBodyFontId,
-} from "@/lib/reader-verse-body-font";
-import { ReaderFontSizeSlider } from "@/components/reader-font-size-slider";
 import { ReaderVerseRow } from "@/components/reader-verse-row";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
 import { nativeTabFabOffsetPx, nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
@@ -145,6 +114,8 @@ import { useReaderActionBarOnboarding } from "@/src/features/reader/useReaderAct
 import { useReaderFeatureOnboarding, type ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import { useReaderSettingsOnboarding } from "@/src/features/reader/useReaderSettingsOnboarding";
 import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
+import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
+import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
 
 const TRANSLATION_IDS = [
   "KJV",
@@ -169,59 +140,7 @@ const TRANSLATION_LANGUAGE_BY_ID: Record<(typeof TRANSLATION_IDS)[number], strin
   ENG_WEBBE: "English",
 };
 
-const READER_CHAPTER_PREFETCH_DEPTH = 2;
-
-const READER_FONT_SCALE_STORAGE_KEY = "sb:reader:fontScale";
-const READER_LINE_SPACING_STORAGE_KEY = "sb:reader:lineSpacingScale";
-const READER_TEXT_ALIGN_STORAGE_KEY = "sb:reader:verseTextAlign";
-
-type ReaderVerseTextAlign = "left" | "right" | "center" | "justify";
-
-const READER_VERSE_TEXT_ALIGN_OPTIONS: readonly ReaderVerseTextAlign[] = [
-  "left",
-  "right",
-  "center",
-  "justify",
-] as const;
-
-function isReaderVerseTextAlign(raw: string): raw is ReaderVerseTextAlign {
-  return (READER_VERSE_TEXT_ALIGN_OPTIONS as readonly string[]).includes(raw);
-}
-
-function readerVerseTextAlignLabel(a: ReaderVerseTextAlign): string {
-  switch (a) {
-    case "left":
-      return "Left";
-    case "right":
-      return "Right";
-    case "center":
-      return "Center";
-    case "justify":
-      return "Justify";
-  }
-}
-
-const FONT_SHEET_ALIGN_ROW: readonly {
-  align: ReaderVerseTextAlign;
-  Icon: typeof ReaderAlignLeftIcon;
-}[] = [
-  { align: "left", Icon: ReaderAlignLeftIcon },
-  { align: "center", Icon: ReaderAlignCenterIcon },
-  { align: "right", Icon: ReaderAlignRightIcon },
-  { align: "justify", Icon: ReaderAlignJustifyIcon },
-];
-
-/** Font settings card: top inset inside the card (`ScrollView` content `paddingTop`). */
 const READER_FONT_CARD_PADDING_TOP_PX = 12;
-/** Font settings card: space between font-size slider and the “Font spacing” label (`marginTop` on that label). */
-const READER_FONT_CARD_GAP_AFTER_SIZE_SLIDER_PX = 5;
-/** Font settings card: space between font-spacing slider and the align icon row (`marginTop` on that row). */
-const READER_FONT_CARD_GAP_AFTER_SPACING_SLIDER_PX = 5;
-const FONT_SCALE_MIN = 0.5;
-const FONT_SCALE_MAX = 3;
-/** Multiplier on verse line height (base 28px at scale 1); slider range 60%–200%. */
-const LINE_SPACING_MIN = 0.6;
-const LINE_SPACING_MAX = 2;
 
 const BOOK_SELECTOR_VIEW_STORAGE_KEY = "sb:reader:bookSelectorView";
 
@@ -229,10 +148,6 @@ function persistReaderPref(key: string, value: string): void {
   void AsyncStorage.setItem(key, value).catch(() => {
     /* ignore storage write errors */
   });
-}
-
-function hasChapterInlineAnnotations(chapter: BibleChapter): boolean {
-  return (chapter.verseInlineContent ?? []).some((segments) => segments.length > 0);
 }
 
 /** Share of screen width the reader translates left when settings are open (phones). */
@@ -272,7 +187,20 @@ export default function ReaderChapterScreen() {
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { bundle, themeId, setThemeId } = useMobileAppTheme();
+  const {
+    prefs,
+    bundle,
+    setFontFamily: setReaderVerseBodyFontIdPersisted,
+    setFontScale: setFontSizeScalePersisted,
+    setLineSpacingScale: setLineSpacingScalePersisted,
+    setVerseTextAlign: setVerseTextAlignPersisted,
+    setThemeId,
+    readerVerseFontSize,
+    readerVerseLineHeight,
+    readerVerseBodyFontFamily,
+  } = useReaderPreferences();
+  const { fontScale: fontSizeScale, fontFamilyId: readerVerseBodyFontId, lineSpacingScale, verseTextAlign, themeId } =
+    prefs;
   const colors = bundle.ui;
   const rc = bundle.reader;
 
@@ -304,165 +232,13 @@ export default function ReaderChapterScreen() {
     [router],
   );
 
-  const [readerPayload, setReaderPayload] = useState<{
-    resolvedTranslationId: string;
-    books: BibleBookNavItem[];
-    chapter: BibleChapter;
-  } | null>(null);
-  const readerPayloadRef = useRef(readerPayload);
-  readerPayloadRef.current = readerPayload;
-  const [chapterMissing, setChapterMissing] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const slug = bookSlug ?? "";
-    const resolved = requestedTranslationId;
-    const cacheKey = readerChapterCacheKey(resolved, slug, chapterNumber);
-    const memHit = getCachedReaderChapter(cacheKey);
-    if (memHit) {
-      setReaderPayload(memHit);
-      return;
-    }
-
-    void (async () => {
-      try {
-        setChapterMissing(false);
-
-        let resolvedTranslation = resolved;
-        const cachedPayload = readerPayloadRef.current;
-        const cachedBooks =
-          cachedPayload?.resolvedTranslationId === resolvedTranslation && cachedPayload.books.length > 0
-            ? cachedPayload.books
-            : null;
-
-        let books: BibleBookNavItem[];
-        let chapter: BibleChapter | null;
-
-        if (resolvedTranslation === "KJV" || !readerUsesPerChapterFetch(resolvedTranslation)) {
-          if (isTranslationId(resolvedTranslation)) {
-            if (cachedBooks) {
-              books = cachedBooks;
-              chapter = await getChapterBySlugForTranslation(resolvedTranslation, slug, chapterNumber);
-            } else {
-              [books, chapter] = await Promise.all([
-                getBookNavForTranslation(resolvedTranslation),
-                getChapterBySlugForTranslation(resolvedTranslation, slug, chapterNumber),
-              ]);
-            }
-          } else {
-            books = cachedBooks ?? (await resolveReaderBooksForTranslation(resolvedTranslation, null));
-            chapter = await fetchReaderChapterContent(resolvedTranslation, slug, chapterNumber);
-          }
-        } else {
-          books = await resolveReaderBooksForTranslation(resolvedTranslation, cachedBooks);
-          if (!cachedBooks && isTranslationId(resolvedTranslation)) {
-            void getBookNavForTranslation(resolvedTranslation).then((nav) => {
-              if (cancelled) return;
-              setReaderPayload((curr) =>
-                curr?.resolvedTranslationId === resolvedTranslation ? { ...curr, books: nav } : curr,
-              );
-            });
-          }
-          chapter = await fetchReaderChapterContent(resolvedTranslation, slug, chapterNumber);
-        }
-
-        if (!chapter) {
-          resolvedTranslation = "KJV";
-          books = await getBookNavForTranslation("KJV");
-          chapter = await getChapterBySlugForTranslation("KJV", slug, chapterNumber);
-        }
-
-        if (cancelled) return;
-
-        if (!chapter) {
-          setReaderPayload(null);
-          setChapterMissing(true);
-          return;
-        }
-
-        const payload = { resolvedTranslationId: resolvedTranslation, books, chapter };
-        setCachedReaderChapter(cacheKey, payload);
-        setReaderPayload(payload);
-      } catch {
-        if (!cancelled) {
-          setReaderPayload(null);
-          setChapterMissing(true);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [requestedTranslationId, bookSlug, chapterNumber]);
-
-  const kjvInlineEnrichmentKey =
-    readerPayload?.resolvedTranslationId === "KJV" &&
-    !hasChapterInlineAnnotations(readerPayload.chapter)
-      ? `${readerPayload.chapter.bookSlug}:${readerPayload.chapter.chapterNumber}`
-      : null;
-
-  useEffect(() => {
-    if (!kjvInlineEnrichmentKey) return;
-    const [chapterBookSlug, chapterNumRaw] = kjvInlineEnrichmentKey.split(":");
-    const chapterNum = Number(chapterNumRaw);
-    const usfm = getUsfmBookId(chapterBookSlug);
-    if (!usfm) return;
-    let cancelled = false;
-    const task = InteractionManager.runAfterInteractions(() => {
-      // Keep first paint fast; enrich KJV inline spans after initial chapter render and gestures settle.
-      void (async () => {
-        try {
-          const helloKjv = await fetchApiChapter("eng_kjv", usfm, chapterNum);
-          if (cancelled) return;
-          setReaderPayload((curr) => {
-            if (!curr) return curr;
-            if (
-              curr.resolvedTranslationId !== "KJV" ||
-              curr.chapter.bookSlug !== chapterBookSlug ||
-              curr.chapter.chapterNumber !== chapterNum
-            ) {
-              return curr;
-            }
-            return {
-              ...curr,
-              chapter: mergeVerseInlineFromHelloaoChapter(curr.chapter, helloKjv),
-            };
-          });
-        } catch {
-          /* offline or API error — keep unannotated KJV */
-        }
-      })();
-    });
-
-    return () => {
-      cancelled = true;
-      task.cancel();
-    };
-  }, [kjvInlineEnrichmentKey]);
-
-  useEffect(() => {
-    const tid = requestedTranslationId;
-    if (tid === "KJV") return;
-    const booksForPrefetch =
-      readerPayload?.books ?? readerPayloadRef.current?.books ?? [];
-    if (booksForPrefetch.length === 0) return;
-    const slug = bookSlug ?? "";
-    const targets = collectPrefetchChapterTargets(
-      booksForPrefetch,
-      slug,
-      chapterNumber,
-      READER_CHAPTER_PREFETCH_DEPTH,
-    );
-    for (const target of targets) {
-      primeReaderChapterFetch(tid, target);
-    }
-  }, [requestedTranslationId, bookSlug, chapterNumber, readerPayload?.books]);
-
-  const resolvedTranslationId = readerPayload?.resolvedTranslationId;
-  const books = readerPayload?.books;
-  const chapter = readerPayload?.chapter;
+  const {
+    chapter,
+    books,
+    resolvedTranslationId,
+    isLoading: readerChapterLoading,
+    error: readerChapterError,
+  } = useReaderChapter(bookSlug ?? "", chapterNumber, requestedTranslationId);
 
   const {
     highlights,
@@ -475,15 +251,6 @@ export default function ReaderChapterScreen() {
   const { items: translationPickerItems, loading: translationPickerLoading } = useTranslationPicker();
   const { favoriteTranslationIds, toggleFavoriteTranslation } = useFavoriteTranslations();
 
-  const [fontSizeScale, setFontSizeScale] = useState(1);
-  const fontScaleUserTouchedRef = useRef(false);
-  const [lineSpacingScale, setLineSpacingScale] = useState(1);
-  const lineSpacingUserTouchedRef = useRef(false);
-  const [verseTextAlign, setVerseTextAlign] = useState<ReaderVerseTextAlign>("justify");
-  const verseTextAlignUserTouchedRef = useRef(false);
-  const [readerVerseBodyFontId, setReaderVerseBodyFontId] =
-    useState<ReaderVerseBodyFontId>(DEFAULT_READER_VERSE_BODY_FONT_ID);
-  const readerVerseBodyFontUserTouchedRef = useRef(false);
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
   const [readerPrivacyPolicyOpen, setReaderPrivacyPolicyOpen] = useState(false);
   const [readerTermsOpen, setReaderTermsOpen] = useState(false);
@@ -650,60 +417,14 @@ export default function ReaderChapterScreen() {
   }, []);
 
   useEffect(() => {
-    fontScaleUserTouchedRef.current = false;
-    lineSpacingUserTouchedRef.current = false;
-    verseTextAlignUserTouchedRef.current = false;
-    readerVerseBodyFontUserTouchedRef.current = false;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
-        const pairs = await AsyncStorage.multiGet([
-          READER_FONT_SCALE_STORAGE_KEY,
-          READER_LINE_SPACING_STORAGE_KEY,
-          READER_TEXT_ALIGN_STORAGE_KEY,
-          READER_VERSE_BODY_FONT_STORAGE_KEY,
-          BOOK_SELECTOR_VIEW_STORAGE_KEY,
-        ]);
+        const rawBookSelectorView = await AsyncStorage.getItem(BOOK_SELECTOR_VIEW_STORAGE_KEY);
         if (cancelled) return;
-        const valuesByKey = new Map(pairs);
-
-        let nextFontSizeScale: number | null = null;
-        const rawFontScale = valuesByKey.get(READER_FONT_SCALE_STORAGE_KEY);
-        if (rawFontScale && !fontScaleUserTouchedRef.current) {
-          const n = parseFloat(rawFontScale);
-          if (Number.isFinite(n) && n >= FONT_SCALE_MIN && n <= FONT_SCALE_MAX) {
-            nextFontSizeScale = n;
-          }
-        }
-
-        let nextLineSpacingScale: number | null = null;
-        const rawLineSpacing = valuesByKey.get(READER_LINE_SPACING_STORAGE_KEY);
-        if (rawLineSpacing && !lineSpacingUserTouchedRef.current) {
-          const n = parseFloat(rawLineSpacing);
-          if (Number.isFinite(n) && n >= LINE_SPACING_MIN && n <= LINE_SPACING_MAX) {
-            nextLineSpacingScale = n;
-          }
-        }
-
-        let nextVerseTextAlign: ReaderVerseTextAlign | null = null;
-        const rawTextAlign = valuesByKey.get(READER_TEXT_ALIGN_STORAGE_KEY);
-        if (rawTextAlign && !verseTextAlignUserTouchedRef.current && isReaderVerseTextAlign(rawTextAlign)) {
-          nextVerseTextAlign = rawTextAlign;
-        }
-
-        let nextReaderVerseBodyFontId: ReaderVerseBodyFontId | null = null;
-        const rawReaderVerseBodyFont = valuesByKey.get(READER_VERSE_BODY_FONT_STORAGE_KEY);
-        if (
-          rawReaderVerseBodyFont &&
-          !readerVerseBodyFontUserTouchedRef.current &&
-          isReaderVerseBodyFontId(rawReaderVerseBodyFont)
-        ) {
-          nextReaderVerseBodyFontId = rawReaderVerseBodyFont;
-        }
 
         let nextBookSelectorViewMode: BookSelectorViewMode | null = null;
         let nextSelectorTestamentTab: SelectorTestamentTab | null = null;
-        const rawBookSelectorView = valuesByKey.get(BOOK_SELECTOR_VIEW_STORAGE_KEY);
         if (rawBookSelectorView) {
           try {
             const parsed = JSON.parse(rawBookSelectorView) as {
@@ -722,16 +443,11 @@ export default function ReaderChapterScreen() {
         }
 
         unstable_batchedUpdates(() => {
-          if (nextFontSizeScale != null) setFontSizeScale(nextFontSizeScale);
-          if (nextLineSpacingScale != null) setLineSpacingScale(nextLineSpacingScale);
-          if (nextVerseTextAlign != null) setVerseTextAlign(nextVerseTextAlign);
-          if (nextReaderVerseBodyFontId != null) setReaderVerseBodyFontId(nextReaderVerseBodyFontId);
           if (nextBookSelectorViewMode != null) setBookSelectorViewMode(nextBookSelectorViewMode);
           if (nextSelectorTestamentTab != null) setSelectorTestamentTab(nextSelectorTestamentTab);
           setBookSelectorStorageReady(true);
         });
       } catch {
-        // ignore corrupt storage
         if (!cancelled) {
           unstable_batchedUpdates(() => {
             setBookSelectorStorageReady(true);
@@ -777,33 +493,6 @@ export default function ReaderChapterScreen() {
     readerScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
     readerScrollYAnim.setValue(0);
   }, [bookSlug, chapterNumber, requestedTranslationId, readerScrollYAnim, initialScrollVerse]);
-
-  const setFontSizeScalePersisted = useCallback((v: number) => {
-    fontScaleUserTouchedRef.current = true;
-    const next = Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, v));
-    setFontSizeScale(next);
-    persistReaderPref(READER_FONT_SCALE_STORAGE_KEY, String(next));
-  }, []);
-
-  const setLineSpacingScalePersisted = useCallback((v: number) => {
-    lineSpacingUserTouchedRef.current = true;
-    const next = Math.min(LINE_SPACING_MAX, Math.max(LINE_SPACING_MIN, v));
-    setLineSpacingScale(next);
-    persistReaderPref(READER_LINE_SPACING_STORAGE_KEY, String(next));
-  }, []);
-
-  const setVerseTextAlignPersisted = useCallback((a: ReaderVerseTextAlign) => {
-    hapticLightImpact();
-    verseTextAlignUserTouchedRef.current = true;
-    setVerseTextAlign(a);
-    persistReaderPref(READER_TEXT_ALIGN_STORAGE_KEY, a);
-  }, []);
-
-  const setReaderVerseBodyFontIdPersisted = useCallback((id: ReaderVerseBodyFontId) => {
-    readerVerseBodyFontUserTouchedRef.current = true;
-    setReaderVerseBodyFontId(id);
-    persistReaderPref(READER_VERSE_BODY_FONT_STORAGE_KEY, id);
-  }, []);
 
   const clearMobileSettingsFollowUp = useCallback(() => {
     if (mobileSettingsFollowUpTimeoutRef.current != null) {
@@ -1074,23 +763,21 @@ export default function ReaderChapterScreen() {
   }, [clearVerseSelection]);
 
   const openJournalFromSelection = useCallback(() => {
-    const ch = readerPayload?.chapter;
-    const tid = readerPayload?.resolvedTranslationId;
-    if (!ch || !tid || selectedVerses.length === 0) return;
+    if (!chapter || !resolvedTranslationId || selectedVerses.length === 0) return;
     hapticLightImpact();
     const first = selectedVerses[0]!;
     const last = selectedVerses[selectedVerses.length - 1]!;
     setNewEntryInitialParams({
-      book: ch.bookSlug,
-      chapter: String(ch.chapterNumber),
+      book: chapter.bookSlug,
+      chapter: String(chapter.chapterNumber),
       verseStart: String(first),
       verseEnd: String(last),
-      translation: tid,
+      translation: resolvedTranslationId,
     });
     setNewEntrySheetKey((k) => k + 1);
     setNewEntrySheetOpen(true);
     clearVerseSelection();
-  }, [readerPayload?.chapter, readerPayload?.resolvedTranslationId, selectedVerses, clearVerseSelection]);
+  }, [chapter, resolvedTranslationId, selectedVerses, clearVerseSelection]);
 
   const openStudyNotesFromSelection = useCallback(() => {
     if (selectedVerses.length === 0) return;
@@ -1323,20 +1010,20 @@ export default function ReaderChapterScreen() {
   );
 
   const { oldTestamentBooks, newTestamentBooks } = useMemo(() => {
-    const b = readerPayload?.books ?? [];
+    const b = books ?? [];
     const OT_COUNT = 39;
     return {
       oldTestamentBooks: b.slice(0, OT_COUNT),
       newTestamentBooks: b.slice(OT_COUNT),
     };
-  }, [readerPayload?.books]);
+  }, [books]);
 
   const azSortedBooks = useMemo(
     () =>
-      [...(readerPayload?.books ?? [])].sort((a, b) =>
+      [...(books ?? [])].sort((a, b) =>
         getBookAzSortKey(a.name).localeCompare(getBookAzSortKey(b.name)),
       ),
-    [readerPayload?.books, getBookAzSortKey],
+    [books, getBookAzSortKey],
   );
 
   const gridSectionsForPicker = useMemo(
@@ -1605,10 +1292,12 @@ export default function ReaderChapterScreen() {
   }, [fontSettingsSheetOpen, fontSettingsPopupSlideAnim, fontSettingsPopupOpacityAnim]);
 
   const isReaderContentCurrent = Boolean(
-    readerPayload &&
-      readerPayload.chapter.bookSlug === (bookSlug ?? "") &&
-      readerPayload.chapter.chapterNumber === chapterNumber &&
-      readerPayload.resolvedTranslationId === requestedTranslationId,
+    chapter &&
+      books &&
+      resolvedTranslationId &&
+      chapter.bookSlug === (bookSlug ?? "") &&
+      chapter.chapterNumber === chapterNumber &&
+      resolvedTranslationId === requestedTranslationId,
   );
 
   useEffect(() => {
@@ -1635,25 +1324,24 @@ export default function ReaderChapterScreen() {
   }, [isReaderContentCurrent, readerVersesOpacityAnim]);
 
   const chapterNav = useMemo(() => {
-    if (!readerPayload?.chapter || !readerPayload.books) {
+    if (!chapter || !books) {
       return { prevChapter: null as ChapterNavTarget | null, nextChapter: null as ChapterNavTarget | null };
     }
     const slug = bookSlug ?? "";
-    const ch = readerPayload.chapter;
-    const tid = readerPayload.resolvedTranslationId;
+    const tid = resolvedTranslationId;
     const synced =
-      ch.bookSlug === slug && ch.chapterNumber === chapterNumber && tid === requestedTranslationId;
+      chapter.bookSlug === slug && chapter.chapterNumber === chapterNumber && tid === requestedTranslationId;
     const navChapter: BibleChapter = synced
-      ? ch
+      ? chapter
       : {
-          bookName: readerPayload.books.find((b) => b.slug === slug)?.name ?? ch.bookName,
+          bookName: books.find((b) => b.slug === slug)?.name ?? chapter.bookName,
           bookSlug: slug,
           chapterNumber,
-          verses: ch.verses,
-          ...(ch.verseInlineContent ? { verseInlineContent: ch.verseInlineContent } : {}),
+          verses: chapter.verses,
+          ...(chapter.verseInlineContent ? { verseInlineContent: chapter.verseInlineContent } : {}),
         };
-    return getReaderChapterNeighbors(readerPayload.books, navChapter, chapterNumber);
-  }, [readerPayload, bookSlug, chapterNumber, requestedTranslationId]);
+    return getReaderChapterNeighbors(books, navChapter, chapterNumber);
+  }, [chapter, books, resolvedTranslationId, bookSlug, chapterNumber, requestedTranslationId]);
 
   const chapterNavRouteKey = `${bookSlug ?? ""}:${chapterNumber}:${requestedTranslationId}`;
   const chapterNavArrowsOverlayOpen =
@@ -1668,18 +1356,18 @@ export default function ReaderChapterScreen() {
     !chapterNavArrowsOverlayOpen &&
     selectedVerses.length === 0 &&
     (chapterNav.prevChapter != null || chapterNav.nextChapter != null) &&
-    readerPayload?.resolvedTranslationId === requestedTranslationId;
+    resolvedTranslationId === requestedTranslationId;
 
   const goToPrevChapter = useCallback(() => {
     const target = chapterNav.prevChapter;
     if (!target) return;
     const tid = resolvedTranslationId ?? requestedTranslationId;
     primeReaderChapterFetch(tid, target);
-    if (readerPayload?.books) {
+    if (books) {
       primeReaderChapterFetch(
         tid,
         getReaderChapterNeighbors(
-          readerPayload.books,
+          books,
           { bookSlug: target.slug, chapterNumber: target.chapter },
           target.chapter,
         ).prevChapter,
@@ -1691,7 +1379,7 @@ export default function ReaderChapterScreen() {
     chapterNav.prevChapter,
     closeToolsMenu,
     goToReaderChapter,
-    readerPayload?.books,
+    books,
     resolvedTranslationId,
     requestedTranslationId,
   ]);
@@ -1701,11 +1389,11 @@ export default function ReaderChapterScreen() {
     if (!target) return;
     const tid = resolvedTranslationId ?? requestedTranslationId;
     primeReaderChapterFetch(tid, target);
-    if (readerPayload?.books) {
+    if (books) {
       primeReaderChapterFetch(
         tid,
         getReaderChapterNeighbors(
-          readerPayload.books,
+          books,
           { bookSlug: target.slug, chapterNumber: target.chapter },
           target.chapter,
         ).nextChapter,
@@ -1717,7 +1405,7 @@ export default function ReaderChapterScreen() {
     chapterNav.nextChapter,
     closeToolsMenu,
     goToReaderChapter,
-    readerPayload?.books,
+    books,
     resolvedTranslationId,
     requestedTranslationId,
   ]);
@@ -1731,9 +1419,6 @@ export default function ReaderChapterScreen() {
     () => (chapter ? splitVerseIndexForBalancedColumns(chapter.verses) : 0),
     [chapter],
   );
-
-  const readerVerseFontSize = 16 * fontSizeScale;
-  const readerVerseLineHeight = 28 * fontSizeScale * lineSpacingScale;
 
   const verseFlashListData = useMemo((): ReaderVerseFlashItem[] => {
     if (!chapter) return [];
@@ -1800,7 +1485,7 @@ export default function ReaderChapterScreen() {
       bodyTextColor: colors.brown800,
       readerVerseFontSize,
       readerVerseLineHeight,
-      readerVerseBodyFontFamily: readerVerseBodyFontFamily(readerVerseBodyFontId),
+      readerVerseBodyFontFamily,
       verseTextAlign,
     }),
     [
@@ -1812,7 +1497,7 @@ export default function ReaderChapterScreen() {
       colors.brown800,
       readerVerseFontSize,
       readerVerseLineHeight,
-      readerVerseBodyFontId,
+      readerVerseBodyFontFamily,
       verseTextAlign,
     ],
   );
@@ -1965,7 +1650,7 @@ export default function ReaderChapterScreen() {
   }, []);
 
   const readerChapterFlashListFooter = useCallback(() => {
-    if (readerPayload?.resolvedTranslationId !== requestedTranslationId) return null;
+    if (resolvedTranslationId !== requestedTranslationId) return null;
     const { prevChapter, nextChapter } = chapterNav;
     return (
       <Animated.View style={{ opacity: readerVersesOpacityAnim }}>
@@ -2021,7 +1706,7 @@ export default function ReaderChapterScreen() {
       </Animated.View>
     );
   }, [
-    readerPayload?.resolvedTranslationId,
+    resolvedTranslationId,
     requestedTranslationId,
     readerVersesOpacityAnim,
     chapterNav,
@@ -2079,7 +1764,7 @@ export default function ReaderChapterScreen() {
   }, []);
 
   const readerFeatureOnboarding = useReaderFeatureOnboarding({
-    readerContentReady: readerPayload != null && !chapterMissing,
+    readerContentReady: !readerChapterLoading && readerChapterError == null && chapter != null,
     readerOverlayOpen,
     headerToolsGroupRef,
     selectionBannerRef: selectionBannerLiveRef,
@@ -2133,7 +1818,7 @@ export default function ReaderChapterScreen() {
   );
 
   const chapterSwipePan = useMemo(() => {
-    const tid = readerPayload?.resolvedTranslationId;
+    const tid = resolvedTranslationId;
     if (!tid) return noopChapterSwipePan;
     const { prevChapter, nextChapter } = chapterNav;
     const releaseThresholdPx = Platform.OS === "android" ? 72 : 52;
@@ -2167,7 +1852,7 @@ export default function ReaderChapterScreen() {
         tryChapterSwipeNavigate(g);
       },
     });
-  }, [chapterNav, readerPayload?.resolvedTranslationId, goToReaderChapter, hideChapterNavArrowsFromMotion]);
+  }, [chapterNav, resolvedTranslationId, goToReaderChapter, hideChapterNavArrowsFromMotion]);
 
   const readerSettingsOnboarding = useReaderSettingsOnboarding({
     toolsMenuOpen,
@@ -2210,7 +1895,7 @@ export default function ReaderChapterScreen() {
     toggleVerseSelection,
   ]);
 
-  if (chapterMissing) {
+  if (readerChapterError) {
     return (
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: rc.sceneSurface }}>
         <Text style={{ fontFamily: "Inter_400Regular", color: colors.tan300, textAlign: "center" }}>
@@ -2220,7 +1905,7 @@ export default function ReaderChapterScreen() {
     );
   }
 
-  if (!readerPayload || !chapter || !books || !resolvedTranslationId) {
+  if (readerChapterLoading || !chapter || !books || !resolvedTranslationId) {
     return (
       <View className="flex-1 items-center justify-center gap-3" style={{ backgroundColor: rc.sceneSurface }}>
         <ActivityIndicator color={colors.brown800} />
@@ -2271,7 +1956,7 @@ export default function ReaderChapterScreen() {
 
   /**
    * Do not tie chapter swipes to `isReaderContentCurrent`: after `setParams`, the route updates
-   * immediately but `readerPayload` is still the previous chapter until the async load finishes.
+   * immediately but chapter data is still the previous chapter until the async load finishes.
    * That made `noop` pan handlers run so the next swipe did nothing (often read as “one swipe only”).
    * `chapterNav` already uses URL params for neighbors while payload catches up.
    */
