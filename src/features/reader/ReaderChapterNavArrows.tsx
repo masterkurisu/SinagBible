@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import {
   Animated,
   Easing,
@@ -6,30 +6,39 @@ import {
   Pressable,
   StyleSheet,
   View,
+  useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { EdgeInsets } from "react-native-safe-area-context";
 import { hapticLightImpact } from "@/lib/haptics";
 
-/** Tap target diameter (26px radius). */
-export const READER_CHAPTER_NAV_ARROW_CIRCLE_PX = 52;
+/** Tap target diameter (36px radius). */
+export const READER_CHAPTER_NAV_ARROW_CIRCLE_PX = 72;
 /** Chevron glyph size inside the circle. */
-export const READER_CHAPTER_NAV_ARROW_ICON_PX = 26;
-/** Distance from the screen edge (before safe-area inset). */
-export const READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX = 8;
+export const READER_CHAPTER_NAV_ARROW_ICON_PX = 36;
+/** Distance from the left screen edge. */
+export const READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX = 20;
+/** Distance from the right screen edge (next arrow only). */
+export const READER_CHAPTER_NAV_ARROW_RIGHT_EDGE_INSET_PX = 0;
 /** Extra pressable slop beyond the circle edge. */
 export const READER_CHAPTER_NAV_ARROW_HIT_SLOP_PX = 8;
+/** Opacity when arrows are visible (before idle fade-out). */
+export const READER_CHAPTER_NAV_ARROW_VISIBLE_OPACITY = 0.7;
+/** Scale when arrows are visible. */
+export const READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE = 1;
+/** Scale while fading out. */
+export const READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE = 0.88;
 /** Fade in/out duration when showing or hiding arrows. */
-export const READER_CHAPTER_NAV_ARROW_FADE_MS = 220;
+export const READER_CHAPTER_NAV_ARROW_FADE_MS = 400;
 /** Hide arrows after this long without scroll or tap. */
-export const READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS = 10_000;
+export const READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS = 2_500;
 
 type ChapterNavTarget = { slug: string; chapter: number };
 
 type ReaderChapterNavArrowsProps = {
   opacityAnim: Animated.Value;
+  scaleAnim: Animated.Value;
   pointerEventsEnabled: boolean;
   prevChapter: ChapterNavTarget | null;
   nextChapter: ChapterNavTarget | null;
@@ -37,7 +46,6 @@ type ReaderChapterNavArrowsProps = {
   onNext: () => void;
   colors: { brown800: string };
   rc: { sceneSurface: string; popoverShadow: string };
-  insets: EdgeInsets;
   prevArrowRef?: RefObject<View | null>;
   nextArrowRef?: RefObject<View | null>;
 };
@@ -48,8 +56,24 @@ function chapterNavArrowCircleBackground(rc: { sceneSurface: string }) {
   return rc.sceneSurface;
 }
 
+function chapterNavArrowScreenInsets(
+  windowWidth: number,
+  overlayWindowX: number,
+  overlayWidth: number,
+  leftInset: number,
+  rightInset: number,
+) {
+  const gapToScreenLeft = overlayWindowX;
+  const gapToScreenRight = Math.max(0, windowWidth - overlayWindowX - overlayWidth);
+  return {
+    left: leftInset - gapToScreenLeft,
+    right: rightInset - gapToScreenRight,
+  };
+}
+
 export function ReaderChapterNavArrows({
   opacityAnim,
+  scaleAnim,
   pointerEventsEnabled,
   prevChapter,
   nextChapter,
@@ -57,14 +81,44 @@ export function ReaderChapterNavArrows({
   onNext,
   colors,
   rc,
-  insets,
   prevArrowRef,
   nextArrowRef,
 }: ReaderChapterNavArrowsProps) {
+  const { width: windowWidth } = useWindowDimensions();
+  const overlayRef = useRef<View>(null);
+  const [overlayFrame, setOverlayFrame] = useState({ x: 0, width: 0 });
   const circleBg = chapterNavArrowCircleBackground(rc);
   const hitSlop = READER_CHAPTER_NAV_ARROW_HIT_SLOP_PX;
-  const leftInset = Math.max(insets.left, READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX);
-  const rightInset = Math.max(insets.right, READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX);
+  const leftInset = READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX;
+  const rightInset = READER_CHAPTER_NAV_ARROW_RIGHT_EDGE_INSET_PX;
+  const circlePx = READER_CHAPTER_NAV_ARROW_CIRCLE_PX;
+  const arrowMotionStyle = {
+    opacity: opacityAnim,
+    transform: [{ scale: scaleAnim }],
+  };
+
+  const measureOverlayInWindow = useCallback(() => {
+    overlayRef.current?.measureInWindow((x, _y, width) => {
+      if (width > 0) {
+        setOverlayFrame({ x, width });
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    measureOverlayInWindow();
+  }, [measureOverlayInWindow, windowWidth, prevChapter, nextChapter]);
+
+  const screenInsets =
+    windowWidth > 0 && overlayFrame.width > 0
+      ? chapterNavArrowScreenInsets(
+          windowWidth,
+          overlayFrame.x,
+          overlayFrame.width,
+          leftInset,
+          rightInset,
+        )
+      : { left: leftInset, right: rightInset };
 
   const renderArrow = (
     direction: "prev" | "next",
@@ -103,27 +157,37 @@ export function ReaderChapterNavArrows({
           name={direction === "prev" ? "chevron-back" : "chevron-forward"}
           size={READER_CHAPTER_NAV_ARROW_ICON_PX}
           color={colors.brown800}
+          style={direction === "next" ? styles.nextChevronIcon : undefined}
         />
       </Pressable>
     </View>
   );
 
   return (
-    <Animated.View
+    <View
+      ref={overlayRef}
+      collapsable={false}
+      onLayout={measureOverlayInWindow}
       pointerEvents={pointerEventsEnabled ? "box-none" : "none"}
-      style={[StyleSheet.absoluteFill, styles.overlay, { opacity: opacityAnim }]}
+      style={[StyleSheet.absoluteFill, styles.overlay]}
     >
       {prevChapter ? (
-        <View pointerEvents="box-none" style={[styles.sideSlot, { left: leftInset }]}>
+        <Animated.View
+          pointerEvents="box-none"
+          style={[styles.sideSlot, { left: screenInsets.left, marginTop: -circlePx / 2 }, arrowMotionStyle]}
+        >
           {renderArrow("prev", onPrev, "Previous chapter", prevArrowRef)}
-        </View>
+        </Animated.View>
       ) : null}
       {nextChapter ? (
-        <View pointerEvents="box-none" style={[styles.sideSlot, { right: rightInset }]}>
+        <Animated.View
+          pointerEvents="box-none"
+          style={[styles.sideSlot, { right: screenInsets.right, marginTop: -circlePx / 2 }, arrowMotionStyle]}
+        >
           {renderArrow("next", onNext, "Next chapter", nextArrowRef)}
-        </View>
+        </Animated.View>
       ) : null}
-    </Animated.View>
+    </View>
   );
 }
 
@@ -135,7 +199,9 @@ const styles = StyleSheet.create({
   sideSlot: {
     position: "absolute",
     top: "50%",
-    marginTop: -READER_CHAPTER_NAV_ARROW_CIRCLE_PX / 2,
+  },
+  nextChevronIcon: {
+    transform: [{ translateX: 8 }],
   },
   circle: {
     width: READER_CHAPTER_NAV_ARROW_CIRCLE_PX,
@@ -151,13 +217,21 @@ const styles = StyleSheet.create({
   },
 });
 
-export function useReaderChapterNavArrowsVisibility(chapterRouteKey: string, enabled: boolean) {
-  const opacityAnim = useRef(new Animated.Value(1)).current;
+export function useReaderChapterNavArrowsVisibility(
+  chapterRouteKey: string,
+  enabled: boolean,
+  forceVisible = false,
+) {
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE)).current;
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isScrollingRef = useRef(false);
-  const arrowsShownRef = useRef(true);
+  const arrowsShownRef = useRef(false);
+  const forceVisibleRef = useRef(forceVisible);
   const lastScrollOffsetRef = useRef(0);
   const scrollMotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  forceVisibleRef.current = forceVisible;
 
   const clearIdleTimer = useCallback(() => {
     if (idleTimerRef.current != null) {
@@ -173,35 +247,51 @@ export function useReaderChapterNavArrowsVisibility(chapterRouteKey: string, ena
     }
   }, []);
 
-  const animateOpacity = useCallback(
-    (toValue: number) => {
+  const animateVisibility = useCallback(
+    (visible: boolean, targetOpacity = READER_CHAPTER_NAV_ARROW_VISIBLE_OPACITY) => {
       opacityAnim.stopAnimation();
-      Animated.timing(opacityAnim, {
-        toValue,
-        duration: READER_CHAPTER_NAV_ARROW_FADE_MS,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }).start();
-      arrowsShownRef.current = toValue > 0.5;
+      scaleAnim.stopAnimation();
+      Animated.parallel([
+        Animated.timing(opacityAnim, {
+          toValue: visible ? targetOpacity : 0,
+          duration: READER_CHAPTER_NAV_ARROW_FADE_MS,
+          easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: visible ? READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE : READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE,
+          duration: READER_CHAPTER_NAV_ARROW_FADE_MS,
+          easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+      arrowsShownRef.current = visible;
     },
-    [opacityAnim],
+    [opacityAnim, scaleAnim],
   );
 
-  const hideArrows = useCallback(() => {
-    clearIdleTimer();
-    animateOpacity(0);
-  }, [animateOpacity, clearIdleTimer]);
-
-  const showArrows = useCallback(() => {
-    if (!enabled) return;
-    animateOpacity(1);
+  const scheduleIdleHide = useCallback(() => {
     clearIdleTimer();
     idleTimerRef.current = setTimeout(() => {
-      if (!isScrollingRef.current) {
-        animateOpacity(0);
+      if (!isScrollingRef.current && !forceVisibleRef.current) {
+        animateVisibility(false);
       }
     }, READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS);
-  }, [animateOpacity, clearIdleTimer, enabled]);
+  }, [animateVisibility, clearIdleTimer]);
+
+  const hideArrows = useCallback(() => {
+    if (forceVisibleRef.current) return;
+    clearIdleTimer();
+    animateVisibility(false);
+  }, [animateVisibility, clearIdleTimer]);
+
+  const showArrows = useCallback(() => {
+    if (!enabled || forceVisibleRef.current) return;
+    if (!arrowsShownRef.current) {
+      animateVisibility(true);
+    }
+    scheduleIdleHide();
+  }, [animateVisibility, enabled, scheduleIdleHide]);
 
   const onScrollBeginDrag = useCallback(() => {
     isScrollingRef.current = true;
@@ -241,21 +331,22 @@ export function useReaderChapterNavArrowsVisibility(chapterRouteKey: string, ena
   }, [enabled, showArrows]);
 
   useEffect(() => {
+    if (forceVisible) {
+      clearIdleTimer();
+      clearScrollMotionTimer();
+      animateVisibility(true, 1);
+      return;
+    }
+
     clearIdleTimer();
     clearScrollMotionTimer();
     isScrollingRef.current = false;
     lastScrollOffsetRef.current = 0;
     if (enabled) {
-      opacityAnim.setValue(1);
-      arrowsShownRef.current = true;
-      idleTimerRef.current = setTimeout(() => {
-        if (!isScrollingRef.current) {
-          animateOpacity(0);
-        }
-      }, READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS);
+      animateVisibility(true);
+      scheduleIdleHide();
     } else {
-      opacityAnim.setValue(0);
-      arrowsShownRef.current = false;
+      animateVisibility(false);
     }
     return () => {
       clearIdleTimer();
@@ -264,10 +355,11 @@ export function useReaderChapterNavArrowsVisibility(chapterRouteKey: string, ena
   }, [
     chapterRouteKey,
     enabled,
-    animateOpacity,
+    forceVisible,
+    animateVisibility,
     clearIdleTimer,
     clearScrollMotionTimer,
-    opacityAnim,
+    scheduleIdleHide,
   ]);
 
   const hideFromMotion = useCallback(() => {
@@ -282,6 +374,7 @@ export function useReaderChapterNavArrowsVisibility(chapterRouteKey: string, ena
 
   return {
     opacityAnim,
+    scaleAnim,
     pointerEventsEnabled: enabled,
     onScrollBeginDrag,
     onScrollEndDrag: onScrollEnd,

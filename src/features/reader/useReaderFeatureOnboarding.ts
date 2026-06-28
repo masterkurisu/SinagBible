@@ -17,6 +17,7 @@ import type { SpotlightTarget } from "@/src/components/feature-onboarding/Spotli
 import {
   READER_CHAPTER_NAV_ARROW_CIRCLE_PX,
   READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX,
+  READER_CHAPTER_NAV_ARROW_RIGHT_EDGE_INSET_PX,
 } from "@/src/features/reader/ReaderChapterNavArrows";
 import {
   estimateReaderHeaderToolsPillRect,
@@ -85,15 +86,14 @@ function circleSpotlightTarget(rect: LayoutRectangle): SpotlightTarget {
 }
 
 function chapterNavArrowFallbackTargets(
-  insets: EdgeInsets,
   screenW: number,
   screenH: number,
   hasPrevChapter: boolean,
   hasNextChapter: boolean,
 ): LayoutRectangle[] {
   const circle = READER_CHAPTER_NAV_ARROW_CIRCLE_PX;
-  const leftInset = Math.max(insets.left, READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX);
-  const rightInset = Math.max(insets.right, READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX);
+  const leftInset = READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX;
+  const rightInset = READER_CHAPTER_NAV_ARROW_RIGHT_EDGE_INSET_PX;
   const y = screenH / 2 - circle / 2;
   const targets: LayoutRectangle[] = [];
   if (hasPrevChapter) {
@@ -231,7 +231,6 @@ export function useReaderFeatureOnboarding({
         measuredTargets.length > 0
           ? measuredTargets
           : chapterNavArrowFallbackTargets(
-              insets,
               screenW,
               screenH,
               hasPrevChapter,

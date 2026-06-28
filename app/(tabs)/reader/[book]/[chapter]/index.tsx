@@ -1656,32 +1656,6 @@ export default function ReaderChapterScreen() {
     selectedVerses.length === 0 &&
     (chapterNav.prevChapter != null || chapterNav.nextChapter != null) &&
     readerPayload?.resolvedTranslationId === requestedTranslationId;
-  const {
-    opacityAnim: chapterNavArrowsOpacityAnim,
-    pointerEventsEnabled: chapterNavArrowsPointerEventsEnabled,
-    onScrollBeginDrag: onChapterNavArrowsScrollBeginDrag,
-    onScrollEndDrag: onChapterNavArrowsScrollEndDrag,
-    onMomentumScrollEnd: onChapterNavArrowsMomentumScrollEnd,
-    onScroll: onChapterNavArrowsScroll,
-    hideFromMotion: hideChapterNavArrowsFromMotion,
-  } = useReaderChapterNavArrowsVisibility(chapterNavRouteKey, chapterNavArrowsEnabled);
-
-  const onReaderScrollBeginDragWithChapterNav = useCallback(() => {
-    onReaderScrollBeginDrag();
-    onChapterNavArrowsScrollBeginDrag();
-  }, [onReaderScrollBeginDrag, onChapterNavArrowsScrollBeginDrag]);
-
-  const onReaderScroll = useMemo(
-    () =>
-      Animated.event(
-        [{ nativeEvent: { contentOffset: { y: readerScrollYAnim } } }],
-        {
-          useNativeDriver: true,
-          listener: onChapterNavArrowsScroll,
-        },
-      ),
-    [readerScrollYAnim, onChapterNavArrowsScroll],
-  );
 
   const goToPrevChapter = useCallback(() => {
     const target = chapterNav.prevChapter;
@@ -1734,43 +1708,6 @@ export default function ReaderChapterScreen() {
     resolvedTranslationId,
     requestedTranslationId,
   ]);
-
-  const chapterSwipePan = useMemo(() => {
-    const tid = readerPayload?.resolvedTranslationId;
-    if (!tid) return noopChapterSwipePan;
-    const { prevChapter, nextChapter } = chapterNav;
-    const releaseThresholdPx = Platform.OS === "android" ? 72 : 52;
-    const tryChapterSwipeNavigate = (g: PanResponderGestureState) => {
-      if (!chapterSwipeReleaseShouldNavigate(g, releaseThresholdPx)) return;
-      if (g.dx <= -releaseThresholdPx && nextChapter) {
-        primeReaderChapterFetch(tid, nextChapter);
-        goToReaderChapter(nextChapter.slug, nextChapter.chapter, tid);
-      } else if (g.dx >= releaseThresholdPx && prevChapter) {
-        primeReaderChapterFetch(tid, prevChapter);
-        goToReaderChapter(prevChapter.slug, prevChapter.chapter, tid);
-      }
-    };
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-        const active = chapterSwipeMoveShouldActivate(g);
-        if (active) hideChapterNavArrowsFromMotion();
-        return active;
-      },
-      onMoveShouldSetPanResponderCapture: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-        const active = chapterSwipeMoveShouldSetCapture() && chapterSwipeMoveShouldActivate(g);
-        if (active) hideChapterNavArrowsFromMotion();
-        return active;
-      },
-      onPanResponderTerminationRequest: () => true,
-      onPanResponderRelease: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-        tryChapterSwipeNavigate(g);
-      },
-      onPanResponderTerminate: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-        tryChapterSwipeNavigate(g);
-      },
-    });
-  }, [chapterNav, readerPayload?.resolvedTranslationId, goToReaderChapter, hideChapterNavArrowsFromMotion]);
 
   const readerTabletLandscapeTwoColumn =
     chapter != null &&
@@ -2113,6 +2050,75 @@ export default function ReaderChapterScreen() {
   onboardingStepRef.current = readerFeatureOnboarding.currentStep;
   completeOnboardingInteractionRef.current = readerFeatureOnboarding.completeInteractionStep;
 
+  const {
+    opacityAnim: chapterNavArrowsOpacityAnim,
+    scaleAnim: chapterNavArrowsScaleAnim,
+    pointerEventsEnabled: chapterNavArrowsPointerEventsEnabled,
+    onScrollBeginDrag: onChapterNavArrowsScrollBeginDrag,
+    onScrollEndDrag: onChapterNavArrowsScrollEndDrag,
+    onMomentumScrollEnd: onChapterNavArrowsMomentumScrollEnd,
+    onScroll: onChapterNavArrowsScroll,
+    hideFromMotion: hideChapterNavArrowsFromMotion,
+  } = useReaderChapterNavArrowsVisibility(
+    chapterNavRouteKey,
+    chapterNavArrowsEnabled,
+    readerFeatureOnboarding.forceChapterNavArrowsVisible,
+  );
+
+  const onReaderScrollBeginDragWithChapterNav = useCallback(() => {
+    onReaderScrollBeginDrag();
+    onChapterNavArrowsScrollBeginDrag();
+  }, [onReaderScrollBeginDrag, onChapterNavArrowsScrollBeginDrag]);
+
+  const onReaderScroll = useMemo(
+    () =>
+      Animated.event(
+        [{ nativeEvent: { contentOffset: { y: readerScrollYAnim } } }],
+        {
+          useNativeDriver: true,
+          listener: onChapterNavArrowsScroll,
+        },
+      ),
+    [readerScrollYAnim, onChapterNavArrowsScroll],
+  );
+
+  const chapterSwipePan = useMemo(() => {
+    const tid = readerPayload?.resolvedTranslationId;
+    if (!tid) return noopChapterSwipePan;
+    const { prevChapter, nextChapter } = chapterNav;
+    const releaseThresholdPx = Platform.OS === "android" ? 72 : 52;
+    const tryChapterSwipeNavigate = (g: PanResponderGestureState) => {
+      if (!chapterSwipeReleaseShouldNavigate(g, releaseThresholdPx)) return;
+      if (g.dx <= -releaseThresholdPx && nextChapter) {
+        primeReaderChapterFetch(tid, nextChapter);
+        goToReaderChapter(nextChapter.slug, nextChapter.chapter, tid);
+      } else if (g.dx >= releaseThresholdPx && prevChapter) {
+        primeReaderChapterFetch(tid, prevChapter);
+        goToReaderChapter(prevChapter.slug, prevChapter.chapter, tid);
+      }
+    };
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+        const active = chapterSwipeMoveShouldActivate(g);
+        if (active) hideChapterNavArrowsFromMotion();
+        return active;
+      },
+      onMoveShouldSetPanResponderCapture: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+        const active = chapterSwipeMoveShouldSetCapture() && chapterSwipeMoveShouldActivate(g);
+        if (active) hideChapterNavArrowsFromMotion();
+        return active;
+      },
+      onPanResponderTerminationRequest: () => true,
+      onPanResponderRelease: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+        tryChapterSwipeNavigate(g);
+      },
+      onPanResponderTerminate: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+        tryChapterSwipeNavigate(g);
+      },
+    });
+  }, [chapterNav, readerPayload?.resolvedTranslationId, goToReaderChapter, hideChapterNavArrowsFromMotion]);
+
   const readerSettingsOnboarding = useReaderSettingsOnboarding({
     toolsMenuOpen,
     rowRefs: settingsOnboardingRowRefs,
@@ -2153,12 +2159,6 @@ export default function ReaderChapterScreen() {
     chapter?.verses?.length,
     toggleVerseSelection,
   ]);
-
-  useEffect(() => {
-    if (readerFeatureOnboarding.forceChapterNavArrowsVisible) {
-      chapterNavArrowsOpacityAnim.setValue(1);
-    }
-  }, [readerFeatureOnboarding.forceChapterNavArrowsVisible, chapterNavArrowsOpacityAnim]);
 
   if (chapterMissing) {
     return (
@@ -2421,7 +2421,7 @@ export default function ReaderChapterScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: rc.sceneSurface }}>
+    <View style={{ flex: 1, backgroundColor: rc.sceneSurface, overflow: "visible" }}>
       <ReaderMobileSettingsPanel
         insets={insets}
         scrollPaddingTop={readerMobileSettingsScrollPaddingTop}
@@ -2486,22 +2486,6 @@ export default function ReaderChapterScreen() {
         hasVerseSelection={hasVerseSelection}
         actionBarMode={actionBarMode}
         actionBarBottomPx={actionBarBottomPx}
-      />
-
-      <ReaderChapterNavArrows
-        opacityAnim={chapterNavArrowsOpacityAnim}
-        pointerEventsEnabled={
-          chapterNavArrowsPointerEventsEnabled || readerFeatureOnboarding.forceChapterNavArrowsVisible
-        }
-        prevChapter={chapterNav.prevChapter}
-        nextChapter={chapterNav.nextChapter}
-        onPrev={goToPrevChapter}
-        onNext={goToNextChapter}
-        colors={colors}
-        rc={rc}
-        insets={insets}
-        prevArrowRef={chapterNavPrevArrowRef}
-        nextArrowRef={chapterNavNextArrowRef}
       />
 
       {copyToastVisible ? (
@@ -2767,6 +2751,22 @@ export default function ReaderChapterScreen() {
       ) : null}
 
       </Animated.View>
+
+      <ReaderChapterNavArrows
+        opacityAnim={chapterNavArrowsOpacityAnim}
+        scaleAnim={chapterNavArrowsScaleAnim}
+        pointerEventsEnabled={
+          chapterNavArrowsPointerEventsEnabled || readerFeatureOnboarding.forceChapterNavArrowsVisible
+        }
+        prevChapter={chapterNav.prevChapter}
+        nextChapter={chapterNav.nextChapter}
+        onPrev={goToPrevChapter}
+        onNext={goToNextChapter}
+        colors={colors}
+        rc={rc}
+        prevArrowRef={chapterNavPrevArrowRef}
+        nextArrowRef={chapterNavNextArrowRef}
+      />
 
       {Platform.OS === "android" && !readerHeaderToolsHidden ? (
         <View
