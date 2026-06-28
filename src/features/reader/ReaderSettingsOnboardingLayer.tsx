@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, View, type LayoutRectangle } from "react-native";
 import { FeatureOnboardingModal } from "@/src/components/feature-onboarding/FeatureOnboardingModal";
+import { OnboardingTargetDebugOverlay } from "@/src/components/feature-onboarding/OnboardingTargetDebugOverlay";
 import { SettingsOnboardingOverlay } from "@/src/features/reader/SettingsOnboardingOverlay";
+import { READER_ONBOARDING_DEBUG_TARGETS } from "@/src/features/reader/readerOnboardingDebug";
 import type { ReaderSettingsOnboardingStep } from "@/src/features/reader/readerSettingsOnboardingSteps";
 
 const FADE_IN_MS = 280;
@@ -111,6 +113,10 @@ export function ReaderSettingsOnboardingLayer({
       {mounted && displayStep && displayAnchor ? (
         <Animated.View style={[styles.layer, { opacity: opacityAnim }]} pointerEvents="none">
           <SettingsOnboardingOverlay step={displayStep} rowAnchor={displayAnchor} colors={colors} />
+          <OnboardingTargetDebugOverlay
+            targets={[displayAnchor]}
+            enabled={READER_ONBOARDING_DEBUG_TARGETS}
+          />
         </Animated.View>
       ) : null}
     </FeatureOnboardingModal>

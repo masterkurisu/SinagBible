@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { InteractionManager, Platform, type LayoutRectangle, type View } from "react-native";
+import { Platform, type LayoutRectangle, type View } from "react-native";
 import type { EdgeInsets } from "react-native-safe-area-context";
 import {
   isFeatureOnboardingDone,
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import { adjustAnchorForOnboardingModal } from "@/src/components/feature-onboarding/onboardingOverlayCoords";
+import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import {
   READER_SETTINGS_ONBOARDING_STEP_MS,
   READER_SETTINGS_ONBOARDING_STEPS,
   type ReaderSettingsOnboardingStepId,
 } from "@/src/features/reader/readerSettingsOnboardingSteps";
+import {
+  fallbackSettingsRowAnchor,
+  visibleSettingsRowAnchor,
+} from "@/src/features/reader/readerSettingsOnboardingAnchor";
 
 const MENU_OPEN_SETTLE_MS = 320;
 const SETTINGS_ROW_HEIGHT_PX = 52;
@@ -23,49 +29,39 @@ type UseReaderSettingsOnboardingArgs = {
   screenW: number;
   screenH: number;
   insets: EdgeInsets;
+  settingsLayoutEpoch: number;
+  settingsRevealedStripWidthPx: number;
 };
 
-function measureViewInWindow(ref: RefObject<View | null>): Promise<LayoutRectangle | null> {
-  return new Promise((resolve) => {
-    const node = ref.current;
-    if (!node) {
-      resolve(null);
-      return;
-    }
-    node.measureInWindow((x, y, width, height) => {
-      if (width <= 0 || height <= 0) {
-        resolve(null);
-        return;
-      }
-      resolve({ x, y, width, height });
-    });
-  });
-}
-
-function fallbackSettingsRowTarget(
+function resolveSettingsRowAnchor(
   stepId: ReaderSettingsOnboardingStepId,
+  measured: LayoutRectangle | null,
   screenW: number,
   screenH: number,
   scrollPaddingTop: number,
   insets: EdgeInsets,
+  settingsRevealedStripWidthPx: number,
 ): LayoutRectangle {
-  const visibleStripW = screenW * 0.42;
-  const x = screenW - visibleStripW - Math.max(insets.right, 10);
+  const deleteMyDataBottomPx =
+    nativeTabSheetBottomInsetPx(insets.bottom, 10) + (Platform.OS === "ios" ? 30 : 70);
+  const stepIndex = READER_SETTINGS_ONBOARDING_STEPS.findIndex((step) => step.id === stepId);
 
-  if (stepId === "delete-my-data") {
-    const bottomPx =
-      nativeTabSheetBottomInsetPx(insets.bottom, 10) + (Platform.OS === "ios" ? 30 : 70);
-    return {
-      x,
-      y: screenH - bottomPx - SETTINGS_ROW_HEIGHT_PX,
-      width: visibleStripW,
-      height: SETTINGS_ROW_HEIGHT_PX,
-    };
+  if (measured) {
+    return visibleSettingsRowAnchor(measured, screenW, insets, settingsRevealedStripWidthPx);
   }
 
-  const index = READER_SETTINGS_ONBOARDING_STEPS.findIndex((step) => step.id === stepId);
-  const y = scrollPaddingTop + Math.max(0, index) * (SETTINGS_ROW_HEIGHT_PX + SETTINGS_ROW_GAP_PX);
-  return { x, y, width: visibleStripW, height: SETTINGS_ROW_HEIGHT_PX };
+  return fallbackSettingsRowAnchor(
+    stepIndex,
+    screenW,
+    screenH,
+    scrollPaddingTop,
+    insets,
+    settingsRevealedStripWidthPx,
+    SETTINGS_ROW_HEIGHT_PX,
+    SETTINGS_ROW_GAP_PX,
+    deleteMyDataBottomPx,
+    stepId === "delete-my-data",
+  );
 }
 
 export function useReaderSettingsOnboarding({
@@ -75,6 +71,8 @@ export function useReaderSettingsOnboarding({
   screenW,
   screenH,
   insets,
+  settingsLayoutEpoch,
+  settingsRevealedStripWidthPx,
 }: UseReaderSettingsOnboardingArgs) {
   const [active, setActive] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
@@ -99,20 +97,31 @@ export function useReaderSettingsOnboarding({
     async (index: number) => {
       const step = READER_SETTINGS_ONBOARDING_STEPS[index];
       if (!step) return;
-      const measured = await measureViewInWindow(rowRefs[step.id]);
-      const anchor =
-        measured ??
-        fallbackSettingsRowTarget(step.id, screenW, screenH, scrollPaddingTop, insets);
+      const measured = await measureOnboardingTarget(rowRefs[step.id], {
+        minWidth: 40,
+        minHeight: 20,
+      });
+      const anchor = adjustAnchorForOnboardingModal(
+        resolveSettingsRowAnchor(
+          step.id,
+          measured,
+          screenW,
+          screenH,
+          scrollPaddingTop,
+          insets,
+          settingsRevealedStripWidthPx,
+        ),
+      );
       setRowAnchor(anchor);
       setPresentedStepIndex(index);
     },
-    [insets, rowRefs, screenH, screenW, scrollPaddingTop],
+    [insets, rowRefs, screenH, screenW, scrollPaddingTop, settingsRevealedStripWidthPx],
   );
 
   useEffect(() => {
     if (!active || !toolsMenuOpen) return;
     void measureCurrentStep(stepIndex);
-  }, [active, measureCurrentStep, stepIndex, toolsMenuOpen]);
+  }, [active, measureCurrentStep, settingsLayoutEpoch, stepIndex, toolsMenuOpen]);
 
   useEffect(() => {
     if (!toolsMenuOpen) {
@@ -128,11 +137,6 @@ export function useReaderSettingsOnboarding({
 
     const startTimeout = setTimeout(() => {
       void (async () => {
-        await new Promise<void>((resolve) => {
-          InteractionManager.runAfterInteractions(() => resolve());
-        });
-        if (cancelled) return;
-
         const done = await isFeatureOnboardingDone("readerSettings");
         if (cancelled || done) return;
 

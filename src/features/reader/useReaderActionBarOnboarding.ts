@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { InteractionManager, type LayoutRectangle, type View } from "react-native";
+import { type LayoutRectangle, type View } from "react-native";
 import {
   isFeatureOnboardingDone,
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
+import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
+import { adjustAnchorForOnboardingModal } from "@/src/components/feature-onboarding/onboardingOverlayCoords";
 import {
   READER_ACTION_BAR_BUTTON_GAP_PX,
   READER_ACTION_BAR_BUTTON_INDEX,
@@ -25,23 +27,6 @@ type UseReaderActionBarOnboardingArgs = {
   screenW: number;
   actionBarBottomPx: number;
 };
-
-function measureViewInWindow(ref: RefObject<View | null>): Promise<LayoutRectangle | null> {
-  return new Promise((resolve) => {
-    const node = ref.current;
-    if (!node) {
-      resolve(null);
-      return;
-    }
-    node.measureInWindow((x, y, width, height) => {
-      if (width <= 0 || height <= 0) {
-        resolve(null);
-        return;
-      }
-      resolve({ x, y, width, height });
-    });
-  });
-}
 
 function fallbackActionBarButtonTarget(
   stepId: ReaderActionBarOnboardingStepId,
@@ -105,9 +90,13 @@ export function useReaderActionBarOnboarding({
     async (index: number) => {
       const step = READER_ACTION_BAR_ONBOARDING_STEPS[index];
       if (!step) return;
-      const measured = await measureViewInWindow(buttonRefs[step.id]);
-      const anchor =
-        measured ?? fallbackActionBarButtonTarget(step.id, screenW, actionBarBottomPx);
+      const measured = await measureOnboardingTarget(buttonRefs[step.id], {
+        minWidth: 20,
+        minHeight: 20,
+      });
+      const anchor = adjustAnchorForOnboardingModal(
+        measured ?? fallbackActionBarButtonTarget(step.id, screenW, actionBarBottomPx),
+      );
       setButtonAnchor(anchor);
       setPresentedStepIndex(index);
     },
@@ -141,11 +130,6 @@ export function useReaderActionBarOnboarding({
 
     const startTimeout = setTimeout(() => {
       void (async () => {
-        await new Promise<void>((resolve) => {
-          InteractionManager.runAfterInteractions(() => resolve());
-        });
-        if (cancelled) return;
-
         const readerDone = await isFeatureOnboardingDone("reader");
         if (cancelled || !readerDone) return;
 

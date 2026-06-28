@@ -5,16 +5,16 @@ import {
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
   type LayoutRectangle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { CoachmarkArrowIcon } from "@/src/components/feature-onboarding/CoachmarkArrowIcon";
 import { onboardingTooltipStyles } from "@/src/components/feature-onboarding/onboarding-tooltip-styles";
 import type { ReaderSettingsOnboardingStep } from "@/src/features/reader/readerSettingsOnboardingSteps";
 
 const ARROW_SIZE_PX = 30;
 const ARROW_GAP_PX = 12;
 const ARROW_NUDGE_PX = 10;
+const TOOLTIP_EST_HEIGHT_PX = 120;
 
 type SettingsOnboardingOverlayProps = {
   step: ReaderSettingsOnboardingStep;
@@ -31,7 +31,6 @@ export function SettingsOnboardingOverlay({
   rowAnchor,
   colors,
 }: SettingsOnboardingOverlayProps) {
-  const { width: screenW } = useWindowDimensions();
   const arrowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -64,8 +63,10 @@ export function SettingsOnboardingOverlay({
   const rowCenterY = rowAnchor.y + rowAnchor.height / 2;
   const arrowLeft = Math.max(16, rowAnchor.x - ARROW_SIZE_PX - ARROW_GAP_PX);
   const arrowTop = rowCenterY - ARROW_SIZE_PX / 2;
-  const tooltipMaxWidth = Math.max(160, arrowLeft - 32);
-  const tooltipTop = Math.max(20, rowCenterY - 72);
+
+  const tooltipMaxWidth = Math.min(320, Math.max(180, rowAnchor.x - ARROW_SIZE_PX - ARROW_GAP_PX - 32));
+  const tooltipLeft = Math.max(16, arrowLeft - tooltipMaxWidth - 10);
+  const tooltipTop = Math.max(20, rowCenterY - TOOLTIP_EST_HEIGHT_PX / 2);
 
   return (
     <View style={styles.root} pointerEvents="none">
@@ -79,7 +80,7 @@ export function SettingsOnboardingOverlay({
           },
         ]}
       >
-        <Ionicons name="arrow-forward" size={ARROW_SIZE_PX} color={colors.arrow} />
+        <CoachmarkArrowIcon name="arrow-forward" size={ARROW_SIZE_PX} color={colors.arrow} />
       </Animated.View>
 
       <View
@@ -87,8 +88,8 @@ export function SettingsOnboardingOverlay({
           styles.tooltipWrap,
           {
             top: tooltipTop,
-            left: 20,
-            maxWidth: Math.min(tooltipMaxWidth, screenW * 0.52),
+            left: tooltipLeft,
+            width: tooltipMaxWidth,
           },
         ]}
       >

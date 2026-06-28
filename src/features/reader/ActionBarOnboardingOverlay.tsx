@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
   type LayoutRectangle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { CoachmarkArrowIcon } from "@/src/components/feature-onboarding/CoachmarkArrowIcon";
 import { onboardingTooltipStyles } from "@/src/components/feature-onboarding/onboarding-tooltip-styles";
 
 const ARROW_SIZE_PX = 24;
@@ -123,7 +123,7 @@ export function ActionBarOnboardingOverlay({
           },
         ]}
       >
-        <Ionicons
+        <CoachmarkArrowIcon
           name={tooltipPlacement === "below" ? "arrow-up" : "arrow-down"}
           size={ARROW_SIZE_PX}
           color={colors.arrow}

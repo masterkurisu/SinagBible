@@ -497,8 +497,10 @@ export default function ReaderChapterScreen() {
   const selectionBannerAnchorRef = useRef<View | null>(null);
   const selectionBannerLiveRef = useRef<View | null>(null);
   const headerToolsGroupRef = useRef<View | null>(null);
-  const [headerToolsPillRect, setHeaderToolsPillRect] = useState<LayoutRectangle | null>(null);
+  const chapterNavPrevArrowRef = useRef<View | null>(null);
+  const chapterNavNextArrowRef = useRef<View | null>(null);
   const [headerToolsLayoutEpoch, setHeaderToolsLayoutEpoch] = useState(0);
+  const [settingsLayoutEpoch, setSettingsLayoutEpoch] = useState(0);
   const settingsOnboardingTranslationRef = useRef<View | null>(null);
   const settingsOnboardingStudyNotesRef = useRef<View | null>(null);
   const settingsOnboardingFontSettingsRef = useRef<View | null>(null);
@@ -2081,37 +2083,21 @@ export default function ReaderChapterScreen() {
     (Platform.OS === "android" ? 52 : 0) +
     (Platform.OS === "ios" && !isTabletReaderLayout ? 30 : 0);
 
-  const measureHeaderToolsPill = useCallback(() => {
-    headerToolsGroupRef.current?.measureInWindow((x, y, width, height) => {
-      if (width <= 0 || height <= 0) return;
-      const next = { x, y, width, height };
-      setHeaderToolsPillRect((prev) => {
-        if (
-          prev &&
-          Math.abs(prev.x - next.x) < 1 &&
-          Math.abs(prev.y - next.y) < 1 &&
-          Math.abs(prev.width - next.width) < 1 &&
-          Math.abs(prev.height - next.height) < 1
-        ) {
-          return prev;
-        }
-        return next;
-      });
-    });
+  const bumpHeaderToolsLayoutEpoch = useCallback(() => {
+    setHeaderToolsLayoutEpoch((epoch) => epoch + 1);
   }, []);
 
-  useEffect(() => {
-    if (!headerToolsPillRect) return;
-    setHeaderToolsLayoutEpoch((epoch) => epoch + 1);
-  }, [headerToolsPillRect]);
+  const bumpSettingsLayoutEpoch = useCallback(() => {
+    setSettingsLayoutEpoch((epoch) => epoch + 1);
+  }, []);
 
   const readerFeatureOnboarding = useReaderFeatureOnboarding({
     readerContentReady: readerPayload != null && !chapterMissing,
     readerOverlayOpen,
-    bookButtonRef: bookFanRef,
-    settingsButtonRef,
+    headerToolsGroupRef,
     selectionBannerRef: selectionBannerLiveRef,
-    headerToolsPillRect,
+    chapterNavPrevArrowRef,
+    chapterNavNextArrowRef,
     headerToolsLayoutEpoch,
     insets,
     screenW: windowWidth,
@@ -2134,6 +2120,8 @@ export default function ReaderChapterScreen() {
     screenW: windowWidth,
     screenH: windowHeight,
     insets,
+    settingsLayoutEpoch,
+    settingsRevealedStripWidthPx: readerMobileSettingsSlidePx,
   });
 
   const readerActionBarOnboarding = useReaderActionBarOnboarding({
@@ -2413,7 +2401,7 @@ export default function ReaderChapterScreen() {
     <View
       ref={headerToolsGroupRef}
       collapsable={false}
-      onLayout={measureHeaderToolsPill}
+      onLayout={bumpHeaderToolsLayoutEpoch}
       className="flex-row items-center rounded-full"
       style={{
         height: 44,
@@ -2445,6 +2433,7 @@ export default function ReaderChapterScreen() {
         onSelectCommentary={openMobileReaderCommentaryFromMenu}
         onSelectDeleteMyData={openDeleteMyDataConfirmFromMenu}
         settingsOnboardingRowRefs={settingsOnboardingRowRefs}
+        onSettingsPanelLayout={bumpSettingsLayoutEpoch}
       />
       <Animated.View
         {...(toolsMenuOpen ? readerSettingsMenuPanResponder.panHandlers : {})}
@@ -2511,6 +2500,8 @@ export default function ReaderChapterScreen() {
         colors={colors}
         rc={rc}
         insets={insets}
+        prevArrowRef={chapterNavPrevArrowRef}
+        nextArrowRef={chapterNavNextArrowRef}
       />
 
       {copyToastVisible ? (

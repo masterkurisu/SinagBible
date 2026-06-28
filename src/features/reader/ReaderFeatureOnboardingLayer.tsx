@@ -1,6 +1,8 @@
 import { CoachMarkOverlay } from "@/src/components/feature-onboarding/CoachMarkOverlay";
 import { FeatureOnboardingModal } from "@/src/components/feature-onboarding/FeatureOnboardingModal";
+import { OnboardingTargetDebugOverlay } from "@/src/components/feature-onboarding/OnboardingTargetDebugOverlay";
 import { SpotlightOverlay } from "@/src/components/feature-onboarding/SpotlightOverlay";
+import { READER_ONBOARDING_DEBUG_TARGETS } from "@/src/features/reader/readerOnboardingDebug";
 import type { ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import { StyleSheet, View } from "react-native";
 
@@ -56,20 +58,26 @@ export function ReaderFeatureOnboardingLayer({
     <>
       <FeatureOnboardingModal visible={spotlightVisible} animationType="none">
         {spotlightVisible && step && labelConfig ? (
-          <SpotlightOverlay
-            targets={spotlightTargets}
-            message={message}
-            subtitle={subtitle}
-            onDismiss={onDismiss}
-            colors={{
-              tooltipBackground: colors.tooltipBackground,
-              tooltipText: colors.tooltipText,
-            }}
-            labelPosition={labelConfig.labelPosition}
-            labelGap={labelConfig.labelGap}
-            labelAnchorTargetIndex={labelConfig.labelAnchorTargetIndex}
-            targetPadding={step === "book-selector" || step === "settings" ? 12 : 8}
-          />
+          <>
+            <SpotlightOverlay
+              targets={spotlightTargets}
+              message={message}
+              subtitle={subtitle}
+              onDismiss={onDismiss}
+              colors={{
+                tooltipBackground: colors.tooltipBackground,
+                tooltipText: colors.tooltipText,
+              }}
+              labelPosition={labelConfig.labelPosition}
+              labelGap={labelConfig.labelGap}
+              labelAnchorTargetIndex={labelConfig.labelAnchorTargetIndex}
+              targetPadding={step === "book-selector" || step === "settings" ? 12 : 8}
+            />
+            <OnboardingTargetDebugOverlay
+              targets={spotlightTargets}
+              enabled={READER_ONBOARDING_DEBUG_TARGETS}
+            />
+          </>
         ) : null}
       </FeatureOnboardingModal>
 

@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import {
-  InteractionManager,
-  type LayoutRectangle,
-  type View,
-} from "react-native";
+import { type LayoutRectangle, type View } from "react-native";
 import type { EdgeInsets } from "react-native-safe-area-context";
 import {
   isFeatureOnboardingDone,
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
+import {
+  measureOnboardingTarget,
+  measureOnboardingTargets,
+} from "@/src/components/feature-onboarding/measureOnboardingTarget";
+import {
+  adjustAnchorForOnboardingModal,
+  adjustAnchorsForOnboardingModal,
+} from "@/src/components/feature-onboarding/onboardingOverlayCoords";
 import type { SpotlightTarget } from "@/src/components/feature-onboarding/SpotlightOverlay";
 import {
   READER_CHAPTER_NAV_ARROW_CIRCLE_PX,
@@ -16,6 +20,7 @@ import {
 } from "@/src/features/reader/ReaderChapterNavArrows";
 import {
   estimateReaderHeaderToolsPillRect,
+  isPlausibleHeaderToolsPillRect,
   readerHeaderToolTargetsFromPill,
 } from "@/src/features/reader/readerHeaderToolTargets";
 
@@ -52,10 +57,10 @@ export const READER_ONBOARDING_SUBTITLES: Partial<Record<ReaderOnboardingStep, s
 type UseReaderFeatureOnboardingArgs = {
   readerContentReady: boolean;
   readerOverlayOpen: boolean;
-  bookButtonRef: RefObject<View | null>;
-  settingsButtonRef: RefObject<View | null>;
+  headerToolsGroupRef: RefObject<View | null>;
   selectionBannerRef: RefObject<View | null>;
-  headerToolsPillRect: LayoutRectangle | null;
+  chapterNavPrevArrowRef: RefObject<View | null>;
+  chapterNavNextArrowRef: RefObject<View | null>;
   headerToolsLayoutEpoch: number;
   insets: EdgeInsets;
   screenW: number;
@@ -68,24 +73,18 @@ type UseReaderFeatureOnboardingArgs = {
   onTourComplete?: () => void;
 };
 
-function measureViewInWindow(ref: RefObject<View | null>): Promise<LayoutRectangle | null> {
-  return new Promise((resolve) => {
-    const node = ref.current;
-    if (!node) {
-      resolve(null);
-      return;
-    }
-    node.measureInWindow((x, y, width, height) => {
-      if (width <= 0 || height <= 0) {
-        resolve(null);
-        return;
-      }
-      resolve({ x, y, width, height });
-    });
-  });
+function circleSpotlightTarget(rect: LayoutRectangle): SpotlightTarget {
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+    borderRadius: Math.max(rect.width, rect.height) / 2,
+    shape: "circle",
+  };
 }
 
-function chapterNavArrowTargets(
+function chapterNavArrowFallbackTargets(
   insets: EdgeInsets,
   screenW: number,
   screenH: number,
@@ -119,41 +118,29 @@ function selectionBannerFallbackAnchor(
   };
 }
 
-function resolveHeaderToolTarget(
-  which: "book" | "settings",
-  measuredButton: LayoutRectangle | null,
-  headerToolsPillRect: LayoutRectangle | null,
+async function measureHeaderToolsPillRect(
+  headerToolsGroupRef: RefObject<View | null>,
   insets: EdgeInsets,
   screenW: number,
   androidTopToolsTopPx: number,
-): SpotlightTarget {
-  const pill =
-    headerToolsPillRect ??
-    estimateReaderHeaderToolsPillRect(insets, screenW, androidTopToolsTopPx);
-  const fromPill = readerHeaderToolTargetsFromPill(pill)[which];
-
-  if (measuredButton && measuredButton.width > 0 && measuredButton.height > 0) {
-    const pillCy = fromPill.y + fromPill.height / 2;
-    return {
-      x: measuredButton.x,
-      y: Math.abs(measuredButton.y - pillCy) < 80 ? measuredButton.y : fromPill.y,
-      width: measuredButton.width,
-      height: measuredButton.height,
-      borderRadius: Math.max(measuredButton.width, measuredButton.height) / 2,
-      shape: "circle",
-    };
+): Promise<LayoutRectangle> {
+  const measured = await measureOnboardingTarget(headerToolsGroupRef, {
+    minWidth: 80,
+    minHeight: 36,
+  });
+  if (isPlausibleHeaderToolsPillRect(measured, insets, screenW)) {
+    return measured;
   }
-
-  return fromPill;
+  return estimateReaderHeaderToolsPillRect(insets, screenW, androidTopToolsTopPx);
 }
 
 export function useReaderFeatureOnboarding({
   readerContentReady,
   readerOverlayOpen,
-  bookButtonRef,
-  settingsButtonRef,
+  headerToolsGroupRef,
   selectionBannerRef,
-  headerToolsPillRect,
+  chapterNavPrevArrowRef,
+  chapterNavNextArrowRef,
   headerToolsLayoutEpoch,
   insets,
   screenW,
@@ -201,64 +188,61 @@ export function useReaderFeatureOnboarding({
       return;
     }
 
-    await new Promise<void>((resolve) => {
-      InteractionManager.runAfterInteractions(() => resolve());
-    });
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => resolve());
-    });
-
     if (currentStep === "book-selector") {
-      const measured = await measureViewInWindow(bookButtonRef);
-      setSpotlightTargets([
-        resolveHeaderToolTarget(
-          "book",
-          measured,
-          headerToolsPillRect,
-          insets,
-          screenW,
-          androidTopToolsTopPx,
-        ),
-      ]);
+      const pillRect = await measureHeaderToolsPillRect(
+        headerToolsGroupRef,
+        insets,
+        screenW,
+        androidTopToolsTopPx,
+      );
+      setSpotlightTargets([readerHeaderToolTargetsFromPill(pillRect).book]);
       setCoachMarkAnchor(null);
       setTargetsReady(true);
       return;
     }
 
     if (currentStep === "settings") {
-      const measured = await measureViewInWindow(settingsButtonRef);
-      setSpotlightTargets([
-        resolveHeaderToolTarget(
-          "settings",
-          measured,
-          headerToolsPillRect,
-          insets,
-          screenW,
-          androidTopToolsTopPx,
-        ),
-      ]);
+      const pillRect = await measureHeaderToolsPillRect(
+        headerToolsGroupRef,
+        insets,
+        screenW,
+        androidTopToolsTopPx,
+      );
+      setSpotlightTargets([readerHeaderToolTargetsFromPill(pillRect).settings]);
       setCoachMarkAnchor(null);
       setTargetsReady(true);
       return;
     }
 
     if (currentStep === "page-turns") {
-      const targets = chapterNavArrowTargets(
-        insets,
-        screenW,
-        screenH,
-        hasPrevChapter,
-        hasNextChapter,
+      const [measuredPrev, measuredNext] = await measureOnboardingTargets(
+        [
+          hasPrevChapter ? chapterNavPrevArrowRef : null,
+          hasNextChapter ? chapterNavNextArrowRef : null,
+        ],
+        { minWidth: 20, minHeight: 20 },
       );
+
+      const measuredTargets: LayoutRectangle[] = [];
+      if (hasPrevChapter && measuredPrev) measuredTargets.push(measuredPrev);
+      if (hasNextChapter && measuredNext) measuredTargets.push(measuredNext);
+
+      const targets =
+        measuredTargets.length > 0
+          ? measuredTargets
+          : chapterNavArrowFallbackTargets(
+              insets,
+              screenW,
+              screenH,
+              hasPrevChapter,
+              hasNextChapter,
+            );
+
       setSpotlightTargets(
-        targets.map((t) => ({
-          ...t,
-          borderRadius: READER_CHAPTER_NAV_ARROW_CIRCLE_PX / 2,
-          shape: "circle" as const,
-        })),
+        adjustAnchorsForOnboardingModal(targets).map(circleSpotlightTarget),
       );
       setCoachMarkAnchor(null);
-      setTargetsReady(true);
+      setTargetsReady(targets.length > 0);
       return;
     }
 
@@ -270,8 +254,10 @@ export function useReaderFeatureOnboarding({
     }
 
     if (currentStep === "clear-selection") {
-      const measured = await measureViewInWindow(selectionBannerRef);
-      const anchor = measured ?? selectionBannerFallbackAnchor(screenW, selectionBannerTopPx);
+      const measured = await measureOnboardingTarget(selectionBannerRef, { minWidth: 20, minHeight: 20 });
+      const anchor = adjustAnchorForOnboardingModal(
+        measured ?? selectionBannerFallbackAnchor(screenW, selectionBannerTopPx),
+      );
       setSpotlightTargets([
         {
           ...anchor,
@@ -286,18 +272,18 @@ export function useReaderFeatureOnboarding({
   }, [
     active,
     androidTopToolsTopPx,
-    bookButtonRef,
+    headerToolsGroupRef,
+    chapterNavNextArrowRef,
+    chapterNavPrevArrowRef,
     currentStep,
     hasNextChapter,
     hasPrevChapter,
-    headerToolsPillRect,
     insets,
     screenH,
     screenW,
     selectionBannerRef,
     selectionBannerTopPx,
     selectedVerseCount,
-    settingsButtonRef,
   ]);
 
   useEffect(() => {
@@ -306,8 +292,8 @@ export function useReaderFeatureOnboarding({
   }, [
     active,
     currentStep,
+    forceChapterNavArrowsVisible,
     headerToolsLayoutEpoch,
-    headerToolsPillRect,
     measureStepTargets,
     readerOverlayOpen,
     screenW,

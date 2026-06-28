@@ -211,6 +211,7 @@ export type ReaderMobileSettingsPanelProps = {
   settingsOnboardingRowRefs?: Partial<
     Record<ReaderSettingsOnboardingStepId, RefObject<View | null>>
   >;
+  onSettingsPanelLayout?: () => void;
 };
 
 const SETTINGS_MENU_ICON_COLOR = "#ffffff";
@@ -250,6 +251,7 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
     onSelectCommentary,
     onSelectDeleteMyData,
     settingsOnboardingRowRefs,
+    onSettingsPanelLayout,
   } = props;
   const deleteMyDataBottomPx =
     nativeTabSheetBottomInsetPx(insets.bottom, 10) + (Platform.OS === "ios" ? 30 : 70);
@@ -299,6 +301,7 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
   return (
     <View
       style={[StyleSheet.absoluteFillObject, { backgroundColor: READER_MOBILE_SETTINGS_PANEL_BG, zIndex: 0 }]}
+      onLayout={onSettingsPanelLayout}
     >
       <ScrollView
         keyboardShouldPersistTaps="handled"

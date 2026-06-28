@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 import {
   Animated,
   Easing,
@@ -38,6 +38,8 @@ type ReaderChapterNavArrowsProps = {
   colors: { brown800: string };
   rc: { sceneSurface: string; popoverShadow: string };
   insets: EdgeInsets;
+  prevArrowRef?: RefObject<View | null>;
+  nextArrowRef?: RefObject<View | null>;
 };
 
 function chapterNavArrowCircleBackground(rc: { sceneSurface: string }) {
@@ -56,6 +58,8 @@ export function ReaderChapterNavArrows({
   colors,
   rc,
   insets,
+  prevArrowRef,
+  nextArrowRef,
 }: ReaderChapterNavArrowsProps) {
   const circleBg = chapterNavArrowCircleBackground(rc);
   const hitSlop = READER_CHAPTER_NAV_ARROW_HIT_SLOP_PX;
@@ -66,39 +70,42 @@ export function ReaderChapterNavArrows({
     direction: "prev" | "next",
     onPress: () => void,
     accessibilityLabel: string,
+    arrowRef?: RefObject<View | null>,
   ) => (
-    <Pressable
-      onPress={() => {
-        hapticLightImpact();
-        onPress();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      hitSlop={{ top: hitSlop, bottom: hitSlop, left: hitSlop, right: hitSlop }}
-      style={({ pressed }) => [
-        styles.circle,
-        {
-          backgroundColor: circleBg,
-          opacity: pressed ? 0.82 : 1,
-          ...Platform.select({
-            ios: {
-              shadowColor: rc.popoverShadow,
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.14,
-              shadowRadius: 6,
-            },
-            android: { elevation: 3 },
-            default: {},
-          }),
-        },
-      ]}
-    >
-      <Ionicons
-        name={direction === "prev" ? "chevron-back" : "chevron-forward"}
-        size={READER_CHAPTER_NAV_ARROW_ICON_PX}
-        color={colors.brown800}
-      />
-    </Pressable>
+    <View ref={arrowRef} collapsable={false} style={styles.circle}>
+      <Pressable
+        onPress={() => {
+          hapticLightImpact();
+          onPress();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        hitSlop={{ top: hitSlop, bottom: hitSlop, left: hitSlop, right: hitSlop }}
+        style={({ pressed }) => [
+          styles.circlePressable,
+          {
+            backgroundColor: circleBg,
+            opacity: pressed ? 0.82 : 1,
+            ...Platform.select({
+              ios: {
+                shadowColor: rc.popoverShadow,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.14,
+                shadowRadius: 6,
+              },
+              android: { elevation: 3 },
+              default: {},
+            }),
+          },
+        ]}
+      >
+        <Ionicons
+          name={direction === "prev" ? "chevron-back" : "chevron-forward"}
+          size={READER_CHAPTER_NAV_ARROW_ICON_PX}
+          color={colors.brown800}
+        />
+      </Pressable>
+    </View>
   );
 
   return (
@@ -108,12 +115,12 @@ export function ReaderChapterNavArrows({
     >
       {prevChapter ? (
         <View pointerEvents="box-none" style={[styles.sideSlot, { left: leftInset }]}>
-          {renderArrow("prev", onPrev, "Previous chapter")}
+          {renderArrow("prev", onPrev, "Previous chapter", prevArrowRef)}
         </View>
       ) : null}
       {nextChapter ? (
         <View pointerEvents="box-none" style={[styles.sideSlot, { right: rightInset }]}>
-          {renderArrow("next", onNext, "Next chapter")}
+          {renderArrow("next", onNext, "Next chapter", nextArrowRef)}
         </View>
       ) : null}
     </Animated.View>
@@ -131,6 +138,11 @@ const styles = StyleSheet.create({
     marginTop: -READER_CHAPTER_NAV_ARROW_CIRCLE_PX / 2,
   },
   circle: {
+    width: READER_CHAPTER_NAV_ARROW_CIRCLE_PX,
+    height: READER_CHAPTER_NAV_ARROW_CIRCLE_PX,
+    borderRadius: READER_CHAPTER_NAV_ARROW_CIRCLE_PX / 2,
+  },
+  circlePressable: {
     width: READER_CHAPTER_NAV_ARROW_CIRCLE_PX,
     height: READER_CHAPTER_NAV_ARROW_CIRCLE_PX,
     borderRadius: READER_CHAPTER_NAV_ARROW_CIRCLE_PX / 2,
