@@ -5,7 +5,7 @@ import { Stack, useRouter, type Href } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
-import { appFontMap } from "@/lib/app-font-map";
+import { STARTUP_FONT_MAP } from "@/lib/app-font-map";
 import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useState } from "react";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
@@ -52,7 +52,7 @@ function ThemedStack() {
 
 function RootLayoutContent() {
   const router = useRouter();
-  const [fontsLoaded] = useFonts(appFontMap);
+  const [fontsLoaded] = useFonts(STARTUP_FONT_MAP);
   const [onboardingStorageReady, setOnboardingStorageReady] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(false);
   const [pendingHomeAfterOnboarding, setPendingHomeAfterOnboarding] = useState(false);

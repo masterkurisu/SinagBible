@@ -1,3 +1,5 @@
+import type { LazyLoadableFontKey } from "@/lib/app-font-map";
+
 export const READER_VERSE_BODY_FONT_IDS = [
   "lora",
   "merriweather",
@@ -34,7 +36,7 @@ const LABELS: Record<ReaderVerseBodyFontId, string> = {
   inter: "Inter",
 };
 
-/** `fontFamily` strings must match keys passed to `useFonts` in `app-font-map.ts`. */
+/** `fontFamily` strings must match keys in `STARTUP_FONT_MAP` / lazy font loaders. */
 const FAMILY: Record<ReaderVerseBodyFontId, string> = {
   lora: "Lora_400Regular",
   merriweather: "Merriweather_400Regular",
@@ -50,6 +52,19 @@ const FAMILY: Record<ReaderVerseBodyFontId, string> = {
   inter: "Inter_400Regular",
 };
 
+const LAZY_FONT_ID_TO_KEY: Partial<Record<ReaderVerseBodyFontId, LazyLoadableFontKey>> = {
+  merriweather: "Merriweather_400Regular",
+  ebGaramond: "EBGaramond_400Regular",
+  crimsonPro: "CrimsonPro_400Regular",
+  gentiumPlus: "GentiumPlus_400Regular",
+  charisSil: "CharisSIL_400Regular",
+  notoSans: "NotoSans_400Regular",
+  sourceSans3: "SourceSans3_400Regular",
+  lato: "Lato_400Regular",
+  atkinsonHyperlegible: "AtkinsonHyperlegible_400Regular",
+  openDyslexic: "ReaderOpenDyslexic",
+};
+
 export const READER_VERSE_BODY_FONT_OPTIONS: readonly {
   id: ReaderVerseBodyFontId;
   label: string;
@@ -61,4 +76,8 @@ export function isReaderVerseBodyFontId(raw: string): raw is ReaderVerseBodyFont
 
 export function readerVerseBodyFontFamily(id: ReaderVerseBodyFontId): string {
   return FAMILY[id];
+}
+
+export function readerVerseBodyFontLazyKey(id: ReaderVerseBodyFontId): LazyLoadableFontKey | null {
+  return LAZY_FONT_ID_TO_KEY[id] ?? null;
 }

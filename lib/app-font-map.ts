@@ -20,16 +20,20 @@ import { Merriweather_400Regular } from "@expo-google-fonts/merriweather";
 import { NotoSans_400Regular } from "@expo-google-fonts/noto-sans";
 import { SourceSans3_400Regular } from "@expo-google-fonts/source-sans-3";
 
-/** Fonts loaded at app root (`useFonts`) for reader verse body + existing UI. */
-export const appFontMap = {
-  Lora_400Regular,
-  Lora_400Regular_Italic,
-  Lora_700Bold,
-  Lora_700Bold_Italic,
+/** Fonts loaded before splash clears — UI (Inter) + default reader body (Lora). */
+export const STARTUP_FONT_MAP = {
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
+  Lora_400Regular,
+  Lora_400Regular_Italic,
+  Lora_700Bold,
+  Lora_700Bold_Italic,
+} as const;
+
+/** Reader verse body fonts — loaded on demand from the font picker. */
+export const LAZY_FONT_MAP = {
   Merriweather_400Regular,
   EBGaramond_400Regular,
   CrimsonPro_400Regular,
@@ -39,5 +43,15 @@ export const appFontMap = {
   SourceSans3_400Regular,
   Lato_400Regular,
   AtkinsonHyperlegible_400Regular,
+} as const;
+
+export type LazyFontKey = keyof typeof LAZY_FONT_MAP;
+
+/** Local asset — not from @expo-google-fonts; lazy-loaded separately. */
+export const OPEN_DYSLEXIC_FONT = {
   ReaderOpenDyslexic: require("../assets/fonts/OpenDyslexic-Regular.otf"),
-};
+} as const;
+
+export type OpenDyslexicFontKey = keyof typeof OPEN_DYSLEXIC_FONT;
+
+export type LazyLoadableFontKey = LazyFontKey | OpenDyslexicFontKey;

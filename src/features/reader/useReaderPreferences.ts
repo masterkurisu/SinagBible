@@ -6,8 +6,10 @@ import {
   isReaderVerseBodyFontId,
   READER_VERSE_BODY_FONT_STORAGE_KEY,
   readerVerseBodyFontFamily,
+  readerVerseBodyFontLazyKey,
   type ReaderVerseBodyFontId,
 } from "@/lib/reader-verse-body-font";
+import { ensureLazyFontLoaded, useLazyFont } from "@/lib/use-lazy-font";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import type { MobileAppThemeId } from "@sinag-bible/tokens";
 import { hapticLightImpact } from "@/lib/haptics";
@@ -50,6 +52,7 @@ export type ReaderPreferences = {
 
 export function useReaderPreferences() {
   const { bundle, themeId, setThemeId } = useMobileAppTheme();
+  useLazyFont();
 
   const [fontScale, setFontScaleState] = useState(1);
   const fontScaleUserTouchedRef = useRef(false);
@@ -126,6 +129,13 @@ export function useReaderPreferences() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const lazyKey = readerVerseBodyFontLazyKey(fontFamilyId);
+    if (lazyKey) {
+      void ensureLazyFontLoaded(lazyKey);
+    }
+  }, [fontFamilyId]);
 
   const setFontScale = useCallback((v: number) => {
     fontScaleUserTouchedRef.current = true;

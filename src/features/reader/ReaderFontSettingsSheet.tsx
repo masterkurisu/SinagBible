@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Easing,
@@ -27,8 +28,10 @@ import { hapticLightImpact } from "@/lib/haptics";
 import {
   READER_VERSE_BODY_FONT_OPTIONS,
   readerVerseBodyFontFamily,
+  readerVerseBodyFontLazyKey,
   type ReaderVerseBodyFontId,
 } from "@/lib/reader-verse-body-font";
+import { useLazyFont } from "@/lib/use-lazy-font";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
 
 type ReaderVerseTextAlign = "left" | "right" | "center" | "justify";
@@ -102,6 +105,8 @@ export function ReaderFontSettingsSheet({
   const { width: screenW } = useWindowDimensions();
 
   const [readerFontPickerOpen, setReaderFontPickerOpen] = useState(false);
+  const [loadingFontId, setLoadingFontId] = useState<ReaderVerseBodyFontId | null>(null);
+  const { ensureFontLoaded, isFontLoaded } = useLazyFont();
   const popupSlideAnim = useRef(new Animated.Value(0)).current;
   const popupOpacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -113,6 +118,24 @@ export function ReaderFontSettingsSheet({
   const fontSettingsPopupPadBottom = 12 * fontSettingsScale;
   const fontSettingsSectionLabelSize = 10 * fontSettingsScale;
   const fontSettingsAlignIconSize = 22 * fontSettingsScale;
+
+  const handleFontSelect = useCallback(
+    async (fontId: ReaderVerseBodyFontId) => {
+      hapticLightImpact();
+      const lazyKey = readerVerseBodyFontLazyKey(fontId);
+      if (lazyKey && !isFontLoaded(lazyKey)) {
+        setLoadingFontId(fontId);
+        try {
+          await ensureFontLoaded(lazyKey);
+        } finally {
+          setLoadingFontId((current) => (current === fontId ? null : current));
+        }
+      }
+      setReaderVerseBodyFontIdPersisted(fontId);
+      setReaderFontPickerOpen(false);
+    },
+    [ensureFontLoaded, isFontLoaded, setReaderVerseBodyFontIdPersisted],
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -277,18 +300,22 @@ export function ReaderFontSettingsSheet({
                   >
                     {READER_VERSE_BODY_FONT_OPTIONS.map((opt) => {
                       const selected = opt.id === readerVerseBodyFontId;
+                      const lazyKey = readerVerseBodyFontLazyKey(opt.id);
+                      const fontReady = lazyKey == null || isFontLoaded(lazyKey);
+                      const isLoading = loadingFontId === opt.id;
                       return (
                         <TouchableOpacity
                           key={opt.id}
-                          onPress={() => {
-                            hapticLightImpact();
-                            setReaderVerseBodyFontIdPersisted(opt.id);
-                            setReaderFontPickerOpen(false);
-                          }}
+                          onPress={() => void handleFontSelect(opt.id)}
+                          disabled={isLoading}
                           activeOpacity={0.75}
                           accessibilityRole="button"
-                          accessibilityState={{ selected }}
+                          accessibilityState={{ selected, busy: isLoading }}
                           style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8 * fontSettingsScale,
                             paddingVertical: 11 * fontSettingsScale,
                             paddingHorizontal: 12 * fontSettingsScale,
                             backgroundColor: selected ? rc.popoverRow : "transparent",
@@ -296,13 +323,17 @@ export function ReaderFontSettingsSheet({
                         >
                           <Text
                             style={{
-                              fontFamily: readerVerseBodyFontFamily(opt.id),
+                              flex: 1,
+                              fontFamily: fontReady ? readerVerseBodyFontFamily(opt.id) : undefined,
                               fontSize: 16 * fontSettingsScale,
                               color: colors.brown800,
                             }}
                           >
                             {opt.label}
                           </Text>
+                          {!fontReady ? (
+                            <ActivityIndicator size="small" color={colors.tan300} />
+                          ) : null}
                         </TouchableOpacity>
                       );
                     })}
