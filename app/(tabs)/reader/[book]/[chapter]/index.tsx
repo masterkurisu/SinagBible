@@ -54,7 +54,7 @@ import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
 import { nativeTabFabOffsetPx, nativeTabSheetBottomInsetPx, readerAndroidListBottomPaddingPx, readerAndroidTabBarClearancePx } from "@/lib/native-tab-chrome";
-import { useReaderTabBarHideProgress, useRegisterReaderSettingsSlideProgress } from "@/lib/reader-tab-bar-visibility-context";
+import { useReaderTabBarScrollHidden, useRegisterReaderSettingsSlideProgress } from "@/lib/reader-tab-bar-visibility-context";
 import {
   READER_SETTINGS_MENU_SPRING_CLOSE,
   READER_SETTINGS_MENU_SPRING_OPEN,
@@ -1210,7 +1210,7 @@ export default function ReaderChapterScreen() {
       ? readerAndroidListBottomPaddingPx(insets.bottom, true, false, 0)
       : 40;
 
-  const tabBarHideProgress = useReaderTabBarHideProgress();
+  const readerTabBarScrollHidden = useReaderTabBarScrollHidden();
 
   const bumpHeaderToolsLayoutEpoch = useCallback(() => {
     setHeaderToolsLayoutEpoch((epoch) => epoch + 1);
@@ -1657,7 +1657,7 @@ export default function ReaderChapterScreen() {
         readerChapterFlashListFooter={readerChapterFlashListFooter}
         actionBarBottomPx={actionBarBottomPx}
         actionBarBottomPxHidden={actionBarBottomPxHidden}
-        tabBarHideProgress={Platform.OS === "android" ? tabBarHideProgress : null}
+        tabBarScrollHidden={Platform.OS === "android" ? readerTabBarScrollHidden : undefined}
         androidListPaddingBottomHidden={androidListPaddingBottomHidden}
         onListContentSizeChange={onTabBarContentSizeChange}
         onListLayoutHeight={onTabBarListLayout}

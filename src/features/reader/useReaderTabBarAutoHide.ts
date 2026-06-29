@@ -4,12 +4,21 @@ import { useSetReaderTabBarScrollHidden } from "@/lib/reader-tab-bar-visibility-
 
 const TOP_EDGE_PX = 40;
 const BOTTOM_EDGE_PX = 48;
+/**
+ * Extra slack before hiding again after reaching the chapter end.
+ * Covers list padding animation + native tab bar show/hide viewport resize.
+ */
+const BOTTOM_UNPIN_SCROLL_UP_PX = 96;
+/** Ignore layout/content-size churn while tab bar slide + padding settle. */
+const METRICS_COOLDOWN_MS = 260;
 
 type ScrollMetrics = {
   y: number;
   contentHeight: number;
   viewportHeight: number;
 };
+
+type MetricsSource = "scroll" | "layout";
 
 export function useReaderTabBarAutoHide({
   chapterRouteKey,
@@ -25,30 +34,62 @@ export function useReaderTabBarAutoHide({
   const setScrollHidden = useSetReaderTabBarScrollHidden();
   const hiddenRef = useRef(false);
   const metricsRef = useRef<ScrollMetrics>({ y: 0, contentHeight: 0, viewportHeight: 0 });
+  const bottomPinnedRef = useRef(false);
+  const metricsCooldownUntilRef = useRef(0);
 
   const applyVisibility = useCallback(
     (shouldHide: boolean) => {
       if (hiddenRef.current === shouldHide) return;
       hiddenRef.current = shouldHide;
       setScrollHidden(shouldHide);
+      metricsCooldownUntilRef.current = Date.now() + METRICS_COOLDOWN_MS;
+      if (shouldHide) {
+        bottomPinnedRef.current = false;
+      }
     },
     [setScrollHidden],
   );
 
-  const evaluateFromMetrics = useCallback(() => {
-    if (!enabled || forceVisible) {
-      applyVisibility(false);
-      return;
-    }
+  const evaluateFromMetrics = useCallback(
+    (source: MetricsSource) => {
+      if (!enabled || forceVisible) {
+        bottomPinnedRef.current = false;
+        applyVisibility(false);
+        return;
+      }
 
-    const { y, contentHeight, viewportHeight } = metricsRef.current;
-    if (viewportHeight <= 0) return;
+      if (source !== "scroll" && Date.now() < metricsCooldownUntilRef.current) {
+        return;
+      }
 
-    const maxScrollY = Math.max(0, contentHeight - viewportHeight);
-    const atTop = y <= TOP_EDGE_PX;
-    const atBottom = maxScrollY <= BOTTOM_EDGE_PX || y >= maxScrollY - BOTTOM_EDGE_PX;
-    applyVisibility(!(atTop || atBottom));
-  }, [applyVisibility, enabled, forceVisible]);
+      const { y, contentHeight, viewportHeight } = metricsRef.current;
+      if (viewportHeight <= 0) return;
+
+      const maxScrollY = Math.max(0, contentHeight - viewportHeight);
+      const atTop = y <= TOP_EDGE_PX;
+      const nearBottom = maxScrollY <= BOTTOM_EDGE_PX || y >= maxScrollY - BOTTOM_EDGE_PX;
+
+      if (bottomPinnedRef.current) {
+        const scrolledUpFromBottom = y < maxScrollY - BOTTOM_UNPIN_SCROLL_UP_PX;
+        if (scrolledUpFromBottom && !atTop) {
+          bottomPinnedRef.current = false;
+          applyVisibility(true);
+        }
+        return;
+      }
+
+      if (atTop || nearBottom) {
+        if (nearBottom) {
+          bottomPinnedRef.current = true;
+        }
+        applyVisibility(false);
+        return;
+      }
+
+      applyVisibility(true);
+    },
+    [applyVisibility, enabled, forceVisible],
+  );
 
   const onTabBarScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -59,7 +100,7 @@ export function useReaderTabBarAutoHide({
         contentHeight: contentSize.height,
         viewportHeight: layoutMeasurement.height,
       };
-      evaluateFromMetrics();
+      evaluateFromMetrics("scroll");
     },
     [enabled, evaluateFromMetrics],
   );
@@ -68,7 +109,7 @@ export function useReaderTabBarAutoHide({
     (_width: number, height: number) => {
       if (Platform.OS !== "android" || !enabled) return;
       metricsRef.current = { ...metricsRef.current, contentHeight: height };
-      evaluateFromMetrics();
+      evaluateFromMetrics("layout");
     },
     [enabled, evaluateFromMetrics],
   );
@@ -77,13 +118,15 @@ export function useReaderTabBarAutoHide({
     (height: number) => {
       if (Platform.OS !== "android" || !enabled) return;
       metricsRef.current = { ...metricsRef.current, viewportHeight: height };
-      evaluateFromMetrics();
+      evaluateFromMetrics("layout");
     },
     [enabled, evaluateFromMetrics],
   );
 
   useEffect(() => {
     hiddenRef.current = false;
+    bottomPinnedRef.current = false;
+    metricsCooldownUntilRef.current = 0;
     metricsRef.current = { y: 0, contentHeight: 0, viewportHeight: 0 };
     setScrollHidden(false);
   }, [chapterRouteKey, setScrollHidden]);

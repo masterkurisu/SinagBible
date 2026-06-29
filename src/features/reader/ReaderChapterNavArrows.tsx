@@ -31,6 +31,8 @@ export const READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE = 1;
 export const READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE = 0.88;
 /** Fade in/out duration when showing or hiding arrows. */
 export const READER_CHAPTER_NAV_ARROW_FADE_MS = 400;
+/** Ignore sub-pixel / layout-settling scroll noise so arrows don't blink at chapter end. */
+const READER_CHAPTER_NAV_ARROW_SCROLL_MOTION_THRESHOLD_PX = 4;
 /** Hide arrows after this long without scroll or tap. */
 export const READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS = 2_500;
 
@@ -309,18 +311,19 @@ export function useReaderChapterNavArrowsVisibility(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (!enabled) return;
       const y = event.nativeEvent.contentOffset.y;
-      if (Math.abs(y - lastScrollOffsetRef.current) > 0.5) {
-        lastScrollOffsetRef.current = y;
-        if (arrowsShownRef.current) {
-          hideArrows();
-        }
-        isScrollingRef.current = true;
-        clearScrollMotionTimer();
-        scrollMotionTimerRef.current = setTimeout(() => {
-          isScrollingRef.current = false;
-          showArrows();
-        }, 120);
+      if (Math.abs(y - lastScrollOffsetRef.current) <= READER_CHAPTER_NAV_ARROW_SCROLL_MOTION_THRESHOLD_PX) {
+        return;
       }
+      lastScrollOffsetRef.current = y;
+      if (arrowsShownRef.current) {
+        hideArrows();
+      }
+      isScrollingRef.current = true;
+      clearScrollMotionTimer();
+      scrollMotionTimerRef.current = setTimeout(() => {
+        isScrollingRef.current = false;
+        showArrows();
+      }, 120);
     },
     [clearScrollMotionTimer, enabled, hideArrows, showArrows],
   );

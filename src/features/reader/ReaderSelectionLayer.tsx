@@ -512,7 +512,7 @@ export type ReaderSelectionLayerProps = {
   readerChapterFlashListFooter: () => React.ReactElement | null;
   actionBarBottomPx: number;
   actionBarBottomPxHidden?: number;
-  tabBarHideProgress?: AnimatedType.Value | null;
+  tabBarScrollHidden?: boolean;
   androidListPaddingBottomHidden?: number;
   onListContentSizeChange?: (width: number, height: number) => void;
   onListLayoutHeight?: (height: number) => void;
@@ -566,7 +566,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   readerChapterFlashListFooter,
   actionBarBottomPx,
   actionBarBottomPxHidden,
-  tabBarHideProgress,
+  tabBarScrollHidden,
   androidListPaddingBottomHidden,
   onListContentSizeChange,
   onListLayoutHeight,
@@ -831,17 +831,14 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
 
   const actionBarBottom = useMemo(() => {
     if (
-      tabBarHideProgress != null &&
+      tabBarScrollHidden != null &&
       actionBarBottomPxHidden != null &&
       Platform.OS === "android"
     ) {
-      return tabBarHideProgress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [actionBarBottomPx, actionBarBottomPxHidden],
-      });
+      return tabBarScrollHidden ? actionBarBottomPxHidden : actionBarBottomPx;
     }
     return actionBarBottomPx;
-  }, [actionBarBottomPx, actionBarBottomPxHidden, tabBarHideProgress]);
+  }, [actionBarBottomPx, actionBarBottomPxHidden, tabBarScrollHidden]);
 
   const readerActionBarOnboarding = useReaderActionBarOnboarding({
     hasVerseSelection,
@@ -884,7 +881,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
         hasVerseSelection={hasVerseSelection}
         actionBarMode={actionBarMode}
         actionBarBottomPx={actionBarBottomPx}
-        tabBarHideProgress={tabBarHideProgress}
+        tabBarScrollHidden={tabBarScrollHidden}
         androidListPaddingBottomHidden={androidListPaddingBottomHidden}
         onListContentSizeChange={onListContentSizeChange}
         onListLayoutHeight={onListLayoutHeight}

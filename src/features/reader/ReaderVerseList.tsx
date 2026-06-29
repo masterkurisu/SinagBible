@@ -150,7 +150,7 @@ type ReaderVerseListProps = {
   hasVerseSelection: boolean;
   actionBarMode: "default" | "highlight";
   actionBarBottomPx: number;
-  tabBarHideProgress?: Animated.Value | null;
+  tabBarScrollHidden?: boolean;
   androidListPaddingBottomHidden?: number;
   onListContentSizeChange?: (width: number, height: number) => void;
   onListLayoutHeight?: (height: number) => void;
@@ -176,7 +176,7 @@ export function ReaderVerseList({
   hasVerseSelection,
   actionBarMode,
   actionBarBottomPx,
-  tabBarHideProgress,
+  tabBarScrollHidden,
   androidListPaddingBottomHidden,
   onListContentSizeChange,
   onListLayoutHeight,
@@ -199,16 +199,13 @@ export function ReaderVerseList({
         paddingBottom: selectionPaddingBottom,
       };
     }
-    if (tabBarHideProgress != null && androidListPaddingBottomHidden != null) {
+    if (tabBarScrollHidden != null && androidListPaddingBottomHidden != null) {
       return {
         flexGrow: 1,
         paddingLeft: 10,
         paddingRight: 15,
         paddingTop: 94,
-        paddingBottom: tabBarHideProgress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [40, androidListPaddingBottomHidden],
-        }),
+        paddingBottom: tabBarScrollHidden ? androidListPaddingBottomHidden : 40,
       };
     }
     return {
@@ -221,7 +218,7 @@ export function ReaderVerseList({
   }, [
     hasVerseSelection,
     selectionPaddingBottom,
-    tabBarHideProgress,
+    tabBarScrollHidden,
     androidListPaddingBottomHidden,
   ]);
 

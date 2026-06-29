@@ -195,6 +195,9 @@ importers:
       babel-plugin-module-resolver:
         specifier: ^5.0.2
         version: 5.0.3
+      babel-preset-expo:
+        specifier: ~56.0.15
+        version: 56.0.15(@babel/core@7.29.0)(@babel/runtime@7.29.2)(expo@56.0.12)(react-refresh@0.14.2)
       eslint:
         specifier: ^9.39.4
         version: 9.39.4(jiti@1.21.7)

@@ -16,8 +16,9 @@ import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 /** Matches `READER_MOBILE_SETTINGS_PANEL_BG` in ReaderModals (settings strip + tab bar). */
 export const READER_TOOLS_MENU_TAB_BAR_COLOR = "#2e2e2e";
 
-const TAB_BAR_HIDE_MS = 240;
-const TAB_BAR_SHOW_MS = 280;
+const TAB_BAR_SLIDE_MS = 220;
+/** Material standard deceleration — reads as a physical slide, not a fade. */
+const TAB_BAR_SLIDE_EASING = Easing.bezier(0.4, 0, 0.2, 1);
 
 type ReaderTabBarVisibilityContextValue = {
   /** Native tab bar hidden while reading mid-chapter (Android). */
@@ -26,7 +27,7 @@ type ReaderTabBarVisibilityContextValue = {
   settingsTabBarTint: number;
   /** Reader settings menu slide (0 = closed, 1 = open) when on the chapter screen. */
   settingsSlideProgress: Animated.Value | null;
-  /** 0 = tab bar visible, 1 = hidden — drives list padding / action bar motion (layout / JS driver). */
+  /** 0 = tab bar shown, 1 = slid down off-screen — native-driver slide overlay. */
   hideProgress: Animated.Value;
   setScrollHidden: (hidden: boolean) => void;
   registerReaderSettingsSlideProgress: (progress: Animated.Value | null) => void;
@@ -38,36 +39,49 @@ export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNo
   const [scrollHidden, setScrollHiddenState] = useState(false);
   const [settingsSlideProgress, setSettingsSlideProgress] = useState<Animated.Value | null>(null);
   const [settingsTabBarTint, setSettingsTabBarTint] = useState(0);
-  /** Layout-driven hide progress (padding, action bar bottom) — JS driver only. */
+  /** Snapped for list padding; slide overlay uses tabBarSlideProgress. */
   const hideProgress = useRef(new Animated.Value(0)).current;
-  /** Opacity-only hide progress for the brief scroll cover — native driver. */
-  const hideScrollCoverProgress = useRef(new Animated.Value(0)).current;
+  /** 0 = tab bar shown, 1 = tab bar slid down — drives translateY on the slide overlay. */
+  const tabBarSlideProgress = useRef(new Animated.Value(0)).current;
   const scrollHiddenRef = useRef(false);
+  const slideAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const [slideOverlayActive, setSlideOverlayActive] = useState(false);
+
+  const playTabBarSlide = useCallback(
+    (hidden: boolean) => {
+      if (Platform.OS !== "android") return;
+      slideAnimationRef.current?.stop();
+      tabBarSlideProgress.stopAnimation();
+      setSlideOverlayActive(true);
+      slideAnimationRef.current = Animated.timing(tabBarSlideProgress, {
+        toValue: hidden ? 1 : 0,
+        duration: TAB_BAR_SLIDE_MS,
+        easing: TAB_BAR_SLIDE_EASING,
+        useNativeDriver: true,
+      });
+      slideAnimationRef.current.start(({ finished }) => {
+        if (finished) {
+          setSlideOverlayActive(false);
+        }
+      });
+    },
+    [tabBarSlideProgress],
+  );
 
   const setScrollHidden = useCallback(
     (hidden: boolean) => {
       if (scrollHiddenRef.current === hidden) return;
       scrollHiddenRef.current = hidden;
       setScrollHiddenState(hidden);
-
-      const toValue = hidden ? 1 : 0;
-      Animated.parallel([
-        Animated.timing(hideProgress, {
-          toValue,
-          duration: hidden ? TAB_BAR_HIDE_MS : TAB_BAR_SHOW_MS,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: false,
-        }),
-        Animated.timing(hideScrollCoverProgress, {
-          toValue,
-          duration: hidden ? TAB_BAR_HIDE_MS : TAB_BAR_SHOW_MS,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      hideProgress.setValue(hidden ? 1 : 0);
+      playTabBarSlide(hidden);
     },
-    [hideProgress, hideScrollCoverProgress],
+    [hideProgress, playTabBarSlide],
   );
+
+  useEffect(() => () => {
+    slideAnimationRef.current?.stop();
+  }, []);
 
   const registerReaderSettingsSlideProgress = useCallback((progress: Animated.Value | null) => {
     setSettingsSlideProgress(progress);
@@ -118,7 +132,10 @@ export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNo
     <ReaderTabBarVisibilityContext.Provider value={value}>
       <View style={{ flex: 1 }}>
         {children}
-        <ReaderTabBarChromeOverlays hideScrollCoverProgress={hideScrollCoverProgress} />
+        <ReaderTabBarChromeOverlays
+          tabBarSlideProgress={tabBarSlideProgress}
+          slideOverlayActive={slideOverlayActive}
+        />
       </View>
     </ReaderTabBarVisibilityContext.Provider>
   );
@@ -173,19 +190,20 @@ export function useSetReaderTabBarCoverFromReaderMenuDeprecated(): ((covers: boo
 }
 
 function ReaderTabBarChromeOverlays({
-  hideScrollCoverProgress,
+  tabBarSlideProgress,
+  slideOverlayActive,
 }: {
-  hideScrollCoverProgress: Animated.Value;
+  tabBarSlideProgress: Animated.Value;
+  slideOverlayActive: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const { bundle } = useMobileAppTheme();
   const tabBarHeight = nativeTabSheetBottomInsetPx(insets.bottom, 0);
-  const readerSurface = bundle.reader.sceneSurface;
+  const tabBarSurface = bundle.chrome.tabBarBackground;
 
-  /** Brief cover during the native tab bar show/hide layout change. */
-  const scrollCoverOpacity = hideScrollCoverProgress.interpolate({
-    inputRange: [0, 0.35, 1],
-    outputRange: [0, 1, 0],
+  const slideTranslateY = tabBarSlideProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, tabBarHeight],
   });
 
   if (Platform.OS !== "android") return null;
@@ -197,8 +215,9 @@ function ReaderTabBarChromeOverlays({
           styles.overlay,
           {
             height: tabBarHeight,
-            backgroundColor: readerSurface,
-            opacity: scrollCoverOpacity,
+            backgroundColor: tabBarSurface,
+            opacity: slideOverlayActive ? 1 : 0,
+            transform: [{ translateY: slideTranslateY }],
           },
         ]}
       />
