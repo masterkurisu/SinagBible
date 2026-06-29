@@ -12,6 +12,11 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  getFeaturedTranslationSortIndex,
+  isBundledFeaturedTranslationId,
+  isFeaturedTranslationId,
+} from "@sinag-bible/core/bible-translations";
+import {
   flattenHelloaoVerseText,
   parseHelloaoVerseContentArray,
 } from "@sinag-bible/core/helloao-verse-inline";
@@ -140,18 +145,26 @@ export function fetchAvailableTranslations(): Promise<ApiTranslation[]> {
 }
 
 /**
- * Returns every translation from the API, sorted for grouped pickers:
- * by `languageEnglishName`, then short name. Bundled-only versions (e.g.
- * local `ADB1905`) are merged in separately by the picker hook.
+ * Returns featured translations from the API, sorted for grouped pickers:
+ * curated order within each language section, then by short name.
+ * Bundled-only versions (e.g. local `ADB1905`) are merged in separately by the picker hook.
  */
 export async function getTranslationPickerItemsFromApi(): Promise<TranslationPickerApiItem[]> {
   const all = await fetchAvailableTranslations();
   return all
+    .filter(
+      (t) =>
+        !isBundledFeaturedTranslationId(t.shortName) &&
+        isFeaturedTranslationId(t.id, t.shortName),
+    )
     .slice()
     .sort((a, b) => {
       const la = (a.languageEnglishName ?? a.language).toLowerCase();
       const lb = (b.languageEnglishName ?? b.language).toLowerCase();
       if (la !== lb) return la.localeCompare(lb);
+      const orderA = getFeaturedTranslationSortIndex(a.id, a.shortName);
+      const orderB = getFeaturedTranslationSortIndex(b.id, b.shortName);
+      if (orderA !== orderB) return orderA - orderB;
       return a.shortName.localeCompare(b.shortName);
     })
     .map((t) => ({

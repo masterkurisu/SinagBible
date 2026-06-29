@@ -1,11 +1,15 @@
 import { useMemo, useEffect, useState } from "react";
 import {
+  FEATURED_TRANSLATION_IDS,
+  type FeaturedTranslationId,
+  getFeaturedTranslationSortIndex,
   getTranslationIds,
+  isFeaturedTranslationId,
   TRANSLATION_FULL_NAME,
   TRANSLATION_LANGUAGE_LABEL,
   getExternalApiId,
-} from "@sinag-bible/core/bible-translations";
-import { getTranslationPickerItemsFromApi } from "./bible-api-service";
+} from "@sinag-bible/core";
+import { fetchAvailableTranslations, type ApiTranslation } from "./bible-api-service";
 
 export type TranslationPickerItem = {
   id: string;
@@ -14,6 +18,27 @@ export type TranslationPickerItem = {
   languageSection: string;
 };
 
+function shouldIncludeApiTranslation(t: ApiTranslation): boolean {
+  return isFeaturedTranslationId(t.id, t.shortName);
+}
+
+function mapApiTranslationsToPickerItems(allTranslations: ApiTranslation[]): TranslationPickerItem[] {
+  const featured = allTranslations.filter(shouldIncludeApiTranslation);
+  return featured
+    .slice()
+    .sort((a, b) => {
+      const la = (a.languageEnglishName ?? a.language).toLowerCase();
+      const lb = (b.languageEnglishName ?? b.language).toLowerCase();
+      if (la !== lb) return la.localeCompare(lb);
+      return a.shortName.localeCompare(b.shortName);
+    })
+    .map((t) => ({
+      id: t.id,
+      label: `${t.shortName} - ${t.englishName || t.name}`,
+      languageSection: (t.languageEnglishName ?? t.language).trim() || "Other",
+    }));
+}
+
 function buildInternalFallback(): TranslationPickerItem[] {
   return getTranslationIds()
     .map((id) => ({
@@ -21,7 +46,15 @@ function buildInternalFallback(): TranslationPickerItem[] {
       label: `${id} - ${TRANSLATION_FULL_NAME[id]}`,
       languageSection: TRANSLATION_LANGUAGE_LABEL[id],
     }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .filter((item) =>
+      FEATURED_TRANSLATION_IDS.includes(item.id as FeaturedTranslationId),
+    )
+    .sort((a, b) => {
+      const orderA = getFeaturedTranslationSortIndex(a.id);
+      const orderB = getFeaturedTranslationSortIndex(b.id);
+      if (orderA !== orderB) return orderA - orderB;
+      return a.label.localeCompare(b.label);
+    });
 }
 
 /** English first, then alphabetical by section label. */
@@ -37,6 +70,9 @@ function sortPickerItems(items: TranslationPickerItem[]): TranslationPickerItem[
   return items.slice().sort((x, y) => {
     const c = compareLanguageSections(x.languageSection, y.languageSection);
     if (c !== 0) return c;
+    const orderA = getFeaturedTranslationSortIndex(x.id);
+    const orderB = getFeaturedTranslationSortIndex(y.id);
+    if (orderA !== orderB) return orderA - orderB;
     return x.label.localeCompare(y.label, undefined, { sensitivity: "base" });
   });
 }
@@ -62,8 +98,9 @@ export function useTranslationPicker(): {
     let cancelled = false;
     void (async () => {
       try {
-        const result = await getTranslationPickerItemsFromApi();
-        if (!cancelled) setApiItems(result);
+        const allTranslations = await fetchAvailableTranslations();
+        const featured = mapApiTranslationsToPickerItems(allTranslations);
+        if (!cancelled) setApiItems(featured);
       } catch {
         /* network unavailable — keep fallback */
       } finally {

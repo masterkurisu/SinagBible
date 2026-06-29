@@ -35,8 +35,10 @@ import type {
 import { State } from "react-native-gesture-handler";
 import {
   formatTranslationDropdownLabel,
+  getExternalApiId,
   getInternalIdFromApiId,
   isTranslationId,
+  TRANSLATION_LANGUAGE_LABEL,
   type TranslationId,
 } from "@sinag-bible/core/bible-translations";
 import { primeReaderChapterFetch } from "@/lib/reader-chapter-load";
@@ -111,29 +113,6 @@ import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSetting
 import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
 import { useReaderTabBarAutoHide } from "@/src/features/reader/useReaderTabBarAutoHide";
-
-const TRANSLATION_IDS = [
-  "KJV",
-  "WEB",
-  "OEB",
-  "ADB1905",
-  "BSB",
-  "ENG_ASV",
-  "ENG_BBE",
-  "ENG_DARBY",
-  "ENG_WEBBE",
-] as const;
-const TRANSLATION_LANGUAGE_BY_ID: Record<(typeof TRANSLATION_IDS)[number], string> = {
-  KJV: "English",
-  WEB: "English",
-  ADB1905: "Tagalog",
-  OEB: "English",
-  BSB: "English",
-  ENG_ASV: "English",
-  ENG_BBE: "English",
-  ENG_DARBY: "English",
-  ENG_WEBBE: "English",
-};
 
 const READER_FONT_CARD_PADDING_TOP_PX = 12;
 
@@ -1365,6 +1344,19 @@ export default function ReaderChapterScreen() {
   const readerHeaderTranslationId = isReaderContentCurrent
     ? resolvedTranslationId
     : requestedTranslationId;
+  const readerHeaderLanguageLabel = (() => {
+    const apiId = isTranslationId(readerHeaderTranslationId)
+      ? getExternalApiId(readerHeaderTranslationId)
+      : readerHeaderTranslationId;
+    const pickerItem = translationPickerItems.find(
+      (t) => t.id === apiId || t.id.toLowerCase() === apiId.toLowerCase(),
+    );
+    if (pickerItem) return pickerItem.languageSection;
+    if (isTranslationId(readerHeaderTranslationId)) {
+      return TRANSLATION_LANGUAGE_LABEL[readerHeaderTranslationId];
+    }
+    return "English";
+  })();
 
   const readerChapterPageHeading = (
     <Animated.View
@@ -1374,7 +1366,7 @@ export default function ReaderChapterScreen() {
       <Text
         style={[readerFlashListChromeStyles.pageHeadingTranslation, { fontFamily: "Inter_400Regular", color: colors.gold }]}
       >
-        {readerHeaderTranslationId} ({TRANSLATION_LANGUAGE_BY_ID[readerHeaderTranslationId as keyof typeof TRANSLATION_LANGUAGE_BY_ID] ?? "English"})
+        {readerHeaderTranslationId} ({readerHeaderLanguageLabel})
       </Text>
       <Text
         style={{ fontFamily: "Lora_400Regular", fontSize: 36, lineHeight: 42, color: colors.brown800 }}

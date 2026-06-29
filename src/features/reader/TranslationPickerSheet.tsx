@@ -37,6 +37,39 @@ import type { TranslationPickerItem } from "@/lib/use-translation-picker";
 import { hapticLightImpact } from "@/lib/haptics";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
 
+type TranslationPinButtonProps = {
+  isPinned: boolean;
+  onPress: () => void;
+  ui: MobileAppThemeBundle["ui"];
+};
+
+function TranslationPinButton({ isPinned, onPress, ui }: TranslationPinButtonProps) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+      accessibilityRole="button"
+      accessibilityLabel={isPinned ? "Unpin translation" : "Pin translation"}
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: isPinned ? `${ui.gold}40` : `${ui.goldMuted}28`,
+        borderWidth: 1.5,
+        borderColor: isPinned ? ui.gold : `${ui.goldMuted}99`,
+      }}
+    >
+      <Ionicons
+        name={isPinned ? "star" : "star-outline"}
+        size={20}
+        color={isPinned ? ui.gold : ui.goldMuted}
+      />
+    </TouchableOpacity>
+  );
+}
+
 export type TranslationPickerSheetProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -638,15 +671,14 @@ export function TranslationPickerSheet({
                       </View>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                         {item.id === resolvedTranslationApiId ? <Ionicons name="checkmark" size={15} color={ui.gold} /> : null}
-                        <TouchableOpacity
+                        <TranslationPinButton
+                          isPinned
                           onPress={() => {
                             Keyboard.dismiss();
                             toggleFavoriteTranslation(item.id);
                           }}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Ionicons name="star" size={16} color={ui.gold} />
-                        </TouchableOpacity>
+                          ui={ui}
+                        />
                       </View>
                     </TouchableOpacity>
                   );}) : (
@@ -713,15 +745,14 @@ export function TranslationPickerSheet({
                           </View>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                             {item.id === resolvedTranslationApiId ? <Ionicons name="checkmark" size={15} color={ui.gold} /> : null}
-                            <TouchableOpacity
+                            <TranslationPinButton
+                              isPinned={isPinned}
                               onPress={() => {
                                 Keyboard.dismiss();
                                 toggleFavoriteTranslation(item.id);
                               }}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
-                              <Ionicons name={isPinned ? "star" : "star-outline"} size={16} color={isPinned ? ui.gold : ui.borderSolid} />
-                            </TouchableOpacity>
+                              ui={ui}
+                            />
                           </View>
                         </TouchableOpacity>
                       );

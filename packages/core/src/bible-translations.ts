@@ -138,6 +138,90 @@ function loadTranslationData(id: TranslationId): Promise<TranslationData> {
   return p;
 }
 
+/** Curated translations shown in the picker (API ids or bundled internal ids). */
+export const FEATURED_TRANSLATION_IDS = [
+  // Bundled (no API call)
+  "KJV", // King James Version
+  "WEB", // World English Bible
+  "ADB1905", // Ang Dating Biblia - classic Tagalog (bundled)
+
+  // Filipino languages (API)
+  "tgl_ulb", // Banal na Bibliya - modern Tagalog
+  "ceb_ulb", // Balaan nga Bibliya - Cebuano
+  "ceb_ocb", // Ang Pulong sa Dios - Cebuano (Biblica)
+  "ilo_ulb", // Ti Biblia - Ilocano
+
+  // English translations (API)
+  "eng_kjv", // King James Version (classic, most recognized)
+  "eng_kja", // KJV with Apocrypha (for Catholic users)
+  "eng_asv", // American Standard Version (1901)
+  "eng_dra", // Douay-Rheims 1899 (Catholic - very relevant for Filipino audience)
+  "BSB", // Berean Standard Bible (modern, popular)
+  "eng_net", // NET Bible (modern, study notes)
+  "eng_bbe", // Bible in Basic English (simple language)
+  "eng_web", // World English Bible Classic
+  "eng_webc", // World English Bible Catholic
+  "eng_dby", // Darby Translation
+  "eng_gnv", // Geneva Bible 1599 (historical)
+  "eng_ylt", // Young's Literal Translation (study use)
+  "eng_lsv", // Literal Standard Version
+
+  // Regional
+  "RV1909", // Reina Valera - Spanish
+] as const;
+
+export type FeaturedTranslationId = (typeof FEATURED_TRANSLATION_IDS)[number];
+
+/** helloao.org API ids where the featured picker id differs from the API id. */
+const FEATURED_TRANSLATION_API_IDS: Partial<Record<FeaturedTranslationId, string>> = {
+  RV1909: "spa_r09",
+};
+
+const BUNDLED_FEATURED_TRANSLATION_IDS = new Set<FeaturedTranslationId>(["KJV", "WEB", "ADB1905"]);
+
+const FEATURED_TRANSLATION_ID_SET = new Set<string>(FEATURED_TRANSLATION_IDS);
+
+export function getFeaturedTranslationIds(): readonly FeaturedTranslationId[] {
+  return FEATURED_TRANSLATION_IDS;
+}
+
+export function resolveFeaturedTranslationApiId(id: string): string {
+  return FEATURED_TRANSLATION_API_IDS[id as FeaturedTranslationId] ?? id;
+}
+
+/**
+ * True when `id` or optional `shortName` is in {@link FEATURED_TRANSLATION_IDS},
+ * or when `id` is the helloao.org API id for a featured alias (e.g. `eng_asv` → ASV).
+ */
+export function isFeaturedTranslationId(id: string, shortName?: string): boolean {
+  const candidates = [id.trim(), shortName?.trim()].filter(Boolean) as string[];
+  for (const candidate of candidates) {
+    if (FEATURED_TRANSLATION_ID_SET.has(candidate as FeaturedTranslationId)) return true;
+    const upper = candidate.toUpperCase();
+    if (FEATURED_TRANSLATION_ID_SET.has(upper as FeaturedTranslationId)) return true;
+  }
+  for (const featured of FEATURED_TRANSLATION_IDS) {
+    const apiId = resolveFeaturedTranslationApiId(featured);
+    if (apiId === id || apiId.toLowerCase() === id.toLowerCase()) return true;
+  }
+  return false;
+}
+
+/** Sort key for curated picker order; unknown ids sort after featured entries. */
+export function getFeaturedTranslationSortIndex(id: string, shortName?: string): number {
+  for (let i = 0; i < FEATURED_TRANSLATION_IDS.length; i++) {
+    const featured = FEATURED_TRANSLATION_IDS[i]!;
+    if (id === featured || shortName === featured) return i;
+    const apiId = resolveFeaturedTranslationApiId(featured);
+    if (apiId === id || apiId.toLowerCase() === id.toLowerCase()) return i;
+  }
+  return FEATURED_TRANSLATION_IDS.length;
+}
+
+export function isBundledFeaturedTranslationId(id: string): boolean {
+  return BUNDLED_FEATURED_TRANSLATION_IDS.has(id.toUpperCase() as FeaturedTranslationId);
+}
+
 const TRANSLATION_ID_KEYS = {
   KJV: true,
   WEB: true,
