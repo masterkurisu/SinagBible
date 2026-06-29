@@ -1,0 +1,14 @@
+import * as Device from "expo-device";
+import { Platform } from "react-native";
+
+const LOW_END_RAM_BYTES = 5 * 1024 * 1024 * 1024;
+
+/**
+ * True when RAM is known to be under 5GB, OR when we can't determine RAM
+ * on Android (conservative fallback — better to under-render than crash).
+ */
+export const isLowEndDevice =
+  Platform.OS === "android" &&
+  (Device.totalMemory == null || Device.totalMemory < LOW_END_RAM_BYTES);
+
+export const READER_FLASH_LIST_DRAW_DISTANCE_PX = isLowEndDevice ? 200 : 500;

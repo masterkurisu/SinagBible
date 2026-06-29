@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { GestureResponderEvent, PanResponderGestureState } from "react-native";
 import { Alert, Animated, BackHandler, Dimensions, Easing, PanResponder, Platform } from "react-native";
+import Reanimated from "react-native-reanimated";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
 import type { JournalNewEntryFormHandle } from "@/components/journal-new-entry-form";
@@ -69,7 +70,7 @@ export function chapterSwipeReleaseShouldNavigate(g: PanResponderGestureState, m
   return adx > ady * 1.35 + 14;
 }
 
-export const AnimatedReaderChapterFlashList = Animated.createAnimatedComponent(
+export const AnimatedReaderChapterFlashList = Reanimated.createAnimatedComponent(
   FlashList,
 ) as typeof FlashList<ReaderVerseFlashItem>;
 

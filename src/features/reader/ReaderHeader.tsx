@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Platform, StyleSheet, Text, View, Animated } from "react-native";
+import { Platform, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import Animated, { type AnimatedStyle } from "react-native-reanimated";
 import { Stack } from "expo-router";
 
 /** ~20% smaller than a typical ~17pt stack title; acronym another 20% smaller. */
@@ -15,7 +16,7 @@ type ReaderHeaderProps = {
   rc: { sceneSurface: string };
   colors: { brown800: string; gold: string };
   screenW: number;
-  readerHeaderTitleOpacityAnim: Animated.AnimatedInterpolation<string | number>;
+  readerHeaderTitleAnimatedStyle: AnimatedStyle<ViewStyle>;
   readerHeaderBookName: string;
   chapterNumber: number;
   readerHeaderTranslationId: string;
@@ -27,7 +28,7 @@ export function ReaderHeader({
   rc,
   colors,
   screenW,
-  readerHeaderTitleOpacityAnim,
+  readerHeaderTitleAnimatedStyle,
   readerHeaderBookName,
   chapterNumber,
   readerHeaderTranslationId,
@@ -59,13 +60,15 @@ export function ReaderHeader({
           headerTitle: () => (
             <Animated.View
               pointerEvents="none"
-              style={{
-                opacity: readerHeaderTitleOpacityAnim,
-                backgroundColor: rc.sceneSurface,
-                borderRadius: 999,
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-              }}
+              style={[
+                {
+                  backgroundColor: rc.sceneSurface,
+                  borderRadius: 999,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                },
+                readerHeaderTitleAnimatedStyle,
+              ]}
             >
               <View
                 className="flex-row items-baseline justify-center"

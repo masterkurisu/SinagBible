@@ -19,8 +19,8 @@ export default function ReaderStackLayout() {
           title: "",
           headerBackTitle: "",
           headerBackVisible: false,
-          /** `fade` stacks two scenes and reads as ghosting + white flashes with a transparent header. */
-          animation: "none",
+          animation: "fade",
+          animationDuration: 120,
           contentStyle: { flex: 1, backgroundColor: READER_STACK_SCENE_BG },
         }}
       />

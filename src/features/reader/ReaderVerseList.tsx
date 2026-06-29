@@ -6,6 +6,7 @@ import {
   READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX,
   READER_ACTION_BAR_SELECTION_CLEARANCE_HIGHLIGHT_PX,
 } from "@/src/features/reader/readerActionBarOnboardingSteps";
+import { READER_FLASH_LIST_DRAW_DISTANCE_PX } from "@/lib/device-capability";
 import { AnimatedReaderChapterFlashList, type ReaderVerseFlashItem } from "./useReaderGestures";
 
 export const READER_TABLET_TWO_COLUMN_GAP = 18;
@@ -271,7 +272,9 @@ export function ReaderVerseList({
       {...chapterSwipePanHandlers}
       {...({ estimatedItemSize: readerVerseEstimatedItemSize } as Record<string, unknown>)}
       style={{ ...readerFlashListChromeStyles.list, backgroundColor: rc.sceneSurface }}
-      scrollEventThrottle={16}
+      scrollEventThrottle={8}
+      drawDistance={READER_FLASH_LIST_DRAW_DISTANCE_PX}
+      maintainVisibleContentPosition={{}}
       onScroll={onScroll}
       onScrollBeginDrag={onScrollBeginDrag}
       onScrollEndDrag={onScrollEndDrag}

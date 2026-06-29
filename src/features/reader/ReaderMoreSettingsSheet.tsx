@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  Animated,
-  Easing,
   Modal,
   Pressable,
   StyleSheet,
@@ -9,6 +7,12 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { HapticFeedbackToggle } from "@/components/HapticFeedbackToggle";
 import { hapticLightImpact } from "@/lib/haptics";
@@ -39,8 +43,8 @@ export function ReaderMoreSettingsSheet({
   const rc = bundle.reader;
   const { width: screenW } = useWindowDimensions();
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
-  const popupSlideAnim = useRef(new Animated.Value(0)).current;
-  const popupOpacityAnim = useRef(new Animated.Value(0)).current;
+  const scale = useSharedValue(0.94);
+  const opacity = useSharedValue(0);
 
   const sheetScale = isTabletReaderLayout ? 1.5 : 1;
   const sheetSideInsetPx = 12 + 30;
@@ -58,28 +62,19 @@ export function ReaderMoreSettingsSheet({
   }, []);
 
   useEffect(() => {
-    if (!isOpen) {
-      popupSlideAnim.setValue(0);
-      popupOpacityAnim.setValue(0);
-      return;
+    if (isOpen) {
+      scale.value = withSpring(1, { damping: 18, stiffness: 280, mass: 0.8 });
+      opacity.value = withTiming(1, { duration: 180 });
+    } else {
+      scale.value = withSpring(0.94, { damping: 20, stiffness: 300 });
+      opacity.value = withTiming(0, { duration: 140 });
     }
-    popupSlideAnim.setValue(0);
-    popupOpacityAnim.setValue(0);
-    Animated.parallel([
-      Animated.timing(popupSlideAnim, {
-        toValue: 1,
-        duration: 280,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(popupOpacityAnim, {
-        toValue: 1,
-        duration: 240,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [isOpen, popupSlideAnim, popupOpacityAnim]);
+  }, [isOpen, scale, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
 
   const toggleHaptics = useCallback(() => {
     void (async () => {
@@ -111,20 +106,7 @@ export function ReaderMoreSettingsSheet({
             paddingHorizontal: 12,
           }}
         >
-          <Animated.View
-            style={{
-              width: sheetMaxW,
-              opacity: popupOpacityAnim,
-              transform: [
-                {
-                  scale: popupSlideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.96, 1],
-                  }),
-                },
-              ],
-            }}
-          >
+          <Animated.View style={[{ width: sheetMaxW }, animatedStyle]}>
             <View
               style={{
                 borderRadius: 16,

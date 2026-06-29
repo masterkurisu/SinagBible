@@ -33,6 +33,14 @@ import type {
   PanGestureHandlerStateChangeEvent,
 } from "react-native-gesture-handler";
 import { State } from "react-native-gesture-handler";
+import Reanimated, {
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 import {
   formatTranslationDropdownLabel,
   getExternalApiId,
@@ -292,30 +300,34 @@ export default function ReaderChapterScreen() {
     setNoteTargetVerse,
   } = selectionActivity;
   const readerScrollRef = useRef<FlashListRef<ReaderVerseFlashItem> | null>(null);
-  /** Drives cross-fade between in-content heading and stack header title (native scroll events). */
-  const readerScrollYAnim = useRef(new Animated.Value(0)).current;
+  /** Drives cross-fade between in-content heading and stack header title (UI-thread scroll). */
+  const readerScrollY = useSharedValue(0);
   const [readerPageHeadingHeight, setReaderPageHeadingHeight] = useState(96);
   const onReaderPageHeadingLayout = useCallback((height: number) => {
     setReaderPageHeadingHeight((prev) => (Math.abs(prev - height) > 1 ? height : prev));
   }, []);
   const readerHeadingFadeEndPx = Math.max(40, Math.round(readerPageHeadingHeight * 0.82));
-  const readerPageHeadingOpacityAnim = useMemo(
-    () =>
-      readerScrollYAnim.interpolate({
-        inputRange: [0, readerHeadingFadeEndPx],
-        outputRange: [1, 0],
-        extrapolate: "clamp",
-      }),
-    [readerScrollYAnim, readerHeadingFadeEndPx],
+  const readerPageHeadingAnimatedStyle = useAnimatedStyle(
+    () => ({
+      opacity: interpolate(
+        readerScrollY.value,
+        [0, readerHeadingFadeEndPx],
+        [1, 0],
+        Extrapolation.CLAMP,
+      ),
+    }),
+    [readerHeadingFadeEndPx],
   );
-  const readerHeaderTitleOpacityAnim = useMemo(
-    () =>
-      readerScrollYAnim.interpolate({
-        inputRange: [0, readerHeadingFadeEndPx],
-        outputRange: [0, 1],
-        extrapolate: "clamp",
-      }),
-    [readerScrollYAnim, readerHeadingFadeEndPx],
+  const readerHeaderTitleAnimatedStyle = useAnimatedStyle(
+    () => ({
+      opacity: interpolate(
+        readerScrollY.value,
+        [0, readerHeadingFadeEndPx],
+        [0, 1],
+        Extrapolation.CLAMP,
+      ),
+    }),
+    [readerHeadingFadeEndPx],
   );
   const newEntryFormRef = useRef<JournalNewEntryFormHandle | null>(null);
 
@@ -399,8 +411,8 @@ export default function ReaderChapterScreen() {
   useEffect(() => {
     if (pendingScrollVerseRef.current != null) return;
     readerScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
-    readerScrollYAnim.setValue(0);
-  }, [bookSlug, chapterNumber, requestedTranslationId, readerScrollYAnim, initialScrollVerse]);
+    readerScrollY.value = 0;
+  }, [bookSlug, chapterNumber, requestedTranslationId, readerScrollY, initialScrollVerse]);
 
   const clearMobileSettingsFollowUp = useCallback(() => {
     if (mobileSettingsFollowUpTimeoutRef.current != null) {
@@ -1280,20 +1292,30 @@ export default function ReaderChapterScreen() {
     onChapterNavArrowsScrollBeginDrag();
   }, [onReaderScrollBeginDrag, onChapterNavArrowsScrollBeginDrag]);
 
-  const onReaderScroll = useMemo(
-    () =>
-      Animated.event(
-        [{ nativeEvent: { contentOffset: { y: readerScrollYAnim } } }],
-        {
-          useNativeDriver: true,
-          listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-            onChapterNavArrowsScroll(event);
-            onTabBarScroll(event);
-          },
-        },
-      ),
-    [readerScrollYAnim, onChapterNavArrowsScroll, onTabBarScroll],
+  const onReaderScrollSideEffects = useCallback(
+    (y: number, contentHeight: number, viewportHeight: number) => {
+      const nativeEvent = {
+        contentOffset: { y, x: 0 },
+        contentSize: { height: contentHeight, width: 0 },
+        layoutMeasurement: { height: viewportHeight, width: 0 },
+      } as NativeScrollEvent;
+      const event = { nativeEvent } as NativeSyntheticEvent<NativeScrollEvent>;
+      onChapterNavArrowsScroll(event);
+      onTabBarScroll(event);
+    },
+    [onChapterNavArrowsScroll, onTabBarScroll],
   );
+
+  const onReaderScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      readerScrollY.value = event.contentOffset.y;
+      runOnJS(onReaderScrollSideEffects)(
+        event.contentOffset.y,
+        event.contentSize.height,
+        event.layoutMeasurement.height,
+      );
+    },
+  });
 
   const chapterSwipePan = useMemo(() => {
     const tid = resolvedTranslationId;
@@ -1375,8 +1397,8 @@ export default function ReaderChapterScreen() {
   );
 
   const readerChapterPageHeading = (
-    <Animated.View
-      style={[readerFlashListChromeStyles.pageHeading, { opacity: readerPageHeadingOpacityAnim }]}
+    <Reanimated.View
+      style={[readerFlashListChromeStyles.pageHeading, readerPageHeadingAnimatedStyle]}
       onLayout={(e) => onReaderPageHeadingLayout(e.nativeEvent.layout.height)}
     >
       <Text
@@ -1395,7 +1417,7 @@ export default function ReaderChapterScreen() {
       >
         {formatReaderChapterHeading(readerHeaderLanguageLabel, chapterNumber)}
       </Text>
-    </Animated.View>
+    </Reanimated.View>
   );
 
   const { prevChapter, nextChapter } = chapterNav;
@@ -1618,7 +1640,7 @@ export default function ReaderChapterScreen() {
         rc={rc}
         colors={colors}
         screenW={screenW}
-        readerHeaderTitleOpacityAnim={readerHeaderTitleOpacityAnim}
+        readerHeaderTitleAnimatedStyle={readerHeaderTitleAnimatedStyle}
         readerHeaderBookName={readerHeaderBookName}
         chapterNumber={chapterNumber}
         readerHeaderTranslationId={readerHeaderTranslationId}
@@ -1720,18 +1742,20 @@ export default function ReaderChapterScreen() {
           }}
         >
           {!toolsMenuOpen ? (
-          <Animated.View
+          <Reanimated.View
             pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              top: 0,
-              bottom: 0,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: readerHeaderTitleOpacityAnim,
-            }}
+            style={[
+              {
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 0,
+                alignItems: "center",
+                justifyContent: "center",
+              },
+              readerHeaderTitleAnimatedStyle,
+            ]}
           >
             <View
               style={{
@@ -1765,7 +1789,7 @@ export default function ReaderChapterScreen() {
                 >{` (${readerHeaderTranslationId})`}</Text>
               </View>
             </View>
-          </Animated.View>
+          </Reanimated.View>
           ) : null}
           <View
             pointerEvents="auto"
