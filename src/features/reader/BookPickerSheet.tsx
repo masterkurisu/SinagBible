@@ -31,7 +31,7 @@ import {
 } from "react-native-gesture-handler";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
-import { FilterListIcon } from "@/components/icons/FilterListIcon";
+import { MenuOptionsIcon } from "@/components/icons/MenuOptionsIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { getSelectChapterHeadingForLanguage } from "@/lib/reader-chapter-label";
 import { hapticLightImpact } from "@/lib/haptics";
@@ -541,7 +541,7 @@ export function BookPickerSheet({
                   accessibilityLabel="Choose book list view"
                   accessibilityState={{ expanded: bookViewMenuOpen }}
                 >
-                  <FilterListIcon size={22} color={colors.gold} />
+                  <MenuOptionsIcon size={22} color={colors.gold} />
                 </TouchableOpacity>
               </View>
               <Text

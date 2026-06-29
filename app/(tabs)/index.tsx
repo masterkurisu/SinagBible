@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Platform, View, Text, TouchableOpacity, ScrollView, type ViewStyle } from "react-native";
-import { useRouter } from "expo-router";
+import { Platform, View, Text, Pressable, ScrollView, type ViewStyle } from "react-native";
+import { Link, type Href } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Path } from "react-native-svg";
@@ -8,8 +8,36 @@ import { useSbTabScreenPadding } from "@/lib/use-sb-bottom-padding";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
 import { hapticLightImpact } from "@/lib/haptics";
 
-const ctaRowClass =
-  "flex-row h-14 w-full max-w-[300px] self-center items-center justify-between rounded-full px-6";
+/** Home hero CTA pill buttons (Read Scripture / Write a journal). */
+const HOME_CTA = {
+  width: 200,
+  height: 56,
+  paddingHorizontal: 18,
+  /** Half of height — fully rounded capsule ends. */
+  borderRadius: 28,
+} as const;
+
+const homeCtaShellStyle: ViewStyle = {
+  alignSelf: "center",
+  width: HOME_CTA.width,
+  borderRadius: HOME_CTA.borderRadius,
+  overflow: "hidden",
+};
+
+const homeCtaRowStyle: ViewStyle = {
+  height: HOME_CTA.height,
+  paddingHorizontal: HOME_CTA.paddingHorizontal,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  borderRadius: HOME_CTA.borderRadius,
+};
+
+const homeCtaJournalFillStyle: ViewStyle = {
+  backgroundColor: "#fdfbf7",
+  borderWidth: 1,
+  borderColor: "#ffffff",
+};
 
 const ctaShadow: ViewStyle = {
   shadowColor: "#242423",
@@ -71,7 +99,6 @@ function FeatureIconPrivate() {
 }
 
 export default function HomeScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = useSbTabScreenPadding(48);
   // Android native tabs can still overlay content in some SDK/device combos.
@@ -144,55 +171,47 @@ export default function HomeScreen() {
           </Text>
 
           <View className="mb-8 mt-7 gap-3">
-            <TouchableOpacity
-              style={[ctaShadow, { borderRadius: 9999, alignSelf: "center", maxWidth: 300, width: "100%" }]}
-              activeOpacity={0.95}
-              onPress={() => {
-                hapticLightImpact();
-                router.push("/reader");
-              }}
-            >
-              <LinearGradient
-                colors={["#4A3826", "#2C2416", "#1A160F"]}
-                locations={[0, 0.6, 1]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  borderRadius: 9999,
-                  height: 56,
-                  paddingHorizontal: 24,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
+            <Link href={"/reader" as Href} asChild onPress={() => hapticLightImpact()}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Read Scripture"
+                style={({ pressed }) => [ctaShadow, homeCtaShellStyle, pressed && { opacity: 0.95 }]}
               >
-                <Text
-                  className="text-[16px] tracking-[0.025em] text-cream"
-                  style={{ fontFamily: "Lora_400Regular" }}
+                <LinearGradient
+                  colors={["#4A3826", "#2C2416", "#1A160F"]}
+                  locations={[0, 0.6, 1]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={homeCtaRowStyle}
                 >
-                  Read Scripture
-                </Text>
-                <Text className="text-cream text-base">→</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                  <Text
+                    className="text-[16px] tracking-[0.025em] text-cream"
+                    style={{ fontFamily: "Lora_400Regular" }}
+                  >
+                    Read Scripture
+                  </Text>
+                  <Text className="text-cream text-base">→</Text>
+                </LinearGradient>
+              </Pressable>
+            </Link>
 
-            <TouchableOpacity
-              className={`${ctaRowClass} border border-white bg-parchment`}
-              style={ctaShadow}
-              activeOpacity={0.95}
-              onPress={() => {
-                hapticLightImpact();
-                router.push("/journal");
-              }}
-            >
-              <Text
-                className="text-[16px] tracking-[0.025em] text-brown-800"
-                style={{ fontFamily: "Lora_400Regular" }}
+            <Link href={"/journal" as Href} asChild onPress={() => hapticLightImpact()}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Write a journal"
+                style={({ pressed }) => [ctaShadow, homeCtaShellStyle, pressed && { opacity: 0.95 }]}
               >
-                Write a journal
-              </Text>
-              <Text className="text-brown-800 text-base">→</Text>
-            </TouchableOpacity>
+                <View style={[homeCtaRowStyle, homeCtaJournalFillStyle]}>
+                  <Text
+                    className="text-[16px] tracking-[0.025em] text-brown-800"
+                    style={{ fontFamily: "Lora_400Regular" }}
+                  >
+                    Write a journal
+                  </Text>
+                  <Text className="text-brown-800 text-base">→</Text>
+                </View>
+              </Pressable>
+            </Link>
           </View>
         </View>
 
