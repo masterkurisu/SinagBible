@@ -10,6 +10,12 @@ import {
   getExternalApiId,
 } from "@sinag-bible/core/bible-translations";
 import { fetchAvailableTranslations, type ApiTranslation } from "./bible-api-service";
+import {
+  fetchYvpBibles,
+  formatYvpTranslationId,
+  type YvpBible,
+} from "./youversion-api";
+import { normalizeTranslationLanguageSection } from "./translation-language-sections";
 
 export type TranslationPickerItem = {
   id: string;
@@ -17,6 +23,22 @@ export type TranslationPickerItem = {
   /** Section heading in the translation sheet (e.g. "English", "Tagalog"). */
   languageSection: string;
 };
+
+/** Short code shown in the picker (e.g. `KJV`, `NIV`). */
+export function getTranslationPickerAbbreviation(item: TranslationPickerItem): string {
+  return item.label.split(" - ")[0]?.trim() || item.id;
+}
+
+export function compareTranslationPickerAbbreviations(
+  a: TranslationPickerItem,
+  b: TranslationPickerItem,
+): number {
+  return getTranslationPickerAbbreviation(a).localeCompare(
+    getTranslationPickerAbbreviation(b),
+    undefined,
+    { sensitivity: "base", numeric: true },
+  );
+}
 
 function shouldIncludeApiTranslation(t: ApiTranslation): boolean {
   return isFeaturedTranslationId(t.id, t.shortName);
@@ -35,8 +57,22 @@ function mapApiTranslationsToPickerItems(allTranslations: ApiTranslation[]): Tra
     .map((t) => ({
       id: t.id,
       label: `${t.shortName} - ${t.englishName || t.name}`,
-      languageSection: (t.languageEnglishName ?? t.language).trim() || "Other",
+      languageSection: normalizeTranslationLanguageSection(
+        (t.languageEnglishName ?? t.language).trim() || "Other",
+      ),
     }));
+}
+
+function mapYvpBiblesToPickerItems(bibles: YvpBible[]): TranslationPickerItem[] {
+  return bibles.map((bible) => {
+    const abbr = bible.localizedAbbreviation?.trim() || bible.abbreviation.trim();
+    const title = bible.localizedTitle?.trim() || bible.title.trim();
+    return {
+      id: formatYvpTranslationId(bible.id),
+      label: `${abbr} - ${title}`,
+      languageSection: normalizeTranslationLanguageSection(bible.languageTag),
+    };
+  });
 }
 
 function buildInternalFallback(): TranslationPickerItem[] {
@@ -44,7 +80,7 @@ function buildInternalFallback(): TranslationPickerItem[] {
     .map((id) => ({
       id: getExternalApiId(id),
       label: `${id} - ${TRANSLATION_FULL_NAME[id]}`,
-      languageSection: TRANSLATION_LANGUAGE_LABEL[id],
+      languageSection: normalizeTranslationLanguageSection(TRANSLATION_LANGUAGE_LABEL[id]),
     }))
     .filter((item) =>
       FEATURED_TRANSLATION_IDS.includes(item.id as FeaturedTranslationId),
@@ -77,35 +113,54 @@ function sortPickerItems(items: TranslationPickerItem[]): TranslationPickerItem[
   });
 }
 
+function mergePickerItems(
+  helloaoItems: TranslationPickerItem[],
+  yvpItems: TranslationPickerItem[],
+  fallback: TranslationPickerItem[],
+): TranslationPickerItem[] {
+  const merged = new Map<string, TranslationPickerItem>();
+  for (const item of [...helloaoItems, ...yvpItems, ...fallback]) {
+    merged.set(item.id, item);
+  }
+  return sortPickerItems([...merged.values()]);
+}
+
 /**
- * Fetches translations from the Free Use Bible API (all languages) and merges
- * bundled translations the API does not list (e.g. OEB, ADB1905).
+ * Fetches translations from helloao.org (featured) and the YouVersion Platform API,
+ * then merges bundled translations the helloao API does not list (e.g. OEB, ADB1905).
  *
  * - `items` is pre-populated with the internal fallback immediately, so the
- *   picker is never empty while the network request is in-flight.
- * - Once the API responds, `items` is replaced with the merged result.
- * - On network failure the fallback list is kept permanently.
+ *   picker is never empty while network requests are in-flight.
+ * - YouVersion entries use ids like `yvp:111` (NIV).
  */
 export function useTranslationPicker(): {
   items: TranslationPickerItem[];
   loading: boolean;
 } {
   const fallback = useMemo(buildInternalFallback, []);
-  const [apiItems, setApiItems] = useState<TranslationPickerItem[] | null>(null);
+  const [helloaoItems, setHelloaoItems] = useState<TranslationPickerItem[] | null>(null);
+  const [yvpItems, setYvpItems] = useState<TranslationPickerItem[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      try {
-        const allTranslations = await fetchAvailableTranslations();
-        const featured = mapApiTranslationsToPickerItems(allTranslations);
-        if (!cancelled) setApiItems(featured);
-      } catch {
-        /* network unavailable — keep fallback */
-      } finally {
-        if (!cancelled) setLoading(false);
+      const [helloaoResult, yvpResult] = await Promise.allSettled([
+        fetchAvailableTranslations().then((allTranslations) =>
+          mapApiTranslationsToPickerItems(allTranslations),
+        ),
+        fetchYvpBibles().then((bibles) => mapYvpBiblesToPickerItems(bibles)),
+      ]);
+
+      if (cancelled) return;
+
+      if (helloaoResult.status === "fulfilled") {
+        setHelloaoItems(helloaoResult.value);
       }
+      if (yvpResult.status === "fulfilled") {
+        setYvpItems(yvpResult.value);
+      }
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -113,11 +168,9 @@ export function useTranslationPicker(): {
   }, []);
 
   const items = useMemo(() => {
-    if (!apiItems) return sortPickerItems(fallback);
-    const apiIdSet = new Set(apiItems.map((t) => t.id));
-    const missing = fallback.filter((t) => !apiIdSet.has(t.id));
-    return sortPickerItems([...apiItems, ...missing]);
-  }, [apiItems, fallback]);
+    if (!helloaoItems && !yvpItems) return sortPickerItems(fallback);
+    return mergePickerItems(helloaoItems ?? [], yvpItems ?? [], fallback);
+  }, [helloaoItems, yvpItems, fallback]);
 
   return { items, loading };
 }

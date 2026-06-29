@@ -1142,6 +1142,7 @@ export default function JournalIndexScreen() {
                   <JournalNewEntryForm
                     ref={newEntryFormRef}
                     key={newEntrySheetKey}
+                    onboardingSessionKey={newEntrySheetKey}
                     contentScrollMaxHeight={sheetMaxHeight - 42}
                     contentHorizontalPadding={10}
                     onDirtyChange={setNewEntryHasDraft}

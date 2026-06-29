@@ -203,6 +203,8 @@ type Props = {
   readerCardBottomLiftPx?: number;
   /** Android: show save confirmation via parent toast instead of a native alert dialog. */
   onSaveToast?: (message: string) => void;
+  /** Bump when the parent sheet opens so editor onboarding can restart in dev. */
+  onboardingSessionKey?: number;
 };
 
 export type JournalNewEntryFormHandle = {
@@ -221,6 +223,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     readerNewEntryScrollable,
     readerCardBottomLiftPx = READER_NEW_ENTRY_CARD_BOTTOM_LIFT_PX,
     onSaveToast,
+    onboardingSessionKey = 0,
   }: Props,
   ref,
 ) {
@@ -333,6 +336,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const editorOnboarding = useJournalEditorOnboarding({
     enabled: !editDraft,
+    sessionKey: onboardingSessionKey,
+    isReaderNewEntry: readerNewEntryScrollable === true && editDraft == null,
     targetRefs: editorOnboardingTargetRefs,
     screenW: windowWidth,
     screenH: windowHeight,
@@ -1590,6 +1595,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       visible={editorOnboarding.showLayer}
       step={editorOnboarding.currentStep}
       stepAnchor={editorOnboarding.stepAnchor}
+      useWindowOverlay={readerNewEntryFromReader}
       colors={{
         tooltipBackground: colors.brown800,
         tooltipText: "#f5f2ec",

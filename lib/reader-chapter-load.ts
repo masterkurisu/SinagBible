@@ -8,10 +8,17 @@ import {
 import { getUsfmBookId } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import { apiChapterToBibleChapter, fetchChapter as fetchApiChapter, fetchTranslationBookNav } from "@/lib/bible-api-service";
+import {
+  fetchYvpBookNav,
+  fetchYvpChapter,
+  isYvpTranslationId,
+  parseYvpBibleId,
+} from "@/lib/youversion-api";
 
-/** KJV uses bundled JSON; every other known translation loads one chapter at a time via the API. */
+/** KJV uses bundled JSON; API-backed translations load one chapter at a time. */
 export function readerUsesPerChapterFetch(translationId: string): boolean {
-  return translationId !== "KJV" && isTranslationId(translationId);
+  if (translationId === "KJV") return false;
+  return isTranslationId(translationId) || isYvpTranslationId(translationId);
 }
 
 export function primeReaderChapterFetch(
@@ -19,6 +26,13 @@ export function primeReaderChapterFetch(
   target: { slug: string; chapter: number } | null | undefined,
 ): void {
   if (!target || translationId === "KJV") return;
+  const yvpBibleId = parseYvpBibleId(translationId);
+  if (yvpBibleId != null) {
+    void fetchYvpChapter(yvpBibleId, target.slug, target.chapter).catch(() => {
+      /* prefetch is best-effort */
+    });
+    return;
+  }
   const usfm = getUsfmBookId(target.slug);
   if (!usfm) return;
   const apiId = isTranslationId(translationId)
@@ -36,6 +50,15 @@ export async function fetchReaderChapterContent(
 ): Promise<BibleChapter | null> {
   if (translationId === "KJV") {
     return getChapterBySlugForTranslation("KJV", bookSlug, chapterNumber);
+  }
+
+  const yvpBibleId = parseYvpBibleId(translationId);
+  if (yvpBibleId != null) {
+    try {
+      return await fetchYvpChapter(yvpBibleId, bookSlug, chapterNumber);
+    } catch {
+      return null;
+    }
   }
 
   const usfm = getUsfmBookId(bookSlug);
@@ -61,6 +84,14 @@ export async function resolveReaderBooksForTranslation(
   cachedBooks: BibleBookNavItem[] | null,
 ): Promise<BibleBookNavItem[]> {
   if (cachedBooks && cachedBooks.length > 0) return cachedBooks;
+  const yvpBibleId = parseYvpBibleId(translationId);
+  if (yvpBibleId != null) {
+    try {
+      return await fetchYvpBookNav(yvpBibleId);
+    } catch {
+      return getBookNavForTranslation("KJV");
+    }
+  }
   if (isTranslationId(translationId)) {
     return getBookNavForTranslation(translationId);
   }

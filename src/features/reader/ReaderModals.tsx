@@ -864,6 +864,7 @@ bundle,
             <JournalNewEntryForm
               ref={newEntryFormRef}
               key={newEntrySheetKey}
+              onboardingSessionKey={newEntrySheetKey}
               initialParams={newEntryInitialParams ?? undefined}
               contentHorizontalPadding={10}
               readerNewEntryScrollable

@@ -41,3 +41,28 @@ export const JOURNAL_EDITOR_ONBOARDING_STEPS: JournalEditorOnboardingStep[] = [
 ];
 
 export const JOURNAL_EDITOR_ONBOARDING_STEP_MS = 4500;
+
+const BASE_COACHMARK_VERTICAL_OFFSET_PX = 40;
+
+const EXTRA_COACHMARK_VERTICAL_OFFSET_PX: Partial<Record<JournalEditorOnboardingStepId, number>> = {
+  "optional-title": 40,
+};
+
+const READER_EXTRA_COACHMARK_VERTICAL_OFFSET_PX: Partial<Record<JournalEditorOnboardingStepId, number>> = {
+  "rich-text-toolbar": 30,
+  "photo-attachment": 30,
+  "fullscreen-mode": 30,
+};
+
+/** Total downward shift applied to the coachmark arrow (see ActionBarOnboardingOverlay). */
+export function journalEditorCoachmarkVerticalOffsetPx(
+  stepId: JournalEditorOnboardingStepId,
+  isReaderNewEntry: boolean,
+): number {
+  let offset = BASE_COACHMARK_VERTICAL_OFFSET_PX;
+  offset += EXTRA_COACHMARK_VERTICAL_OFFSET_PX[stepId] ?? 0;
+  if (isReaderNewEntry) {
+    offset += READER_EXTRA_COACHMARK_VERTICAL_OFFSET_PX[stepId] ?? 0;
+  }
+  return offset;
+}

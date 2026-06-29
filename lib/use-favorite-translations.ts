@@ -1,16 +1,48 @@
 import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  DEFAULTS_MIGRATION_KEY,
+  getDefaultPinnedTranslationIds,
+} from "@/lib/default-pinned-translations";
 
 const STORAGE_KEY = "sb:reader:favorite-translations";
+
+function mergeWithDefaultPins(stored: string[]): string[] {
+  const seen = new Set(stored);
+  const merged = [...stored];
+  for (const id of getDefaultPinnedTranslationIds()) {
+    if (!seen.has(id)) {
+      merged.push(id);
+    }
+  }
+  return merged;
+}
 
 async function loadFavorites(): Promise<string[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
+    const migrated = await AsyncStorage.getItem(DEFAULTS_MIGRATION_KEY);
+
+    if (raw == null) {
+      const defaults = getDefaultPinnedTranslationIds();
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
+      await AsyncStorage.setItem(DEFAULTS_MIGRATION_KEY, "1");
+      return defaults;
+    }
+
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as string[]) : [];
+    const stored = Array.isArray(parsed) ? (parsed as string[]) : [];
+
+    if (!migrated) {
+      const merged = mergeWithDefaultPins(stored);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      await AsyncStorage.setItem(DEFAULTS_MIGRATION_KEY, "1");
+      return merged;
+    }
+
+    return stored;
   } catch {
-    return [];
+    return getDefaultPinnedTranslationIds();
   }
 }
 
@@ -32,7 +64,7 @@ export function useFavoriteTranslations(): {
     void loadFavorites()
       .then(setFavoriteTranslationIds)
       .catch(() => {
-        setFavoriteTranslationIds([]);
+        setFavoriteTranslationIds(getDefaultPinnedTranslationIds());
       });
   }, []);
 

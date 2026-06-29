@@ -2,7 +2,6 @@ import { useCallback, useState } from "react";
 import { View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { getBookNameFromSlug } from "@sinag-bible/core";
-import { isTranslationId } from "@sinag-bible/core/bible-translations";
 import { ScreenLoadingSkeleton } from "@/components/loading-skeleton";
 import { READER_INTERNAL_NO_STACK_ANIMATION } from "@/lib/reader-hub-navigation";
 import { loadReaderLastPosition, peekReaderLastPosition, type ReaderLastPosition } from "@/lib/reader-last-position";
@@ -20,7 +19,8 @@ function resolveReaderTarget(saved: ReaderLastPosition | null): {
     getBookNameFromSlug(saved.bookSlug) &&
     saved.chapter >= 1 &&
     saved.chapter <= 200 &&
-    isTranslationId(saved.translationId)
+    typeof saved.translationId === "string" &&
+    saved.translationId.length > 0
   ) {
     return { book: saved.bookSlug, chapter: saved.chapter, translation: saved.translationId };
   }

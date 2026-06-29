@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, type LayoutRectangle } from "react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Animated, Easing, Modal, Platform, StyleSheet, View, type LayoutRectangle } from "react-native";
+import { FullWindowOverlay } from "react-native-screens";
 import { FeatureOnboardingModal } from "@/src/components/feature-onboarding/FeatureOnboardingModal";
 import { ActionBarOnboardingOverlay } from "@/src/features/reader/ActionBarOnboardingOverlay";
 
@@ -18,6 +19,13 @@ type JournalOnboardingLayerProps = {
   stepAnchor: LayoutRectangle | null;
   tooltipPlacement?: "above" | "below";
   verticalOffsetPx?: number;
+  /** Added on top of `verticalOffsetPx` for matching step ids (keyed by displayed step). */
+  extraVerticalOffsetByStepId?: Partial<Record<string, number>>;
+  /**
+   * Reader new-entry sheet: render in a window-level overlay (matches book picker) instead of a
+   * nested full-screen modal, which misaligns `measureInWindow` coachmark anchors.
+   */
+  useWindowOverlay?: boolean;
   colors: {
     tooltipBackground: string;
     tooltipText: string;
@@ -25,12 +33,47 @@ type JournalOnboardingLayerProps = {
   };
 };
 
+function OnboardingOverlayHost({
+  mounted,
+  useWindowOverlay,
+  children,
+}: {
+  mounted: boolean;
+  useWindowOverlay: boolean;
+  children: ReactNode;
+}) {
+  if (!mounted) return null;
+
+  if (useWindowOverlay) {
+    if (Platform.OS === "ios") {
+      return (
+        <FullWindowOverlay unstable_accessibilityContainerViewIsModal>{children}</FullWindowOverlay>
+      );
+    }
+    return (
+      <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={() => {}}>
+        <View style={styles.layer} pointerEvents="box-none">
+          {children}
+        </View>
+      </Modal>
+    );
+  }
+
+  return (
+    <FeatureOnboardingModal visible={mounted} pointerEvents="box-none" animationType="none">
+      {children}
+    </FeatureOnboardingModal>
+  );
+}
+
 export function JournalOnboardingLayer({
   visible,
   step,
   stepAnchor,
   tooltipPlacement = "above",
   verticalOffsetPx = 0,
+  extraVerticalOffsetByStepId,
+  useWindowOverlay = false,
   colors,
 }: JournalOnboardingLayerProps) {
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -115,20 +158,33 @@ export function JournalOnboardingLayer({
 
   useEffect(() => () => stopFadeAnims(), []);
 
+  const overlay =
+    mounted && displayStep && displayAnchor ? (
+      <Animated.View style={[styles.layer, { opacity: opacityAnim }]} pointerEvents="none">
+        <ActionBarOnboardingOverlay
+          step={displayStep}
+          buttonAnchor={displayAnchor}
+          tooltipPlacement={tooltipPlacement}
+          verticalOffsetPx={
+            verticalOffsetPx + (extraVerticalOffsetByStepId?.[displayStep.id] ?? 0)
+          }
+          colors={colors}
+        />
+      </Animated.View>
+    ) : null;
+
+  if (useWindowOverlay) {
+    return (
+      <OnboardingOverlayHost mounted={mounted} useWindowOverlay>
+        {overlay}
+      </OnboardingOverlayHost>
+    );
+  }
+
   return (
-    <FeatureOnboardingModal visible={mounted} pointerEvents="box-none" animationType="none">
-      {mounted && displayStep && displayAnchor ? (
-        <Animated.View style={[styles.layer, { opacity: opacityAnim }]} pointerEvents="none">
-          <ActionBarOnboardingOverlay
-            step={displayStep}
-            buttonAnchor={displayAnchor}
-            tooltipPlacement={tooltipPlacement}
-            verticalOffsetPx={verticalOffsetPx}
-            colors={colors}
-          />
-        </Animated.View>
-      ) : null}
-    </FeatureOnboardingModal>
+    <OnboardingOverlayHost mounted={mounted} useWindowOverlay={false}>
+      {overlay}
+    </OnboardingOverlayHost>
   );
 }
 

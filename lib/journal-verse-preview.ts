@@ -10,6 +10,7 @@ import {
 } from "@sinag-bible/core/bible-translations";
 import type { BibleChapter } from "@sinag-bible/types";
 import { fetchReaderChapterContent } from "@/lib/reader-chapter-load";
+import { isYvpTranslationId } from "@/lib/youversion-api";
 
 /**
  * Resolve a journal translation id from route params, saved entry, or reader context.
@@ -29,6 +30,7 @@ export function normalizeJournalTranslationId(raw: string | null | undefined): s
 export function resolveJournalTranslationForFetch(translationId: string): string {
   const normalized = normalizeJournalTranslationId(translationId);
   if (isTranslationId(normalized)) return normalized;
+  if (isYvpTranslationId(normalized)) return normalized;
   return resolveFeaturedTranslationApiId(normalized.toLowerCase());
 }
 

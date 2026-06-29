@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { InteractionManager, type LayoutRectangle, type View } from "react-native";
+import { type LayoutRectangle, type View } from "react-native";
 import {
   isFeatureOnboardingDone,
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
+import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
+import { adjustAnchorForOnboardingModal } from "@/src/components/feature-onboarding/onboardingOverlayCoords";
+import { JOURNAL_EDITOR_ONBOARDING_DEBUG_ALWAYS_START } from "@/src/features/journal/journalEditorOnboardingDebug";
 import {
   JOURNAL_EDITOR_ONBOARDING_STEP_MS,
   JOURNAL_EDITOR_ONBOARDING_STEPS,
+  journalEditorCoachmarkVerticalOffsetPx,
   type JournalEditorOnboardingStepId,
 } from "@/src/features/journal/journalEditorOnboardingSteps";
 
@@ -15,27 +19,13 @@ const TOOLBAR_BTN_PX = 40;
 
 type UseJournalEditorOnboardingArgs = {
   enabled: boolean;
+  /** Bump when the parent sheet opens so the tour can restart (pairs with debug flag). */
+  sessionKey: number;
+  isReaderNewEntry: boolean;
   targetRefs: Record<JournalEditorOnboardingStepId, RefObject<View | null>>;
   screenW: number;
   screenH: number;
 };
-
-function measureViewInWindow(ref: RefObject<View | null>): Promise<LayoutRectangle | null> {
-  return new Promise((resolve) => {
-    const node = ref.current;
-    if (!node) {
-      resolve(null);
-      return;
-    }
-    node.measureInWindow((x, y, width, height) => {
-      if (width <= 0 || height <= 0) {
-        resolve(null);
-        return;
-      }
-      resolve({ x, y, width, height });
-    });
-  });
-}
 
 function fallbackTarget(stepId: JournalEditorOnboardingStepId, screenW: number, screenH: number): LayoutRectangle {
   const toolbarY = screenH * 0.52;
@@ -55,8 +45,15 @@ function fallbackTarget(stepId: JournalEditorOnboardingStepId, screenW: number, 
   }
 }
 
+/** Bakes vertical offset into anchor y (equivalent to ActionBarOnboardingOverlay `verticalOffsetPx`). */
+function anchorWithCoachmarkVerticalOffset(anchor: LayoutRectangle, offsetPx: number): LayoutRectangle {
+  return { ...anchor, y: anchor.y + offsetPx };
+}
+
 export function useJournalEditorOnboarding({
   enabled,
+  sessionKey,
+  isReaderNewEntry,
   targetRefs,
   screenW,
   screenH,
@@ -66,7 +63,7 @@ export function useJournalEditorOnboarding({
   const [presentedStepIndex, setPresentedStepIndex] = useState(0);
   const [stepAnchor, setStepAnchor] = useState<LayoutRectangle | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const storageCheckedRef = useRef(false);
+  const sessionTokenRef = useRef(0);
 
   const clearTimer = useCallback(() => {
     if (intervalRef.current != null) {
@@ -75,41 +72,62 @@ export function useJournalEditorOnboarding({
     }
   }, []);
 
-  const finishTour = useCallback(() => {
+  const resetSession = useCallback(() => {
     clearTimer();
     setActive(false);
-    void markFeatureOnboardingDone("journalEditor");
+    setStepIndex(0);
+    setPresentedStepIndex(0);
+    setStepAnchor(null);
   }, [clearTimer]);
 
+  const finishTour = useCallback(() => {
+    sessionTokenRef.current += 1;
+    resetSession();
+    if (!JOURNAL_EDITOR_ONBOARDING_DEBUG_ALWAYS_START) {
+      void markFeatureOnboardingDone("journalEditor");
+    }
+  }, [resetSession]);
+
   const measureCurrentStep = useCallback(
-    async (index: number) => {
+    async (index: number, token: number) => {
       const step = JOURNAL_EDITOR_ONBOARDING_STEPS[index];
       if (!step) return;
-      const measured = await measureViewInWindow(targetRefs[step.id]);
-      const anchor = measured ?? fallbackTarget(step.id, screenW, screenH);
+
+      const measured = await measureOnboardingTarget(targetRefs[step.id], {
+        minWidth: 20,
+        minHeight: 20,
+      });
+      if (token !== sessionTokenRef.current) return;
+
+      const rawAnchor = measured ?? fallbackTarget(step.id, screenW, screenH);
+      const modalAnchor = adjustAnchorForOnboardingModal(rawAnchor);
+      const offsetPx = journalEditorCoachmarkVerticalOffsetPx(step.id, isReaderNewEntry);
+      const anchor = anchorWithCoachmarkVerticalOffset(modalAnchor, offsetPx);
+
       setStepAnchor(anchor);
       setPresentedStepIndex(index);
     },
-    [screenH, screenW, targetRefs],
+    [isReaderNewEntry, screenH, screenW, targetRefs],
   );
 
   useEffect(() => {
-    if (!enabled || storageCheckedRef.current) return;
-    storageCheckedRef.current = true;
+    if (!enabled) {
+      sessionTokenRef.current += 1;
+      resetSession();
+      return;
+    }
 
-    let cancelled = false;
+    const token = ++sessionTokenRef.current;
+    resetSession();
 
     const startTimeout = setTimeout(() => {
       void (async () => {
-        await new Promise<void>((resolve) => {
-          InteractionManager.runAfterInteractions(() => resolve());
-        });
-        if (cancelled) return;
+        const done = JOURNAL_EDITOR_ONBOARDING_DEBUG_ALWAYS_START
+          ? false
+          : await isFeatureOnboardingDone("journalEditor");
+        if (token !== sessionTokenRef.current) return;
+        if (done) return;
 
-        const done = await isFeatureOnboardingDone("journalEditor");
-        if (cancelled || done) return;
-
-        setStepIndex(0);
         setActive(true);
 
         intervalRef.current = setInterval(() => {
@@ -126,14 +144,14 @@ export function useJournalEditorOnboarding({
     }, CONTENT_SETTLE_MS);
 
     return () => {
-      cancelled = true;
       clearTimeout(startTimeout);
     };
-  }, [enabled, finishTour]);
+  }, [enabled, sessionKey, finishTour, resetSession]);
 
   useEffect(() => {
     if (!active) return;
-    void measureCurrentStep(stepIndex);
+    const token = sessionTokenRef.current;
+    void measureCurrentStep(stepIndex, token);
   }, [active, measureCurrentStep, stepIndex]);
 
   useEffect(() => () => clearTimer(), [clearTimer]);

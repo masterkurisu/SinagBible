@@ -33,7 +33,12 @@ import {
 } from "@sinag-bible/core/bible-translations";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
-import type { TranslationPickerItem } from "@/lib/use-translation-picker";
+import {
+  compareTranslationPickerAbbreviations,
+  getTranslationPickerAbbreviation,
+  type TranslationPickerItem,
+} from "@/lib/use-translation-picker";
+import { getTranslationLanguageFilterOptions } from "@/lib/translation-language-sections";
 import { hapticLightImpact } from "@/lib/haptics";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
 
@@ -119,13 +124,10 @@ export function TranslationPickerSheet({
   const langSheetDragStartYRef = useRef(0);
   const langSearchInputRef = useRef<TextInput>(null);
 
-  const availableLanguages = useMemo(() => {
-    const seen = new Set<string>();
-    return translationPickerItems
-      .map((t) => t.languageSection)
-      .filter((l) => l && !seen.has(l) && seen.add(l))
-      .sort();
-  }, [translationPickerItems]);
+  const availableLanguages = useMemo(
+    () => getTranslationLanguageFilterOptions(translationPickerItems),
+    [translationPickerItems],
+  );
 
   const filteredLanguages = useMemo(() => {
     const q = langSearch.trim().toLowerCase();
@@ -135,12 +137,16 @@ export function TranslationPickerSheet({
 
   const filteredTranslations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return translationPickerItems.filter((item) => {
+    const filtered = translationPickerItems.filter((item) => {
       if (langFilter && item.languageSection !== langFilter) return false;
       if (!query) return true;
-      const abbr = item.label.split(" - ")[0]?.toLowerCase() ?? "";
+      const abbr = getTranslationPickerAbbreviation(item).toLowerCase();
       return item.label.toLowerCase().includes(query) || abbr.includes(query);
     });
+    if (langFilter != null) {
+      return filtered.slice().sort(compareTranslationPickerAbbreviations);
+    }
+    return filtered;
   }, [langFilter, searchQuery, translationPickerItems]);
 
   const showResults = useMemo(
@@ -431,9 +437,12 @@ export function TranslationPickerSheet({
     };
   }, [langSheetOpen]);
 
-  const pinnedTranslations = translationPickerItems.filter((item) =>
-    favoriteTranslationIds.includes(item.id),
-  );
+  const pinnedTranslations = useMemo(() => {
+    const byId = new Map(translationPickerItems.map((item) => [item.id, item]));
+    return favoriteTranslationIds
+      .map((id) => byId.get(id))
+      .filter((item): item is TranslationPickerItem => item != null);
+  }, [translationPickerItems, favoriteTranslationIds]);
   const ui = colors;
 
   return (
@@ -625,7 +634,7 @@ export function TranslationPickerSheet({
 
                 <View style={{ gap: 8, marginBottom: 16 }}>
                   {pinnedTranslations.length > 0 ? pinnedTranslations.map((item, index) => {
-                    const abbr = item.label.split(" - ")[0] ?? item.label;
+                    const abbr = getTranslationPickerAbbreviation(item);
                     return (
                     <TouchableOpacity
                       key={item.id}
@@ -699,7 +708,7 @@ export function TranslationPickerSheet({
                   <View style={{ gap: 8, marginBottom: 16 }}>
                     {filteredTranslations.map((item) => {
                       const isPinned = favoriteTranslationIds.includes(item.id);
-                      const abbr = item.label.split(" - ")[0] ?? item.label;
+                      const abbr = getTranslationPickerAbbreviation(item);
                       return (
                         <TouchableOpacity
                           key={`result-${item.id}`}
