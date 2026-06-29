@@ -56,6 +56,14 @@ export function getUsfmBookId(bookSlug: string): string | null {
   return BIBLE_BOOK_USFM_CODES[i] ?? null;
 }
 
+/** Inverse of {@link getUsfmBookId}: USFM code (e.g. `JHN`) → reader slug (`john`). */
+export function getBookSlugFromUsfm(usfm: string): string | null {
+  const normalized = usfm.trim().toUpperCase();
+  const i = (BIBLE_BOOK_USFM_CODES as readonly string[]).indexOf(normalized);
+  if (i === -1) return null;
+  return BIBLE_BOOK_SLUGS[i] ?? null;
+}
+
 /** Resolve display name for a normalized book slug (e.g. `isaiah` → `Isaiah`). */
 export function getBookNameFromSlug(slug: string): string | null {
   const i = BIBLE_BOOK_SLUGS.indexOf(slug);

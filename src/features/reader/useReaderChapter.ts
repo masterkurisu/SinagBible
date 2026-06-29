@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { InteractionManager } from "react-native";
 import {
-  getBookNavForTranslation,
   getChapterBySlugForTranslation,
-  isTranslationId,
 } from "@sinag-bible/core/bible-translations";
 import { getUsfmBookId } from "@sinag-bible/core";
 import { fetchChapter as fetchApiChapter } from "@/lib/bible-api-service";
@@ -16,7 +14,6 @@ import {
 import {
   fetchReaderChapterContent,
   primeReaderChapterFetch,
-  readerUsesPerChapterFetch,
   resolveReaderBooksForTranslation,
 } from "@/lib/reader-chapter-load";
 import { collectPrefetchChapterTargets } from "@/lib/reader-chapter-nav";
@@ -65,37 +62,16 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
           let books: BibleBookNavItem[];
           let chapter: BibleChapter | null;
 
-          if (resolvedTranslation === "KJV" || !readerUsesPerChapterFetch(resolvedTranslation)) {
-            if (isTranslationId(resolvedTranslation)) {
-              if (cachedBooks) {
-                books = cachedBooks;
-                chapter = await getChapterBySlugForTranslation(resolvedTranslation, slug, chapterNumber);
-              } else {
-                [books, chapter] = await Promise.all([
-                  getBookNavForTranslation(resolvedTranslation),
-                  getChapterBySlugForTranslation(resolvedTranslation, slug, chapterNumber),
-                ]);
-              }
-            } else {
-              books = cachedBooks ?? (await resolveReaderBooksForTranslation(resolvedTranslation, null));
-              chapter = await fetchReaderChapterContent(resolvedTranslation, slug, chapterNumber);
-            }
-          } else {
-            books = await resolveReaderBooksForTranslation(resolvedTranslation, cachedBooks);
-            if (!cachedBooks && isTranslationId(resolvedTranslation)) {
-              void getBookNavForTranslation(resolvedTranslation).then((nav) => {
-                if (cancelled) return;
-                setReaderPayload((curr) =>
-                  curr?.resolvedTranslationId === resolvedTranslation ? { ...curr, books: nav } : curr,
-                );
-              });
-            }
-            chapter = await fetchReaderChapterContent(resolvedTranslation, slug, chapterNumber);
-          }
+          [books, chapter] = await Promise.all([
+            resolveReaderBooksForTranslation(resolvedTranslation, cachedBooks),
+            resolvedTranslation === "KJV"
+              ? getChapterBySlugForTranslation("KJV", slug, chapterNumber)
+              : fetchReaderChapterContent(resolvedTranslation, slug, chapterNumber),
+          ]);
 
           if (!chapter) {
             resolvedTranslation = "KJV";
-            books = await getBookNavForTranslation("KJV");
+            books = await resolveReaderBooksForTranslation("KJV", null);
             chapter = await getChapterBySlugForTranslation("KJV", slug, chapterNumber);
           }
 

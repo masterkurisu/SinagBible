@@ -36,15 +36,14 @@ import {
   getPassageMisspellingSuggestion,
 } from "@sinag-bible/core";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
-import {
-  getChapterBySlugForTranslation,
-  getClosestBookSuggestionForTranslation,
-  getVersePreviewForTranslation,
-  isTranslationId,
-  resolvePassageBookSlugForTranslation,
-  type TranslationId,
-} from "@sinag-bible/core/bible-translations";
 import { saveLocalEntry, updateLocalEntry } from "@/lib/journal-local";
+import {
+  getJournalChapter,
+  getJournalClosestBookSuggestion,
+  getJournalVersePreview,
+  normalizeJournalTranslationId,
+  resolveJournalPassageBookSlug,
+} from "@/lib/journal-verse-preview";
 import { hapticLightImpact, hapticSelection } from "@/lib/haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -270,12 +269,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           Math.round(windowHeight * (isTabletForm && isLandscapeForm ? 0.34 : 0.46)),
         );
 
-  const requestedTranslationRaw =
-    editDraft?.bible_translation?.trim().toUpperCase() ??
-    initialParams?.translation?.trim().toUpperCase();
-  const defaultTranslation: TranslationId = isTranslationId(requestedTranslationRaw)
-    ? requestedTranslationRaw
-    : "KJV";
+  const journalTranslationId = normalizeJournalTranslationId(
+    editDraft?.bible_translation ?? initialParams?.translation,
+  );
 
   const defaultPassageNew =
     initialParams?.book && initialParams?.chapter
@@ -671,9 +667,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           return;
         }
 
-        const canonicalBook = await resolvePassageBookSlugForTranslation(defaultTranslation, parsed.book);
+        const canonicalBook = await resolveJournalPassageBookSlug(journalTranslationId, parsed.book);
         if (!canonicalBook) {
-          const closest = await getClosestBookSuggestionForTranslation(defaultTranslation, bookInput);
+          const closest = await getJournalClosestBookSuggestion(journalTranslationId, bookInput);
           if (!cancelled) {
             setPassagePreview(null);
             setPassagePreviewRef(null);
@@ -684,11 +680,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           return;
         }
 
-        const chapterData = await getChapterBySlugForTranslation(
-          defaultTranslation,
-          canonicalBook,
-          parsed.chapter,
-        );
+        const chapterData = await getJournalChapter(journalTranslationId, canonicalBook, parsed.chapter);
 
         if (!chapterData) {
           if (!cancelled) {
@@ -711,8 +703,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           }
         }
 
-        const preview = await getVersePreviewForTranslation(
-          defaultTranslation,
+        const preview = await getJournalVersePreview(
+          journalTranslationId,
           canonicalBook,
           parsed.chapter,
           parsed.verseStart,
@@ -742,7 +734,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [defaultTranslation, passage]);
+  }, [journalTranslationId, passage]);
 
   const attachReflectionImage = async () => {
     hapticLightImpact();
@@ -890,7 +882,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           chapter,
           verse_start,
           verse_end,
-          bible_translation: hasPassage ? defaultTranslation : null,
+          bible_translation: hasPassage ? journalTranslationId : null,
           content,
           title: titleTrim,
         });
@@ -903,7 +895,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         chapter,
         verse_start,
         verse_end,
-        bible_translation: hasPassage ? defaultTranslation : null,
+        bible_translation: hasPassage ? journalTranslationId : null,
         content,
         title: titleTrim,
         is_favorite: false,

@@ -7,7 +7,7 @@ import {
 } from "@sinag-bible/core/bible-translations";
 import { getUsfmBookId } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
-import { apiChapterToBibleChapter, fetchChapter as fetchApiChapter } from "@/lib/bible-api-service";
+import { apiChapterToBibleChapter, fetchChapter as fetchApiChapter, fetchTranslationBookNav } from "@/lib/bible-api-service";
 
 /** KJV uses bundled JSON; every other known translation loads one chapter at a time via the API. */
 export function readerUsesPerChapterFetch(translationId: string): boolean {
@@ -61,6 +61,12 @@ export async function resolveReaderBooksForTranslation(
   cachedBooks: BibleBookNavItem[] | null,
 ): Promise<BibleBookNavItem[]> {
   if (cachedBooks && cachedBooks.length > 0) return cachedBooks;
-  if (translationId === "KJV") return getBookNavForTranslation("KJV");
-  return getBookNavForTranslation("KJV");
+  if (isTranslationId(translationId)) {
+    return getBookNavForTranslation(translationId);
+  }
+  try {
+    return await fetchTranslationBookNav(translationId);
+  } catch {
+    return getBookNavForTranslation("KJV");
+  }
 }

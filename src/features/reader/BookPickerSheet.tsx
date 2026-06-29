@@ -32,6 +32,7 @@ import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
+import { getSelectChapterHeadingForLanguage } from "@/lib/reader-chapter-label";
 import { hapticLightImpact } from "@/lib/haptics";
 import { FullWindowOverlay } from "react-native-screens";
 
@@ -81,6 +82,7 @@ export type BookPickerSheetProps = {
   chapter: BibleChapter;
   books: BibleBookNavItem[];
   resolvedTranslationId: string;
+  translationLanguageLabel: string;
   goToReaderChapter: (bookSlug: string, chapterNumber: number, translationId: string) => void;
   colors: {
     borderSolid: string;
@@ -106,6 +108,7 @@ export function BookPickerSheet({
   chapter,
   books,
   resolvedTranslationId,
+  translationLanguageLabel,
   goToReaderChapter,
   colors,
   rc,
@@ -930,7 +933,7 @@ export function BookPickerSheet({
               textAlign: "center",
             }}
           >
-            SELECT A CHAPTER
+            {getSelectChapterHeadingForLanguage(translationLanguageLabel)}
           </Text>
           <Text
             style={{

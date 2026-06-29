@@ -35,11 +35,9 @@ import {
 } from "@/lib/journal-local";
 import { hapticLightImpact } from "@/lib/haptics";
 import {
-  getVersePreviewForTranslation,
-  isTranslationId,
-  resolvePassageBookSlugForTranslation,
-  type TranslationId,
-} from "@sinag-bible/core/bible-translations";
+  getJournalVersePreview,
+  resolveJournalPassageBookSlug,
+} from "@/lib/journal-verse-preview";
 import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboardingLayer";
 import { useJournalDetailOnboarding } from "@/src/features/journal/useJournalDetailOnboarding";
 import type { JournalDetailOnboardingStepId } from "@/src/features/journal/journalDetailOnboardingSteps";
@@ -463,14 +461,13 @@ export default function JournalEntryScreen() {
           setVerseText(null);
           return;
         }
-        const translationRaw = entry.bible_translation?.trim().toUpperCase();
-        const translation: TranslationId = isTranslationId(translationRaw) ? translationRaw : "KJV";
-        const resolvedBook = await resolvePassageBookSlugForTranslation(translation, entry.book);
+        const translation = entry.bible_translation?.trim() || "KJV";
+        const resolvedBook = await resolveJournalPassageBookSlug(translation, entry.book);
         if (!resolvedBook) {
           if (!cancelled) setVerseText(null);
           return;
         }
-        const fullVerse = await getVersePreviewForTranslation(
+        const fullVerse = await getJournalVersePreview(
           translation,
           resolvedBook,
           entry.chapter,

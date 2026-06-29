@@ -372,6 +372,7 @@ export type ReaderModalsProps = {
   readerNewEntrySheetBottomLiftPx: number;
   requestCloseReaderNewEntrySheet: () => void;
   resolvedTranslationId: string;
+  translationLanguageLabel: string;
   saveNoteFromModal: () => void;
   selectedVerses: number[];
   setNewEntryHasDraft: (v: boolean) => void;
@@ -466,6 +467,7 @@ bundle,
     readerNewEntrySheetBottomLiftPx,
     requestCloseReaderNewEntrySheet,
     resolvedTranslationId,
+    translationLanguageLabel,
     saveNoteFromModal,
     selectedVerses,
     setNewEntryHasDraft,
@@ -998,6 +1000,7 @@ bundle,
   chapter={chapter}
   books={books}
   resolvedTranslationId={resolvedTranslationId}
+  translationLanguageLabel={translationLanguageLabel}
   goToReaderChapter={goToReaderChapter}
   colors={colors}
   rc={rc}

@@ -8,7 +8,7 @@ import {
   TRANSLATION_FULL_NAME,
   TRANSLATION_LANGUAGE_LABEL,
   getExternalApiId,
-} from "@sinag-bible/core";
+} from "@sinag-bible/core/bible-translations";
 import { fetchAvailableTranslations, type ApiTranslation } from "./bible-api-service";
 
 export type TranslationPickerItem = {

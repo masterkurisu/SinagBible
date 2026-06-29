@@ -38,9 +38,10 @@ import {
   getExternalApiId,
   getInternalIdFromApiId,
   isTranslationId,
-  TRANSLATION_LANGUAGE_LABEL,
   type TranslationId,
 } from "@sinag-bible/core/bible-translations";
+import { formatReaderChapterHeading } from "@/lib/reader-chapter-label";
+import { getReaderTranslationLanguageLabel } from "@/lib/reader-translation-language";
 import { primeReaderChapterFetch } from "@/lib/reader-chapter-load";
 import {
   getReaderChapterNeighbors,
@@ -1344,19 +1345,10 @@ export default function ReaderChapterScreen() {
   const readerHeaderTranslationId = isReaderContentCurrent
     ? resolvedTranslationId
     : requestedTranslationId;
-  const readerHeaderLanguageLabel = (() => {
-    const apiId = isTranslationId(readerHeaderTranslationId)
-      ? getExternalApiId(readerHeaderTranslationId)
-      : readerHeaderTranslationId;
-    const pickerItem = translationPickerItems.find(
-      (t) => t.id === apiId || t.id.toLowerCase() === apiId.toLowerCase(),
-    );
-    if (pickerItem) return pickerItem.languageSection;
-    if (isTranslationId(readerHeaderTranslationId)) {
-      return TRANSLATION_LANGUAGE_LABEL[readerHeaderTranslationId];
-    }
-    return "English";
-  })();
+  const readerHeaderLanguageLabel = getReaderTranslationLanguageLabel(
+    readerHeaderTranslationId,
+    translationPickerItems,
+  );
 
   const readerChapterPageHeading = (
     <Animated.View
@@ -1377,7 +1369,7 @@ export default function ReaderChapterScreen() {
       <Text
         style={[readerFlashListChromeStyles.pageHeadingChapter, { fontFamily: "Inter_400Regular", color: colors.tan200 }]}
       >
-        Chapter {chapterNumber}
+        {formatReaderChapterHeading(readerHeaderLanguageLabel, chapterNumber)}
       </Text>
     </Animated.View>
   );
@@ -1811,6 +1803,7 @@ export default function ReaderChapterScreen() {
         readerNewEntrySheetBottomLiftPx={readerNewEntrySheetBottomLiftPx}
         requestCloseReaderNewEntrySheet={requestCloseReaderNewEntrySheet}
         resolvedTranslationId={resolvedTranslationId}
+        translationLanguageLabel={readerHeaderLanguageLabel}
         saveNoteFromModal={saveNoteFromModal}
         selectedVerses={selectedVerses}
         setNewEntryHasDraft={setNewEntryHasDraft}

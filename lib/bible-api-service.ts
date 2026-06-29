@@ -8,23 +8,29 @@
  * Base URL:  https://bible.helloao.org/api
  * Key endpoints:
  *   GET /available_translations.json          → all translations
+ *   GET /{translationId}/books.json           → localized book list for a translation
  *   GET /{translationId}/{bookId}/{chapter}.json → single chapter
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getBookSlugFromUsfm } from "@sinag-bible/core/bible-meta";
 import {
+  getExternalApiId,
   getFeaturedTranslationSortIndex,
   isBundledFeaturedTranslationId,
   isFeaturedTranslationId,
+  isTranslationId,
+  resolveFeaturedTranslationApiId,
 } from "@sinag-bible/core/bible-translations";
 import {
   flattenHelloaoVerseText,
   parseHelloaoVerseContentArray,
 } from "@sinag-bible/core/helloao-verse-inline";
-import type { BibleChapter } from "@sinag-bible/types";
+import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
 
 const BIBLE_API_BASE_URL = "https://bible.helloao.org/api";
 const CHAPTER_CACHE_KEY_PREFIX = "sb:bible-api:chapter:";
+const BOOKS_CACHE_KEY_PREFIX = "sb:bible-api:books:";
 const BIBLE_API_TIMEOUT_MS = 12_000;
 
 // ---------------------------------------------------------------------------
@@ -97,6 +103,27 @@ type ApiChapterResponse = {
     content: ApiContentItem[];
   };
 };
+
+type ApiTranslationBook = {
+  id: string;
+  name: string;
+  commonName?: string;
+  order: number;
+  numberOfChapters: number;
+};
+
+type ApiTranslationBooksResponse = {
+  books: ApiTranslationBook[];
+};
+
+function resolveApiTranslationId(translationId: string): string {
+  if (isTranslationId(translationId)) return getExternalApiId(translationId);
+  return resolveFeaturedTranslationApiId(translationId.toLowerCase());
+}
+
+function booksStorageKey(translationId: string): string {
+  return `${BOOKS_CACHE_KEY_PREFIX}${translationId}`;
+}
 
 // ---------------------------------------------------------------------------
 // Available translations — in-memory promise cache
@@ -223,6 +250,65 @@ function parseChapterResponse(
  * two network calls for the same key within a single session.
  */
 const chapterFetchCache = new Map<string, Promise<ApiChapter>>();
+const translationBooksCache = new Map<string, Promise<BibleBookNavItem[]>>();
+
+function parseTranslationBooksResponse(raw: ApiTranslationBooksResponse): BibleBookNavItem[] {
+  const books = Array.isArray(raw?.books) ? raw.books : [];
+  return books
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((book) => {
+      const slug = getBookSlugFromUsfm(book.id);
+      if (!slug) return null;
+      return {
+        name: (book.commonName ?? book.name).trim() || book.name,
+        slug,
+        chapterCount: book.numberOfChapters,
+      };
+    })
+    .filter((item): item is BibleBookNavItem => item != null);
+}
+
+/**
+ * Localized book nav for API-only translations (e.g. `tgl_ulb`).
+ * Canonical reader slugs (KJV-shaped) are preserved for routing.
+ */
+export function fetchTranslationBookNav(translationId: string): Promise<BibleBookNavItem[]> {
+  const apiId = resolveApiTranslationId(translationId);
+  const inflight = translationBooksCache.get(apiId);
+  if (inflight) return inflight;
+
+  const p = (async () => {
+    try {
+      const cached = await AsyncStorage.getItem(booksStorageKey(apiId));
+      if (cached) {
+        const parsed = JSON.parse(cached) as BibleBookNavItem[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      /* ignore storage read errors */
+    }
+
+    const url = `${BIBLE_API_BASE_URL}/${apiId}/books.json`;
+    const raw = await fetchJsonWithTimeout<ApiTranslationBooksResponse>(url);
+    const nav = parseTranslationBooksResponse(raw);
+    if (nav.length === 0) {
+      throw new Error(`bible-api: no canonical books in ${apiId}/books.json`);
+    }
+
+    try {
+      await AsyncStorage.setItem(booksStorageKey(apiId), JSON.stringify(nav));
+    } catch {
+      /* ignore storage write errors */
+    }
+
+    return nav;
+  })();
+
+  translationBooksCache.set(apiId, p);
+  void p.catch(() => translationBooksCache.delete(apiId));
+  return p;
+}
 
 /**
  * Fetches a single Bible chapter.
@@ -330,4 +416,5 @@ export async function clearChapterCache(): Promise<void> {
 export function clearBibleApiMemoryCaches(): void {
   availableTranslationsCache = null;
   chapterFetchCache.clear();
+  translationBooksCache.clear();
 }
