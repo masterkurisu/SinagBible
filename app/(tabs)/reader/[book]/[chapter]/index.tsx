@@ -65,6 +65,7 @@ import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
 import { nativeTabFabOffsetPx, nativeTabSheetBottomInsetPx, readerAndroidListBottomPaddingPx, readerAndroidTabBarClearancePx } from "@/lib/native-tab-chrome";
+import { READER_SCROLL_JS_BRIDGE_DELTA_PX } from "@/lib/device-capability";
 import { useReaderTabBarScrollHidden, useRegisterReaderSettingsSlideProgress } from "@/lib/reader-tab-bar-visibility-context";
 import {
   READER_SETTINGS_MENU_SPRING_CLOSE,
@@ -302,6 +303,8 @@ export default function ReaderChapterScreen() {
   const readerScrollRef = useRef<FlashListRef<ReaderVerseFlashItem> | null>(null);
   /** Drives cross-fade between in-content heading and stack header title (UI-thread scroll). */
   const readerScrollY = useSharedValue(0);
+  const lastScrollBridgeY = useSharedValue(-1);
+  const latestScrollMetricsRef = useRef({ y: 0, contentHeight: 0, viewportHeight: 0 });
   const [readerPageHeadingHeight, setReaderPageHeadingHeight] = useState(96);
   const onReaderPageHeadingLayout = useCallback((height: number) => {
     setReaderPageHeadingHeight((prev) => (Math.abs(prev - height) > 1 ? height : prev));
@@ -412,7 +415,8 @@ export default function ReaderChapterScreen() {
     if (pendingScrollVerseRef.current != null) return;
     readerScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
     readerScrollY.value = 0;
-  }, [bookSlug, chapterNumber, requestedTranslationId, readerScrollY, initialScrollVerse]);
+    lastScrollBridgeY.value = -1;
+  }, [bookSlug, chapterNumber, requestedTranslationId, readerScrollY, lastScrollBridgeY, initialScrollVerse]);
 
   const clearMobileSettingsFollowUp = useCallback(() => {
     if (mobileSettingsFollowUpTimeoutRef.current != null) {
@@ -1287,13 +1291,9 @@ export default function ReaderChapterScreen() {
     readerFeatureOnboarding.forceChapterNavArrowsVisible,
   );
 
-  const onReaderScrollBeginDragWithChapterNav = useCallback(() => {
-    onReaderScrollBeginDrag();
-    onChapterNavArrowsScrollBeginDrag();
-  }, [onReaderScrollBeginDrag, onChapterNavArrowsScrollBeginDrag]);
-
   const onReaderScrollSideEffects = useCallback(
     (y: number, contentHeight: number, viewportHeight: number) => {
+      latestScrollMetricsRef.current = { y, contentHeight, viewportHeight };
       const nativeEvent = {
         contentOffset: { y, x: 0 },
         contentSize: { height: contentHeight, width: 0 },
@@ -1306,14 +1306,39 @@ export default function ReaderChapterScreen() {
     [onChapterNavArrowsScroll, onTabBarScroll],
   );
 
+  const flushReaderScrollSideEffects = useCallback(() => {
+    const { y, contentHeight, viewportHeight } = latestScrollMetricsRef.current;
+    onReaderScrollSideEffects(y, contentHeight, viewportHeight);
+    lastScrollBridgeY.value = y;
+  }, [onReaderScrollSideEffects, lastScrollBridgeY]);
+
+  const onReaderScrollBeginDragWithChapterNav = useCallback(() => {
+    onReaderScrollBeginDrag();
+    onChapterNavArrowsScrollBeginDrag();
+    flushReaderScrollSideEffects();
+  }, [onReaderScrollBeginDrag, onChapterNavArrowsScrollBeginDrag, flushReaderScrollSideEffects]);
+
+  const onReaderScrollEndDragWithChapterNav = useCallback(() => {
+    onChapterNavArrowsScrollEndDrag();
+    flushReaderScrollSideEffects();
+  }, [onChapterNavArrowsScrollEndDrag, flushReaderScrollSideEffects]);
+
+  const onReaderMomentumScrollEndWithChapterNav = useCallback(() => {
+    onChapterNavArrowsMomentumScrollEnd();
+    flushReaderScrollSideEffects();
+  }, [onChapterNavArrowsMomentumScrollEnd, flushReaderScrollSideEffects]);
+
   const onReaderScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
-      readerScrollY.value = event.contentOffset.y;
-      runOnJS(onReaderScrollSideEffects)(
-        event.contentOffset.y,
-        event.contentSize.height,
-        event.layoutMeasurement.height,
-      );
+      const y = event.contentOffset.y;
+      readerScrollY.value = y;
+      const contentHeight = event.contentSize.height;
+      const viewportHeight = event.layoutMeasurement.height;
+      const dy = Math.abs(y - lastScrollBridgeY.value);
+      if (lastScrollBridgeY.value < 0 || dy >= READER_SCROLL_JS_BRIDGE_DELTA_PX) {
+        lastScrollBridgeY.value = y;
+        runOnJS(onReaderScrollSideEffects)(y, contentHeight, viewportHeight);
+      }
     },
   });
 
@@ -1672,8 +1697,8 @@ export default function ReaderChapterScreen() {
         readerVerseEstimatedItemSize={readerVerseEstimatedItemSize}
         onScroll={onReaderScroll}
         onScrollBeginDrag={onReaderScrollBeginDragWithChapterNav}
-        onScrollEndDrag={onChapterNavArrowsScrollEndDrag}
-        onMomentumScrollEnd={onChapterNavArrowsMomentumScrollEnd}
+        onScrollEndDrag={onReaderScrollEndDragWithChapterNav}
+        onMomentumScrollEnd={onReaderMomentumScrollEndWithChapterNav}
         dismissReaderChromeFromBackgroundPress={dismissReaderChromeFromBackgroundPress}
         verseFlashListDataForList={verseFlashListDataForList}
         readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}

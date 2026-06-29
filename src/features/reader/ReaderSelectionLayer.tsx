@@ -393,7 +393,6 @@ type ReaderVerseFlashRowProps = {
   interactionData: ReaderVerseInteractionData;
   stableVisualData: ReaderVerseStableVisualData;
   readerTabletLandscapeTwoColumn: boolean;
-  readerVersesOpacityAnim: AnimatedType.Value;
   onVersePress: (verseNum: number) => void;
   onVerseLongPress: (verseNum: number) => void;
 };
@@ -405,7 +404,6 @@ const MemoizedReaderVerseFlashRow = memo(
     interactionData,
     stableVisualData: vd,
     readerTabletLandscapeTwoColumn,
-    readerVersesOpacityAnim,
     onVersePress,
     onVerseLongPress,
   }: ReaderVerseFlashRowProps) => {
@@ -417,13 +415,7 @@ const MemoizedReaderVerseFlashRow = memo(
           : readerVerseListStyles.rightColumnPadding
         : null;
     return (
-      <Animated.View
-        style={[
-          readerVerseListStyles.flashItemBase,
-          twoColumnPaddingStyle,
-          { opacity: readerVersesOpacityAnim },
-        ]}
-      >
+      <View style={[readerVerseListStyles.flashItemBase, twoColumnPaddingStyle]}>
         <ReaderVerseRow
           verseNum={verseNum}
           verseText={item.verseText}
@@ -444,7 +436,7 @@ const MemoizedReaderVerseFlashRow = memo(
           onVersePress={onVersePress}
           onVerseLongPress={onVerseLongPress}
         />
-      </Animated.View>
+      </View>
     );
   },
   (prevProps, nextProps) => {
@@ -453,7 +445,6 @@ const MemoizedReaderVerseFlashRow = memo(
     if (prevProps.item.verseInlineContent !== nextProps.item.verseInlineContent) return false;
     if (prevProps.index !== nextProps.index) return false;
     if (prevProps.readerTabletLandscapeTwoColumn !== nextProps.readerTabletLandscapeTwoColumn) return false;
-    if (prevProps.readerVersesOpacityAnim !== nextProps.readerVersesOpacityAnim) return false;
     if (prevProps.onVersePress !== nextProps.onVersePress) return false;
     if (prevProps.onVerseLongPress !== nextProps.onVerseLongPress) return false;
     if (prevProps.stableVisualData !== nextProps.stableVisualData) return false;
@@ -807,14 +798,12 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           interactionData={interactionDataRef.current}
           stableVisualData={stableVisualDataRef.current}
           readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
-          readerVersesOpacityAnim={readerVersesOpacityAnim}
           onVersePress={handleVerseTapForOnboarding}
           onVerseLongPress={handleVerseLongPressForOnboarding}
         />
       );
     },
     [
-      readerVersesOpacityAnim,
       handleVerseTapForOnboarding,
       handleVerseLongPressForOnboarding,
       readerTabletLandscapeTwoColumn,
@@ -881,8 +870,8 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
         hasVerseSelection={hasVerseSelection}
         actionBarMode={actionBarMode}
         actionBarBottomPx={actionBarBottomPx}
-        tabBarScrollHidden={tabBarScrollHidden}
         androidListPaddingBottomHidden={androidListPaddingBottomHidden}
+        readerVersesOpacityAnim={readerVersesOpacityAnim}
         onListContentSizeChange={onListContentSizeChange}
         onListLayoutHeight={onListLayoutHeight}
       />

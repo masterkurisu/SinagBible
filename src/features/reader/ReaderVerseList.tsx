@@ -6,7 +6,10 @@ import {
   READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX,
   READER_ACTION_BAR_SELECTION_CLEARANCE_HIGHLIGHT_PX,
 } from "@/src/features/reader/readerActionBarOnboardingSteps";
-import { READER_FLASH_LIST_DRAW_DISTANCE_PX } from "@/lib/device-capability";
+import {
+  READER_FLASH_LIST_DRAW_DISTANCE_PX,
+  READER_SCROLL_EVENT_THROTTLE,
+} from "@/lib/device-capability";
 import { AnimatedReaderChapterFlashList, type ReaderVerseFlashItem } from "./useReaderGestures";
 
 export const READER_TABLET_TWO_COLUMN_GAP = 18;
@@ -180,10 +183,11 @@ type ReaderVerseListProps = {
   hasVerseSelection: boolean;
   actionBarMode: "default" | "highlight";
   actionBarBottomPx: number;
-  tabBarScrollHidden?: boolean;
   androidListPaddingBottomHidden?: number;
   onListContentSizeChange?: (width: number, height: number) => void;
   onListLayoutHeight?: (height: number) => void;
+  /** Chapter cross-fade — applied on the list shell, not per verse row. */
+  readerVersesOpacityAnim?: Animated.Value;
 };
 
 export function ReaderVerseList({
@@ -206,10 +210,10 @@ export function ReaderVerseList({
   hasVerseSelection,
   actionBarMode,
   actionBarBottomPx,
-  tabBarScrollHidden,
   androidListPaddingBottomHidden,
   onListContentSizeChange,
   onListLayoutHeight,
+  readerVersesOpacityAnim,
 }: ReaderVerseListProps) {
   const readerVerseFlashGetItemType = useCallback((item: ReaderVerseFlashItem) => item.kind, []);
 
@@ -229,13 +233,14 @@ export function ReaderVerseList({
         paddingBottom: selectionPaddingBottom,
       };
     }
-    if (tabBarScrollHidden != null && androidListPaddingBottomHidden != null) {
+    // Keep bottom padding stable while the tab bar hides — toggling it relayouts every visible row.
+    if (androidListPaddingBottomHidden != null) {
       return {
         flexGrow: 1,
         paddingLeft: 10,
         paddingRight: 15,
         paddingTop: 94,
-        paddingBottom: tabBarScrollHidden ? androidListPaddingBottomHidden : 40,
+        paddingBottom: Math.max(40, androidListPaddingBottomHidden),
       };
     }
     return {
@@ -248,7 +253,6 @@ export function ReaderVerseList({
   }, [
     hasVerseSelection,
     selectionPaddingBottom,
-    tabBarScrollHidden,
     androidListPaddingBottomHidden,
   ]);
 
@@ -265,16 +269,20 @@ export function ReaderVerseList({
     [dismissReaderChromeFromBackgroundPress, listHeader],
   );
 
-  return (
+  const listStyle = useMemo(
+    () => ({ ...readerFlashListChromeStyles.list, backgroundColor: rc.sceneSurface }),
+    [rc.sceneSurface],
+  );
+
+  const flashList = (
     <AnimatedReaderChapterFlashList
       key={readerTabletLandscapeTwoColumn ? "reader-verse-2col" : "reader-verse-1col"}
       ref={readerScrollRef}
       {...chapterSwipePanHandlers}
       {...({ estimatedItemSize: readerVerseEstimatedItemSize } as Record<string, unknown>)}
-      style={{ ...readerFlashListChromeStyles.list, backgroundColor: rc.sceneSurface }}
-      scrollEventThrottle={8}
+      style={listStyle}
+      scrollEventThrottle={READER_SCROLL_EVENT_THROTTLE}
       drawDistance={READER_FLASH_LIST_DRAW_DISTANCE_PX}
-      maintainVisibleContentPosition={{}}
       onScroll={onScroll}
       onScrollBeginDrag={onScrollBeginDrag}
       onScrollEndDrag={onScrollEndDrag}
@@ -295,5 +303,15 @@ export function ReaderVerseList({
       ListFooterComponent={readerChapterFlashListFooter}
       contentContainerStyle={flashListContentContainerStyle}
     />
+  );
+
+  if (readerVersesOpacityAnim == null) {
+    return flashList;
+  }
+
+  return (
+    <Animated.View style={[readerFlashListChromeStyles.list, { opacity: readerVersesOpacityAnim }]}>
+      {flashList}
+    </Animated.View>
   );
 }
