@@ -1,10 +1,11 @@
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
+import { getHapticsEnabledSync } from "@/lib/haptics-preference";
 
 const isNative = Platform.OS === "ios" || Platform.OS === "android";
 
 function run(fn: () => Promise<void>) {
-  if (!isNative) return;
+  if (!isNative || !getHapticsEnabledSync()) return;
   void fn().catch(() => {
     /* no engine / reduced motion / unsupported */
   });

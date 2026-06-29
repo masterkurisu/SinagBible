@@ -111,6 +111,7 @@ import { useReaderSettingsOnboarding } from "@/src/features/reader/useReaderSett
 import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
+import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
 import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
 import { useReaderTabBarAutoHide } from "@/src/features/reader/useReaderTabBarAutoHide";
@@ -219,6 +220,7 @@ export default function ReaderChapterScreen() {
   const [commentaryPanelOpen, setCommentaryPanelOpen] = useState(false);
   const mobileSettingsFollowUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
+  const [moreSettingsSheetOpen, setMoreSettingsSheetOpen] = useState(false);
   const [readerDropdown, setReaderDropdown] = useState<ReaderToolsDropdown | null>(null);
   const [dropdownAnchor, setDropdownAnchor] = useState<LayoutRectangle | null>(null);
 
@@ -422,6 +424,7 @@ export default function ReaderChapterScreen() {
     clearMobileSettingsFollowUp();
     setToolsMenuOpen(false);
     setFontSettingsSheetOpen(false);
+    setMoreSettingsSheetOpen(false);
     setReaderDropdown(null);
     setDropdownAnchor(null);
   }, [clearMobileSettingsFollowUp]);
@@ -429,6 +432,11 @@ export default function ReaderChapterScreen() {
   const closeFontSettingsPopup = useCallback(() => {
     clearMobileSettingsFollowUp();
     setFontSettingsSheetOpen(false);
+  }, [clearMobileSettingsFollowUp]);
+
+  const closeMoreSettingsPopup = useCallback(() => {
+    clearMobileSettingsFollowUp();
+    setMoreSettingsSheetOpen(false);
   }, [clearMobileSettingsFollowUp]);
 
   const openFontSettingsSheet = useCallback(() => {
@@ -444,6 +452,13 @@ export default function ReaderChapterScreen() {
     closeToolsMenu();
     scheduleAfterMobileReaderMenuClose(() => {
       setFontSettingsSheetOpen(true);
+    });
+  }, [closeToolsMenu, scheduleAfterMobileReaderMenuClose]);
+
+  const openMobileReaderMoreFromMenu = useCallback(() => {
+    closeToolsMenu();
+    scheduleAfterMobileReaderMenuClose(() => {
+      setMoreSettingsSheetOpen(true);
     });
   }, [closeToolsMenu, scheduleAfterMobileReaderMenuClose]);
 
@@ -811,6 +826,7 @@ export default function ReaderChapterScreen() {
     hapticLightImpact();
     setToolsMenuOpen(false);
     setFontSettingsSheetOpen(false);
+    setMoreSettingsSheetOpen(false);
     setBookSheetExitAnimationStarted(false);
     measureAndSetDropdown(bookFanRef, "book");
   }, [measureAndSetDropdown]);
@@ -845,12 +861,14 @@ export default function ReaderChapterScreen() {
     setToolsMenuOpen((open) => {
       if (open) {
         setFontSettingsSheetOpen(false);
+        setMoreSettingsSheetOpen(false);
         setReaderDropdown(null);
         setDropdownAnchor(null);
         return false;
       }
       clearMobileSettingsFollowUp();
       setFontSettingsSheetOpen(false);
+      setMoreSettingsSheetOpen(false);
       setReaderDropdown(null);
       setDropdownAnchor(null);
       return true;
@@ -867,6 +885,7 @@ export default function ReaderChapterScreen() {
   const dismissReaderChromeFromBackgroundPress = useCallback(() => {
     if (toolsMenuOpen) closeToolsMenu();
     else if (fontSettingsSheetOpen) closeFontSettingsPopup();
+    else if (moreSettingsSheetOpen) closeMoreSettingsPopup();
     else if (readerPrivacyPolicyOpen) setReaderPrivacyPolicyOpen(false);
     else if (readerCreditsOpen) setReaderCreditsOpen(false);
     else if (commentaryPanelOpen) setCommentaryPanelOpen(false);
@@ -876,6 +895,8 @@ export default function ReaderChapterScreen() {
     closeToolsMenu,
     fontSettingsSheetOpen,
     closeFontSettingsPopup,
+    moreSettingsSheetOpen,
+    closeMoreSettingsPopup,
     readerPrivacyPolicyOpen,
     readerCreditsOpen,
     commentaryPanelOpen,
@@ -952,6 +973,7 @@ export default function ReaderChapterScreen() {
   const chapterNavArrowsOverlayOpen =
     toolsMenuOpen ||
     fontSettingsSheetOpen ||
+    moreSettingsSheetOpen ||
     readerDropdown != null ||
     readerPrivacyPolicyOpen ||
     readerCreditsOpen ||
@@ -1144,6 +1166,7 @@ export default function ReaderChapterScreen() {
   const readerOverlayOpen =
     toolsMenuOpen ||
     fontSettingsSheetOpen ||
+    moreSettingsSheetOpen ||
     readerDropdown != null ||
     readerPrivacyPolicyOpen ||
     readerCreditsOpen ||
@@ -1218,6 +1241,7 @@ export default function ReaderChapterScreen() {
 
   const tabBarAutoHideForceVisible =
     (fontSettingsSheetOpen ||
+      moreSettingsSheetOpen ||
       readerDropdown != null ||
       readerPrivacyPolicyOpen ||
       readerCreditsOpen ||
@@ -1563,6 +1587,7 @@ export default function ReaderChapterScreen() {
         onSelectFontSettings={openMobileReaderFontSettingsFromMenu}
         onSelectThemes={openMobileReaderThemesFromMenu}
         onSelectCredits={openMobileReaderCreditsFromMenu}
+        onSelectMore={openMobileReaderMoreFromMenu}
         onSelectTranslation={openMobileReaderTranslationFromMenu}
         onSelectCommentary={openMobileReaderCommentaryFromMenu}
         onSelectDeleteMyData={openDeleteMyDataConfirmFromMenu}
@@ -1645,6 +1670,7 @@ export default function ReaderChapterScreen() {
         readerOverlayOpenFromParent={
           toolsMenuOpen ||
           fontSettingsSheetOpen ||
+          moreSettingsSheetOpen ||
           readerDropdown != null ||
           readerPrivacyPolicyOpen ||
           readerCreditsOpen ||
@@ -1842,6 +1868,14 @@ export default function ReaderChapterScreen() {
         setVerseTextAlignPersisted={setVerseTextAlignPersisted}
         readerVerseBodyFontId={readerVerseBodyFontId}
         setReaderVerseBodyFontIdPersisted={setReaderVerseBodyFontIdPersisted}
+        settingsMutedTextColor={settingsMutedTextColor}
+      />
+      <ReaderMoreSettingsSheet
+        isOpen={moreSettingsSheetOpen}
+        onClose={closeMoreSettingsPopup}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
         settingsMutedTextColor={settingsMutedTextColor}
       />
       <CreditsSheet

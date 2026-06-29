@@ -5,7 +5,7 @@ import {
   isFeatureOnboardingDone,
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
-import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import { readerSettingsDeleteMyDataScreenBottomPx } from "@/lib/native-tab-chrome";
 import { adjustAnchorForOnboardingModal } from "@/src/components/feature-onboarding/onboardingOverlayCoords";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import {
@@ -42,8 +42,7 @@ function resolveSettingsRowAnchor(
   insets: EdgeInsets,
   settingsRevealedStripWidthPx: number,
 ): LayoutRectangle {
-  const deleteMyDataBottomPx =
-    nativeTabSheetBottomInsetPx(insets.bottom, 10) + (Platform.OS === "ios" ? 30 : 70);
+  const deleteMyDataBottomPx = readerSettingsDeleteMyDataScreenBottomPx(insets.bottom);
   const stepIndex = READER_SETTINGS_ONBOARDING_STEPS.findIndex((step) => step.id === stepId);
 
   if (measured) {

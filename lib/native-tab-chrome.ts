@@ -58,6 +58,31 @@ export function nativeTabSheetBottomInsetPx(safeAreaBottom: number, gapPx: numbe
   return NATIVE_TAB_BAR_CORE_PX + safeAreaBottom + gapPx;
 }
 
+/** Reader settings panel: pin Delete My Data this many px above the native tab bar. */
+export const READER_SETTINGS_DELETE_ABOVE_TAB_BAR_PX = 30;
+
+/**
+ * Bottom offset for Delete My Data inside the reader settings panel.
+ * NativeTabs tab content already ends at the top of the tab bar — do not add tab bar height again.
+ */
+export function readerSettingsDeleteMyDataPanelBottomPx(): number {
+  return READER_SETTINGS_DELETE_ABOVE_TAB_BAR_PX;
+}
+
+/** Screen-space bottom offset for onboarding fallbacks (full window height). */
+export function readerSettingsDeleteMyDataScreenBottomPx(safeAreaBottom: number): number {
+  const tabBarFromScreenBottomPx =
+    Platform.OS === "android"
+      ? ANDROID_NATIVE_TAB_BAR_BODY_PX + safeAreaBottom
+      : 49 + safeAreaBottom;
+  return tabBarFromScreenBottomPx + READER_SETTINGS_DELETE_ABOVE_TAB_BAR_PX;
+}
+
+/** @deprecated Use readerSettingsDeleteMyDataPanelBottomPx or readerSettingsDeleteMyDataScreenBottomPx. */
+export function readerSettingsDeleteMyDataBottomPx(safeAreaBottom: number): number {
+  return readerSettingsDeleteMyDataScreenBottomPx(safeAreaBottom);
+}
+
 /** Extra scroll padding when content is laid out above a docked tab bar (not an overlay). */
 export function nativeTabScrollPaddingBottomPx(extraPx = 28): number {
   return extraPx;

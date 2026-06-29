@@ -50,9 +50,10 @@ import { ReaderFontSettingsIcon } from "@/components/icons/ReaderFontSettingsIco
 import { CreditsIcon } from "@/components/icons/CreditsIcon";
 import { ReaderThemesPaletteIcon } from "@/components/icons/ReaderThemesPaletteIcon";
 import { DeleteMyDataIcon } from "@/components/icons/DeleteMyDataIcon";
+import { SettingsMoreIcon } from "@/components/icons/SettingsMoreIcon";
 import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
-import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import { nativeTabSheetBottomInsetPx, readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
 import { hapticLightImpact } from "@/lib/haptics";
 import { READER_MENU_SLIDE_FROM_PX } from "./useReaderGestures";
 import { BookPickerSheet } from "@/src/features/reader/BookPickerSheet";
@@ -131,6 +132,7 @@ export type ReaderMobileSettingsPanelProps = {
   onSelectFontSettings: () => void;
   onSelectThemes: () => void;
   onSelectCredits: () => void;
+  onSelectMore: () => void;
   onSelectTranslation: () => void;
   onSelectCommentary: () => void;
   onSelectDeleteMyData: () => void;
@@ -144,6 +146,8 @@ const SETTINGS_MENU_ICON_COLOR = "#ffffff";
 const SETTINGS_MENU_ICON_SIZE = 26;
 const SETTINGS_MENU_OPTICAL_ICON_SIZE = 24;
 const SETTINGS_MENU_LABEL_SIZE = 14;
+const READER_MOBILE_SETTINGS_DELETE_ROW_HEIGHT = 54;
+const READER_MOBILE_SETTINGS_DELETE_SCROLL_EXTRA_PX = 16;
 
 type ReaderSettingsMenuIconProps = { size?: number; color?: string };
 
@@ -173,14 +177,14 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
     onSelectFontSettings,
     onSelectThemes,
     onSelectCredits,
+    onSelectMore,
     onSelectTranslation,
     onSelectCommentary,
     onSelectDeleteMyData,
     settingsOnboardingRowRefs,
     onSettingsPanelLayout,
   } = props;
-  const deleteMyDataBottomPx =
-    nativeTabSheetBottomInsetPx(insets.bottom, 10) + (Platform.OS === "ios" ? 30 : 70);
+  const deleteMyDataBottomPx = readerSettingsDeleteMyDataPanelBottomPx();
 
   const rows: {
     id: ReaderSettingsOnboardingStepId;
@@ -235,7 +239,10 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
         bounces
         contentContainerStyle={{
           paddingTop: scrollPaddingTop,
-          paddingBottom: deleteMyDataBottomPx + 86,
+          paddingBottom:
+            deleteMyDataBottomPx +
+            READER_MOBILE_SETTINGS_DELETE_ROW_HEIGHT +
+            READER_MOBILE_SETTINGS_DELETE_SCROLL_EXTRA_PX,
           paddingLeft: padH,
           paddingRight: 10 + insets.right,
         }}
@@ -275,6 +282,36 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
             </View>
           </TouchableOpacity>
         ))}
+          <TouchableOpacity
+            style={{ width: "100%" }}
+            onPress={() => {
+              hapticLightImpact();
+              onSelectMore();
+            }}
+            activeOpacity={0.75}
+            accessibilityLabel="More"
+            accessibilityRole="button"
+          >
+            <View
+              collapsable={false}
+              style={[
+                READER_MOBILE_SETTINGS_MENU_ROW,
+                { backgroundColor: READER_MOBILE_SETTINGS_ROW },
+              ]}
+            >
+              <Text
+                style={{
+                  fontFamily: "Inter_400Regular",
+                  fontSize: SETTINGS_MENU_LABEL_SIZE,
+                  color: "#ffffff",
+                  textAlign: "right",
+                }}
+              >
+                More
+              </Text>
+              <SettingsMoreIcon size={SETTINGS_MENU_ICON_SIZE} color={SETTINGS_MENU_ICON_COLOR} />
+            </View>
+          </TouchableOpacity>
         </View>
       </ScrollView>
       <TouchableOpacity
