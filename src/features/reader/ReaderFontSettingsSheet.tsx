@@ -350,7 +350,7 @@ export function ReaderFontSettingsSheet({
                 marginBottom: 8 * fontSettingsScale,
               }}
             >
-              Font size
+              Font Size
             </Text>
             <ReaderFontSizeSlider
               variant="sheet"
@@ -358,7 +358,7 @@ export function ReaderFontSettingsSheet({
               min={FONT_SCALE_MIN}
               max={FONT_SCALE_MAX}
               onValueChange={setFontSizeScalePersisted}
-              accessibilityLabel={`Font size ${Math.round(fontSizeScale * 100)} percent`}
+              accessibilityLabel={`Font Size ${Math.round(fontSizeScale * 100)} percent`}
             />
 
             <Text
@@ -370,7 +370,7 @@ export function ReaderFontSettingsSheet({
                 marginBottom: 4 * fontSettingsScale,
               }}
             >
-              Font spacing
+              Line Spacing
             </Text>
             <ReaderFontSizeSlider
               variant="sheet"
@@ -378,7 +378,7 @@ export function ReaderFontSettingsSheet({
               min={LINE_SPACING_MIN}
               max={LINE_SPACING_MAX}
               onValueChange={setLineSpacingScalePersisted}
-              accessibilityLabel={`Font spacing ${Math.round(lineSpacingScale * 100)} percent`}
+              accessibilityLabel={`Line Spacing ${Math.round(lineSpacingScale * 100)} percent`}
             />
 
             <View
