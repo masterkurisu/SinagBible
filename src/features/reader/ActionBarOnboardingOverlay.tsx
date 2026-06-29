@@ -107,9 +107,11 @@ export function ActionBarOnboardingOverlay({
           <Text style={[onboardingTooltipStyles.message, { color: colors.tooltipText }]}>
             {step.title}
           </Text>
-          <Text style={[onboardingTooltipStyles.hint, { color: colors.tooltipText, marginTop: 6 }]}>
-            {step.description}
-          </Text>
+          {step.description ? (
+            <Text style={[onboardingTooltipStyles.hint, { color: colors.tooltipText, marginTop: 6 }]}>
+              {step.description}
+            </Text>
+          ) : null}
         </View>
       </View>
 

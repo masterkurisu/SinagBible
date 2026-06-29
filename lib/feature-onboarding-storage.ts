@@ -5,6 +5,7 @@ export const FEATURE_ONBOARDING_STORAGE_KEYS = {
   reader: "sb:featureOnboarding:reader:v1",
   readerSettings: "sb:featureOnboarding:readerSettings:v1",
   readerActionBar: "sb:featureOnboarding:readerActionBar:v1",
+  readerBookPicker: "sb:featureOnboarding:readerBookPicker:v1",
   journal: "sb:featureOnboarding:journal:v1",
   journalEditor: "sb:featureOnboarding:journalEditor:v1",
   journalDetail: "sb:featureOnboarding:journalDetail:v1",

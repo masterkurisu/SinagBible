@@ -14,6 +14,7 @@ import {
   TouchableWithoutFeedback,
   View,
   unstable_batchedUpdates,
+  useWindowDimensions,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
@@ -34,6 +35,8 @@ import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { getSelectChapterHeadingForLanguage } from "@/lib/reader-chapter-label";
 import { hapticLightImpact } from "@/lib/haptics";
+import { ActionBarOnboardingOverlay } from "@/src/features/reader/ActionBarOnboardingOverlay";
+import { useBookPickerOnboarding } from "@/src/features/reader/useBookPickerOnboarding";
 import { FullWindowOverlay } from "react-native-screens";
 
 export type BookSelectorViewMode = "grid" | "az" | "testament";
@@ -137,6 +140,20 @@ export function BookPickerSheet({
   const bookListScrollRef = useRef<GHScrollViewRef>(null);
   const bookListContentRef = useRef<View>(null);
   const currentBookItemRef = useRef<View>(null);
+  const bookViewFilterButtonRef = useRef<View>(null);
+
+  const { width: screenW } = useWindowDimensions();
+
+  const bookPickerOnboarding = useBookPickerOnboarding({
+    isOpen,
+    pickerStep: step,
+    viewMenuOpen: bookViewMenuOpen,
+    filterButtonRef: bookViewFilterButtonRef,
+    insets,
+    screenW,
+    readerBookSheetScreenEdgePad,
+    readerBookSheetPad,
+  });
 
   const getBookAzSortKey = useCallback(
     (bookName: string) => bookName.replace(/^[0-9]+\s*/u, "").trim().toLowerCase(),
@@ -494,31 +511,39 @@ export function BookPickerSheet({
         <>
           <View style={{ paddingHorizontal: readerBookSheetPad, paddingTop: 0, paddingBottom: 6 }}>
             <View style={{ minHeight: 48, justifyContent: "center", zIndex: 1 }}>
-              <TouchableOpacity
-                onPress={() => setBookViewMenuOpen((o) => !o)}
-                delayPressIn={0}
+              <View
+                ref={bookViewFilterButtonRef}
+                collapsable={false}
                 style={{
                   position: "absolute",
                   left: 0,
                   top: 0,
                   bottom: 0,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  minWidth: 48,
-                  minHeight: 44,
-                  paddingLeft: 10,
-                  paddingRight: 16,
                   zIndex: 10,
                   elevation: 10,
                 }}
-                /* Avoid a tall bottom hitSlop: it overlaps the book grid ScrollView and the OS
-                 * waits to disambiguate scroll vs tap, which feels like lag or missed taps. */
-                hitSlop={{ top: 10, bottom: 4, left: 8, right: 8 }}
-                accessibilityLabel="Choose book list view"
-                accessibilityState={{ expanded: bookViewMenuOpen }}
               >
-                <FilterListIcon size={22} color={colors.gold} />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setBookViewMenuOpen((o) => !o)}
+                  delayPressIn={0}
+                  style={{
+                    flex: 1,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    minWidth: 48,
+                    minHeight: 44,
+                    paddingLeft: 10,
+                    paddingRight: 16,
+                  }}
+                  /* Avoid a tall bottom hitSlop: it overlaps the book grid ScrollView and the OS
+                   * waits to disambiguate scroll vs tap, which feels like lag or missed taps. */
+                  hitSlop={{ top: 10, bottom: 4, left: 8, right: 8 }}
+                  accessibilityLabel="Choose book list view"
+                  accessibilityState={{ expanded: bookViewMenuOpen }}
+                >
+                  <FilterListIcon size={22} color={colors.gold} />
+                </TouchableOpacity>
+              </View>
               <Text
                 className="tracking-widest uppercase"
                 style={{
@@ -1087,6 +1112,27 @@ export function BookPickerSheet({
     ) : null}
         </View>
       </Animated.View>
+    {bookPickerOnboarding.showLayer &&
+    bookPickerOnboarding.currentStep &&
+    bookPickerOnboarding.buttonAnchor ? (
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { zIndex: 10000, elevation: 100 }]}
+        accessibilityLabel={bookPickerOnboarding.currentStep.title}
+      >
+        <ActionBarOnboardingOverlay
+          step={bookPickerOnboarding.currentStep}
+          buttonAnchor={bookPickerOnboarding.buttonAnchor}
+          tooltipPlacement="below"
+          verticalOffsetPx={-40}
+          colors={{
+            tooltipBackground: rc.selectionBackground,
+            tooltipText: rc.selectionText,
+            arrow: "#FFFFFF",
+          }}
+        />
+      </View>
+    ) : null}
     </View>
   </ReaderBookSheetWindowOverlay>
   );
