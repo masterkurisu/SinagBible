@@ -74,9 +74,9 @@ import { deleteAllUserData } from "@/lib/delete-my-data";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   buildReaderVerseFlashListData,
-  findFlashListIndexForVerseNumber,
   readerFlashListChromeStyles,
   readerVerseEstimatedFlashListItemSizePx,
+  scrollReaderFlashListToVerseCentered,
   splitVerseIndexForBalancedColumns,
 } from "@/src/features/reader/ReaderVerseList";
 import {
@@ -1067,24 +1067,18 @@ export default function ReaderChapterScreen() {
       return;
     }
 
-    const listIndex = findFlashListIndexForVerseNumber(verseFlashListDataForList, targetVerse);
-    if (listIndex == null) return;
-
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
-        try {
-          readerScrollRef.current?.scrollToIndex({
-            index: listIndex,
-            animated: true,
-            viewOffset: 48,
-          });
-        } catch {
-          readerScrollRef.current?.scrollToOffset({
-            offset: Math.max(0, listIndex * readerVerseEstimatedItemSize),
-            animated: true,
-          });
+        const didScroll = scrollReaderFlashListToVerseCentered(
+          readerScrollRef.current,
+          verseFlashListDataForList,
+          targetVerse,
+          readerVerseEstimatedItemSize,
+          { animated: true },
+        );
+        if (didScroll) {
+          pendingScrollVerseRef.current = null;
         }
-        pendingScrollVerseRef.current = null;
       });
     });
 

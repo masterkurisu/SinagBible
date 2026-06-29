@@ -1,6 +1,6 @@
 import { useCallback, useMemo, type ComponentProps, type ReactNode, type RefObject } from "react";
 import { Animated, Pressable, StyleSheet, type GestureResponderHandlers } from "react-native";
-import type { ListRenderItemInfo } from "@shopify/flash-list";
+import type { FlashListRef, ListRenderItemInfo } from "@shopify/flash-list";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
 import {
   READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX,
@@ -109,6 +109,35 @@ export function findFlashListIndexForVerseNumber(
     (item) => item.kind === "verse" && item.verseIndex === targetIndex,
   );
   return idx >= 0 ? idx : null;
+}
+
+/** Place a verse row near the vertical center when opening from search / deep links. */
+export function scrollReaderFlashListToVerseCentered(
+  listRef: FlashListRef<ReaderVerseFlashItem> | null | undefined,
+  items: ReaderVerseFlashItem[],
+  verseNumber: number,
+  estimatedItemSize: number,
+  options?: { animated?: boolean },
+): boolean {
+  const listIndex = findFlashListIndexForVerseNumber(items, verseNumber);
+  if (listIndex == null || listRef == null) return false;
+
+  const animated = options?.animated ?? true;
+  void listRef
+    .scrollToIndex({
+      index: listIndex,
+      animated,
+      viewPosition: 0.5,
+    })
+    .catch(() => {
+      const viewportHeight = listRef.getWindowSize().height;
+      const offset = Math.max(
+        0,
+        listIndex * estimatedItemSize - viewportHeight / 2 + estimatedItemSize / 2,
+      );
+      listRef.scrollToOffset({ offset, animated });
+    });
+  return true;
 }
 
 /** Index of first verse in the right column; left column is verse indices [0, index). */

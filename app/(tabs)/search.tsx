@@ -18,7 +18,7 @@ import {
   Inter_500Medium,
   Inter_600SemiBold,
 } from "@expo-google-fonts/inter";
-import { type Href, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, Link, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   getSearchResultsForTranslation,
@@ -38,6 +38,7 @@ import { formatBookSuggestionChipLabel } from "@/lib/book-genre-display";
 import {
   getPreferredReaderTranslationId,
   peekReaderLastPosition,
+  saveReaderLastPosition,
 } from "@/lib/reader-last-position";
 import { filterLocalJournalEntriesByQuery } from "@/lib/journal-local-search";
 import { getCachedLocalEntries } from "@/lib/journal-local";
@@ -46,7 +47,7 @@ import { ScreenLoadingSkeleton } from "@/components/loading-skeleton";
 import { RecentSvgrepoIcon } from "@/components/icons/RecentSvgrepoIcon";
 import { useSbTabScreenPadding } from "@/lib/use-sb-bottom-padding";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
-import { hapticSelection } from "@/lib/haptics";
+import { hapticLightImpact, hapticSelection } from "@/lib/haptics";
 
 const FALLBACK_TRANSLATION: TranslationId = "KJV";
 
@@ -132,8 +133,10 @@ export default function SearchScreen() {
           alignItems: "center",
           paddingLeft: 4,
           marginRight: -2,
+          minWidth: 32,
+          minHeight: 32,
+          zIndex: 2,
         },
-        clearButtonPressed: { opacity: 0.65 },
         searchPendingSkeleton: {
           flex: 1,
           paddingTop: 12,
@@ -318,7 +321,6 @@ export default function SearchScreen() {
     Inter_600SemiBold,
   });
 
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = useSbTabScreenPadding(24);
   const params = useLocalSearchParams<{ q?: string }>();
@@ -539,7 +541,14 @@ export default function SearchScreen() {
     setJournalResults([]);
     setBookSuggestion(null);
     setNearbyBooks([]);
+    setSearchError(null);
+    setPending(false);
   }, [flushDebouncedSearch]);
+
+  const handleClearPressIn = useCallback(() => {
+    onClearQuery();
+    Keyboard.dismiss();
+  }, [onClearQuery]);
 
   const onPickBookSuggestion = useCallback(
     (suggestion: BookSuggestion) => {
@@ -559,27 +568,35 @@ export default function SearchScreen() {
 
   const showClear = query.length > 0;
 
-  const onPressVerseResult = useCallback(
-    (item: SearchResult) => {
-      router.push(
-        readerChapterHref(
-          item.bookSlug,
-          item.chapterNumber,
-          searchTranslationId,
-          undefined,
-          item.verseNumber,
-        ) as Href,
-      );
-    },
-    [router, searchTranslationId],
+  const readerHrefForResult = useCallback(
+    (item: SearchResult): Href =>
+      readerChapterHref(
+        item.bookSlug,
+        item.chapterNumber,
+        searchTranslationId,
+        undefined,
+        item.verseNumber,
+      ) as Href,
+    [searchTranslationId],
   );
 
-  const onPressJournalResult = useCallback(
-    (entry: LocalJournalEntry) => {
-      router.push(`/journal/${entry.id}` as Href);
+  const onOpenVerseResult = useCallback(
+    (item: SearchResult) => {
+      hapticLightImpact();
+      Keyboard.dismiss();
+      void saveReaderLastPosition({
+        bookSlug: item.bookSlug,
+        chapter: item.chapterNumber,
+        translationId: searchTranslationId,
+      });
     },
-    [router],
+    [searchTranslationId],
   );
+
+  const onOpenJournalResult = useCallback((entry: LocalJournalEntry) => {
+    hapticLightImpact();
+    Keyboard.dismiss();
+  }, []);
 
   const showEmptyState = query.trim().length === 0;
   const hasQuery = query.trim().length > 0;
@@ -672,15 +689,16 @@ export default function SearchScreen() {
           onSubmitEditing={onSubmitSearch}
         />
         {showClear ? (
-          <Pressable
-            onPress={onClearQuery}
-            hitSlop={10}
-            style={({ pressed }) => [styles.clearButton, pressed && styles.clearButtonPressed]}
+          <TouchableOpacity
+            onPressIn={handleClearPressIn}
+            activeOpacity={0.65}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={styles.clearButton}
             accessibilityLabel="Clear search"
             accessibilityRole="button"
           >
             <MaterialCommunityIcons name="close-circle" size={22} color={s.muted} />
-          </Pressable>
+          </TouchableOpacity>
         ) : null}
       </View>
 
@@ -692,7 +710,7 @@ export default function SearchScreen() {
         ) : showEmptyState ? (
           <ScrollView
             style={styles.bodyScroll}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
             keyboardDismissMode="on-drag"
             contentContainerStyle={[
               styles.emptyScrollContent,
@@ -787,32 +805,41 @@ export default function SearchScreen() {
             )}
             stickySectionHeadersEnabled={false}
             contentContainerStyle={[styles.listContent, styles.bodyScrollGrow, { paddingBottom: bottomPad }]}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
             keyboardDismissMode="on-drag"
             ListFooterComponent={
               <Pressable style={styles.tapToDismissFiller} onPress={Keyboard.dismiss} accessibilityRole="none" />
             }
             renderItem={({ item, section }) =>
               section.title === "Journal" ? (
-                <Pressable
-                  onPress={() => onPressJournalResult(item as LocalJournalEntry)}
-                  style={styles.row}
+                <Link
+                  href={`/journal/${(item as LocalJournalEntry).id}` as Href}
+                  asChild
+                  onPress={() => onOpenJournalResult(item as LocalJournalEntry)}
                 >
-                  <Text style={styles.refText}>{journalSearchRowTitle(item as LocalJournalEntry)}</Text>
-                  <Text style={styles.snippet} numberOfLines={2}>
-                    {stripHtmlPreview((item as LocalJournalEntry).content, 160)}
-                  </Text>
-                </Pressable>
+                  <TouchableOpacity activeOpacity={0.75} style={styles.row}>
+                    <Text style={styles.refText}>{journalSearchRowTitle(item as LocalJournalEntry)}</Text>
+                    <Text style={styles.snippet} numberOfLines={2}>
+                      {stripHtmlPreview((item as LocalJournalEntry).content, 160)}
+                    </Text>
+                  </TouchableOpacity>
+                </Link>
               ) : (
-                <Pressable onPress={() => onPressVerseResult(item as SearchResult)} style={styles.row}>
-                  <Text style={styles.refText}>
-                    {(item as SearchResult).bookName} {(item as SearchResult).chapterNumber}:
-                    {(item as SearchResult).verseNumber}
-                  </Text>
-                  <Text style={styles.snippet} numberOfLines={2}>
-                    {(item as SearchResult).verseText}
-                  </Text>
-                </Pressable>
+                <Link
+                  href={readerHrefForResult(item as SearchResult)}
+                  asChild
+                  onPress={() => onOpenVerseResult(item as SearchResult)}
+                >
+                  <TouchableOpacity activeOpacity={0.75} style={styles.row}>
+                    <Text style={styles.refText}>
+                      {(item as SearchResult).bookName} {(item as SearchResult).chapterNumber}:
+                      {(item as SearchResult).verseNumber}
+                    </Text>
+                    <Text style={styles.snippet} numberOfLines={2}>
+                      {(item as SearchResult).verseText}
+                    </Text>
+                  </TouchableOpacity>
+                </Link>
               )
             }
           />
