@@ -13,7 +13,8 @@ import {
   Alert,
   type ListRenderItem,
 } from "react-native";
-import { FlatList } from "react-native-gesture-handler";
+import { FlatList, Gesture, GestureDetector } from "react-native-gesture-handler";
+import type { NativeGesture } from "react-native-gesture-handler";
 import { useRouter } from "expo-router";
 import { useFocusEffect, useIsFocused } from "expo-router/react-navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -51,6 +52,10 @@ import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboarding
 import { useJournalOnboarding } from "@/src/features/journal/useJournalOnboarding";
 import type { JournalOnboardingStepId } from "@/src/features/journal/journalOnboardingSteps";
 import { JournalM3ExpressiveFab } from "@/src/features/journal/JournalM3ExpressiveFab";
+import {
+  JOURNAL_M3_ELEVATED_CARD_RADIUS_PX,
+  journalM3ElevatedCardStyle,
+} from "@/src/features/journal/journalCardChrome";
 import {
   JournalFilterSortPanel,
   type JournalFilterKind,
@@ -152,7 +157,7 @@ const JOURNAL_LIST_HEADING_HEIGHT_PX = 28;
 const JOURNAL_TILE_CONTENT_HEIGHT_PX = 108;
 const JOURNAL_TILE_BADGE_SLOT_MIN_PX = 18;
 const JOURNAL_TILE_PREVIEW_BLOCK_MIN_PX = 28;
-const JOURNAL_TILE_RADIUS_PX = 16;
+const JOURNAL_TILE_RADIUS_PX = Platform.OS === "android" ? JOURNAL_M3_ELEVATED_CARD_RADIUS_PX : 16;
 const JOURNAL_TILE_PREVIEW_FONT_PX = 13;
 const JOURNAL_TILE_PREVIEW_LINE_HEIGHT_PX = 16;
 
@@ -179,6 +184,7 @@ type JournalListEntryCardProps = {
   onEntryPress: (id: string) => void;
   onSwipeFavorite: (item: MobileJournalListItem) => void;
   onSwipeDelete: (item: MobileJournalListItem) => void;
+  listScrollGesture?: NativeGesture;
 };
 
 const JournalListEntryCard = memo(function JournalListEntryCard({
@@ -186,6 +192,7 @@ const JournalListEntryCard = memo(function JournalListEntryCard({
   onEntryPress,
   onSwipeFavorite,
   onSwipeDelete,
+  listScrollGesture,
 }: JournalListEntryCardProps) {
   const { bundle } = useMobileAppTheme();
   const colors = bundle.ui;
@@ -223,6 +230,21 @@ const JournalListEntryCard = memo(function JournalListEntryCard({
     : null;
   const pinClass = isFavorite ? "border-l-[10px] border-l-[#fbe0e0]" : "border-l-[3px] border-l-transparent";
 
+  const isAndroid = Platform.OS === "android";
+  const entryCardStyle = useMemo(() => {
+    if (isAndroid) {
+      return journalM3ElevatedCardStyle(bundle, favoriteLeftRadii);
+    }
+    return [
+      entryCardShadow,
+      {
+        backgroundColor: j.cardBackground,
+        borderRadius: JOURNAL_TILE_RADIUS_PX,
+        ...(favoriteLeftRadii ?? {}),
+      },
+    ];
+  }, [bundle, entryCardShadow, favoriteLeftRadii, isAndroid, j.cardBackground]);
+
   return (
     <JournalSwipeableListRow
       rowKey={item.id}
@@ -230,14 +252,8 @@ const JournalListEntryCard = memo(function JournalListEntryCard({
       onSwipeFavorite={() => onSwipeFavorite(item)}
       onSwipeDelete={() => onSwipeDelete(item)}
       shellStyle={favoriteLeftRadii ?? undefined}
-      cardStyle={[
-        entryCardShadow,
-        {
-          backgroundColor: j.cardBackground,
-          borderRadius: JOURNAL_TILE_RADIUS_PX,
-          ...(favoriteLeftRadii ?? {}),
-        },
-      ]}
+      cardStyle={entryCardStyle}
+      listScrollGesture={listScrollGesture}
     >
       <View
         className={`py-1.5 pl-4 pr-4 ${pinClass}`}
@@ -744,6 +760,8 @@ export default function JournalIndexScreen() {
     [],
   );
 
+  const journalListScrollGesture = useMemo(() => Gesture.Native(), []);
+
   const renderJournalRow = useCallback<ListRenderItem<JournalRow>>(
     ({ item: row }) => {
       if (row.kind === "heading") {
@@ -763,6 +781,7 @@ export default function JournalIndexScreen() {
               onEntryPress={handleEntryPress}
               onSwipeFavorite={commitToggleFavorite}
               onSwipeDelete={requestDeleteEntry}
+              listScrollGesture={journalListScrollGesture}
             />
           </View>
         );
@@ -773,6 +792,7 @@ export default function JournalIndexScreen() {
           onEntryPress={handleEntryPress}
           onSwipeFavorite={commitToggleFavorite}
           onSwipeDelete={requestDeleteEntry}
+          listScrollGesture={journalListScrollGesture}
         />
       );
     },
@@ -781,6 +801,7 @@ export default function JournalIndexScreen() {
       firstEntryId,
       firstHeadingKey,
       handleEntryPress,
+      journalListScrollGesture,
       requestDeleteEntry,
     ],
   );
@@ -831,6 +852,7 @@ export default function JournalIndexScreen() {
           onNavigate={(href) => router.push(href)}
           followUp={settingsFollowUp}
           hideTranslationAndStudyNotes
+          panelBackgroundColor={j.listPageBackground}
         />
       ) : null}
 
@@ -908,23 +930,25 @@ export default function JournalIndexScreen() {
       {loading && entries.length === 0 ? (
         <ScreenLoadingSkeleton lines={7} caption="Loading entries…" style={{ paddingTop: 24 }} />
       ) : (
-        <FlatList
-          ref={listRef}
-          className="flex-1 px-4"
-          data={rows}
-          keyExtractor={keyExtractor}
-          ItemSeparatorComponent={JournalListRowSeparator}
-          removeClippedSubviews={Platform.OS === "android"}
-          getItemLayout={getJournalItemLayout}
-          windowSize={10}
-          maxToRenderPerBatch={8}
-          initialNumToRender={6}
-          scrollEventThrottle={16}
-          refreshControl={refreshControl}
-          contentContainerStyle={listContentContainerStyle}
-          ListEmptyComponent={journalListEmpty}
-          renderItem={renderJournalRow}
-        />
+        <GestureDetector gesture={journalListScrollGesture}>
+          <FlatList
+            ref={listRef}
+            className="flex-1 px-4"
+            data={rows}
+            keyExtractor={keyExtractor}
+            ItemSeparatorComponent={JournalListRowSeparator}
+            removeClippedSubviews={Platform.OS === "android"}
+            getItemLayout={getJournalItemLayout}
+            windowSize={10}
+            maxToRenderPerBatch={8}
+            initialNumToRender={6}
+            scrollEventThrottle={16}
+            refreshControl={refreshControl}
+            contentContainerStyle={listContentContainerStyle}
+            ListEmptyComponent={journalListEmpty}
+            renderItem={renderJournalRow}
+          />
+        </GestureDetector>
       )}
       </Animated.View>
 

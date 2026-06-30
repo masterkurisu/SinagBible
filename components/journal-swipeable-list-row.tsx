@@ -1,12 +1,14 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
-import { Animated, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import {
-  PanGestureHandler,
-  State,
-  TouchableOpacity,
-  type PanGestureHandlerGestureEvent,
-  type HandlerStateChangeEvent,
-} from "react-native-gesture-handler";
+import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { Gesture, GestureDetector, type NativeGesture } from "react-native-gesture-handler";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 import type { ReactNode } from "react";
 import {
   JournalSwipeHeartIcon,
@@ -22,6 +24,10 @@ const MAX_DRAG = 110;
 const THRESHOLD = 56;
 const VELOCITY_TRIGGER = 380;
 const VELOCITY_OFFSET = 24;
+const PAN_ACTIVATE_PX = 12;
+const PAN_FAIL_VERTICAL_PX = 24;
+const TAP_SLOP_PX = 10;
+const PAN_SPRING = { damping: 12, stiffness: 210 };
 
 type Props = {
   children: ReactNode;
@@ -34,6 +40,8 @@ type Props = {
   shellStyle?: StyleProp<ViewStyle>;
   /** When the list re-binds this row to another entry, force translation back to 0 */
   rowKey?: string;
+  /** FlatList scroll native gesture — required on Android for bidirectional row pans. */
+  listScrollGesture?: NativeGesture;
 };
 
 export const JournalSwipeableListRow = memo(function JournalSwipeableListRow({
@@ -45,18 +53,19 @@ export const JournalSwipeableListRow = memo(function JournalSwipeableListRow({
   cardStyle,
   shellStyle,
   rowKey,
+  listScrollGesture,
 }: Props) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const baseRef = useRef(0);
-  const lastVXRef = useRef(0);
-  const liveXRef = useRef(0);
+  const translateX = useSharedValue(0);
+  const dragStartX = useSharedValue(0);
+  const touchStartX = useSharedValue(0);
+  const touchStartY = useSharedValue(0);
+  const panActive = useSharedValue(false);
 
   const hardResetPosition = useCallback(() => {
-    translateX.stopAnimation();
-    translateX.setValue(0);
-    liveXRef.current = 0;
-    baseRef.current = 0;
-  }, [translateX]);
+    translateX.value = 0;
+    dragStartX.value = 0;
+    panActive.value = false;
+  }, [dragStartX, panActive, translateX]);
 
   const prevRowKeyRef = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -69,147 +78,151 @@ export const JournalSwipeableListRow = memo(function JournalSwipeableListRow({
     }
   }, [rowKey, hardResetPosition]);
 
-  const favoriteOpacity = useMemo(
-    () =>
-      translateX.interpolate({
-        inputRange: [-MAX_DRAG, -36, 0],
-        outputRange: [1, 0.45, 0],
-        extrapolate: "clamp",
-      }),
-    [translateX],
-  );
-  const favoriteScale = useMemo(
-    () =>
-      translateX.interpolate({
-        inputRange: [-MAX_DRAG, 0],
-        outputRange: [1.14, 0.86],
-        extrapolate: "clamp",
-      }),
-    [translateX],
-  );
-  const deleteOpacity = useMemo(
-    () =>
-      translateX.interpolate({
-        inputRange: [0, 36, MAX_DRAG],
-        outputRange: [0, 0.45, 1],
-        extrapolate: "clamp",
-      }),
-    [translateX],
-  );
-  const deleteScale = useMemo(
-    () =>
-      translateX.interpolate({
-        inputRange: [0, MAX_DRAG],
-        outputRange: [0.86, 1.14],
-        extrapolate: "clamp",
-      }),
-    [translateX],
-  );
+  const commitPanEnd = useCallback(
+    (x: number, vx: number) => {
+      const shouldFavorite = x <= -THRESHOLD || (vx < -VELOCITY_TRIGGER && x < -VELOCITY_OFFSET);
+      const shouldDelete = x >= THRESHOLD || (vx > VELOCITY_TRIGGER && x > VELOCITY_OFFSET);
 
-  const onGestureEvent = useCallback(
-    (e: PanGestureHandlerGestureEvent) => {
-      if (disabled) return;
-      const { translationX, velocityX } = e.nativeEvent;
-      lastVXRef.current = velocityX;
-      const next = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, baseRef.current + translationX));
-      liveXRef.current = next;
-      translateX.setValue(next);
-    },
-    [disabled, translateX],
-  );
-
-  const onHandlerStateChange = useCallback(
-    (e: HandlerStateChangeEvent) => {
-      const { state } = e.nativeEvent;
-
-      if (state === State.BEGAN) {
-        translateX.stopAnimation((v) => {
-          baseRef.current = v;
-          liveXRef.current = v;
-        });
-        return;
+      if (shouldFavorite) {
+        hapticMediumImpact();
+        onSwipeFavorite();
+      } else if (shouldDelete) {
+        hapticWarning();
+        onSwipeDelete();
       }
+    },
+    [onSwipeDelete, onSwipeFavorite],
+  );
 
-      if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
-        translateX.stopAnimation();
-        const x = liveXRef.current;
-        const vx = lastVXRef.current;
-        const shouldFavorite = x <= -THRESHOLD || (vx < -VELOCITY_TRIGGER && x < -VELOCITY_OFFSET);
-        const shouldDelete = x >= THRESHOLD || (vx > VELOCITY_TRIGGER && x > VELOCITY_OFFSET);
+  const handlePress = useCallback(() => {
+    if (disabled) return;
+    onPress();
+  }, [disabled, onPress]);
 
-        if (shouldFavorite) {
-          hapticMediumImpact();
-          onSwipeFavorite();
-        } else if (shouldDelete) {
-          hapticWarning();
-          onSwipeDelete();
+  const gesture = useMemo(() => {
+    let pan = Gesture.Pan()
+      .enabled(!disabled)
+      .manualActivation(true)
+      .onTouchesDown((event) => {
+        const touch = event.allTouches[0];
+        if (!touch) return;
+        touchStartX.value = touch.absoluteX;
+        touchStartY.value = touch.absoluteY;
+        panActive.value = false;
+        dragStartX.value = translateX.value;
+      })
+      .onTouchesMove((event, state) => {
+        if (panActive.value) return;
+        const touch = event.allTouches[0];
+        if (!touch) return;
+
+        const dx = touch.absoluteX - touchStartX.value;
+        const dy = touch.absoluteY - touchStartY.value;
+
+        if (Math.abs(dy) > PAN_FAIL_VERTICAL_PX && Math.abs(dy) > Math.abs(dx)) {
+          state.fail();
+          return;
         }
 
-        baseRef.current = 0;
+        if (Math.abs(dx) > PAN_ACTIVATE_PX && Math.abs(dx) >= Math.abs(dy)) {
+          panActive.value = true;
+          state.activate();
+        }
+      })
+      .onTouchesUp((event) => {
+        if (panActive.value) return;
+        const touch = event.allTouches[0];
+        if (!touch) return;
 
-        Animated.spring(translateX, {
-          toValue: 0,
-          friction: 8,
-          tension: 210,
-          useNativeDriver: false,
-        }).start(() => {
-          translateX.setValue(0);
-          liveXRef.current = 0;
-          baseRef.current = 0;
-        });
-      }
-    },
-    [onSwipeDelete, onSwipeFavorite, translateX],
-  );
+        const dx = Math.abs(touch.absoluteX - touchStartX.value);
+        const dy = Math.abs(touch.absoluteY - touchStartY.value);
+        if (dx < TAP_SLOP_PX && dy < TAP_SLOP_PX) {
+          runOnJS(handlePress)();
+        }
+      })
+      .onUpdate((event) => {
+        const next = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, dragStartX.value + event.translationX));
+        translateX.value = next;
+      })
+      .onEnd((event) => {
+        const x = translateX.value;
+        runOnJS(commitPanEnd)(x, event.velocityX);
+        translateX.value = withSpring(0, PAN_SPRING);
+        dragStartX.value = 0;
+        panActive.value = false;
+      })
+      .onFinalize(() => {
+        panActive.value = false;
+      });
+
+    if (listScrollGesture) {
+      pan = pan.simultaneousWithExternalGesture(listScrollGesture);
+    }
+
+    return pan;
+  }, [
+    commitPanEnd,
+    disabled,
+    dragStartX,
+    handlePress,
+    listScrollGesture,
+    panActive,
+    touchStartX,
+    touchStartY,
+    translateX,
+  ]);
+
+  const cardAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const deleteIconStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [0, 36, MAX_DRAG], [0, 0.45, 1], Extrapolation.CLAMP),
+    transform: [
+      {
+        scale: interpolate(translateX.value, [0, MAX_DRAG], [0.86, 1.14], Extrapolation.CLAMP),
+      },
+    ],
+  }));
+
+  const favoriteIconStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [-MAX_DRAG, -36, 0], [1, 0.45, 0], Extrapolation.CLAMP),
+    transform: [
+      {
+        scale: interpolate(translateX.value, [-MAX_DRAG, 0], [1.14, 0.86], Extrapolation.CLAMP),
+      },
+    ],
+  }));
 
   return (
     <View style={[styles.shell, shellStyle]}>
       <View style={styles.underlay} pointerEvents="none">
         <View style={styles.laneNeutral}>
-          <Animated.View
-            style={[
-              styles.iconPill,
-              styles.iconPillDelete,
-              { opacity: deleteOpacity, transform: [{ scale: deleteScale }] },
-            ]}
-          >
+          <Animated.View style={[styles.iconPill, styles.iconPillDelete, deleteIconStyle]}>
             <JournalSwipeTrashIcon size={30} stroke={SWIPE_TRASH_INK} strokeWidth={1.75} />
           </Animated.View>
         </View>
         <View style={[styles.laneNeutral, styles.laneRight]}>
-          <Animated.View
-            style={[
-              styles.iconPill,
-              styles.iconPillFavorite,
-              { opacity: favoriteOpacity, transform: [{ scale: favoriteScale }] },
-            ]}
-          >
+          <Animated.View style={[styles.iconPill, styles.iconPillFavorite, favoriteIconStyle]}>
             <JournalSwipeHeartIcon size={30} stroke={SWIPE_HEART_INK} strokeWidth={2} />
           </Animated.View>
         </View>
       </View>
 
-      <PanGestureHandler
-        enabled={!disabled}
-        activeOffsetX={[-12, 12]}
-        failOffsetY={[-24, 24]}
-        onGestureEvent={onGestureEvent}
-        onHandlerStateChange={onHandlerStateChange}
-      >
+      <GestureDetector gesture={gesture}>
         <Animated.View
           collapsable={false}
-          style={[styles.floatingCard, cardStyle, { transform: [{ translateX }] }]}
+          style={[styles.floatingCard, cardStyle, cardAnimatedStyle]}
         >
-          <TouchableOpacity
-            activeOpacity={0.96}
-            disabled={disabled}
-            onPress={onPress}
+          <View
+            style={styles.cardContent}
             accessibilityRole="button"
+            importantForAccessibility={Platform.OS === "android" ? "yes" : undefined}
           >
             {children}
-          </TouchableOpacity>
+          </View>
         </Animated.View>
-      </PanGestureHandler>
+      </GestureDetector>
     </View>
   );
 });
@@ -235,7 +248,6 @@ const styles = StyleSheet.create({
     paddingLeft: 0,
     paddingRight: 16,
   },
-  /** User palette as fill so icons read on the neutral strip */
   iconPill: {
     alignItems: "center",
     justifyContent: "center",
@@ -251,5 +263,8 @@ const styles = StyleSheet.create({
   },
   floatingCard: {
     backgroundColor: "transparent",
+  },
+  cardContent: {
+    flexGrow: 1,
   },
 });

@@ -47,6 +47,8 @@ type ReaderSettingsFollowUpLayerProps = {
   clearMobileSettingsFollowUp: () => void;
   onNavigate: (href: Href) => void;
   hideTranslationAndStudyNotes?: boolean;
+  /** Theme page background revealed behind the sliding content. */
+  panelBackgroundColor: string;
 };
 
 export function useReaderSettingsFollowUpState({
@@ -271,6 +273,7 @@ export function ReaderSettingsFollowUpLayer({
   clearMobileSettingsFollowUp,
   onNavigate,
   hideTranslationAndStudyNotes = false,
+  panelBackgroundColor,
   followUp,
   settingsOnboardingRowRefs,
   onSettingsPanelLayout,
@@ -354,6 +357,7 @@ export function ReaderSettingsFollowUpLayer({
       onSelectTranslation: followUp.openMobileReaderTranslationFromMenu,
       onSelectCommentary: followUp.openMobileReaderCommentaryFromMenu,
       onSelectDeleteMyData: () => followUp.openDeleteMyDataConfirmFromMenu(onNavigate),
+      panelBackgroundColor,
       rippleColor,
       settingsOnboardingRowRefs,
       onSettingsPanelLayout,
@@ -365,6 +369,7 @@ export function ReaderSettingsFollowUpLayer({
       isTabletReaderLayout,
       onNavigate,
       onSettingsPanelLayout,
+      panelBackgroundColor,
       railWidthPx,
       rippleColor,
       scrollPaddingTop,

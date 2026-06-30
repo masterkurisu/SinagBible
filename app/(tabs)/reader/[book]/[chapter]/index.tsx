@@ -1462,6 +1462,7 @@ export default function ReaderChapterScreen() {
     onSelectTranslation: openMobileReaderTranslationFromMenu,
     onSelectCommentary: openMobileReaderCommentaryFromMenu,
     onSelectDeleteMyData: openDeleteMyDataConfirmFromMenu,
+    panelBackgroundColor: rc.sceneSurface,
     rippleColor: Platform.OS === "android" ? androidAppBarRipple : undefined,
     settingsOnboardingRowRefs,
     onSettingsPanelLayout: bumpSettingsLayoutEpoch,

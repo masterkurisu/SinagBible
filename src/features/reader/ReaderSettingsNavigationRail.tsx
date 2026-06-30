@@ -14,10 +14,7 @@ import { StudyNotesResearchIcon } from "@/components/icons/StudyNotesResearchIco
 import { readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
 import { ReaderM3RailDestination } from "@/src/features/reader/ReaderM3RailDestination";
 import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
-import {
-  READER_MOBILE_SETTINGS_PANEL_BG,
-  READER_SETTINGS_NAV_RAIL_ITEM_HEIGHT_PX,
-} from "@/src/features/reader/readerSettingsPanelChrome";
+import { READER_SETTINGS_NAV_RAIL_ITEM_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
 
 const HEADER_TOOLS_ROW_HEIGHT = 44;
 
@@ -47,6 +44,8 @@ export type ReaderSettingsNavigationRailProps = {
   onSelectTranslation: () => void;
   onSelectCommentary: () => void;
   onSelectDeleteMyData: () => void;
+  /** Theme page background revealed behind the sliding content. */
+  panelBackgroundColor: string;
   /** Theme-aware M3 ripple for rail destinations. */
   rippleColor?: string;
   settingsOnboardingRowRefs?: Partial<
@@ -70,6 +69,7 @@ export function ReaderSettingsNavigationRail({
   onSelectTranslation,
   onSelectCommentary,
   onSelectDeleteMyData,
+  panelBackgroundColor,
   rippleColor,
   settingsOnboardingRowRefs,
   onSettingsPanelLayout,
@@ -129,7 +129,7 @@ export function ReaderSettingsNavigationRail({
           styles.railColumn,
           {
             width: railWidthPx,
-            backgroundColor: toolsMenuOpen ? READER_MOBILE_SETTINGS_PANEL_BG : "transparent",
+            backgroundColor: toolsMenuOpen ? panelBackgroundColor : "transparent",
             borderTopRightRadius: toolsMenuOpen ? 28 : 0,
           },
         ]}

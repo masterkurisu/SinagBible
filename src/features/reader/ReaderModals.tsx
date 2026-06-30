@@ -53,7 +53,6 @@ import {
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
   READER_M3_SURFACE_CONTAINER,
-  READER_MOBILE_SETTINGS_PANEL_BG,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
@@ -145,6 +144,8 @@ export type ReaderMobileSettingsPanelProps = {
   onSelectTranslation: () => void;
   onSelectCommentary: () => void;
   onSelectDeleteMyData: () => void;
+  /** Theme page background revealed behind the sliding content. */
+  panelBackgroundColor: string;
   /** Theme-aware M3 ripple for settings rail destinations (Android). */
   rippleColor?: string;
   settingsOnboardingRowRefs?: Partial<
@@ -196,6 +197,7 @@ function ReaderMobileSettingsPanelTablet(props: ReaderMobileSettingsPanelProps) 
     insets,
     scrollPaddingTop,
     padH,
+    panelBackgroundColor,
     hideFontSettings = false,
     hideTranslationAndStudyNotes = false,
     onSelectFontSettings,
@@ -255,7 +257,7 @@ function ReaderMobileSettingsPanelTablet(props: ReaderMobileSettingsPanelProps) 
 
   return (
     <View
-      style={[StyleSheet.absoluteFill, { backgroundColor: READER_MOBILE_SETTINGS_PANEL_BG, zIndex: 0 }]}
+      style={[StyleSheet.absoluteFill, { backgroundColor: panelBackgroundColor, zIndex: 0 }]}
       onLayout={onSettingsPanelLayout}
     >
       <ScrollView
