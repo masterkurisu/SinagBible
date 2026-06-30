@@ -141,6 +141,20 @@ export function CreditsSheet({
               <Text style={styles.sectionHeading}>Bible Translations</Text>
 
               <Text style={styles.body}>
+                The New International Version (NIV) is provided via the{" "}
+                <Text
+                  style={styles.link}
+                  onPress={() => void Linking.openURL("https://www.youversion.com")}
+                  accessibilityRole="link"
+                  accessibilityLabel="YouVersion website"
+                >
+                  YouVersion Platform API
+                </Text>
+                . The Holy Bible, New International Version®, NIV® Copyright © 1973, 1978,
+                1984, 2011 by Biblica, Inc.® Used by permission. All rights reserved worldwide.
+              </Text>
+
+              <Text style={styles.body}>
                 The Holy Bible, Berean Standard Bible (BSB) is produced in cooperation with Bible Hub,
                 Discovery Bible, OpenBible.com, and the Berean Bible Translation Committee.
               </Text>

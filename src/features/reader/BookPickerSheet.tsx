@@ -39,6 +39,7 @@ import { hapticLightImpact } from "@/lib/haptics";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 import { ActionBarOnboardingOverlay } from "@/src/features/reader/ActionBarOnboardingOverlay";
 import {
+  READER_M3_APP_BAR_ICON_BUTTON_PX,
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
   READER_M3_SURFACE_CONTAINER,
@@ -47,6 +48,153 @@ import { useBookPickerOnboarding } from "@/src/features/reader/useBookPickerOnbo
 import { FullWindowOverlay } from "react-native-screens";
 
 const M3_SHEET_TOP_RADIUS_PX = 28;
+const M3_ICON_BUTTON_RIPPLE = "rgba(28,27,31,0.12)";
+
+type BookPickerFilterButtonProps = {
+  open: boolean;
+  onPress: () => void;
+  isAndroidSheet: boolean;
+  defaultIconColor: string;
+  selectedIconColor: string;
+  /** Increment to play a brief spin when the view mode changes. */
+  spinNonce?: number;
+};
+
+/** M3 standard icon button — ripple, press scale, selected container, icon rotation. */
+function BookPickerFilterButton({
+  open,
+  onPress,
+  isAndroidSheet,
+  defaultIconColor,
+  selectedIconColor,
+  spinNonce = 0,
+}: BookPickerFilterButtonProps) {
+  const openAnim = useRef(new Animated.Value(open ? 1 : 0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const spinLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  useEffect(() => {
+    Animated.spring(openAnim, {
+      toValue: open ? 1 : 0,
+      friction: 8,
+      tension: 140,
+      useNativeDriver: true,
+    }).start();
+  }, [open, openAnim]);
+
+  useEffect(() => {
+    if (!isAndroidSheet || spinNonce === 0) return;
+    spinLoopRef.current?.stop();
+    spinAnim.setValue(0);
+    spinLoopRef.current = Animated.timing(spinAnim, {
+      toValue: 1,
+      duration: 420,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    spinLoopRef.current.start(({ finished }) => {
+      if (finished) spinAnim.setValue(0);
+    });
+  }, [isAndroidSheet, spinAnim, spinNonce]);
+
+  useEffect(() => () => spinLoopRef.current?.stop(), []);
+
+  const handlePress = useCallback(() => {
+    hapticLightImpact();
+    onPress();
+  }, [onPress]);
+
+  const handlePressIn = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.9,
+      friction: 8,
+      tension: 320,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 6,
+      tension: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim]);
+
+  const openRotation = openAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "180deg"],
+  });
+
+  const busyRotation = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
+  const selectedBgOpacity = openAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  if (!isAndroidSheet) {
+    return (
+      <TouchableOpacity
+        onPress={handlePress}
+        delayPressIn={0}
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          minWidth: 48,
+          minHeight: 44,
+          paddingLeft: 10,
+          paddingRight: 16,
+        }}
+        hitSlop={{ top: 10, bottom: 4, left: 8, right: 8 }}
+        accessibilityLabel="Choose book list view"
+        accessibilityState={{ expanded: open }}
+      >
+        <MenuOptionsIcon size={22} color={defaultIconColor} />
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <Pressable
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        android_ripple={{ color: M3_ICON_BUTTON_RIPPLE, borderless: true, radius: 24 }}
+        style={{
+          width: READER_M3_APP_BAR_ICON_BUTTON_PX,
+          height: READER_M3_APP_BAR_ICON_BUTTON_PX,
+          borderRadius: READER_M3_APP_BAR_ICON_BUTTON_PX / 2,
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Choose book list view"
+        accessibilityState={{ expanded: open }}
+      >
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, {
+            borderRadius: READER_M3_APP_BAR_ICON_BUTTON_PX / 2,
+            backgroundColor: READER_M3_SURFACE_CONTAINER,
+            opacity: selectedBgOpacity,
+          }]}
+        />
+        <Animated.View style={{ transform: [{ scale: scaleAnim }, { rotate: openRotation }] }}>
+          <Animated.View style={{ transform: [{ rotate: busyRotation }] }}>
+            <MenuOptionsIcon size={24} color={open ? selectedIconColor : defaultIconColor} />
+          </Animated.View>
+        </Animated.View>
+      </Pressable>
+  );
+}
 
 export type BookSelectorViewMode = "grid" | "az" | "testament";
 export type SelectorTestamentTab = "old" | "new";
@@ -138,6 +286,7 @@ export function BookPickerSheet({
   const [bookSelectorViewMode, setBookSelectorViewMode] = useState<BookSelectorViewMode>("testament");
   const [selectorTestamentTab, setSelectorTestamentTab] = useState<SelectorTestamentTab>("new");
   const [bookViewMenuOpen, setBookViewMenuOpen] = useState(false);
+  const [filterFeedbackNonce, setFilterFeedbackNonce] = useState(0);
   const [bookSheetDismissPanEnabled, setBookSheetDismissPanEnabled] = useState(true);
   const [bookSelectorStorageReady, setBookSelectorStorageReady] = useState(false);
 
@@ -206,6 +355,7 @@ export function BookPickerSheet({
 
   const applyBookSelectorView = useCallback((view: "grid" | "az" | "old" | "new") => {
     hapticLightImpact();
+    if (isAndroidSheet) setFilterFeedbackNonce((n) => n + 1);
     if (view === "grid" || view === "az") {
       setBookSelectorViewMode(view);
     } else {
@@ -213,7 +363,7 @@ export function BookPickerSheet({
       setSelectorTestamentTab(view);
     }
     setBookViewMenuOpen(false);
-  }, []);
+  }, [isAndroidSheet]);
 
   const bookGridColumns = 3;
   const bookSheetInnerW = Math.max(
@@ -594,37 +744,14 @@ export function BookPickerSheet({
                   elevation: 10,
                 }}
               >
-                <TouchableOpacity
+                <BookPickerFilterButton
+                  open={bookViewMenuOpen}
                   onPress={() => setBookViewMenuOpen((o) => !o)}
-                  delayPressIn={0}
-                  style={
-                    isAndroidSheet
-                      ? {
-                          flex: 1,
-                          justifyContent: "center",
-                          alignItems: "center",
-                          width: 48,
-                          minHeight: 48,
-                        }
-                      : {
-                          flex: 1,
-                          justifyContent: "center",
-                          alignItems: "center",
-                          minWidth: 48,
-                          minHeight: 44,
-                          paddingLeft: 10,
-                          paddingRight: 16,
-                        }
-                  }
-                  hitSlop={{ top: 10, bottom: 4, left: 8, right: 8 }}
-                  accessibilityLabel="Choose book list view"
-                  accessibilityState={{ expanded: bookViewMenuOpen }}
-                >
-                  <MenuOptionsIcon
-                    size={isAndroidSheet ? 24 : 22}
-                    color={isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : colors.gold}
-                  />
-                </TouchableOpacity>
+                  isAndroidSheet={isAndroidSheet}
+                  defaultIconColor={isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : colors.gold}
+                  selectedIconColor={colors.gold}
+                  spinNonce={filterFeedbackNonce}
+                />
               </View>
               <Text
                 className={isAndroidSheet ? undefined : "tracking-widest uppercase"}
