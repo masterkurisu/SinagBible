@@ -13,8 +13,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 
-/** Matches `READER_MOBILE_SETTINGS_PANEL_BG` in ReaderModals (settings strip + tab bar). */
-export const READER_TOOLS_MENU_TAB_BAR_COLOR = "#2e2e2e";
+/** Matches `READER_MOBILE_SETTINGS_PANEL_BG` in readerSettingsPanelChrome (settings strip + tab bar). */
+export { READER_MOBILE_SETTINGS_PANEL_BG as READER_TOOLS_MENU_TAB_BAR_COLOR } from "@/src/features/reader/readerSettingsPanelChrome";
 
 const TAB_BAR_SLIDE_MS = 220;
 /** Material standard deceleration — reads as a physical slide, not a fade. */

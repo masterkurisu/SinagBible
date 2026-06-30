@@ -13,6 +13,7 @@ type ReaderSettingsOnboardingLayerProps = {
   visible: boolean;
   step: ReaderSettingsOnboardingStep | null;
   rowAnchor: LayoutRectangle | null;
+  railSide?: "left" | "right";
   colors: {
     tooltipBackground: string;
     tooltipText: string;
@@ -24,6 +25,7 @@ export function ReaderSettingsOnboardingLayer({
   visible,
   step,
   rowAnchor,
+  railSide = "right",
   colors,
 }: ReaderSettingsOnboardingLayerProps) {
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -117,7 +119,7 @@ export function ReaderSettingsOnboardingLayer({
     <FeatureOnboardingModal visible={mounted} pointerEvents="box-none" animationType="none">
       {mounted && displayStep && displayAnchor ? (
         <Animated.View style={[styles.layer, { opacity: opacityAnim }]} pointerEvents="none">
-          <SettingsOnboardingOverlay step={displayStep} rowAnchor={displayAnchor} colors={colors} />
+          <SettingsOnboardingOverlay step={displayStep} rowAnchor={displayAnchor} railSide={railSide} colors={colors} />
           <OnboardingTargetDebugOverlay
             targets={[displayAnchor]}
             enabled={READER_ONBOARDING_DEBUG_TARGETS}

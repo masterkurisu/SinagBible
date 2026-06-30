@@ -6,17 +6,34 @@ export const READER_HEADER_TOOLS_PILL_WIDTH = 92;
 export const READER_HEADER_TOOL_BUTTON_SIZE = 44;
 /** iOS native stack navigation bar content height below the status bar. */
 const IOS_NAV_BAR_HEIGHT = 44;
-const HEADER_TOOLS_RIGHT_INSET = 16;
+const HEADER_TOOLS_EDGE_INSET = 16;
 
 export function isPlausibleHeaderToolsPillRect(
   rect: LayoutRectangle | null | undefined,
   insets: EdgeInsets,
   screenW: number,
+  toolsOnLeft: boolean,
 ): rect is LayoutRectangle {
   if (!rect || rect.width <= 0 || rect.height <= 0) return false;
 
   const expectedMinY = insets.top - 6;
   const expectedMaxY = insets.top + IOS_NAV_BAR_HEIGHT + 12;
+
+  if (toolsOnLeft) {
+    const expectedMinX = Math.max(insets.left, 8);
+    const expectedMaxX = screenW * 0.55;
+    return (
+      rect.y >= expectedMinY &&
+      rect.y <= expectedMaxY &&
+      rect.x >= expectedMinX - 4 &&
+      rect.x + rect.width <= expectedMaxX &&
+      rect.width >= READER_HEADER_TOOLS_PILL_WIDTH - 12 &&
+      rect.width <= READER_HEADER_TOOLS_PILL_WIDTH + 12 &&
+      rect.height >= READER_HEADER_TOOL_BUTTON_SIZE - 8 &&
+      rect.height <= READER_HEADER_TOOL_BUTTON_SIZE + 8
+    );
+  }
+
   const expectedMaxX = screenW - Math.max(insets.right, 8);
   const expectedMinX = screenW * 0.45;
 
@@ -40,6 +57,7 @@ export function estimateReaderHeaderToolsPillRect(
   insets: EdgeInsets,
   screenW: number,
   androidTopToolsTopPx: number,
+  toolsOnLeft: boolean,
 ): LayoutRectangle {
   const height = READER_HEADER_TOOL_BUTTON_SIZE;
   const width = READER_HEADER_TOOLS_PILL_WIDTH;
@@ -47,7 +65,9 @@ export function estimateReaderHeaderToolsPillRect(
     Platform.OS === "android"
       ? androidTopToolsTopPx
       : insets.top + (IOS_NAV_BAR_HEIGHT - height) / 2;
-  const x = screenW - Math.max(insets.right, HEADER_TOOLS_RIGHT_INSET) - width;
+  const x = toolsOnLeft
+    ? Math.max(insets.left, HEADER_TOOLS_EDGE_INSET)
+    : screenW - Math.max(insets.right, HEADER_TOOLS_EDGE_INSET) - width;
   return { x, y, width, height };
 }
 
@@ -85,10 +105,11 @@ export function resolveReaderHeaderToolTarget(
   insets: EdgeInsets,
   screenW: number,
   androidTopToolsTopPx: number,
+  toolsOnLeft: boolean,
 ): SpotlightTarget {
-  const pill = isPlausibleHeaderToolsPillRect(headerToolsPillRect, insets, screenW)
+  const pill = isPlausibleHeaderToolsPillRect(headerToolsPillRect, insets, screenW, toolsOnLeft)
     ? headerToolsPillRect
-    : estimateReaderHeaderToolsPillRect(insets, screenW, androidTopToolsTopPx);
+    : estimateReaderHeaderToolsPillRect(insets, screenW, androidTopToolsTopPx, toolsOnLeft);
 
   return readerHeaderToolTargetsFromPill(pill)[which];
 }

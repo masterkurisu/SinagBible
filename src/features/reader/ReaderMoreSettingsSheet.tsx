@@ -14,17 +14,23 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
-import { HapticFeedbackToggle } from "@/components/HapticFeedbackToggle";
+import { M3Switch } from "@/components/M3Switch";
+import { CreditsIcon } from "@/components/icons/CreditsIcon";
 import { hapticLightImpact } from "@/lib/haptics";
 import {
   loadHapticsEnabledPreference,
   setHapticsEnabled,
   subscribeHapticsEnabled,
 } from "@/lib/haptics-preference";
+import {
+  READER_M3_ON_SURFACE_VARIANT,
+  READER_M3_SURFACE_CONTAINER,
+} from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type ReaderMoreSettingsSheetProps = {
   isOpen: boolean;
   onClose: () => void;
+  onSelectCredits: () => void;
   bundle: MobileAppThemeBundle;
   insets: { top: number; bottom: number; left: number; right: number };
   isTabletReaderLayout: boolean;
@@ -34,6 +40,7 @@ export type ReaderMoreSettingsSheetProps = {
 export function ReaderMoreSettingsSheet({
   isOpen,
   onClose,
+  onSelectCredits,
   bundle,
   insets,
   isTabletReaderLayout,
@@ -54,7 +61,7 @@ export function ReaderMoreSettingsSheet({
   const sheetPadBottom = 16 * sheetScale;
   const sheetTitleSize = 12 * sheetScale;
   const sheetRowLabelSize = 14 * sheetScale;
-  const toggleSize = 40 * sheetScale * 1.5;
+  const switchScale = sheetScale;
 
   useEffect(() => {
     void loadHapticsEnabledPreference().then(setHapticsEnabledState);
@@ -134,6 +141,36 @@ export function ReaderMoreSettingsSheet({
               >
                 More
               </Text>
+              <Pressable
+                onPress={() => {
+                  hapticLightImpact();
+                  onSelectCredits();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Credits"
+                style={({ pressed }) => ({
+                  width: "100%",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12 * sheetScale,
+                  paddingVertical: 10 * sheetScale,
+                  marginBottom: 8 * sheetScale,
+                  borderRadius: 12 * sheetScale,
+                  backgroundColor: pressed ? colors.parchmentDark : "transparent",
+                })}
+              >
+                <CreditsIcon size={22 * sheetScale} color={colors.brown800} />
+                <Text
+                  style={{
+                    fontFamily: "Inter_400Regular",
+                    fontSize: sheetRowLabelSize,
+                    lineHeight: sheetRowLabelSize * 1.35,
+                    color: colors.brown800,
+                  }}
+                >
+                  Credits
+                </Text>
+              </Pressable>
               <View
                 style={{
                   flexDirection: "row",
@@ -152,11 +189,17 @@ export function ReaderMoreSettingsSheet({
                 >
                   Haptic Feedback
                 </Text>
-                <HapticFeedbackToggle
-                  enabled={hapticsEnabled}
-                  onToggle={toggleHaptics}
-                  size={toggleSize}
-                  color={colors.brown800}
+                <M3Switch
+                  value={hapticsEnabled}
+                  onValueChange={toggleHaptics}
+                  accessibilityLabel="Haptic Feedback"
+                  scale={switchScale}
+                  trackColorOn={colors.brown800}
+                  trackColorOff={READER_M3_SURFACE_CONTAINER}
+                  trackBorderOff={READER_M3_ON_SURFACE_VARIANT}
+                  handleColorOn="#FFFFFF"
+                  handleColorOff={READER_M3_ON_SURFACE_VARIANT}
+                  iconColorOn={colors.brown800}
                 />
               </View>
             </View>

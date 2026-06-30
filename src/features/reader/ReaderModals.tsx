@@ -42,10 +42,19 @@ import { mobileAppThemePickerOptions } from "@sinag-bible/tokens";
 import { BookIcon } from "@/components/icons/BookIcon";
 import { StudyNotesResearchIcon } from "@/components/icons/StudyNotesResearchIcon";
 import { ReaderFontSettingsIcon } from "@/components/icons/ReaderFontSettingsIcon";
-import { CreditsIcon } from "@/components/icons/CreditsIcon";
 import { ReaderThemesPaletteIcon } from "@/components/icons/ReaderThemesPaletteIcon";
 import { DeleteMyDataIcon } from "@/components/icons/DeleteMyDataIcon";
 import { SettingsMoreIcon } from "@/components/icons/SettingsMoreIcon";
+import { ReaderSettingsNavigationRail } from "@/src/features/reader/ReaderSettingsNavigationRail";
+import {
+  READER_M3_ERROR,
+  READER_M3_ERROR_CONTAINER,
+  READER_M3_ON_ERROR_CONTAINER,
+  READER_M3_ON_SURFACE,
+  READER_M3_ON_SURFACE_VARIANT,
+  READER_M3_SURFACE_CONTAINER,
+  READER_MOBILE_SETTINGS_PANEL_BG,
+} from "@/src/features/reader/readerSettingsPanelChrome";
 import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { nativeTabSheetBottomInsetPx, readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
@@ -95,8 +104,7 @@ function readerThemeTileChrome(swatchHex: string): {
 /** Parchment gold — not `bundle.ui.gold` (Spectrum et al. use accent colors that are not gold). */
 const READER_THEME_TILE_ACTIVE_BORDER = "#c9a96e";
 
-const READER_MOBILE_SETTINGS_PANEL_BG = "#2e2e2e";
-const READER_MOBILE_SETTINGS_ROW = "rgba(255,255,255,0.1)";
+export { READER_MOBILE_SETTINGS_PANEL_BG } from "@/src/features/reader/readerSettingsPanelChrome";
 const COMMENTARY_STORAGE_KEY = "selectedCommentary";
 const COMMENTARY_DEFAULT_ID = "tyndale";
 const COMMENTARY_API_BASE_URL = "https://bible.helloao.org/api";
@@ -121,12 +129,16 @@ async function fetchWithTimeout(
 
 export type ReaderMobileSettingsPanelProps = {
   insets: { top: number; bottom: number; left: number; right: number };
-  /** Top padding so the first row clears the reader header / tool pill (z-index above this strip). */
+  /** Top padding for the header tools row (safe area + nav chrome). */
   scrollPaddingTop: number;
   padH: number;
+  isTabletReaderLayout: boolean;
+  /** Phone expanded rail width (matches reader slide distance). */
+  railWidthPx: number;
+  toolsMenuOpen: boolean;
+  headerTools?: React.ReactNode;
   onSelectFontSettings: () => void;
   onSelectThemes: () => void;
-  onSelectCredits: () => void;
   onSelectMore: () => void;
   onSelectTranslation: () => void;
   onSelectCommentary: () => void;
@@ -137,7 +149,6 @@ export type ReaderMobileSettingsPanelProps = {
   onSettingsPanelLayout?: () => void;
 };
 
-const SETTINGS_MENU_ICON_COLOR = "#ffffff";
 const SETTINGS_MENU_ICON_SIZE = 26;
 const SETTINGS_MENU_OPTICAL_ICON_SIZE = 24;
 const SETTINGS_MENU_LABEL_SIZE = 14;
@@ -147,31 +158,42 @@ const READER_MOBILE_SETTINGS_DELETE_SCROLL_EXTRA_PX = 16;
 type ReaderSettingsMenuIconProps = { size?: number; color?: string };
 
 /**
- * Rows span the full under-reader surface; only the **right** strip is visible when the menu is open.
- * Align label + icon to the **end** (right) so they sit in the revealed area, not under the reader pane.
+ * Rows span the full under-reader surface; only the **left** strip is visible when the menu is open.
+ * Align label + icon to the **start** so they sit in the revealed area.
  */
 const READER_MOBILE_SETTINGS_MENU_ROW = {
   width: "100%" as const,
-  paddingLeft: 12,
-  /** Tight to scroll `paddingRight` (5px + safe inset) so labels/icons sit near the screen edge. */
-  paddingRight: 10,
+  paddingLeft: 10,
+  paddingRight: 12,
   paddingVertical: 14,
   borderRadius: 10,
   flexDirection: "row" as const,
   alignItems: "center" as const,
-  justifyContent: "flex-end" as const,
+  justifyContent: "flex-start" as const,
   gap: 12,
 } as const;
 
-/** Dark strip behind the reader; revealed when the reader slides left (phone layout). */
+/** Settings strip behind the reader; revealed when the reader slides left. */
 export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps) {
+  if (!props.isTabletReaderLayout) {
+    return (
+      <ReaderSettingsNavigationRail
+        {...props}
+        headerTools={props.headerTools ?? null}
+      />
+    );
+  }
+  return <ReaderMobileSettingsPanelTablet {...props} />;
+}
+
+/** Tablet: horizontal label + icon rows (legacy layout). */
+function ReaderMobileSettingsPanelTablet(props: ReaderMobileSettingsPanelProps) {
   const {
     insets,
     scrollPaddingTop,
     padH,
     onSelectFontSettings,
     onSelectThemes,
-    onSelectCredits,
     onSelectMore,
     onSelectTranslation,
     onSelectCommentary,
@@ -215,12 +237,6 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
       Icon: ReaderThemesPaletteIcon,
       iconSize: SETTINGS_MENU_OPTICAL_ICON_SIZE,
     },
-    {
-      id: "credits",
-      label: "Credits",
-      onPress: onSelectCredits,
-      Icon: CreditsIcon,
-    },
   ];
 
   return (
@@ -238,8 +254,8 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
             deleteMyDataBottomPx +
             READER_MOBILE_SETTINGS_DELETE_ROW_HEIGHT +
             READER_MOBILE_SETTINGS_DELETE_SCROLL_EXTRA_PX,
-          paddingLeft: padH,
-          paddingRight: 10 + insets.right,
+          paddingLeft: padH + insets.left,
+          paddingRight: 10,
         }}
       >
         <View className="gap-2.5">
@@ -260,20 +276,21 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
               collapsable={false}
               style={[
                 READER_MOBILE_SETTINGS_MENU_ROW,
-                { backgroundColor: READER_MOBILE_SETTINGS_ROW },
+                { backgroundColor: READER_M3_SURFACE_CONTAINER },
               ]}
             >
+              <Icon size={iconSize ?? SETTINGS_MENU_ICON_SIZE} color={READER_M3_ON_SURFACE_VARIANT} />
               <Text
                 style={{
                   fontFamily: "Inter_400Regular",
                   fontSize: SETTINGS_MENU_LABEL_SIZE,
-                  color: "#ffffff",
-                  textAlign: "right",
+                  color: READER_M3_ON_SURFACE,
+                  textAlign: "left",
+                  flex: 1,
                 }}
               >
                 {label}
               </Text>
-              <Icon size={iconSize ?? SETTINGS_MENU_ICON_SIZE} color={SETTINGS_MENU_ICON_COLOR} />
             </View>
           </TouchableOpacity>
         ))}
@@ -291,20 +308,21 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
               collapsable={false}
               style={[
                 READER_MOBILE_SETTINGS_MENU_ROW,
-                { backgroundColor: READER_MOBILE_SETTINGS_ROW },
+                { backgroundColor: READER_M3_SURFACE_CONTAINER },
               ]}
             >
+              <SettingsMoreIcon size={SETTINGS_MENU_ICON_SIZE} color={READER_M3_ON_SURFACE_VARIANT} />
               <Text
                 style={{
                   fontFamily: "Inter_400Regular",
                   fontSize: SETTINGS_MENU_LABEL_SIZE,
-                  color: "#ffffff",
-                  textAlign: "right",
+                  color: READER_M3_ON_SURFACE,
+                  textAlign: "left",
+                  flex: 1,
                 }}
               >
                 More
               </Text>
-              <SettingsMoreIcon size={SETTINGS_MENU_ICON_SIZE} color={SETTINGS_MENU_ICON_COLOR} />
             </View>
           </TouchableOpacity>
         </View>
@@ -312,8 +330,8 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
       <TouchableOpacity
         style={{
           position: "absolute",
-          left: padH,
-          right: 10 + insets.right,
+          left: padH + insets.left,
+          right: 10,
           bottom: deleteMyDataBottomPx,
         }}
         onPress={() => {
@@ -327,19 +345,20 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
         <View
           ref={settingsOnboardingRowRefs?.["delete-my-data"]}
           collapsable={false}
-          style={[READER_MOBILE_SETTINGS_MENU_ROW, { backgroundColor: "rgba(193, 18, 31, 0.2)" }]}
+          style={[READER_MOBILE_SETTINGS_MENU_ROW, { backgroundColor: READER_M3_ERROR_CONTAINER }]}
         >
+          <DeleteMyDataIcon size={SETTINGS_MENU_ICON_SIZE} color={READER_M3_ERROR} />
           <Text
             style={{
               fontFamily: "Inter_400Regular",
               fontSize: SETTINGS_MENU_LABEL_SIZE,
-              color: "#ffb3b3",
-              textAlign: "right",
+              color: READER_M3_ON_ERROR_CONTAINER,
+              textAlign: "left",
+              flex: 1,
             }}
           >
             Delete My Data
           </Text>
-          <DeleteMyDataIcon size={SETTINGS_MENU_ICON_SIZE} color="#ffb3b3" />
         </View>
       </TouchableOpacity>
     </View>

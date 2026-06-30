@@ -124,6 +124,7 @@ import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/reade
 import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
+import { readerExpandedNavRailWidthPx } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
 import { useReaderTabBarAutoHide } from "@/src/features/reader/useReaderTabBarAutoHide";
@@ -136,18 +137,11 @@ function persistReaderPref(key: string, value: string): void {
   });
 }
 
-/** Share of screen width the reader translates left when settings are open (phones). */
-const READER_MOBILE_SETTINGS_SLIDE_RATIO = 0.4;
-/** Phone only: extra slide distance so the menu strip is wider; tablets use ratio-only slide. */
-const READER_MOBILE_SETTINGS_PHONE_EXTRA_SLIDE_PX = 20;
-/**
- * Tablet: revealed settings strip as a fraction of `windowWidth` (matches hand-tuned drag targets).
- * Portrait ~25%, landscape ~20%.
- */
+/** Share of screen width the reader translates left when settings are open (tablets). */
 const READER_MOBILE_SETTINGS_TABLET_PORTRAIT_SLIDE_RATIO = 0.25;
 const READER_MOBILE_SETTINGS_TABLET_LANDSCAPE_SLIDE_RATIO = 0.2;
 
-/** Present follow-up sheets after the phone settings strip finishes sliding away. */
+/** Present follow-up sheets after the settings strip finishes sliding away. */
 const READER_MOBILE_MENU_CLOSE_MS = 260;
 
 export default function ReaderChapterScreen() {
@@ -250,7 +244,6 @@ export default function ReaderChapterScreen() {
   const settingsOnboardingStudyNotesRef = useRef<View | null>(null);
   const settingsOnboardingFontSettingsRef = useRef<View | null>(null);
   const settingsOnboardingThemesRef = useRef<View | null>(null);
-  const settingsOnboardingCreditsRef = useRef<View | null>(null);
   const settingsOnboardingDeleteMyDataRef = useRef<View | null>(null);
   const settingsOnboardingRowRefs = useMemo(
     (): Record<ReaderSettingsOnboardingStepId, React.RefObject<View | null>> => ({
@@ -258,7 +251,6 @@ export default function ReaderChapterScreen() {
       "study-notes": settingsOnboardingStudyNotesRef,
       "font-settings": settingsOnboardingFontSettingsRef,
       themes: settingsOnboardingThemesRef,
-      credits: settingsOnboardingCreditsRef,
       "delete-my-data": settingsOnboardingDeleteMyDataRef,
     }),
     [],
@@ -349,14 +341,14 @@ export default function ReaderChapterScreen() {
           : READER_MOBILE_SETTINGS_TABLET_PORTRAIT_SLIDE_RATIO;
       return windowWidth * r;
     }
-    return windowWidth * READER_MOBILE_SETTINGS_SLIDE_RATIO + READER_MOBILE_SETTINGS_PHONE_EXTRA_SLIDE_PX;
+    return readerExpandedNavRailWidthPx(windowWidth);
   }, [isTabletReaderLayout, windowWidth, windowHeight]);
 
   const readerMobileSettingsSlideTranslateX = useMemo(
     () =>
       readerSettingsSlideProgress.interpolate({
         inputRange: [0, 1],
-        outputRange: [0, -readerMobileSettingsSlidePx],
+        outputRange: [0, readerMobileSettingsSlidePx],
       }),
     [readerSettingsSlideProgress, readerMobileSettingsSlidePx],
   );
@@ -477,6 +469,13 @@ export default function ReaderChapterScreen() {
     });
   }, [closeToolsMenu, scheduleAfterMobileReaderMenuClose]);
 
+  const openCreditsFromMoreSheet = useCallback(() => {
+    closeMoreSettingsPopup();
+    setTimeout(() => {
+      setReaderCreditsOpen(true);
+    }, 0);
+  }, [closeMoreSettingsPopup]);
+
   const openMobileReaderThemesFromMenu = useCallback(() => {
     closeToolsMenu();
     scheduleAfterMobileReaderMenuClose(() => {
@@ -492,13 +491,6 @@ export default function ReaderChapterScreen() {
       setReaderDropdown("translation");
     });
   }, [closeToolsMenu, scheduleAfterMobileReaderMenuClose, windowWidth, insets.top]);
-
-  const openMobileReaderCreditsFromMenu = useCallback(() => {
-    closeToolsMenu();
-    scheduleAfterMobileReaderMenuClose(() => {
-      setReaderCreditsOpen(true);
-    });
-  }, [closeToolsMenu, scheduleAfterMobileReaderMenuClose]);
 
   const openMobileReaderCommentaryFromMenu = useCallback(() => {
     closeToolsMenu();
@@ -563,7 +555,7 @@ export default function ReaderChapterScreen() {
     const finishDrag = (g: PanResponderGestureState, menuOpen: boolean) => {
       if (!menuOpen) return;
       const p = readerSettingsMenuDragLastProgressRef.current;
-      const shouldClose = p < 0.38 || (g.vx > 0.45 && p < 0.72);
+      const shouldClose = p < 0.38 || (g.vx < -0.45 && p < 0.72);
       if (shouldClose) {
         closeToolsMenu();
       } else {
@@ -578,12 +570,12 @@ export default function ReaderChapterScreen() {
       onMoveShouldSetPanResponderCapture: (_e, gestureState) => {
         if (!toolsMenuOpen) return false;
         const { dx, dy } = gestureState;
-        return dx > 10 && Math.abs(dx) > Math.abs(dy) * 1.15;
+        return dx < -10 && Math.abs(dx) > Math.abs(dy) * 1.15;
       },
       onMoveShouldSetPanResponder: (_e, gestureState) => {
         if (!toolsMenuOpen) return false;
         const { dx, dy } = gestureState;
-        return dx > 10 && Math.abs(dx) > Math.abs(dy) * 1.15;
+        return dx < -10 && Math.abs(dx) > Math.abs(dy) * 1.15;
       },
       onPanResponderGrant: () => {
         readerSettingsSlideProgress.stopAnimation((v: number) => {
@@ -594,7 +586,7 @@ export default function ReaderChapterScreen() {
       onPanResponderMove: (_e, gestureState) => {
         if (!toolsMenuOpen) return;
         const start = readerSettingsMenuDragStartProgressRef.current;
-        const p = Math.min(1, Math.max(0, start - gestureState.dx / maxSlide));
+        const p = Math.min(1, Math.max(0, start + gestureState.dx / maxSlide));
         readerSettingsMenuDragLastProgressRef.current = p;
         readerSettingsSlideProgress.setValue(p);
       },
@@ -606,7 +598,7 @@ export default function ReaderChapterScreen() {
       },
       onPanResponderTerminationRequest: () => true,
     });
-  }, [toolsMenuOpen, windowWidth, closeToolsMenu, readerSettingsSlideProgress, readerMobileSettingsSlidePx]);
+  }, [toolsMenuOpen, closeToolsMenu, readerSettingsSlideProgress, readerMobileSettingsSlidePx]);
 
   const onboardingStepRef = useRef<ReaderOnboardingStep | null>(null);
   const completeOnboardingInteractionRef = useRef<() => void>(() => {});
@@ -1017,16 +1009,21 @@ export default function ReaderChapterScreen() {
     (isTabletLayout(windowWidth, windowHeight) ? 55 : 0);
 
   /**
-   * Reader chrome (stack header + 44px tool pill) sits above the settings strip; pad past it.
-   * Extra clearance so the first row (Translation) is not under native `headerRight` / tools — that
-   * blocked taps. +10px lowers all menu rows together.
+   * Top inset for the book/settings pill when it lives in the left settings rail (phone).
    */
-  const readerMobileSettingsScrollPaddingTop =
-    (Platform.OS === "ios"
-      ? insets.top + 44 + 12
-      : Math.max(insets.top + 56, readerAndroidTopToolsTopPx + 44 + 12)) +
-    (isTabletReaderLayout ? 10 : 0) +
-    10;
+  const readerMobileSettingsToolsTopPx =
+    Platform.OS === "ios" ? insets.top + 4 : readerAndroidTopToolsTopPx;
+
+  /**
+   * First settings destination row — below the embedded header tools on the left rail.
+   */
+  const readerMobileSettingsScrollPaddingTop = isTabletReaderLayout
+    ? (Platform.OS === "ios"
+        ? insets.top + 44 + 12
+        : Math.max(insets.top + 56, readerAndroidTopToolsTopPx + 44 + 12)) +
+      10 +
+      10
+    : readerMobileSettingsToolsTopPx + 44 + 10;
 
   const actionBarBottomPx =
     nativeTabFabOffsetPx(insets.bottom) +
@@ -1066,6 +1063,7 @@ export default function ReaderChapterScreen() {
     hasNextChapter: chapterNav.nextChapter != null,
     selectionBannerTopPx,
     androidTopToolsTopPx: readerAndroidTopToolsTopPx,
+    toolsOnLeft: true,
     selectedVerseCount: selectedVerses.length,
     onTourComplete: () => clearVerseSelectionRef.current?.(),
   });
@@ -1199,6 +1197,7 @@ export default function ReaderChapterScreen() {
 
   const readerSettingsOnboarding = useReaderSettingsOnboarding({
     toolsMenuOpen,
+    isNavigationRailLayout: !isTabletReaderLayout,
     rowRefs: settingsOnboardingRowRefs,
     scrollPaddingTop: readerMobileSettingsScrollPaddingTop,
     screenW: windowWidth,
@@ -1310,8 +1309,6 @@ export default function ReaderChapterScreen() {
           )
         : 0;
   const settingsMutedTextColor = themeId === "spectrum" ? colors.brown600 : colors.tan200;
-  const androidMenuActiveHeaderIconColor =
-    Platform.OS === "android" && toolsMenuOpen ? rc.selectionText : null;
   const readerHeaderToolsHidden = readerDropdown === "book" && !bookSheetExitAnimationStarted;
 
   const readerSettingsToolsRow =
@@ -1327,7 +1324,7 @@ export default function ReaderChapterScreen() {
           style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
         >
           <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", transform: [{ translateX: 2 }, { translateY: -4 }] }}>
-            <ReaderSettingsCogIcon size={26} color={androidMenuActiveHeaderIconColor ?? colors.brown800} />
+            <ReaderSettingsCogIcon size={26} color={colors.brown800} />
           </View>
         </TouchableOpacity>
       </View>
@@ -1342,7 +1339,7 @@ export default function ReaderChapterScreen() {
         accessibilityState={{ expanded: toolsMenuOpen }}
       >
         <View className="h-6 w-6 items-center justify-center" style={{ transform: [{ translateX: 2 }, { translateY: -4 }] }}>
-          <ReaderSettingsCogIcon size={26} color={androidMenuActiveHeaderIconColor ?? colors.brown800} />
+          <ReaderSettingsCogIcon size={26} color={colors.brown800} />
         </View>
       </Pressable>
     </View>
@@ -1363,10 +1360,7 @@ export default function ReaderChapterScreen() {
           <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", transform: [{ translateY: -4 }] }}>
             <BibleBookIcon
               size={21}
-              color={
-                androidMenuActiveHeaderIconColor ??
-                (readerDropdown === "book" ? colors.gold : colors.brown800)
-              }
+              color={readerDropdown === "book" ? colors.gold : colors.brown800}
             />
           </View>
         </TouchableOpacity>
@@ -1384,10 +1378,7 @@ export default function ReaderChapterScreen() {
         <View className="h-6 w-6 items-center justify-center" style={{ transform: [{ translateY: -4 }] }}>
           <BibleBookIcon
             size={21}
-            color={
-              androidMenuActiveHeaderIconColor ??
-              (readerDropdown === "book" ? colors.gold : colors.brown800)
-            }
+            color={readerDropdown === "book" ? colors.gold : colors.brown800}
           />
         </View>
       </Pressable>
@@ -1407,9 +1398,16 @@ export default function ReaderChapterScreen() {
         paddingHorizontal: Platform.OS === "android" ? 2 : 0,
         gap: 0,
         backgroundColor:
-          Platform.OS === "android" ? (toolsMenuOpen ? "transparent" : rc.sceneSurface) : "transparent",
+          Platform.OS === "android"
+            ? isTabletReaderLayout
+              ? rc.sceneSurface
+              : toolsMenuOpen
+                ? "transparent"
+                : rc.sceneSurface
+            : "transparent",
         borderWidth: 0,
         marginRight: 0,
+        marginLeft: 0,
       }}
     >
       {readerHeaderBookButton}
@@ -1417,22 +1415,29 @@ export default function ReaderChapterScreen() {
     </View>
   );
 
+  const readerSettingsPanelProps = {
+    insets,
+    scrollPaddingTop: isTabletReaderLayout
+      ? readerMobileSettingsScrollPaddingTop
+      : readerMobileSettingsToolsTopPx,
+    padH: fontSettingsPopupPadH,
+    isTabletReaderLayout,
+    railWidthPx: readerMobileSettingsSlidePx,
+    toolsMenuOpen,
+    headerTools: readerHeaderToolsGroup,
+    onSelectFontSettings: openMobileReaderFontSettingsFromMenu,
+    onSelectThemes: openMobileReaderThemesFromMenu,
+    onSelectMore: openMobileReaderMoreFromMenu,
+    onSelectTranslation: openMobileReaderTranslationFromMenu,
+    onSelectCommentary: openMobileReaderCommentaryFromMenu,
+    onSelectDeleteMyData: openDeleteMyDataConfirmFromMenu,
+    settingsOnboardingRowRefs,
+    onSettingsPanelLayout: bumpSettingsLayoutEpoch,
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: rc.sceneSurface, overflow: "visible" }}>
-      <ReaderMobileSettingsPanel
-        insets={insets}
-        scrollPaddingTop={readerMobileSettingsScrollPaddingTop}
-        padH={fontSettingsPopupPadH}
-        onSelectFontSettings={openMobileReaderFontSettingsFromMenu}
-        onSelectThemes={openMobileReaderThemesFromMenu}
-        onSelectCredits={openMobileReaderCreditsFromMenu}
-        onSelectMore={openMobileReaderMoreFromMenu}
-        onSelectTranslation={openMobileReaderTranslationFromMenu}
-        onSelectCommentary={openMobileReaderCommentaryFromMenu}
-        onSelectDeleteMyData={openDeleteMyDataConfirmFromMenu}
-        settingsOnboardingRowRefs={settingsOnboardingRowRefs}
-        onSettingsPanelLayout={bumpSettingsLayoutEpoch}
-      />
+      <ReaderMobileSettingsPanel {...readerSettingsPanelProps} />
       <Animated.View
         {...(toolsMenuOpen ? readerSettingsMenuPanResponder.panHandlers : {})}
         pointerEvents={toolsMenuOpen ? "box-none" : "auto"}
@@ -1441,15 +1446,15 @@ export default function ReaderChapterScreen() {
           backgroundColor: rc.sceneSurface,
           transform: [{ translateX: readerMobileSettingsSlideTranslateX }],
           zIndex: 1,
-          ...(!toolsMenuOpen
-            ? {}
-            : {
+          ...(toolsMenuOpen
+            ? {
                 shadowColor: "#000000",
                 shadowOpacity: 0.4,
-                shadowOffset: { width: 4, height: 0 },
+                shadowOffset: { width: -4, height: 0 },
                 shadowRadius: 16,
                 elevation: 14,
-              }),
+              }
+            : {}),
         }}
       >
       <ReaderHeader
@@ -1461,7 +1466,8 @@ export default function ReaderChapterScreen() {
         readerHeaderBookName={readerHeaderBookName}
         chapterNumber={chapterNumber}
         readerHeaderTranslationId={readerHeaderTranslationId}
-        readerHeaderToolsGroup={readerHeaderToolsGroup}
+        readerHeaderToolsGroup={isTabletReaderLayout ? readerHeaderToolsGroup : null}
+        readerHeaderToolsSide="left"
       />
 
       <ReaderSelectionLayer
@@ -1544,7 +1550,7 @@ export default function ReaderChapterScreen() {
         nextArrowRef={chapterNavNextArrowRef}
       />
 
-      {Platform.OS === "android" && !readerHeaderToolsHidden ? (
+      {Platform.OS === "android" && isTabletReaderLayout && !readerHeaderToolsHidden ? (
         <View
           pointerEvents="box-none"
           collapsable={false}
@@ -1613,7 +1619,7 @@ export default function ReaderChapterScreen() {
             collapsable={false}
             style={{
               position: "absolute",
-              right: 0,
+              left: 0,
               top: 0,
               height: 44,
               justifyContent: "center",
@@ -1711,6 +1717,7 @@ export default function ReaderChapterScreen() {
       <ReaderMoreSettingsSheet
         isOpen={moreSettingsSheetOpen}
         onClose={closeMoreSettingsPopup}
+        onSelectCredits={openCreditsFromMoreSheet}
         bundle={bundle}
         insets={insets}
         isTabletReaderLayout={isTabletReaderLayout}
@@ -1763,6 +1770,7 @@ export default function ReaderChapterScreen() {
         visible={readerSettingsOnboarding.showLayer}
         step={readerSettingsOnboarding.currentStep}
         rowAnchor={readerSettingsOnboarding.rowAnchor}
+        railSide="left"
         colors={{
           tooltipBackground: rc.selectionBackground,
           tooltipText: rc.selectionText,

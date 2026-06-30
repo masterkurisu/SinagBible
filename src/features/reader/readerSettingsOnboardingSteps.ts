@@ -3,7 +3,6 @@ export type ReaderSettingsOnboardingStepId =
   | "study-notes"
   | "font-settings"
   | "themes"
-  | "credits"
   | "delete-my-data";
 
 export type ReaderSettingsOnboardingStep = {
@@ -32,11 +31,6 @@ export const READER_SETTINGS_ONBOARDING_STEPS: ReaderSettingsOnboardingStep[] = 
     id: "themes",
     title: "Themes",
     description: "Change the reader's look — including dark and night modes.",
-  },
-  {
-    id: "credits",
-    title: "Credits",
-    description: "See what powers Sinag Bible and support the app.",
   },
   {
     id: "delete-my-data",

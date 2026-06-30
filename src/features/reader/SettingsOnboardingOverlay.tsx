@@ -19,6 +19,8 @@ const TOOLTIP_EST_HEIGHT_PX = 120;
 type SettingsOnboardingOverlayProps = {
   step: ReaderSettingsOnboardingStep;
   rowAnchor: LayoutRectangle;
+  /** Which edge the settings rail sits on (tooltip appears on the opposite side). */
+  railSide?: "left" | "right";
   colors: {
     tooltipBackground: string;
     tooltipText: string;
@@ -29,6 +31,7 @@ type SettingsOnboardingOverlayProps = {
 export function SettingsOnboardingOverlay({
   step,
   rowAnchor,
+  railSide = "right",
   colors,
 }: SettingsOnboardingOverlayProps) {
   const arrowAnim = useRef(new Animated.Value(0)).current;
@@ -55,18 +58,26 @@ export function SettingsOnboardingOverlay({
     return () => loop.stop();
   }, [arrowAnim, step.id]);
 
-  const arrowTranslateX = arrowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, ARROW_NUDGE_PX],
-  });
-
   const rowCenterY = rowAnchor.y + rowAnchor.height / 2;
-  const arrowLeft = Math.max(16, rowAnchor.x - ARROW_SIZE_PX - ARROW_GAP_PX);
+
+  const isLeftRail = railSide === "left";
+  const arrowLeft = isLeftRail
+    ? rowAnchor.x + rowAnchor.width + ARROW_GAP_PX
+    : Math.max(16, rowAnchor.x - ARROW_SIZE_PX - ARROW_GAP_PX);
   const arrowTop = rowCenterY - ARROW_SIZE_PX / 2;
 
-  const tooltipMaxWidth = Math.min(320, Math.max(180, rowAnchor.x - ARROW_SIZE_PX - ARROW_GAP_PX - 32));
-  const tooltipLeft = Math.max(16, arrowLeft - tooltipMaxWidth - 10);
+  const tooltipMaxWidth = isLeftRail
+    ? Math.min(320, Math.max(180, rowAnchor.x + rowAnchor.width + 80))
+    : Math.min(320, Math.max(180, rowAnchor.x - ARROW_SIZE_PX - ARROW_GAP_PX - 32));
+  const tooltipLeft = isLeftRail
+    ? arrowLeft + ARROW_SIZE_PX + 10
+    : Math.max(16, arrowLeft - tooltipMaxWidth - 10);
   const tooltipTop = Math.max(20, rowCenterY - TOOLTIP_EST_HEIGHT_PX / 2);
+
+  const arrowTranslateX = arrowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, isLeftRail ? ARROW_NUDGE_PX : -ARROW_NUDGE_PX],
+  });
 
   return (
     <View style={styles.root} pointerEvents="none">
@@ -80,7 +91,11 @@ export function SettingsOnboardingOverlay({
           },
         ]}
       >
-        <CoachmarkArrowIcon name="arrow-forward" size={ARROW_SIZE_PX} color={colors.arrow} />
+        <CoachmarkArrowIcon
+          name={isLeftRail ? "arrow-back" : "arrow-forward"}
+          size={ARROW_SIZE_PX}
+          color={colors.arrow}
+        />
       </Animated.View>
 
       <View

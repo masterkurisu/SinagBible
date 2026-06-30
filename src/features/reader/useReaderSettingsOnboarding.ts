@@ -14,7 +14,9 @@ import {
   type ReaderSettingsOnboardingStepId,
 } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import {
+  fallbackNavigationRailRowAnchor,
   fallbackSettingsRowAnchor,
+  navigationRailRowAnchor,
   visibleSettingsRowAnchor,
 } from "@/src/features/reader/readerSettingsOnboardingAnchor";
 
@@ -24,6 +26,7 @@ const SETTINGS_ROW_GAP_PX = 10;
 
 type UseReaderSettingsOnboardingArgs = {
   toolsMenuOpen: boolean;
+  isNavigationRailLayout: boolean;
   rowRefs: Record<ReaderSettingsOnboardingStepId, RefObject<View | null>>;
   scrollPaddingTop: number;
   screenW: number;
@@ -41,17 +44,31 @@ function resolveSettingsRowAnchor(
   scrollPaddingTop: number,
   insets: EdgeInsets,
   settingsRevealedStripWidthPx: number,
+  isNavigationRailLayout: boolean,
 ): LayoutRectangle {
   const deleteMyDataBottomPx = readerSettingsDeleteMyDataScreenBottomPx(insets.bottom);
   const stepIndex = READER_SETTINGS_ONBOARDING_STEPS.findIndex((step) => step.id === stepId);
 
+  if (isNavigationRailLayout) {
+    if (measured) {
+      return navigationRailRowAnchor(measured);
+    }
+    return fallbackNavigationRailRowAnchor(
+      stepIndex,
+      screenH,
+      scrollPaddingTop,
+      settingsRevealedStripWidthPx,
+      deleteMyDataBottomPx,
+      stepId === "delete-my-data",
+    );
+  }
+
   if (measured) {
-    return visibleSettingsRowAnchor(measured, screenW, insets, settingsRevealedStripWidthPx);
+    return visibleSettingsRowAnchor(measured, insets, settingsRevealedStripWidthPx);
   }
 
   return fallbackSettingsRowAnchor(
     stepIndex,
-    screenW,
     screenH,
     scrollPaddingTop,
     insets,
@@ -65,6 +82,7 @@ function resolveSettingsRowAnchor(
 
 export function useReaderSettingsOnboarding({
   toolsMenuOpen,
+  isNavigationRailLayout,
   rowRefs,
   scrollPaddingTop,
   screenW,
@@ -113,12 +131,13 @@ export function useReaderSettingsOnboarding({
           scrollPaddingTop,
           insets,
           settingsRevealedStripWidthPx,
+          isNavigationRailLayout,
         ),
       );
       setRowAnchor(anchor);
       setPresentedStepIndex(index);
     },
-    [insets, rowRefs, screenH, screenW, scrollPaddingTop, settingsRevealedStripWidthPx],
+    [insets, isNavigationRailLayout, rowRefs, screenH, screenW, scrollPaddingTop, settingsRevealedStripWidthPx],
   );
 
   useEffect(() => {

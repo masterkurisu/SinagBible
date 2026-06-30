@@ -20,7 +20,9 @@ type ReaderHeaderProps = {
   readerHeaderBookName: string;
   chapterNumber: number;
   readerHeaderTranslationId: string;
-  readerHeaderToolsGroup: ReactNode;
+  readerHeaderToolsGroup: ReactNode | null;
+  /** When set, renders tools in the native stack header on iOS (`left` or `right`). */
+  readerHeaderToolsSide?: "left" | "right";
 };
 
 export function ReaderHeader({
@@ -33,7 +35,11 @@ export function ReaderHeader({
   chapterNumber,
   readerHeaderTranslationId,
   readerHeaderToolsGroup,
+  readerHeaderToolsSide = "right",
 }: ReaderHeaderProps) {
+  const iosHeaderTools =
+    Platform.OS === "ios" && readerHeaderToolsGroup != null ? () => readerHeaderToolsGroup : undefined;
+
   return (
     <>
       <Stack.Screen
@@ -101,9 +107,9 @@ export function ReaderHeader({
             </Animated.View>
           ),
           headerTitleAlign: "center",
-          headerLeft: () => null,
-          /** Android: in-screen overlay (see reader chapter screen). iOS: native headerRight. */
-          headerRight: Platform.OS === "ios" ? () => readerHeaderToolsGroup : undefined,
+          headerLeft: readerHeaderToolsSide === "left" ? iosHeaderTools : () => null,
+          /** Android: in-screen overlay (see reader chapter screen). iOS: native header tools. */
+          headerRight: readerHeaderToolsSide === "right" ? iosHeaderTools : undefined,
           headerBackVisible: false,
           headerShadowVisible: false,
           headerStyle: {

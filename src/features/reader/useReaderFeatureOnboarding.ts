@@ -70,6 +70,7 @@ type UseReaderFeatureOnboardingArgs = {
   hasNextChapter: boolean;
   selectionBannerTopPx: number;
   androidTopToolsTopPx: number;
+  toolsOnLeft: boolean;
   selectedVerseCount: number;
   onTourComplete?: () => void;
 };
@@ -123,15 +124,16 @@ async function measureHeaderToolsPillRect(
   insets: EdgeInsets,
   screenW: number,
   androidTopToolsTopPx: number,
+  toolsOnLeft: boolean,
 ): Promise<LayoutRectangle> {
   const measured = await measureOnboardingTarget(headerToolsGroupRef, {
     minWidth: 80,
     minHeight: 36,
   });
-  if (isPlausibleHeaderToolsPillRect(measured, insets, screenW)) {
+  if (isPlausibleHeaderToolsPillRect(measured, insets, screenW, toolsOnLeft)) {
     return measured;
   }
-  return estimateReaderHeaderToolsPillRect(insets, screenW, androidTopToolsTopPx);
+  return estimateReaderHeaderToolsPillRect(insets, screenW, androidTopToolsTopPx, toolsOnLeft);
 }
 
 export function useReaderFeatureOnboarding({
@@ -149,6 +151,7 @@ export function useReaderFeatureOnboarding({
   hasNextChapter,
   selectionBannerTopPx,
   androidTopToolsTopPx,
+  toolsOnLeft,
   selectedVerseCount,
   onTourComplete,
 }: UseReaderFeatureOnboardingArgs) {
@@ -194,6 +197,7 @@ export function useReaderFeatureOnboarding({
         insets,
         screenW,
         androidTopToolsTopPx,
+        toolsOnLeft,
       );
       setSpotlightTargets([readerHeaderToolTargetsFromPill(pillRect).book]);
       setCoachMarkAnchor(null);
@@ -207,6 +211,7 @@ export function useReaderFeatureOnboarding({
         insets,
         screenW,
         androidTopToolsTopPx,
+        toolsOnLeft,
       );
       setSpotlightTargets([readerHeaderToolTargetsFromPill(pillRect).settings]);
       setCoachMarkAnchor(null);
@@ -283,6 +288,7 @@ export function useReaderFeatureOnboarding({
     selectionBannerRef,
     selectionBannerTopPx,
     selectedVerseCount,
+    toolsOnLeft,
   ]);
 
   useEffect(() => {
