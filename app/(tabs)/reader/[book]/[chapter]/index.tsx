@@ -109,6 +109,7 @@ import {
 } from "@/src/features/reader/ReaderSelectionLayer";
 import { ReaderHeader, ReaderIosScrollChapterTitle } from "@/src/features/reader/ReaderHeader";
 import { ReaderAndroidAppBar } from "@/src/features/reader/ReaderAndroidAppBar";
+import { ReaderM3IconButton } from "@/src/features/reader/ReaderM3IconButton";
 import {
   ReaderChapterNavArrows,
   useReaderChapterNavArrowsVisibility,
@@ -1328,25 +1329,22 @@ export default function ReaderChapterScreen() {
   const readerHeaderToolsHidden = readerDropdown === "book" && !bookSheetExitAnimationStarted;
 
   const androidAppBarRipple = bundle.chrome.androidRipple;
-  const androidAppBarIconSize = 48;
 
   const readerSettingsToolsRow =
     Platform.OS === "android" ? (
-      <View ref={settingsButtonRef} collapsable={false} style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center" }}>
-        <Pressable
-          onPress={toggleToolsMenu}
-          hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}
-          accessibilityRole="button"
-          accessibilityLabel={toolsMenuOpen ? "Close reader tools" : "Reader settings"}
-          accessibilityState={{ expanded: toolsMenuOpen }}
-          android_ripple={{ color: androidAppBarRipple, borderless: true, radius: 24 }}
-          style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center", borderRadius: 24 }}
-        >
-          <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", transform: [{ translateX: 2 }, { translateY: -4 }] }}>
-            <ReaderSettingsCogIcon size={26} color={colors.brown800} />
-          </View>
-        </Pressable>
-      </View>
+      <ReaderM3IconButton
+        buttonRef={settingsButtonRef}
+        onPress={toggleToolsMenu}
+        accessibilityLabel={toolsMenuOpen ? "Close reader tools" : "Reader settings"}
+        accessibilityState={{ expanded: toolsMenuOpen }}
+        selected={toolsMenuOpen}
+        rippleColor={androidAppBarRipple}
+        suppressHaptic
+      >
+        <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", transform: [{ translateX: 2 }, { translateY: -4 }] }}>
+          <ReaderSettingsCogIcon size={26} color={colors.brown800} />
+        </View>
+      </ReaderM3IconButton>
     ) : (
     <View ref={settingsButtonRef} collapsable={false} className="h-11 w-11 items-center justify-center">
       <Pressable
@@ -1366,24 +1364,22 @@ export default function ReaderChapterScreen() {
 
   const readerHeaderBookButton =
     Platform.OS === "android" ? (
-      <View ref={bookFanRef} collapsable={false} style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center" }}>
-        <Pressable
-          onPress={openBookTools}
-          hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}
-          accessibilityRole="button"
-          accessibilityLabel={readerDropdown === "book" ? "Close book list" : "Choose a Bible book"}
-          accessibilityState={{ selected: readerDropdown === "book" }}
-          android_ripple={{ color: androidAppBarRipple, borderless: true, radius: 24 }}
-          style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center", borderRadius: 24 }}
-        >
-          <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", transform: [{ translateY: -4 }] }}>
-            <BibleBookIcon
-              size={21}
-              color={readerDropdown === "book" ? colors.gold : colors.brown800}
-            />
-          </View>
-        </Pressable>
-      </View>
+      <ReaderM3IconButton
+        buttonRef={bookFanRef}
+        onPress={openBookTools}
+        accessibilityLabel={readerDropdown === "book" ? "Close book list" : "Choose a Bible book"}
+        accessibilityState={{ selected: readerDropdown === "book" }}
+        selected={readerDropdown === "book"}
+        rippleColor={androidAppBarRipple}
+        suppressHaptic
+      >
+        <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", transform: [{ translateY: -4 }] }}>
+          <BibleBookIcon
+            size={21}
+            color={readerDropdown === "book" ? colors.gold : colors.brown800}
+          />
+        </View>
+      </ReaderM3IconButton>
     ) : (
     <View ref={bookFanRef} collapsable={false} className="h-11 w-11 items-center justify-center">
       <Pressable
@@ -1406,21 +1402,18 @@ export default function ReaderChapterScreen() {
 
   const readerHeaderFontButton =
     Platform.OS === "android" ? (
-      <View ref={fontSettingsButtonRef} collapsable={false} style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center" }}>
-        <Pressable
-          onPress={openReaderFontSettingsFromAppBar}
-          hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}
-          accessibilityRole="button"
-          accessibilityLabel="Font settings"
-          accessibilityHint="Adjust reader font size, spacing, and typeface"
-          android_ripple={{ color: androidAppBarRipple, borderless: true, radius: 24 }}
-          style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center", borderRadius: 24 }}
-        >
-          <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
-            <ReaderFontSettingsIcon size={24} color={colors.brown800} />
-          </View>
-        </Pressable>
-      </View>
+      <ReaderM3IconButton
+        buttonRef={fontSettingsButtonRef}
+        onPress={openReaderFontSettingsFromAppBar}
+        accessibilityLabel="Font settings"
+        selected={fontSettingsSheetOpen}
+        rippleColor={androidAppBarRipple}
+        suppressHaptic
+      >
+        <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
+          <ReaderFontSettingsIcon size={24} color={colors.brown800} />
+        </View>
+      </ReaderM3IconButton>
     ) : null;
 
   const readerHeaderToolsGroup = (
@@ -1469,6 +1462,7 @@ export default function ReaderChapterScreen() {
     onSelectTranslation: openMobileReaderTranslationFromMenu,
     onSelectCommentary: openMobileReaderCommentaryFromMenu,
     onSelectDeleteMyData: openDeleteMyDataConfirmFromMenu,
+    rippleColor: Platform.OS === "android" ? androidAppBarRipple : undefined,
     settingsOnboardingRowRefs,
     onSettingsPanelLayout: bumpSettingsLayoutEpoch,
   };

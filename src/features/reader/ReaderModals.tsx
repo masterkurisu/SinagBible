@@ -144,6 +144,8 @@ export type ReaderMobileSettingsPanelProps = {
   onSelectTranslation: () => void;
   onSelectCommentary: () => void;
   onSelectDeleteMyData: () => void;
+  /** Theme-aware M3 ripple for settings rail destinations (Android). */
+  rippleColor?: string;
   settingsOnboardingRowRefs?: Partial<
     Record<ReaderSettingsOnboardingStepId, RefObject<View | null>>
   >;

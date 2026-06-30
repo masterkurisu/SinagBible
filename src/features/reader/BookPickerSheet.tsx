@@ -40,6 +40,7 @@ import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 import { ActionBarOnboardingOverlay } from "@/src/features/reader/ActionBarOnboardingOverlay";
 import {
   READER_M3_APP_BAR_ICON_BUTTON_PX,
+  READER_M3_ICON_BUTTON_RIPPLE,
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
   READER_M3_SURFACE_CONTAINER,
@@ -48,8 +49,7 @@ import { useBookPickerOnboarding } from "@/src/features/reader/useBookPickerOnbo
 import { FullWindowOverlay } from "react-native-screens";
 
 const M3_SHEET_TOP_RADIUS_PX = 28;
-const M3_ICON_BUTTON_RIPPLE = "rgba(28,27,31,0.12)";
-
+const M3_SHEET_TOP_GAP_PX = 50;
 type BookPickerFilterButtonProps = {
   open: boolean;
   onPress: () => void;
@@ -166,7 +166,7 @@ function BookPickerFilterButton({
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        android_ripple={{ color: M3_ICON_BUTTON_RIPPLE, borderless: true, radius: 24 }}
+        android_ripple={{ color: READER_M3_ICON_BUTTON_RIPPLE, borderless: true, radius: 24 }}
         style={{
           width: READER_M3_APP_BAR_ICON_BUTTON_PX,
           height: READER_M3_APP_BAR_ICON_BUTTON_PX,
@@ -305,8 +305,7 @@ export function BookPickerSheet({
   const isAndroidSheet = Platform.OS === "android";
   const m3SheetPad = 24;
   const m3SheetBottomPad = nativeTabSheetBottomInsetPx(insets.bottom, 0);
-  const m3SheetMaxHeight = Math.min(screenH * 0.92, screenH - insets.top - 48);
-  const m3SheetHeight = Math.min(m3SheetMaxHeight, screenH * 0.72);
+  const m3SheetHeight = Math.max(280, screenH - M3_SHEET_TOP_GAP_PX);
   const sheetHorizontalPad = isAndroidSheet ? m3SheetPad : readerBookSheetPad;
   const sheetScreenEdgePad = isAndroidSheet ? 0 : readerBookSheetScreenEdgePad;
 
@@ -671,7 +670,7 @@ export function BookPickerSheet({
             isAndroidSheet
               ? {
                   width: "100%",
-                  maxHeight: m3SheetMaxHeight,
+                  maxHeight: m3SheetHeight,
                   transform: [{ translateY: bookSheetTranslateY }],
                 }
               : {

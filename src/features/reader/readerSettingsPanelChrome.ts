@@ -28,6 +28,9 @@ export function readerExpandedNavRailWidthPx(screenWidth: number): number {
 export const READER_M3_ON_SURFACE = "#1C1B1F";
 export const READER_M3_ON_SURFACE_VARIANT = "#49454F";
 export const READER_M3_SURFACE_CONTAINER = "#F3EDF7";
+
+/** M3 `onSurface` ripple for icon buttons and rail destinations (12% alpha). */
+export const READER_M3_ICON_BUTTON_RIPPLE = "rgba(28,27,31,0.12)";
 export const READER_M3_ERROR = "#B3261E";
 export const READER_M3_ERROR_CONTAINER = "#F9DEDC";
 export const READER_M3_ON_ERROR_CONTAINER = "#410E0B";

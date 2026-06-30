@@ -1,9 +1,7 @@
 import type { ComponentType, ReactNode, RefObject } from "react";
 import {
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   type View as RNView,
 } from "react-native";
@@ -13,23 +11,14 @@ import { ReaderFontSettingsIcon } from "@/components/icons/ReaderFontSettingsIco
 import { ReaderThemesPaletteIcon } from "@/components/icons/ReaderThemesPaletteIcon";
 import { SettingsMoreIcon } from "@/components/icons/SettingsMoreIcon";
 import { StudyNotesResearchIcon } from "@/components/icons/StudyNotesResearchIcon";
-import { hapticLightImpact } from "@/lib/haptics";
 import { readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
+import { ReaderM3RailDestination } from "@/src/features/reader/ReaderM3RailDestination";
 import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import {
-  READER_M3_ERROR,
-  READER_M3_ERROR_CONTAINER,
-  READER_M3_ON_ERROR_CONTAINER,
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_SURFACE_CONTAINER,
   READER_MOBILE_SETTINGS_PANEL_BG,
   READER_SETTINGS_NAV_RAIL_ITEM_HEIGHT_PX,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
-const RAIL_ICON_SIZE = 24;
-const RAIL_LABEL_SIZE = 14;
-const RAIL_LABEL_LINE_HEIGHT = 20;
 const HEADER_TOOLS_ROW_HEIGHT = 44;
 
 type ReaderSettingsMenuIconProps = { size?: number; color?: string };
@@ -57,52 +46,13 @@ export type ReaderSettingsNavigationRailProps = {
   onSelectTranslation: () => void;
   onSelectCommentary: () => void;
   onSelectDeleteMyData: () => void;
+  /** Theme-aware M3 ripple for rail destinations. */
+  rippleColor?: string;
   settingsOnboardingRowRefs?: Partial<
     Record<ReaderSettingsOnboardingStepId | "more", RefObject<RNView | null>>
   >;
   onSettingsPanelLayout?: () => void;
 };
-
-function RailDestinationButton({
-  destination,
-  rowRef,
-  contentPaddingLeft,
-}: {
-  destination: RailDestination;
-  rowRef?: RefObject<RNView | null>;
-  contentPaddingLeft: number;
-}) {
-  const { label, onPress, Icon, iconSize, destructive } = destination;
-  const iconColor = destructive ? READER_M3_ERROR : READER_M3_ON_SURFACE_VARIANT;
-  const labelColor = destructive ? READER_M3_ON_ERROR_CONTAINER : READER_M3_ON_SURFACE;
-
-  return (
-    <Pressable
-      onPress={() => {
-        hapticLightImpact();
-        onPress();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.railItem,
-        destructive && styles.railItemDestructive,
-        pressed && (destructive ? styles.railItemDestructivePressed : styles.railItemPressed),
-      ]}
-    >
-      <View
-        ref={rowRef}
-        collapsable={false}
-        style={[styles.railItemInner, { paddingLeft: 16 + contentPaddingLeft }]}
-      >
-        <Icon size={iconSize ?? RAIL_ICON_SIZE} color={iconColor} />
-        <Text style={[styles.railLabel, { color: labelColor }]} numberOfLines={1}>
-          {label}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
 
 /** M3 expanded navigation rail — phone layout; left edge; revealed when the reader slides aside. */
 export function ReaderSettingsNavigationRail({
@@ -118,6 +68,7 @@ export function ReaderSettingsNavigationRail({
   onSelectTranslation,
   onSelectCommentary,
   onSelectDeleteMyData,
+  rippleColor,
   settingsOnboardingRowRefs,
   onSettingsPanelLayout,
 }: ReaderSettingsNavigationRailProps) {
@@ -206,23 +157,26 @@ export function ReaderSettingsNavigationRail({
               ]}
             >
               {destinations.map((destination) => (
-                <RailDestinationButton
+                <ReaderM3RailDestination
                   key={destination.id}
-                  destination={destination}
+                  label={destination.label}
+                  onPress={destination.onPress}
+                  Icon={destination.Icon}
+                  iconSize={destination.iconSize}
+                  destructive={destination.destructive}
+                  rippleColor={rippleColor}
                   rowRef={settingsOnboardingRowRefs?.[destination.id]}
                   contentPaddingLeft={contentPaddingLeft}
                 />
               ))}
             </ScrollView>
             <View style={[styles.deleteWrap, { bottom: deleteMyDataBottomPx }]}>
-              <RailDestinationButton
-                destination={{
-                  id: "delete-my-data",
-                  label: "Delete My Data",
-                  onPress: onSelectDeleteMyData,
-                  Icon: DeleteMyDataIcon,
-                  destructive: true,
-                }}
+              <ReaderM3RailDestination
+                label="Delete My Data"
+                onPress={onSelectDeleteMyData}
+                Icon={DeleteMyDataIcon}
+                destructive
+                rippleColor={rippleColor}
                 rowRef={settingsOnboardingRowRefs?.["delete-my-data"]}
                 contentPaddingLeft={contentPaddingLeft}
               />
@@ -253,35 +207,6 @@ const styles = StyleSheet.create({
   },
   railScrollContent: {
     gap: 4,
-  },
-  railItem: {
-    minHeight: READER_SETTINGS_NAV_RAIL_ITEM_HEIGHT_PX,
-    borderRadius: 999,
-    marginHorizontal: 12,
-    overflow: "hidden",
-  },
-  railItemPressed: {
-    backgroundColor: READER_M3_SURFACE_CONTAINER,
-  },
-  railItemDestructive: {
-    backgroundColor: READER_M3_ERROR_CONTAINER,
-  },
-  railItemDestructivePressed: {
-    backgroundColor: "#F3DAD7",
-  },
-  railItemInner: {
-    minHeight: READER_SETTINGS_NAV_RAIL_ITEM_HEIGHT_PX,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingRight: 16,
-    paddingVertical: 4,
-    gap: 12,
-  },
-  railLabel: {
-    flex: 1,
-    fontFamily: "Inter_500Medium",
-    fontSize: RAIL_LABEL_SIZE,
-    lineHeight: RAIL_LABEL_LINE_HEIGHT,
   },
   deleteWrap: {
     position: "absolute",
