@@ -11,6 +11,7 @@ import {
   InteractionManager,
   useWindowDimensions,
   Alert,
+  Keyboard,
   type ListRenderItem,
 } from "react-native";
 import { FlatList, Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -24,8 +25,10 @@ import Svg, { Path } from "react-native-svg";
 import { ReaderSettingsCogIcon } from "@/components/icons/ReaderSettingsCogIcon";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { JournalListAndroidAppBar } from "@/src/features/journal/JournalListAndroidAppBar";
+import { JournalInspirationCarousel } from "@/src/features/journal/JournalInspirationCarousel";
+import { JournalListM3TitleBlock } from "@/src/features/journal/JournalListM3TitleBlock";
+import { JOURNAL_M3_LARGE_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/journal/journalListChrome";
 import { ReaderM3IconButton } from "@/src/features/reader/ReaderM3IconButton";
-import { READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
 import { formatBookLabel, formatPassageReference, getTestament } from "@sinag-bible/core";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { loadJournalListItems, type MobileJournalListItem } from "@/lib/load-journal-entries";
@@ -430,7 +433,7 @@ export default function JournalIndexScreen() {
   const fabBottom = journalTabNewEntryFabBottomPx(insets.bottom);
   const journalAndroidTopToolsTopPx = Math.max(insets.top, 8) + 2;
   const journalAndroidAppBarBottomPx =
-    journalAndroidTopToolsTopPx + READER_M3_APP_BAR_CONTENT_HEIGHT_PX;
+    journalAndroidTopToolsTopPx + JOURNAL_M3_LARGE_APP_BAR_CONTENT_HEIGHT_PX;
   const androidAppBarIconColor = colors.brown800;
   const androidAppBarRipple = bundle.chrome.androidRipple;
 
@@ -455,6 +458,7 @@ export default function JournalIndexScreen() {
   }, [settingsFollowUp, settingsMenu]);
 
   const closeJournalSearch = useCallback(() => {
+    Keyboard.dismiss();
     setSearchOpen(false);
     setSearchQuery("");
   }, []);
@@ -869,10 +873,113 @@ export default function JournalIndexScreen() {
     ],
   );
 
-  const journalListEmpty = useMemo(
-    () => <JournalListEmpty variant={hasActiveSearch ? "search" : "default"} />,
-    [hasActiveSearch],
+  const listContentContainerStyle = useMemo(() => ({ paddingBottom: listPadBottom }), [listPadBottom]);
+
+  const journalListHeader = useMemo(
+    () => (
+      <View className="px-4 pb-2">
+        {searchOpen && Platform.OS !== "android" ? (
+          <JournalListSearchBar
+            query={searchQuery}
+            onChangeQuery={setSearchQuery}
+            onClose={closeJournalSearch}
+            autoFocus
+          />
+        ) : (
+          <>
+            {Platform.OS !== "android" ? (
+              <>
+                <View className="mb-1 flex-row items-center justify-end">
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Search journal entries"
+                    onPress={openJournalSearch}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    className="rounded-full p-2 active:opacity-90"
+                    style={{ backgroundColor: j.filterOpenerBackground }}
+                  >
+                    <MaterialIcons name="search" size={22} color={colors.brown800} />
+                  </Pressable>
+                </View>
+                <JournalListM3TitleBlock />
+              </>
+            ) : null}
+            <JournalInspirationCarousel />
+            {Platform.OS !== "android" ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Journal filter and sort options"
+                onPress={() => {
+                  if (journalOnboarding.tourActive) return;
+                  setMenuOpen((open) => !open);
+                }}
+                className="mt-3 self-start rounded-full px-3 py-2 active:opacity-90"
+                style={{ backgroundColor: j.filterOpenerBackground }}
+              >
+                <Text style={{ fontFamily: "Inter_500Medium", fontSize: 13, color: j.filterOpenerText }}>
+                  {filterOptionLabel(filter)} · {sortOptionLabel(sort)}
+                </Text>
+              </Pressable>
+            ) : null}
+            {menuOpen ? (
+              <View
+                className="mt-2 w-full rounded-2xl border px-3 py-3"
+                style={{ borderColor: j.panelBorder, backgroundColor: j.panelBackground }}
+                pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
+              >
+                <JournalFilterSortPanel
+                  bundle={bundle}
+                  filter={filter}
+                  sort={sort}
+                  onSelectFilter={handleSelectFilter}
+                  onSelectSort={handleSelectSort}
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  onDateFromChange={handleDateFromChange}
+                  onDateToChange={handleDateToChange}
+                  filtersRef={filtersRef}
+                  sortRef={sortRef}
+                  pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
+                />
+              </View>
+            ) : null}
+          </>
+        )}
+      </View>
+    ),
+    [
+      bundle,
+      closeJournalSearch,
+      colors.brown800,
+      dateFrom,
+      dateTo,
+      filter,
+      filtersRef,
+      handleDateFromChange,
+      handleDateToChange,
+      handleSelectFilter,
+      handleSelectSort,
+      j.filterOpenerBackground,
+      j.filterOpenerText,
+      j.panelBackground,
+      j.panelBorder,
+      journalOnboarding.tourActive,
+      menuOpen,
+      openJournalSearch,
+      searchOpen,
+      searchQuery,
+      setMenuOpen,
+      sort,
+      sortRef,
+    ],
   );
+
+  const journalListEmpty = useMemo(() => {
+    if (loading && entries.length === 0) {
+      return <ScreenLoadingSkeleton lines={7} caption="Loading entries…" style={{ paddingTop: 8 }} />;
+    }
+    return <JournalListEmpty variant={hasActiveSearch ? "search" : "default"} />;
+  }, [entries.length, hasActiveSearch, loading]);
 
   const refreshControl = useMemo(
     () => <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brown800} />,
@@ -884,7 +991,16 @@ export default function JournalIndexScreen() {
     outputRange: ["0deg", "45deg"],
   });
 
-  const listContentContainerStyle = useMemo(() => ({ paddingBottom: listPadBottom }), [listPadBottom]);
+  const journalListContentStyle = useMemo(
+    () => ({
+      ...listContentContainerStyle,
+      flexGrow: 1,
+      ...(Platform.OS === "android"
+        ? { paddingTop: journalAndroidAppBarBottomPx }
+        : { paddingTop: 49 }),
+    }),
+    [journalAndroidAppBarBottomPx, listContentContainerStyle],
+  );
 
   useEffect(() => {
     return registerTabScrollRef("journal", {
@@ -935,97 +1051,6 @@ export default function JournalIndexScreen() {
           : {})}
         pointerEvents={Platform.OS === "android" && settingsMenu.toolsMenuOpen ? "box-none" : "auto"}
       >
-      <View
-        className="px-4 pb-3"
-        style={Platform.OS === "android" ? { paddingTop: journalAndroidAppBarBottomPx } : { paddingTop: 49 }}
-      >
-        {searchOpen && Platform.OS !== "android" ? (
-          <JournalListSearchBar
-            query={searchQuery}
-            onChangeQuery={setSearchQuery}
-            onClose={closeJournalSearch}
-            autoFocus
-          />
-        ) : (
-          <>
-            <View className="flex-row items-start justify-between">
-              <Text
-                className="flex-1 text-[32px] font-normal"
-                style={{ fontFamily: "Lora_400Regular", color: colors.brown800 }}
-              >
-                Journal
-              </Text>
-              {Platform.OS !== "android" ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Search journal entries"
-                  onPress={openJournalSearch}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  className="mt-1 rounded-full p-2 active:opacity-90"
-                  style={{ backgroundColor: j.filterOpenerBackground }}
-                >
-                  <MaterialIcons name="search" size={22} color={colors.brown800} />
-                </Pressable>
-              ) : null}
-            </View>
-            <Text
-              className="mt-0.5 text-[13px] leading-relaxed"
-              style={{ fontFamily: "Inter_400Regular", color: j.subtitleQuote }}
-            >
-              <Text className="italic" style={{ color: j.subtitleQuote }}>
-                Your Word is a lamp unto my feet and a light unto my path.{" "}
-              </Text>
-              <Text style={{ fontWeight: "700", fontStyle: "normal", color: colors.brown800 }}>
-                Psalm 119:105
-              </Text>
-              {"\n"}
-              Pause, reflect, and document your journey with the Word of God today.
-            </Text>
-            {Platform.OS !== "android" ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Journal filter and sort options"
-                onPress={() => {
-                  if (journalOnboarding.tourActive) return;
-                  setMenuOpen((open) => !open);
-                }}
-                className="mt-3 self-start rounded-full px-3 py-2 active:opacity-90"
-                style={{ backgroundColor: j.filterOpenerBackground }}
-              >
-                <Text style={{ fontFamily: "Inter_500Medium", fontSize: 13, color: j.filterOpenerText }}>
-                  {filterOptionLabel(filter)} · {sortOptionLabel(sort)}
-                </Text>
-              </Pressable>
-            ) : null}
-            {menuOpen ? (
-              <View
-                className="mt-2 w-full rounded-2xl border px-3 py-3"
-                style={{ borderColor: j.panelBorder, backgroundColor: j.panelBackground }}
-                pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
-              >
-                <JournalFilterSortPanel
-                  bundle={bundle}
-                  filter={filter}
-                  sort={sort}
-                  onSelectFilter={handleSelectFilter}
-                  onSelectSort={handleSelectSort}
-                  dateFrom={dateFrom}
-                  dateTo={dateTo}
-                  onDateFromChange={handleDateFromChange}
-                  onDateToChange={handleDateToChange}
-                  filtersRef={filtersRef}
-                  sortRef={sortRef}
-                  pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
-                />
-              </View>
-            ) : null}
-          </>
-        )}
-      </View>
-
-      {loading && entries.length === 0 ? (
-        <ScreenLoadingSkeleton lines={7} caption="Loading entries…" style={{ paddingTop: 24 }} />
-      ) : (
         <GestureDetector gesture={journalListScrollGesture}>
           <FlatList
             ref={listRef}
@@ -1039,13 +1064,14 @@ export default function JournalIndexScreen() {
             maxToRenderPerBatch={8}
             initialNumToRender={6}
             scrollEventThrottle={16}
+            nestedScrollEnabled={Platform.OS === "android"}
             refreshControl={refreshControl}
-            contentContainerStyle={listContentContainerStyle}
+            contentContainerStyle={journalListContentStyle}
+            ListHeaderComponent={journalListHeader}
             ListEmptyComponent={journalListEmpty}
             renderItem={renderJournalRow}
           />
         </GestureDetector>
-      )}
       </Animated.View>
 
       {/* Full-screen layer so the FAB/sheet sit above FlatList native stacking (iOS/Android native tabs). */}

@@ -13,14 +13,24 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { ReaderM3IconButton } from "@/src/features/reader/ReaderM3IconButton";
+import { JournalListM3TitleBlock } from "@/src/features/journal/JournalListM3TitleBlock";
+import {
+  JOURNAL_M3_LARGE_APP_BAR_TITLE_BLOCK_HEIGHT_PX,
+  JOURNAL_SUBTITLE_TAGLINE,
+} from "@/src/features/journal/journalListChrome";
 import {
   READER_M3_APP_BAR_CONTENT_HEIGHT_PX,
   READER_M3_APP_BAR_ICON_BUTTON_PX,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 const SEARCH_BAR_HEIGHT_PX = 48;
-const SEARCH_OPEN_MS = 320;
-const SEARCH_CLOSE_MS = 240;
+const SEARCH_OPEN_MS = 420;
+const SEARCH_CLOSE_MS = 380;
+
+/** M3 emphasized decelerate — elements entering the screen. */
+const M3_ENTER_EASING = Easing.bezier(0.05, 0.7, 0.1, 1);
+/** M3 emphasized accelerate — elements leaving the screen. */
+const M3_EXIT_EASING = Easing.bezier(0.3, 0, 0.8, 0.15);
 
 export type JournalListAndroidAppBarProps = {
   topInsetPx: number;
@@ -36,6 +46,8 @@ export type JournalListAndroidAppBarProps = {
   onCloseSearch: () => void;
   searchIconColor: string;
   rippleColor: string;
+  headline?: string;
+  subtitle?: string;
 };
 
 /** M3 top app bar with an expanding tonal search field centered between leading and trailing actions. */
@@ -53,12 +65,15 @@ export function JournalListAndroidAppBar({
   onCloseSearch,
   searchIconColor,
   rippleColor,
+  headline = "Journal",
+  subtitle = JOURNAL_SUBTITLE_TAGLINE,
 }: JournalListAndroidAppBarProps) {
   const { bundle } = useMobileAppTheme();
   const s = bundle.search;
   const chrome = bundle.chrome;
   const inputRef = useRef<TextInputType | null>(null);
   const searchProgress = useRef(new Animated.Value(0)).current;
+  const searchAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const focusAfterOpenRef = useRef(false);
 
   const paddingLeft = Math.max(insets.left, 4);
@@ -80,48 +95,73 @@ export function JournalListAndroidAppBar({
   }, [centerGapPx, paddingLeft, paddingRight, windowWidth]);
 
   useEffect(() => {
+    if (!searchOpen) {
+      inputRef.current?.blur();
+    }
     if (searchOpen) {
       focusAfterOpenRef.current = true;
     }
-    Animated.timing(searchProgress, {
+
+    searchAnimRef.current?.stop();
+    const anim = Animated.timing(searchProgress, {
       toValue: searchOpen ? 1 : 0,
       duration: searchOpen ? SEARCH_OPEN_MS : SEARCH_CLOSE_MS,
-      easing: searchOpen ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+      easing: searchOpen ? M3_ENTER_EASING : M3_EXIT_EASING,
       useNativeDriver: false,
-    }).start(({ finished }) => {
+    });
+    searchAnimRef.current = anim;
+    anim.start(({ finished }) => {
       if (finished && searchOpen && focusAfterOpenRef.current) {
         focusAfterOpenRef.current = false;
         inputRef.current?.focus();
       }
     });
+
+    return () => {
+      anim.stop();
+    };
   }, [searchOpen, searchProgress]);
 
   const animatedSearchWidth = searchProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [READER_M3_APP_BAR_ICON_BUTTON_PX, expandedSearchWidth],
+    extrapolate: "clamp",
   });
 
   const searchFieldOpacity = searchProgress.interpolate({
-    inputRange: [0, 0.08, 1],
+    inputRange: [0, 0.18, 1],
     outputRange: [0, 1, 1],
     extrapolate: "clamp",
   });
 
   const searchIconOpacity = searchProgress.interpolate({
-    inputRange: [0, 0.28],
-    outputRange: [1, 0],
+    inputRange: [0, 0.42, 1],
+    outputRange: [1, 0, 0],
     extrapolate: "clamp",
   });
 
   const inputOpacity = searchProgress.interpolate({
-    inputRange: [0.35, 0.72, 1],
-    outputRange: [0, 0.4, 1],
+    inputRange: [0, 0.28, 0.62, 1],
+    outputRange: [0, 0, 1, 1],
+    extrapolate: "clamp",
+  });
+
+  const actionsOpacity = searchProgress.interpolate({
+    inputRange: [0, 0.48, 0.78, 1],
+    outputRange: [0, 0, 1, 1],
+    extrapolate: "clamp",
+  });
+
+  const titleOpacity = searchProgress.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [1, 0, 0],
     extrapolate: "clamp",
   });
 
   const trailingWidth = searchProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [READER_M3_APP_BAR_ICON_BUTTON_PX * 2, READER_M3_APP_BAR_ICON_BUTTON_PX],
+    extrapolate: "clamp",
   });
 
   const showClear = searchQuery.length > 0;
@@ -194,27 +234,31 @@ export function JournalListAndroidAppBar({
                 />
               </Animated.View>
               {showClear ? (
+                <Animated.View style={{ opacity: actionsOpacity }}>
+                  <TouchableOpacity
+                    onPress={() => onChangeSearchQuery("")}
+                    activeOpacity={0.65}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.clearButton}
+                    accessibilityLabel="Clear search"
+                    accessibilityRole="button"
+                  >
+                    <MaterialCommunityIcons name="close-circle" size={20} color={s.muted} />
+                  </TouchableOpacity>
+                </Animated.View>
+              ) : null}
+              <Animated.View style={{ opacity: actionsOpacity }}>
                 <TouchableOpacity
-                  onPress={() => onChangeSearchQuery("")}
+                  onPress={onCloseSearch}
                   activeOpacity={0.65}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  style={styles.clearButton}
-                  accessibilityLabel="Clear search"
+                  style={styles.closeButton}
+                  accessibilityLabel="Close search"
                   accessibilityRole="button"
                 >
-                  <MaterialCommunityIcons name="close-circle" size={20} color={s.muted} />
+                  <MaterialCommunityIcons name="close" size={22} color={s.muted} />
                 </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity
-                onPress={onCloseSearch}
-                activeOpacity={0.65}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.closeButton}
-                accessibilityLabel="Close search"
-                accessibilityRole="button"
-              >
-                <MaterialCommunityIcons name="close" size={22} color={s.muted} />
-              </TouchableOpacity>
+              </Animated.View>
             </Animated.View>
           </View>
 
@@ -237,6 +281,20 @@ export function JournalListAndroidAppBar({
             <View style={styles.filterSlot}>{filterAction}</View>
           </Animated.View>
         </View>
+
+        <Animated.View
+          pointerEvents={searchOpen ? "none" : "auto"}
+          style={[
+            styles.titleBlock,
+            {
+              opacity: titleOpacity,
+              paddingLeft: Math.max(insets.left, 16),
+              paddingRight: Math.max(insets.right, 16),
+            },
+          ]}
+        >
+          <JournalListM3TitleBlock headline={headline} subtitle={subtitle} />
+        </Animated.View>
       </View>
     </View>
   );
@@ -322,5 +380,8 @@ const styles = StyleSheet.create({
     height: 24,
     alignItems: "center",
     justifyContent: "center",
+  },
+  titleBlock: {
+    height: JOURNAL_M3_LARGE_APP_BAR_TITLE_BLOCK_HEIGHT_PX,
   },
 });
