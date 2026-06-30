@@ -40,14 +40,14 @@ type ReaderSettingsFollowUpLayerProps = {
   scrollPaddingTop: number;
   toolsMenuOpen: boolean;
   isTabletReaderLayout: boolean;
-  railWidthPx: number;
   rippleColor?: string;
   closeToolsMenu: () => void;
   scheduleAfterMobileReaderMenuClose: (fn: () => void) => void;
   clearMobileSettingsFollowUp: () => void;
   onNavigate: (href: Href) => void;
   hideTranslationAndStudyNotes?: boolean;
-  /** Theme page background revealed behind the sliding content. */
+  onSelectVerseCarousel?: () => void;
+  /** Theme page background for the settings side sheet. */
   panelBackgroundColor: string;
 };
 
@@ -266,13 +266,13 @@ export function ReaderSettingsFollowUpLayer({
   scrollPaddingTop,
   toolsMenuOpen,
   isTabletReaderLayout,
-  railWidthPx,
   rippleColor,
   closeToolsMenu,
   scheduleAfterMobileReaderMenuClose,
   clearMobileSettingsFollowUp,
   onNavigate,
   hideTranslationAndStudyNotes = false,
+  onSelectVerseCarousel,
   panelBackgroundColor,
   followUp,
   settingsOnboardingRowRefs,
@@ -346,8 +346,9 @@ export function ReaderSettingsFollowUpLayer({
       scrollPaddingTop,
       padH: 16,
       isTabletReaderLayout,
-      railWidthPx,
+      screenWidth: windowWidth,
       toolsMenuOpen,
+      onCloseToolsMenu: closeToolsMenu,
       headerTools: null,
       hideFontSettings: Platform.OS === "android",
       hideTranslationAndStudyNotes,
@@ -357,6 +358,7 @@ export function ReaderSettingsFollowUpLayer({
       onSelectTranslation: followUp.openMobileReaderTranslationFromMenu,
       onSelectCommentary: followUp.openMobileReaderCommentaryFromMenu,
       onSelectDeleteMyData: () => followUp.openDeleteMyDataConfirmFromMenu(onNavigate),
+      onSelectVerseCarousel,
       panelBackgroundColor,
       rippleColor,
       settingsOnboardingRowRefs,
@@ -365,16 +367,18 @@ export function ReaderSettingsFollowUpLayer({
     [
       followUp,
       hideTranslationAndStudyNotes,
+      onSelectVerseCarousel,
+      closeToolsMenu,
       insets,
       isTabletReaderLayout,
       onNavigate,
       onSettingsPanelLayout,
       panelBackgroundColor,
-      railWidthPx,
       rippleColor,
       scrollPaddingTop,
       settingsOnboardingRowRefs,
       toolsMenuOpen,
+      windowWidth,
     ],
   );
 

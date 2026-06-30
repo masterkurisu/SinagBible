@@ -34,6 +34,7 @@ export type JournalFilterSortPanelProps = {
   sortRef?: RefObject<RNView | null>;
   dateFilterRef?: RefObject<RNView | null>;
   pointerEvents?: "none" | "auto" | "box-none";
+  onOpenCarouselSettings?: () => void;
 };
 
 function LegacyFilterChip({
@@ -92,6 +93,7 @@ export function JournalFilterSortPanel({
   sortRef,
   dateFilterRef,
   pointerEvents = "auto",
+  onOpenCarouselSettings,
 }: JournalFilterSortPanelProps) {
   const j = bundle.journal;
   const useM3Chips = Platform.OS === "android";
@@ -163,6 +165,28 @@ export function JournalFilterSortPanel({
           </View>
         </View>
       ) : null}
+
+      {onOpenCarouselSettings ? (
+        <View style={styles.section}>
+          <SectionHeading label="Carousel" color={j.dateHeading} />
+          <Pressable
+            onPress={onOpenCarouselSettings}
+            style={[
+              styles.carouselSettingsButton,
+              {
+                borderColor: j.panelBorder,
+                backgroundColor: j.filterOpenerBackground,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Verse carousel settings"
+          >
+            <Text style={{ fontFamily: "Inter_500Medium", fontSize: 13, color: j.filterOpenerText }}>
+              Verse Carousel
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -208,5 +232,12 @@ const styles = StyleSheet.create({
   dateFields: {
     width: "100%",
     gap: 12,
+  },
+  carouselSettingsButton: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
 });

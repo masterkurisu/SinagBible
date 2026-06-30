@@ -45,7 +45,7 @@ import { ReaderFontSettingsIcon } from "@/components/icons/ReaderFontSettingsIco
 import { ReaderThemesPaletteIcon } from "@/components/icons/ReaderThemesPaletteIcon";
 import { DeleteMyDataIcon } from "@/components/icons/DeleteMyDataIcon";
 import { SettingsMoreIcon } from "@/components/icons/SettingsMoreIcon";
-import { ReaderSettingsNavigationRail } from "@/src/features/reader/ReaderSettingsNavigationRail";
+import { ReaderSettingsSideSheet } from "@/src/features/reader/ReaderSettingsSideSheet";
 import {
   READER_M3_ERROR,
   READER_M3_ERROR_CONTAINER,
@@ -132,9 +132,9 @@ export type ReaderMobileSettingsPanelProps = {
   scrollPaddingTop: number;
   padH: number;
   isTabletReaderLayout: boolean;
-  /** Phone expanded rail width (matches reader slide distance). */
-  railWidthPx: number;
+  screenWidth: number;
   toolsMenuOpen: boolean;
+  onCloseToolsMenu: () => void;
   headerTools?: React.ReactNode;
   hideFontSettings?: boolean;
   hideTranslationAndStudyNotes?: boolean;
@@ -144,9 +144,10 @@ export type ReaderMobileSettingsPanelProps = {
   onSelectTranslation: () => void;
   onSelectCommentary: () => void;
   onSelectDeleteMyData: () => void;
-  /** Theme page background revealed behind the sliding content. */
+  onSelectVerseCarousel?: () => void;
+  /** Theme page background for the settings side sheet. */
   panelBackgroundColor: string;
-  /** Theme-aware M3 ripple for settings rail destinations (Android). */
+  /** Theme-aware M3 ripple for settings destinations (Android). */
   rippleColor?: string;
   settingsOnboardingRowRefs?: Partial<
     Record<ReaderSettingsOnboardingStepId, RefObject<View | null>>
@@ -178,13 +179,30 @@ const READER_MOBILE_SETTINGS_MENU_ROW = {
   gap: 12,
 } as const;
 
-/** Settings strip behind the reader; revealed when the reader slides left. */
+/** Phone: M3 side sheet. Tablet: full-width settings panel behind sliding content. */
 export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps) {
   if (!props.isTabletReaderLayout) {
     return (
-      <ReaderSettingsNavigationRail
-        {...props}
+      <ReaderSettingsSideSheet
+        open={props.toolsMenuOpen}
+        onClose={props.onCloseToolsMenu}
+        screenWidth={props.screenWidth}
+        insets={props.insets}
+        scrollPaddingTop={props.scrollPaddingTop}
         headerTools={props.headerTools ?? null}
+        hideFontSettings={props.hideFontSettings}
+        hideTranslationAndStudyNotes={props.hideTranslationAndStudyNotes}
+        onSelectFontSettings={props.onSelectFontSettings}
+        onSelectThemes={props.onSelectThemes}
+        onSelectMore={props.onSelectMore}
+        onSelectTranslation={props.onSelectTranslation}
+        onSelectCommentary={props.onSelectCommentary}
+        onSelectDeleteMyData={props.onSelectDeleteMyData}
+        onSelectVerseCarousel={props.onSelectVerseCarousel}
+        panelBackgroundColor={props.panelBackgroundColor}
+        rippleColor={props.rippleColor}
+        settingsOnboardingRowRefs={props.settingsOnboardingRowRefs}
+        onSettingsPanelLayout={props.onSettingsPanelLayout}
       />
     );
   }

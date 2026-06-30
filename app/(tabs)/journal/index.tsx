@@ -59,6 +59,7 @@ import {
   JOURNAL_M3_ELEVATED_CARD_RADIUS_PX,
   journalM3ElevatedCardStyle,
 } from "@/src/features/journal/journalCardChrome";
+import { JournalCarouselSettingsSheet } from "@/src/features/journal/JournalCarouselSettingsSheet";
 import {
   JournalFilterSortPanel,
   type JournalFilterKind,
@@ -409,6 +410,7 @@ export default function JournalIndexScreen() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [carouselSettingsOpen, setCarouselSettingsOpen] = useState(false);
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   const [newEntrySheetKey, setNewEntrySheetKey] = useState(0);
   const listRef = useRef<FlatList<JournalRow> | null>(null);
@@ -691,6 +693,19 @@ export default function JournalIndexScreen() {
     newEntryFabBottomPx: fabBottom,
   });
 
+  const openCarouselSettings = useCallback(() => {
+    if (journalOnboarding.tourActive) return;
+    closeSettingsMenu();
+    setFilterPanelOpen(false);
+    closeJournalSearch();
+    hapticLightImpact();
+    setCarouselSettingsOpen(true);
+  }, [closeJournalSearch, closeSettingsMenu, journalOnboarding.tourActive, setFilterPanelOpen]);
+
+  const closeCarouselSettings = useCallback(() => {
+    setCarouselSettingsOpen(false);
+  }, []);
+
   const closeFilterPanel = useCallback(() => {
     setFilterPanelOpen(false);
   }, [setFilterPanelOpen]);
@@ -939,6 +954,7 @@ export default function JournalIndexScreen() {
                   onDateToChange={handleDateToChange}
                   filtersRef={filtersRef}
                   sortRef={sortRef}
+                  onOpenCarouselSettings={openCarouselSettings}
                   pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
                 />
               </View>
@@ -965,6 +981,7 @@ export default function JournalIndexScreen() {
       j.panelBorder,
       journalOnboarding.tourActive,
       menuOpen,
+      openCarouselSettings,
       openJournalSearch,
       searchOpen,
       searchQuery,
@@ -1026,7 +1043,6 @@ export default function JournalIndexScreen() {
           scrollPaddingTop={journalAndroidAppBarBottomPx + 10}
           toolsMenuOpen={settingsMenu.toolsMenuOpen}
           isTabletReaderLayout={settingsMenu.isTabletReaderLayout}
-          railWidthPx={settingsMenu.readerMobileSettingsSlidePx}
           rippleColor={androidAppBarRipple}
           closeToolsMenu={settingsMenu.closeToolsMenu}
           scheduleAfterMobileReaderMenuClose={settingsMenu.scheduleAfterMobileReaderMenuClose}
@@ -1034,22 +1050,22 @@ export default function JournalIndexScreen() {
           onNavigate={(href) => router.push(href)}
           followUp={settingsFollowUp}
           hideTranslationAndStudyNotes
+          onSelectVerseCarousel={openCarouselSettings}
           panelBackgroundColor={j.listPageBackground}
         />
       ) : null}
+
+      <JournalCarouselSettingsSheet
+        isOpen={carouselSettingsOpen}
+        onClose={closeCarouselSettings}
+        bundle={bundle}
+      />
 
       <Animated.View
         style={{
           flex: 1,
           zIndex: 0,
-          ...(Platform.OS === "android"
-            ? { transform: [{ translateX: settingsMenu.readerMobileSettingsSlideTranslateX }] }
-            : null),
         }}
-        {...(Platform.OS === "android" && settingsMenu.toolsMenuOpen
-          ? settingsMenu.readerSettingsMenuPanHandlers
-          : {})}
-        pointerEvents={Platform.OS === "android" && settingsMenu.toolsMenuOpen ? "box-none" : "auto"}
       >
         <GestureDetector gesture={journalListScrollGesture}>
           <FlatList
@@ -1235,6 +1251,7 @@ export default function JournalIndexScreen() {
           onDateToChange={handleDateToChange}
           filtersRef={filtersRef}
           sortRef={sortRef}
+          onOpenCarouselSettings={openCarouselSettings}
           pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
         />
         </>

@@ -40,6 +40,7 @@ export type JournalFilterSideSheetProps = {
   filtersRef?: RefObject<RNView | null>;
   sortRef?: RefObject<RNView | null>;
   pointerEvents?: "none" | "auto";
+  onOpenCarouselSettings?: () => void;
 };
 
 /** M3 side sheet — filter and sort controls slide in from the right edge. */
@@ -60,6 +61,7 @@ export function JournalFilterSideSheet({
   filtersRef,
   sortRef,
   pointerEvents = "auto",
+  onOpenCarouselSettings,
 }: JournalFilterSideSheetProps) {
   if (Platform.OS !== "android") return null;
 
@@ -152,6 +154,7 @@ export function JournalFilterSideSheet({
               onDateToChange={onDateToChange}
               filtersRef={filtersRef}
               sortRef={sortRef}
+              onOpenCarouselSettings={onOpenCarouselSettings}
               pointerEvents={pointerEvents}
             />
           </ScrollView>

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
 import {
   Animated,
   Platform,
@@ -14,6 +14,7 @@ import type { HighlightColor } from "@sinag-bible/types";
 import { highlightColorOptions } from "@sinag-bible/ui";
 import {
   ReaderCopyIcon,
+  ReaderFavoriteIcon,
   ReaderHighlightIcon,
   ReaderJournalIcon,
   ReaderNoteIcon,
@@ -21,6 +22,11 @@ import {
 import { StudyNotesBookmarkIcon } from "@/components/icons/StudyNotesBookmarkIcon";
 import type { JournalNewEntryInitialParams } from "@/components/journal-new-entry-form";
 import { hapticLightImpact, hapticSelection } from "@/lib/haptics";
+import {
+  buildCarouselVerseFromSelection,
+  selectionMatchesCarouselRecord,
+} from "@/lib/journal-carousel-verses";
+import { useJournalCarouselVerses } from "@/lib/use-journal-carousel-verses";
 import { ReaderVerseRow } from "@/components/reader-verse-row";
 import {
   ReaderVerseList,
@@ -73,6 +79,7 @@ const ACTION_BAR_ICON_SCALE = {
   highlight: 1.19,
   copy: 1.31,
   note: 1.08,
+  favorite: 1.05,
   journal: 1.08,
 } as const;
 
@@ -119,6 +126,8 @@ type ReaderSelectionActionBarProps = {
   openStudyNotesFromSelection: () => void;
   copySelectedVerses: () => void;
   openNoteForSelection: () => void;
+  toggleFavoriteFromSelection: () => void;
+  selectionIsFavorited: boolean;
   openJournalFromSelection: () => void;
   actionBarButtonRefs: Record<ReaderActionBarOnboardingStepId, RefObject<View | null>>;
 };
@@ -138,6 +147,8 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
   openStudyNotesFromSelection,
   copySelectedVerses,
   openNoteForSelection,
+  toggleFavoriteFromSelection,
+  selectionIsFavorited,
   openJournalFromSelection,
   actionBarButtonRefs,
 }: ReaderSelectionActionBarProps) {
@@ -339,6 +350,35 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
                   </View>
                 </TouchableOpacity>
               </View>
+              <View collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
+                <TouchableOpacity
+                  onPress={toggleFavoriteFromSelection}
+                  accessibilityLabel={
+                    selectionIsFavorited
+                      ? "Remove from journal carousel"
+                      : "Add to journal carousel"
+                  }
+                  className="rounded-full items-center justify-center"
+                  style={ACTION_BAR_BUTTON_STYLE}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={{
+                      width: READER_ACTION_BAR_ICON_BOX_PX,
+                      height: READER_ACTION_BAR_ICON_BOX_PX,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transform: [{ scale: ACTION_BAR_ICON_SCALE.favorite }],
+                    }}
+                  >
+                    <ReaderFavoriteIcon
+                      color={selectionIsFavorited ? "#c45c5c" : rc.actionIconMuted}
+                      filled={selectionIsFavorited}
+                      size={READER_ACTION_BAR_ICON_SIZE_PX}
+                    />
+                  </View>
+                </TouchableOpacity>
+              </View>
               <View ref={actionBarButtonRefs.journal} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
                 <TouchableOpacity
                   onPress={openJournalFromSelection}
@@ -509,7 +549,6 @@ export type ReaderSelectionLayerProps = {
   onListLayoutHeight?: (height: number) => void;
   selectionBannerTopPx: number;
   screenW: number;
-  readerMobileSettingsSlideTranslateX: AnimatedType.AnimatedInterpolation<number>;
   readerOverlayOpenFromParent: boolean;
   readerFeatureOnboardingActive: boolean;
   featureOnboardingStep: ReaderOnboardingStep | null;
@@ -563,7 +602,6 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   onListLayoutHeight,
   selectionBannerTopPx,
   screenW,
-  readerMobileSettingsSlideTranslateX,
   readerOverlayOpenFromParent,
   readerFeatureOnboardingActive,
   featureOnboardingStep,
@@ -629,6 +667,50 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     toolsMenuOpen,
     closeToolsMenu,
   });
+
+  const { favorites, toggleFavorite } = useJournalCarouselVerses();
+  const [favoriteToastVisible, setFavoriteToastVisible] = useState(false);
+  const [favoriteToastAdded, setFavoriteToastAdded] = useState(true);
+
+  useEffect(() => {
+    if (!favoriteToastVisible) return;
+    const t = setTimeout(() => setFavoriteToastVisible(false), 2200);
+    return () => clearTimeout(t);
+  }, [favoriteToastVisible]);
+
+  const selectionIsFavorited = useMemo(
+    () =>
+      bookSlug
+        ? selectionMatchesCarouselRecord(favorites, bookSlug, chapterNumber, selectedVerses) != null
+        : false,
+    [bookSlug, chapterNumber, favorites, selectedVerses],
+  );
+
+  const toggleFavoriteFromSelection = useCallback(() => {
+    if (selectedVerses.length === 0 || !chapter || !resolvedTranslationId || !bookSlug) return;
+    const record = buildCarouselVerseFromSelection({
+      bookSlug,
+      bookName: chapter.bookName,
+      chapter: chapter.chapterNumber,
+      verses: chapter.verses,
+      selectedVerses,
+      translationId: resolvedTranslationId,
+    });
+    if (!record) return;
+    hapticLightImpact();
+    void toggleFavorite(record).then((added) => {
+      setFavoriteToastAdded(added);
+      setFavoriteToastVisible(true);
+      clearVerseSelection();
+    });
+  }, [
+    bookSlug,
+    chapter,
+    clearVerseSelection,
+    resolvedTranslationId,
+    selectedVerses,
+    toggleFavorite,
+  ]);
 
   const clearSelectionPrimedRef = useRef(false);
   const selectionToastHapticGuardRef = useRef(0);
@@ -919,6 +1001,49 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
         </View>
       ) : null}
 
+      {favoriteToastVisible ? (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 51 }]}>
+          <View
+            style={{
+              position: "absolute",
+              top: copyToastTopPx,
+              left: 0,
+              right: 0,
+              alignItems: "center",
+              paddingHorizontal: 16,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                backgroundColor: colors.brown800,
+                borderRadius: 999,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                shadowColor: rc.popoverShadow,
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
+            >
+              <Text style={{ color: rc.selectionText, fontSize: 15 }}>✓</Text>
+              <Text
+                style={{
+                  fontFamily: "Inter_500Medium",
+                  fontSize: 12,
+                  color: rc.selectionText,
+                }}
+              >
+                {favoriteToastAdded ? "Added to journal carousel" : "Removed from journal carousel"}
+              </Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
+
       {hasVerseSelection ? (
         <ReaderSelectionActionBar
           actionBarMode={actionBarMode}
@@ -935,19 +1060,20 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           openStudyNotesFromSelection={openStudyNotesFromSelection}
           copySelectedVerses={copySelectedVerses}
           openNoteForSelection={openNoteForSelection}
+          toggleFavoriteFromSelection={toggleFavoriteFromSelection}
+          selectionIsFavorited={selectionIsFavorited}
           openJournalFromSelection={openJournalFromSelection}
           actionBarButtonRefs={actionBarButtonRefs}
         />
       ) : null}
 
       {hasVerseSelection ? (
-        <Animated.View
+        <View
           pointerEvents="box-none"
           style={[
             StyleSheet.absoluteFill,
             {
               zIndex: 4000,
-              transform: [{ translateX: readerMobileSettingsSlideTranslateX }],
               ...Platform.select({ android: { elevation: 48 } }),
             },
           ]}
@@ -1021,7 +1147,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
               </Pressable>
             </View>
           </View>
-        </Animated.View>
+        </View>
       ) : null}
 
       <ReaderActionBarOnboardingLayer

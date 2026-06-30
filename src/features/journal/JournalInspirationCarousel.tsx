@@ -1,5 +1,6 @@
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
 import {
+  Alert,
   Platform,
   StyleSheet,
   Text,
@@ -7,57 +8,42 @@ import {
   useWindowDimensions,
   type ListRenderItem,
 } from "react-native";
-import { FlatList } from "react-native-gesture-handler";
+import { useFocusEffect } from "expo-router/react-navigation";
+import { FlatList, Pressable } from "react-native-gesture-handler";
 import { LinearGradient } from "expo-linear-gradient";
+import type { CarouselDisplayVerse } from "@/lib/journal-carousel-verses";
+import { useJournalCarouselVerses } from "@/lib/use-journal-carousel-verses";
+import { hapticLightImpact, hapticWarning } from "@/lib/haptics";
 
 /** M3 uncontained carousel — large shape (28dp). */
 const CAROUSEL_CARD_RADIUS_PX = 28;
 const CAROUSEL_GAP_PX = 12;
 const CAROUSEL_VERTICAL_PADDING_PX = 16;
 
-type InspirationVerse = {
-  id: string;
-  reference: string;
-  text: string;
-  /** Width as a fraction of the screen (multi-aspect ratio). */
-  widthRatio: number;
-  gradient: readonly [string, string, string];
-};
-
-const INSPIRATION_VERSES: InspirationVerse[] = [
-  {
-    id: "psalm-119-105",
-    reference: "Psalm 119:105",
-    text: "Your word is a lamp unto my feet and a light unto my path.",
-    widthRatio: 0.58,
-    gradient: ["#3d3428", "#2c2416", "#1a160f"],
-  },
-  {
-    id: "psalm-1-2",
-    reference: "Psalm 1:2",
-    text: "But his delight is in the law of the Lord; and in his law doth he meditate day and night.",
-    widthRatio: 0.72,
-    gradient: ["#5c4f3a", "#4a3826", "#3d3428"],
-  },
-  {
-    id: "joshua-1-8",
-    reference: "Joshua 1:8",
-    text: "This book of the law shall not depart out of thy mouth; but thou shalt meditate therein day and night.",
-    widthRatio: 0.64,
-    gradient: ["#6b5540", "#5c4f3a", "#4a3826"],
-  },
-];
-
 type CarouselCardProps = {
-  item: InspirationVerse;
+  item: CarouselDisplayVerse;
   cardWidth: number;
+  onLongPressFavorite?: (item: CarouselDisplayVerse) => void;
 };
 
-const CarouselCard = memo(function CarouselCard({ item, cardWidth }: CarouselCardProps) {
+const CarouselCard = memo(function CarouselCard({
+  item,
+  cardWidth,
+  onLongPressFavorite,
+}: CarouselCardProps) {
   const cardHeight = Math.round(cardWidth * 1.12);
 
   return (
-    <View
+    <Pressable
+      onLongPress={
+        item.isUserFavorite && onLongPressFavorite
+          ? () => onLongPressFavorite(item)
+          : undefined
+      }
+      delayLongPress={420}
+      accessibilityHint={
+        item.isUserFavorite ? "Long press to remove from carousel favorites" : undefined
+      }
       style={[
         styles.cardShell,
         {
@@ -81,50 +67,88 @@ const CarouselCard = memo(function CarouselCard({ item, cardWidth }: CarouselCar
           <Text style={styles.cardReference}>{item.reference}</Text>
         </View>
       </LinearGradient>
-    </View>
+    </Pressable>
   );
 });
 
 export const JournalInspirationCarousel = memo(function JournalInspirationCarousel() {
   const { width: windowWidth } = useWindowDimensions();
+  const { displayVerses, reload, removeFavorite } = useJournalCarouselVerses();
+  const listRef = useRef<FlatList<CarouselDisplayVerse> | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+    }, [reload]),
+  );
 
   const cardWidths = useMemo(
-    () =>
-      INSPIRATION_VERSES.map((verse) =>
-        Math.round(windowWidth * verse.widthRatio),
-      ),
-    [windowWidth],
+    () => displayVerses.map((verse) => Math.round(windowWidth * verse.widthRatio)),
+    [displayVerses, windowWidth],
   );
 
   const snapOffsets = useMemo(() => {
     const offsets: number[] = [0];
     let running = cardWidths[0]! + CAROUSEL_GAP_PX;
-    for (let i = 1; i < INSPIRATION_VERSES.length; i++) {
+    for (let i = 1; i < displayVerses.length; i++) {
       offsets.push(running);
       running += cardWidths[i]! + CAROUSEL_GAP_PX;
     }
     return offsets;
-  }, [cardWidths]);
+  }, [cardWidths, displayVerses.length]);
 
   const carouselHeight = useMemo(() => {
+    if (cardWidths.length === 0) return 0;
     const tallestCard = Math.max(...cardWidths.map((w) => Math.round(w * 1.12)));
     return tallestCard + CAROUSEL_VERTICAL_PADDING_PX * 2;
   }, [cardWidths]);
 
-  const renderItem = useMemo<ListRenderItem<InspirationVerse>>(
-    () =>
-      ({ item, index }) => (
-        <CarouselCard item={item} cardWidth={cardWidths[index]!} />
-      ),
-    [cardWidths],
+  const handleRemoveFavorite = useCallback(
+    (item: CarouselDisplayVerse) => {
+      if (!item.isUserFavorite) return;
+      hapticWarning();
+      Alert.alert(
+        "Remove from carousel?",
+        `${item.reference} will be removed from your journal carousel favorites.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: () => {
+              hapticLightImpact();
+              void removeFavorite(item.id);
+            },
+          },
+        ],
+      );
+    },
+    [removeFavorite],
   );
 
-  const keyExtractor = (item: InspirationVerse) => item.id;
+  const renderItem = useMemo<ListRenderItem<CarouselDisplayVerse>>(
+    () =>
+      ({ item, index }) => (
+        <CarouselCard
+          item={item}
+          cardWidth={cardWidths[index]!}
+          onLongPressFavorite={handleRemoveFavorite}
+        />
+      ),
+    [cardWidths, handleRemoveFavorite],
+  );
+
+  const keyExtractor = (item: CarouselDisplayVerse) => item.id;
+
+  if (displayVerses.length === 0) {
+    return null;
+  }
 
   return (
     <View style={[styles.root, { height: carouselHeight }]}>
       <FlatList
-        data={INSPIRATION_VERSES}
+        ref={listRef}
+        data={displayVerses}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         horizontal

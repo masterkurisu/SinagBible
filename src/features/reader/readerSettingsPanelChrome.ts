@@ -25,6 +25,11 @@ export function readerExpandedNavRailWidthPx(screenWidth: number): number {
   );
 }
 
+/** M3 side sheet width for reader/journal settings (matches filter side sheet). */
+export function readerSettingsSideSheetWidthPx(screenWidth: number): number {
+  return Math.max(240, Math.min(320, Math.max(280, Math.round(screenWidth * 0.84)) - 40));
+}
+
 export const READER_M3_ON_SURFACE = "#1C1B1F";
 export const READER_M3_ON_SURFACE_VARIANT = "#49454F";
 export const READER_M3_SURFACE_CONTAINER = "#F3EDF7";

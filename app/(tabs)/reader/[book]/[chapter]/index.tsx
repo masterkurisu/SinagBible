@@ -127,7 +127,7 @@ import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/reade
 import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
-import { readerExpandedNavRailWidthPx, READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
+import { readerSettingsSideSheetWidthPx, READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
 import { useReaderTabBarAutoHide } from "@/src/features/reader/useReaderTabBarAutoHide";
@@ -336,8 +336,8 @@ export default function ReaderChapterScreen() {
   const readerSettingsSlideProgress = useRef(new Animated.Value(0)).current;
   const readerSettingsMenuDragStartProgressRef = useRef(1);
   const readerSettingsMenuDragLastProgressRef = useRef(1);
-  /** Total horizontal slide (px) when the settings menu is fully open. */
-  const readerMobileSettingsSlidePx = useMemo(() => {
+  /** Tablet: content slide distance. Phone: side sheet width (onboarding fallback only). */
+  const settingsPanelWidthPx = useMemo(() => {
     if (isTabletReaderLayout) {
       const r =
         windowWidth > windowHeight
@@ -345,41 +345,45 @@ export default function ReaderChapterScreen() {
           : READER_MOBILE_SETTINGS_TABLET_PORTRAIT_SLIDE_RATIO;
       return windowWidth * r;
     }
-    return readerExpandedNavRailWidthPx(windowWidth);
+    return readerSettingsSideSheetWidthPx(windowWidth);
   }, [isTabletReaderLayout, windowWidth, windowHeight]);
 
   const readerMobileSettingsSlideTranslateX = useMemo(
     () =>
       readerSettingsSlideProgress.interpolate({
         inputRange: [0, 1],
-        outputRange: [0, readerMobileSettingsSlidePx],
+        outputRange: [0, settingsPanelWidthPx],
       }),
-    [readerSettingsSlideProgress, readerMobileSettingsSlidePx],
+    [readerSettingsSlideProgress, settingsPanelWidthPx],
   );
 
   useEffect(() => {
+    if (!isTabletReaderLayout) {
+      readerSettingsSlideProgress.setValue(0);
+      return;
+    }
     readerSettingsSlideProgress.stopAnimation();
     Animated.spring(readerSettingsSlideProgress, {
       ...(toolsMenuOpen ? READER_SETTINGS_MENU_SPRING_OPEN : READER_SETTINGS_MENU_SPRING_CLOSE),
       toValue: toolsMenuOpen ? 1 : 0,
     }).start();
-  }, [toolsMenuOpen, readerSettingsSlideProgress]);
+  }, [isTabletReaderLayout, toolsMenuOpen, readerSettingsSlideProgress]);
 
-  useRegisterReaderSettingsSlideProgress(readerSettingsSlideProgress);
+  useRegisterReaderSettingsSlideProgress(readerSettingsSlideProgress, isTabletReaderLayout);
 
   /** When orientation (or breakpoint) changes with the menu open, re-apply full slide so `translateX` matches the new distance. */
   const readerMenuSlidePxWhileOpenRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!toolsMenuOpen) {
+    if (!isTabletReaderLayout || !toolsMenuOpen) {
       readerMenuSlidePxWhileOpenRef.current = null;
       return;
     }
     const prev = readerMenuSlidePxWhileOpenRef.current;
-    readerMenuSlidePxWhileOpenRef.current = readerMobileSettingsSlidePx;
-    if (prev != null && prev !== readerMobileSettingsSlidePx) {
+    readerMenuSlidePxWhileOpenRef.current = settingsPanelWidthPx;
+    if (prev != null && prev !== settingsPanelWidthPx) {
       readerSettingsSlideProgress.setValue(1);
     }
-  }, [toolsMenuOpen, readerMobileSettingsSlidePx, readerSettingsSlideProgress]);
+  }, [isTabletReaderLayout, toolsMenuOpen, settingsPanelWidthPx, readerSettingsSlideProgress]);
 
   useEffect(() => {
     return () => {
@@ -563,7 +567,8 @@ export default function ReaderChapterScreen() {
   }, []);
 
   const readerSettingsMenuPanResponder = useMemo(() => {
-    const maxSlide = readerMobileSettingsSlidePx;
+    if (!isTabletReaderLayout) return PanResponder.create({});
+    const maxSlide = settingsPanelWidthPx;
     const finishDrag = (g: PanResponderGestureState, menuOpen: boolean) => {
       if (!menuOpen) return;
       const p = readerSettingsMenuDragLastProgressRef.current;
@@ -610,7 +615,13 @@ export default function ReaderChapterScreen() {
       },
       onPanResponderTerminationRequest: () => true,
     });
-  }, [toolsMenuOpen, closeToolsMenu, readerSettingsSlideProgress, readerMobileSettingsSlidePx]);
+  }, [
+    closeToolsMenu,
+    isTabletReaderLayout,
+    readerSettingsSlideProgress,
+    settingsPanelWidthPx,
+    toolsMenuOpen,
+  ]);
 
   const onboardingStepRef = useRef<ReaderOnboardingStep | null>(null);
   const completeOnboardingInteractionRef = useRef<() => void>(() => {});
@@ -1221,7 +1232,7 @@ export default function ReaderChapterScreen() {
     screenH: windowHeight,
     insets,
     settingsLayoutEpoch,
-    settingsRevealedStripWidthPx: readerMobileSettingsSlidePx,
+    settingsRevealedStripWidthPx: settingsPanelWidthPx,
   });
 
   if (readerChapterError) {
@@ -1429,13 +1440,7 @@ export default function ReaderChapterScreen() {
         paddingHorizontal: Platform.OS === "android" ? 2 : 0,
         gap: 0,
         backgroundColor:
-          Platform.OS === "android"
-            ? isTabletReaderLayout
-              ? rc.sceneSurface
-              : toolsMenuOpen
-                ? "transparent"
-                : rc.sceneSurface
-            : "transparent",
+          Platform.OS === "android" ? rc.sceneSurface : "transparent",
         borderWidth: 0,
         marginRight: 0,
         marginLeft: 0,
@@ -1451,8 +1456,9 @@ export default function ReaderChapterScreen() {
     scrollPaddingTop: readerMobileSettingsScrollPaddingTop,
     padH: fontSettingsPopupPadH,
     isTabletReaderLayout,
-    railWidthPx: readerMobileSettingsSlidePx,
+    screenWidth: windowWidth,
     toolsMenuOpen,
+    onCloseToolsMenu: closeToolsMenu,
     headerTools: Platform.OS === "android" ? null : readerHeaderToolsGroup,
     hideFontSettings: Platform.OS === "android",
     onSelectFontSettings:
@@ -1472,12 +1478,14 @@ export default function ReaderChapterScreen() {
     <View style={{ flex: 1, backgroundColor: rc.sceneSurface, overflow: "visible" }}>
       <ReaderMobileSettingsPanel {...readerSettingsPanelProps} />
       <Animated.View
-        {...(toolsMenuOpen ? readerSettingsMenuPanResponder.panHandlers : {})}
-        pointerEvents={toolsMenuOpen ? "box-none" : "auto"}
+        {...(isTabletReaderLayout && toolsMenuOpen ? readerSettingsMenuPanResponder.panHandlers : {})}
+        pointerEvents={isTabletReaderLayout && toolsMenuOpen ? "box-none" : "auto"}
         style={{
           flex: 1,
           backgroundColor: rc.sceneSurface,
-          transform: [{ translateX: readerMobileSettingsSlideTranslateX }],
+          ...(isTabletReaderLayout
+            ? { transform: [{ translateX: readerMobileSettingsSlideTranslateX }] }
+            : null),
           zIndex: 1,
         }}
       >
@@ -1530,7 +1538,6 @@ export default function ReaderChapterScreen() {
         onListLayoutHeight={onTabBarListLayout}
         selectionBannerTopPx={selectionBannerTopPx}
         screenW={screenW}
-        readerMobileSettingsSlideTranslateX={readerMobileSettingsSlideTranslateX}
         readerOverlayOpenFromParent={
           toolsMenuOpen ||
           fontSettingsSheetOpen ||
