@@ -137,7 +137,8 @@ export type ReaderMobileSettingsPanelProps = {
   railWidthPx: number;
   toolsMenuOpen: boolean;
   headerTools?: React.ReactNode;
-  onSelectFontSettings: () => void;
+  hideFontSettings?: boolean;
+  onSelectFontSettings?: () => void;
   onSelectThemes: () => void;
   onSelectMore: () => void;
   onSelectTranslation: () => void;
@@ -192,6 +193,7 @@ function ReaderMobileSettingsPanelTablet(props: ReaderMobileSettingsPanelProps) 
     insets,
     scrollPaddingTop,
     padH,
+    hideFontSettings = false,
     onSelectFontSettings,
     onSelectThemes,
     onSelectMore,
@@ -223,13 +225,17 @@ function ReaderMobileSettingsPanelTablet(props: ReaderMobileSettingsPanelProps) 
       onPress: onSelectCommentary,
       Icon: StudyNotesResearchIcon,
     },
-    {
-      id: "font-settings",
-      label: "Font settings",
-      onPress: onSelectFontSettings,
-      Icon: ReaderFontSettingsIcon,
-      iconSize: SETTINGS_MENU_OPTICAL_ICON_SIZE,
-    },
+    ...(hideFontSettings || onSelectFontSettings == null
+      ? []
+      : [
+          {
+            id: "font-settings" as const,
+            label: "Font settings",
+            onPress: onSelectFontSettings,
+            Icon: ReaderFontSettingsIcon,
+            iconSize: SETTINGS_MENU_OPTICAL_ICON_SIZE,
+          },
+        ]),
     {
       id: "themes",
       label: "Themes",

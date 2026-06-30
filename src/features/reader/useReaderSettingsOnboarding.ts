@@ -10,7 +10,7 @@ import { adjustAnchorForOnboardingModal } from "@/src/components/feature-onboard
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import {
   READER_SETTINGS_ONBOARDING_STEP_MS,
-  READER_SETTINGS_ONBOARDING_STEPS,
+  readerSettingsOnboardingStepsForPlatform,
   type ReaderSettingsOnboardingStepId,
 } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import {
@@ -47,7 +47,7 @@ function resolveSettingsRowAnchor(
   isNavigationRailLayout: boolean,
 ): LayoutRectangle {
   const deleteMyDataBottomPx = readerSettingsDeleteMyDataScreenBottomPx(insets.bottom);
-  const stepIndex = READER_SETTINGS_ONBOARDING_STEPS.findIndex((step) => step.id === stepId);
+  const stepIndex = readerSettingsOnboardingStepsForPlatform().findIndex((step) => step.id === stepId);
 
   if (isNavigationRailLayout) {
     if (measured) {
@@ -112,10 +112,12 @@ export function useReaderSettingsOnboarding({
     void markFeatureOnboardingDone("readerSettings");
   }, [clearTimer]);
 
+  const settingsOnboardingSteps = readerSettingsOnboardingStepsForPlatform();
+
   const measureCurrentStep = useCallback(
     async (index: number) => {
       const requestId = ++measureRequestRef.current;
-      const step = READER_SETTINGS_ONBOARDING_STEPS[index];
+      const step = settingsOnboardingSteps[index];
       if (!step) return;
       const measured = await measureOnboardingTarget(rowRefs[step.id], {
         minWidth: 40,
@@ -137,7 +139,7 @@ export function useReaderSettingsOnboarding({
       setRowAnchor(anchor);
       setPresentedStepIndex(index);
     },
-    [insets, isNavigationRailLayout, rowRefs, screenH, screenW, scrollPaddingTop, settingsRevealedStripWidthPx],
+    [insets, isNavigationRailLayout, rowRefs, screenH, screenW, scrollPaddingTop, settingsOnboardingSteps, settingsRevealedStripWidthPx],
   );
 
   useEffect(() => {
@@ -173,7 +175,7 @@ export function useReaderSettingsOnboarding({
         intervalRef.current = setInterval(() => {
           setStepIndex((prev) => {
             const next = prev + 1;
-            if (next >= READER_SETTINGS_ONBOARDING_STEPS.length) {
+            if (next >= settingsOnboardingSteps.length) {
               finishTour();
               return prev;
             }
@@ -187,11 +189,11 @@ export function useReaderSettingsOnboarding({
       cancelled = true;
       clearTimeout(startTimeout);
     };
-  }, [clearTimer, finishTour, toolsMenuOpen]);
+  }, [clearTimer, finishTour, settingsOnboardingSteps.length, toolsMenuOpen]);
 
   useEffect(() => () => clearTimer(), [clearTimer]);
 
-  const currentStep = active ? (READER_SETTINGS_ONBOARDING_STEPS[presentedStepIndex] ?? null) : null;
+  const currentStep = active ? (settingsOnboardingSteps[presentedStepIndex] ?? null) : null;
   const showLayer = active && toolsMenuOpen && currentStep != null && rowAnchor != null;
 
   return {

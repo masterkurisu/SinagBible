@@ -61,6 +61,7 @@ import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import { mobileAppThemePickerOptions } from "@sinag-bible/tokens";
 import { BibleBookIcon } from "@/components/icons/BibleBookIcon";
 import { ReaderSettingsCogIcon } from "@/components/icons/ReaderSettingsCogIcon";
+import { ReaderFontSettingsIcon } from "@/components/icons/ReaderFontSettingsIcon";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
@@ -106,7 +107,8 @@ import {
   ReaderSelectionLayer,
   type ReaderSelectionActivity,
 } from "@/src/features/reader/ReaderSelectionLayer";
-import { ReaderHeader, READER_HEADER_TITLE_MAIN_PX, READER_HEADER_TITLE_TRANS_PX } from "@/src/features/reader/ReaderHeader";
+import { ReaderHeader } from "@/src/features/reader/ReaderHeader";
+import { ReaderAndroidAppBar } from "@/src/features/reader/ReaderAndroidAppBar";
 import {
   ReaderChapterNavArrows,
   useReaderChapterNavArrowsVisibility,
@@ -124,7 +126,7 @@ import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/reade
 import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
-import { readerExpandedNavRailWidthPx } from "@/src/features/reader/readerSettingsPanelChrome";
+import { readerExpandedNavRailWidthPx, READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
 import { useReaderTabBarAutoHide } from "@/src/features/reader/useReaderTabBarAutoHide";
@@ -232,6 +234,7 @@ export default function ReaderChapterScreen() {
 
   const bookFanRef = useRef<View | null>(null);
   const settingsButtonRef = useRef<View | null>(null);
+  const fontSettingsButtonRef = useRef<View | null>(null);
   const selectionBannerAnchorRef = useRef<View | null>(null);
   const selectionBannerLiveRef = useRef<View | null>(null);
   const clearVerseSelectionRef = useRef<(() => void) | null>(null);
@@ -461,6 +464,14 @@ export default function ReaderChapterScreen() {
       setFontSettingsSheetOpen(true);
     });
   }, [closeToolsMenu, scheduleAfterMobileReaderMenuClose]);
+
+  const openReaderFontSettingsFromAppBar = useCallback(() => {
+    hapticLightImpact();
+    setToolsMenuOpen(false);
+    setReaderDropdown(null);
+    setDropdownAnchor(null);
+    setFontSettingsSheetOpen(true);
+  }, []);
 
   const openMobileReaderMoreFromMenu = useCallback(() => {
     closeToolsMenu();
@@ -1000,30 +1011,35 @@ export default function ReaderChapterScreen() {
     newEntrySheetOpen;
 
   const readerAndroidTopToolsTopPx = Math.max(insets.top, 8) + 2;
+  const readerAndroidAppBarBottomPx = readerAndroidTopToolsTopPx + READER_M3_APP_BAR_CONTENT_HEIGHT_PX;
 
-  /** Below stack header / in-screen tool pill so the toast is not under native header touch targets. */
+  /** Below stack header / in-screen app bar so the toast is not under native header touch targets. */
   const selectionBannerTopPx =
     (Platform.OS === "ios"
       ? insets.top + 44 + 10
-      : readerAndroidTopToolsTopPx + 44 + 10) +
+      : readerAndroidAppBarBottomPx + 10) +
     (isTabletLayout(windowWidth, windowHeight) ? 55 : 0);
 
   /**
-   * Top inset for the book/settings pill when it lives in the left settings rail (phone).
+   * Top inset for the book/settings pill when it lives in the left settings rail (iOS phone).
    */
   const readerMobileSettingsToolsTopPx =
     Platform.OS === "ios" ? insets.top + 4 : readerAndroidTopToolsTopPx;
 
   /**
-   * First settings destination row — below the embedded header tools on the left rail.
+   * First settings destination row — below the app bar on Android, or embedded header tools on iOS phone.
    */
   const readerMobileSettingsScrollPaddingTop = isTabletReaderLayout
-    ? (Platform.OS === "ios"
-        ? insets.top + 44 + 12
-        : Math.max(insets.top + 56, readerAndroidTopToolsTopPx + 44 + 12)) +
-      10 +
-      10
-    : readerMobileSettingsToolsTopPx + 44 + 10;
+    ? Platform.OS === "android"
+      ? readerAndroidAppBarBottomPx + 22
+      : (Platform.OS === "ios"
+          ? insets.top + 44 + 12
+          : Math.max(insets.top + 56, readerAndroidTopToolsTopPx + 44 + 12)) +
+        10 +
+        10
+    : Platform.OS === "android"
+      ? readerAndroidAppBarBottomPx + 10
+      : readerMobileSettingsToolsTopPx + 44 + 10;
 
   const actionBarBottomPx =
     nativeTabFabOffsetPx(insets.bottom) +
@@ -1311,22 +1327,25 @@ export default function ReaderChapterScreen() {
   const settingsMutedTextColor = themeId === "spectrum" ? colors.brown600 : colors.tan200;
   const readerHeaderToolsHidden = readerDropdown === "book" && !bookSheetExitAnimationStarted;
 
+  const androidAppBarRipple = bundle.chrome.androidRipple;
+  const androidAppBarIconSize = 48;
+
   const readerSettingsToolsRow =
     Platform.OS === "android" ? (
-      <View ref={settingsButtonRef} collapsable={false} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
-        <TouchableOpacity
+      <View ref={settingsButtonRef} collapsable={false} style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center" }}>
+        <Pressable
           onPress={toggleToolsMenu}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}
           accessibilityRole="button"
           accessibilityLabel={toolsMenuOpen ? "Close reader tools" : "Reader settings"}
           accessibilityState={{ expanded: toolsMenuOpen }}
-          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+          android_ripple={{ color: androidAppBarRipple, borderless: true, radius: 24 }}
+          style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center", borderRadius: 24 }}
         >
           <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", transform: [{ translateX: 2 }, { translateY: -4 }] }}>
             <ReaderSettingsCogIcon size={26} color={colors.brown800} />
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     ) : (
     <View ref={settingsButtonRef} collapsable={false} className="h-11 w-11 items-center justify-center">
@@ -1347,15 +1366,15 @@ export default function ReaderChapterScreen() {
 
   const readerHeaderBookButton =
     Platform.OS === "android" ? (
-      <View ref={bookFanRef} collapsable={false} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
-        <TouchableOpacity
+      <View ref={bookFanRef} collapsable={false} style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center" }}>
+        <Pressable
           onPress={openBookTools}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}
           accessibilityRole="button"
           accessibilityLabel={readerDropdown === "book" ? "Close book list" : "Choose a Bible book"}
           accessibilityState={{ selected: readerDropdown === "book" }}
-          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+          android_ripple={{ color: androidAppBarRipple, borderless: true, radius: 24 }}
+          style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center", borderRadius: 24 }}
         >
           <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", transform: [{ translateY: -4 }] }}>
             <BibleBookIcon
@@ -1363,7 +1382,7 @@ export default function ReaderChapterScreen() {
               color={readerDropdown === "book" ? colors.gold : colors.brown800}
             />
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     ) : (
     <View ref={bookFanRef} collapsable={false} className="h-11 w-11 items-center justify-center">
@@ -1384,6 +1403,25 @@ export default function ReaderChapterScreen() {
       </Pressable>
     </View>
     );
+
+  const readerHeaderFontButton =
+    Platform.OS === "android" ? (
+      <View ref={fontSettingsButtonRef} collapsable={false} style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center" }}>
+        <Pressable
+          onPress={openReaderFontSettingsFromAppBar}
+          hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel="Font settings"
+          accessibilityHint="Adjust reader font size, spacing, and typeface"
+          android_ripple={{ color: androidAppBarRipple, borderless: true, radius: 24 }}
+          style={{ width: androidAppBarIconSize, height: androidAppBarIconSize, alignItems: "center", justifyContent: "center", borderRadius: 24 }}
+        >
+          <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
+            <ReaderFontSettingsIcon size={24} color={colors.brown800} />
+          </View>
+        </Pressable>
+      </View>
+    ) : null;
 
   const readerHeaderToolsGroup = (
     <View
@@ -1417,15 +1455,15 @@ export default function ReaderChapterScreen() {
 
   const readerSettingsPanelProps = {
     insets,
-    scrollPaddingTop: isTabletReaderLayout
-      ? readerMobileSettingsScrollPaddingTop
-      : readerMobileSettingsToolsTopPx,
+    scrollPaddingTop: readerMobileSettingsScrollPaddingTop,
     padH: fontSettingsPopupPadH,
     isTabletReaderLayout,
     railWidthPx: readerMobileSettingsSlidePx,
     toolsMenuOpen,
-    headerTools: readerHeaderToolsGroup,
-    onSelectFontSettings: openMobileReaderFontSettingsFromMenu,
+    headerTools: Platform.OS === "android" ? null : readerHeaderToolsGroup,
+    hideFontSettings: Platform.OS === "android",
+    onSelectFontSettings:
+      Platform.OS === "android" ? undefined : openMobileReaderFontSettingsFromMenu,
     onSelectThemes: openMobileReaderThemesFromMenu,
     onSelectMore: openMobileReaderMoreFromMenu,
     onSelectTranslation: openMobileReaderTranslationFromMenu,
@@ -1550,84 +1588,25 @@ export default function ReaderChapterScreen() {
         nextArrowRef={chapterNavNextArrowRef}
       />
 
-      {Platform.OS === "android" && isTabletReaderLayout && !readerHeaderToolsHidden ? (
-        <View
-          pointerEvents="box-none"
-          collapsable={false}
-          style={{
-            position: "absolute",
-            top: readerAndroidTopToolsTopPx,
-            left: Math.max(insets.left, 10),
-            right: Math.max(insets.right, 10),
-            height: 44,
-            zIndex: 100,
-            elevation: 100,
-          }}
-        >
-          {!toolsMenuOpen ? (
-          <Reanimated.View
-            pointerEvents="none"
-            style={[
-              {
-                position: "absolute",
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: 0,
-                alignItems: "center",
-                justifyContent: "center",
-              },
-              readerHeaderTitleAnimatedStyle,
-            ]}
-          >
-            <View
-              style={{
-                backgroundColor: rc.sceneSurface,
-                borderRadius: 999,
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                maxWidth: screenW * 0.42,
-              }}
-            >
-              <View className="flex-row items-baseline justify-center" style={{ flexShrink: 1 }}>
-                <Text
-                  style={{
-                    fontFamily: "Inter_500Medium",
-                    fontSize: READER_HEADER_TITLE_MAIN_PX,
-                    lineHeight: Math.ceil(READER_HEADER_TITLE_MAIN_PX * 1.25),
-                    color: colors.brown800,
-                  }}
-                  numberOfLines={1}
-                >
-                  {readerHeaderBookName} {chapterNumber}
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: "Inter_400Regular",
-                    fontSize: READER_HEADER_TITLE_TRANS_PX,
-                    lineHeight: Math.ceil(READER_HEADER_TITLE_TRANS_PX * 1.25),
-                    color: colors.gold,
-                  }}
-                  numberOfLines={1}
-                >{` (${readerHeaderTranslationId})`}</Text>
-              </View>
-            </View>
-          </Reanimated.View>
-          ) : null}
-          <View
-            pointerEvents="auto"
-            collapsable={false}
-            style={{
-              position: "absolute",
-              left: 0,
-              top: 0,
-              height: 44,
-              justifyContent: "center",
-            }}
-          >
-            {readerHeaderToolsGroup}
-          </View>
-        </View>
+      {Platform.OS === "android" ? (
+        <ReaderAndroidAppBar
+          hidden={readerHeaderToolsHidden}
+          topInsetPx={readerAndroidTopToolsTopPx}
+          backgroundColor={rc.sceneSurface}
+          insets={insets}
+          screenW={screenW}
+          titleAnimatedStyle={readerHeaderTitleAnimatedStyle}
+          bookName={readerHeaderBookName}
+          chapterNumber={chapterNumber}
+          translationId={readerHeaderTranslationId}
+          colors={colors}
+          bookButton={readerHeaderBookButton}
+          settingsButton={readerSettingsToolsRow}
+          fontButton={readerHeaderFontButton}
+          toolsMenuOpen={toolsMenuOpen}
+          barRef={headerToolsGroupRef}
+          onLayout={bumpHeaderToolsLayoutEpoch}
+        />
       ) : null}
 
       <JournalNewEntrySheet

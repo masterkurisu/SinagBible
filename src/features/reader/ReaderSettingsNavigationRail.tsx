@@ -49,8 +49,9 @@ export type ReaderSettingsNavigationRailProps = {
   /** Expanded rail width — matches reader slide distance; flush to the screen edge. */
   railWidthPx: number;
   toolsMenuOpen: boolean;
-  headerTools: ReactNode;
-  onSelectFontSettings: () => void;
+  headerTools?: ReactNode | null;
+  hideFontSettings?: boolean;
+  onSelectFontSettings?: () => void;
   onSelectThemes: () => void;
   onSelectMore: () => void;
   onSelectTranslation: () => void;
@@ -109,7 +110,8 @@ export function ReaderSettingsNavigationRail({
   scrollPaddingTop,
   railWidthPx,
   toolsMenuOpen,
-  headerTools,
+  headerTools = null,
+  hideFontSettings = false,
   onSelectFontSettings,
   onSelectThemes,
   onSelectMore,
@@ -135,12 +137,16 @@ export function ReaderSettingsNavigationRail({
       onPress: onSelectCommentary,
       Icon: StudyNotesResearchIcon,
     },
-    {
-      id: "font-settings",
-      label: "Font settings",
-      onPress: onSelectFontSettings,
-      Icon: ReaderFontSettingsIcon,
-    },
+    ...(hideFontSettings || onSelectFontSettings == null
+      ? []
+      : [
+          {
+            id: "font-settings" as const,
+            label: "Font settings",
+            onPress: onSelectFontSettings,
+            Icon: ReaderFontSettingsIcon,
+          },
+        ]),
     {
       id: "themes",
       label: "Themes",
@@ -176,8 +182,8 @@ export function ReaderSettingsNavigationRail({
           style={[
             styles.headerToolsRow,
             {
-              paddingTop: scrollPaddingTop,
-              minHeight: HEADER_TOOLS_ROW_HEIGHT,
+              paddingTop: headerTools != null ? scrollPaddingTop : 0,
+              minHeight: headerTools != null ? HEADER_TOOLS_ROW_HEIGHT : 0,
               paddingLeft: contentPaddingLeft,
             },
           ]}
@@ -194,6 +200,7 @@ export function ReaderSettingsNavigationRail({
               contentContainerStyle={[
                 styles.railScrollContent,
                 {
+                  paddingTop: headerTools == null ? scrollPaddingTop : 0,
                   paddingBottom:
                     deleteMyDataBottomPx + READER_SETTINGS_NAV_RAIL_ITEM_HEIGHT_PX + 8,
                 },

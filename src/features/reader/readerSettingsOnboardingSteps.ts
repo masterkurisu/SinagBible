@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 export type ReaderSettingsOnboardingStepId =
   | "translation"
   | "study-notes"
@@ -39,5 +41,13 @@ export const READER_SETTINGS_ONBOARDING_STEPS: ReaderSettingsOnboardingStep[] = 
       "Permanently clear your highlights, notes, and journal from this device.",
   },
 ];
+
+/** Settings onboarding steps — font settings live in the Android app bar, not the settings panel. */
+export function readerSettingsOnboardingStepsForPlatform(): ReaderSettingsOnboardingStep[] {
+  if (Platform.OS === "android") {
+    return READER_SETTINGS_ONBOARDING_STEPS.filter((step) => step.id !== "font-settings");
+  }
+  return READER_SETTINGS_ONBOARDING_STEPS;
+}
 
 export const READER_SETTINGS_ONBOARDING_STEP_MS = 3000;

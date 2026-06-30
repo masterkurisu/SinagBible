@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { type LayoutRectangle, type View } from "react-native";
+import { type LayoutRectangle, Platform, type View } from "react-native";
 import type { EdgeInsets } from "react-native-safe-area-context";
 import {
   isFeatureOnboardingDone,
@@ -21,7 +21,9 @@ import {
 } from "@/src/features/reader/ReaderChapterNavArrows";
 import {
   estimateReaderHeaderToolsPillRect,
+  isPlausibleAndroidAppBarRect,
   isPlausibleHeaderToolsPillRect,
+  readerAndroidAppBarToolTargetsFromBar,
   readerHeaderToolTargetsFromPill,
 } from "@/src/features/reader/readerHeaderToolTargets";
 
@@ -127,11 +129,22 @@ async function measureHeaderToolsPillRect(
   toolsOnLeft: boolean,
 ): Promise<LayoutRectangle> {
   const measured = await measureOnboardingTarget(headerToolsGroupRef, {
-    minWidth: 80,
+    minWidth: Platform.OS === "android" ? screenW * 0.5 : 80,
     minHeight: 36,
   });
+  if (Platform.OS === "android" && isPlausibleAndroidAppBarRect(measured, screenW)) {
+    return measured;
+  }
   if (isPlausibleHeaderToolsPillRect(measured, insets, screenW, toolsOnLeft)) {
     return measured;
+  }
+  if (Platform.OS === "android") {
+    return {
+      x: 0,
+      y: androidTopToolsTopPx,
+      width: screenW,
+      height: 56,
+    };
   }
   return estimateReaderHeaderToolsPillRect(insets, screenW, androidTopToolsTopPx, toolsOnLeft);
 }
@@ -199,7 +212,11 @@ export function useReaderFeatureOnboarding({
         androidTopToolsTopPx,
         toolsOnLeft,
       );
-      setSpotlightTargets([readerHeaderToolTargetsFromPill(pillRect).book]);
+      const bookTarget =
+        Platform.OS === "android" && isPlausibleAndroidAppBarRect(pillRect, screenW)
+          ? readerAndroidAppBarToolTargetsFromBar(pillRect, insets, screenW).book
+          : readerHeaderToolTargetsFromPill(pillRect).book;
+      setSpotlightTargets([bookTarget]);
       setCoachMarkAnchor(null);
       setTargetsReady(true);
       return;
@@ -213,7 +230,11 @@ export function useReaderFeatureOnboarding({
         androidTopToolsTopPx,
         toolsOnLeft,
       );
-      setSpotlightTargets([readerHeaderToolTargetsFromPill(pillRect).settings]);
+      const settingsTarget =
+        Platform.OS === "android" && isPlausibleAndroidAppBarRect(pillRect, screenW)
+          ? readerAndroidAppBarToolTargetsFromBar(pillRect, insets, screenW).settings
+          : readerHeaderToolTargetsFromPill(pillRect).settings;
+      setSpotlightTargets([settingsTarget]);
       setCoachMarkAnchor(null);
       setTargetsReady(true);
       return;

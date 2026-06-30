@@ -1,6 +1,12 @@
 /** M3 `surface` — settings strip revealed when the reader slides aside. */
 export const READER_MOBILE_SETTINGS_PANEL_BG = "#FFFFFF";
 
+/** M3 top app bar content height below the status bar (56dp). */
+export const READER_M3_APP_BAR_CONTENT_HEIGHT_PX = 56;
+
+/** M3 standard icon button touch target (48dp). */
+export const READER_M3_APP_BAR_ICON_BUTTON_PX = 48;
+
 /** M3 compact navigation rail width (80dp). @deprecated Use expanded rail on phone. */
 export const READER_SETTINGS_NAV_RAIL_WIDTH_PX = 80;
 
