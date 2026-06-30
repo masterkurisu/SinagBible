@@ -117,6 +117,12 @@ export type MobileAppThemeBundle = {
     newEntrySheetBorder: string;
     newEntryDragAreaBackground: string;
     fabGradient: readonly [string, string, string];
+    /** M3 expressive FAB — `primaryContainer`. */
+    fabContainer: string;
+    /** M3 expressive FAB — `onPrimaryContainer` icon tint. */
+    fabOnContainer: string;
+    /** M3 FAB press ripple (`onPrimaryContainer` at low alpha). */
+    fabRipple: string;
     /** Passage preview card under the reference field */
     versePreviewBackground: string;
     /** Reflection toolbar circular buttons */
@@ -211,6 +217,9 @@ const defaultThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     newEntrySheetBorder: "#ece7dd",
     newEntryDragAreaBackground: "#fdfbf7",
     fabGradient: ["#4b3520", "#2b2014", "#15110b"],
+    fabContainer: "#EDE5D8",
+    fabOnContainer: "#2C2416",
+    fabRipple: "rgba(44, 36, 22, 0.12)",
     versePreviewBackground: "#ffffff",
     reflectionToolbarBackground: "#2c2118",
     reflectionFormatMenuOpenBackground: "#f5f0e6",
@@ -298,6 +307,9 @@ const darkThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     newEntrySheetBorder: "#3d3428",
     newEntryDragAreaBackground: "#2a2420",
     fabGradient: ["#7a5c3a", "#4a3826", "#1f1a14"],
+    fabContainer: "#6B5540",
+    fabOnContainer: "#F5E9D6",
+    fabRipple: "rgba(245, 233, 214, 0.12)",
     versePreviewBackground: "#3d3830",
     reflectionToolbarBackground: "#1a1410",
     reflectionFormatMenuOpenBackground: "#3d3428",
@@ -386,6 +398,9 @@ const nightThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     newEntrySheetBorder: "#2a2520",
     newEntryDragAreaBackground: "#000000",
     fabGradient: ["#6b4f30", "#3d2e1a", "#0d0b09"],
+    fabContainer: "#5C4630",
+    fabOnContainer: "#E0D4C4",
+    fabRipple: "rgba(224, 212, 196, 0.12)",
     versePreviewBackground: "#141210",
     reflectionToolbarBackground: "#0d0b09",
     reflectionFormatMenuOpenBackground: "#2a2520",
@@ -473,6 +488,9 @@ const monoThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     newEntrySheetBorder: "#e0e0e0",
     newEntryDragAreaBackground: "#f7f9f5",
     fabGradient: ["#333333", "#222222", "#111111"],
+    fabContainer: "#E4E4E2",
+    fabOnContainer: "#111111",
+    fabRipple: "rgba(17, 17, 17, 0.10)",
     versePreviewBackground: "#ffffff",
     reflectionToolbarBackground: "#111111",
     reflectionFormatMenuOpenBackground: "#e8e8e6",
@@ -561,6 +579,9 @@ const sageThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     newEntrySheetBorder: "#c8d4be",
     newEntryDragAreaBackground: "#ffffff",
     fabGradient: ["#4a5e42", "#2e3d2a", "#1e2a1e"],
+    fabContainer: "#C8E6C9",
+    fabOnContainer: "#1B5E20",
+    fabRipple: "rgba(27, 94, 32, 0.12)",
     versePreviewBackground: "#ffffff",
     reflectionToolbarBackground: "#2e3d2a",
     reflectionFormatMenuOpenBackground: "#eaede6",
@@ -650,6 +671,9 @@ const spectrumThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     newEntrySheetBorder: "#e8eaed",
     newEntryDragAreaBackground: "#ffffff",
     fabGradient: ["#1a73e8", "#4285f4", "#1967d2"],
+    fabContainer: "#D3E3FD",
+    fabOnContainer: "#041E49",
+    fabRipple: "rgba(4, 30, 73, 0.12)",
     versePreviewBackground: "#ffffff",
     reflectionToolbarBackground: "#3c4043",
     reflectionFormatMenuOpenBackground: "#f1f3f4",

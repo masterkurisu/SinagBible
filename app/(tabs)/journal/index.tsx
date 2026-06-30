@@ -44,8 +44,14 @@ import { hapticLightImpact } from "@/lib/haptics";
 import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboardingLayer";
 import { useJournalOnboarding } from "@/src/features/journal/useJournalOnboarding";
 import type { JournalOnboardingStepId } from "@/src/features/journal/journalOnboardingSteps";
+import { JournalM3ExpressiveFab } from "@/src/features/journal/JournalM3ExpressiveFab";
+import {
+  JOURNAL_IOS_FAB_SIZE_PX,
+  JOURNAL_NEW_ENTRY_FAB_PX,
+} from "@/src/features/journal/journalFabChrome";
 
-const FAB_SIZE_PX = 72;
+const FAB_SIZE_PX = JOURNAL_NEW_ENTRY_FAB_PX;
+const IOS_FAB_SIZE_PX = JOURNAL_IOS_FAB_SIZE_PX;
 /**
  * Lift above the native tab bar. Reduced by 40px after the SDK 56 NativeTabs upgrade, which
  * already insets tab content from the bottom safe area.
@@ -880,31 +886,43 @@ export default function JournalIndexScreen() {
           style={[styles.fabAnchor, { bottom: fabBottom }]}
           collapsable={false}
         >
-          <Pressable
-            ref={createFromBibleRef}
-            accessibilityRole="button"
-            accessibilityLabel={newEntryOpen ? "Close new entry" : "New journal entry"}
-            onPress={toggleNewEntrySheet}
-            style={({ pressed }) => [
-              styles.fab,
-              {
-                opacity: pressed ? 0.92 : 1,
-                transform: [{ scale: pressed ? 0.96 : 1 }],
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={[...j.fabGradient]}
-              locations={[0, 0.52, 1]}
-              start={{ x: 0.15, y: 0.1 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.fabGrad}
+          {Platform.OS === "android" ? (
+            <JournalM3ExpressiveFab
+              buttonRef={createFromBibleRef}
+              accessibilityLabel={newEntryOpen ? "Close new entry" : "New journal entry"}
+              onPress={toggleNewEntrySheet}
+              containerColor={j.fabContainer}
+              onContainerColor={j.fabOnContainer}
+              rippleColor={j.fabRipple}
+              iconOpenProgress={fabSpin}
+            />
+          ) : (
+            <Pressable
+              ref={createFromBibleRef}
+              accessibilityRole="button"
+              accessibilityLabel={newEntryOpen ? "Close new entry" : "New journal entry"}
+              onPress={toggleNewEntrySheet}
+              style={({ pressed }) => [
+                styles.fab,
+                {
+                  opacity: pressed ? 0.92 : 1,
+                  transform: [{ scale: pressed ? 0.96 : 1 }],
+                },
+              ]}
             >
-              <Animated.View style={{ transform: [{ rotate: fabIconRotate }] }}>
-                <FabPlusIcon />
-              </Animated.View>
-            </LinearGradient>
-          </Pressable>
+              <LinearGradient
+                colors={[...j.fabGradient]}
+                locations={[0, 0.52, 1]}
+                start={{ x: 0.15, y: 0.1 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.fabGrad}
+              >
+                <Animated.View style={{ transform: [{ rotate: fabIconRotate }] }}>
+                  <FabPlusIcon />
+                </Animated.View>
+              </LinearGradient>
+            </Pressable>
+          )}
         </View>
 
         {toast ? (
@@ -982,9 +1000,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   fab: {
-    width: FAB_SIZE_PX,
-    height: FAB_SIZE_PX,
-    borderRadius: FAB_SIZE_PX / 2,
+    width: IOS_FAB_SIZE_PX,
+    height: IOS_FAB_SIZE_PX,
+    borderRadius: IOS_FAB_SIZE_PX / 2,
     overflow: "hidden",
     shadowColor: "#242423",
     shadowOffset: { width: 0, height: 5 },
@@ -995,9 +1013,9 @@ const styles = StyleSheet.create({
   },
   fabGrad: {
     flex: 1,
-    width: FAB_SIZE_PX,
-    height: FAB_SIZE_PX,
-    borderRadius: FAB_SIZE_PX / 2,
+    width: IOS_FAB_SIZE_PX,
+    height: IOS_FAB_SIZE_PX,
+    borderRadius: IOS_FAB_SIZE_PX / 2,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(245, 233, 214, 0.09)",

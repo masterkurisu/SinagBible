@@ -29,7 +29,9 @@ import {
 } from "@/lib/native-tab-chrome";
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 
-const FAB_SIZE_PX = 72;
+import { JOURNAL_NEW_ENTRY_FAB_PX } from "@/src/features/journal/journalFabChrome";
+
+const FAB_SIZE_PX = JOURNAL_NEW_ENTRY_FAB_PX;
 const SHEET_GAP_ABOVE_FAB_PX = 12;
 /** Android Material sheets: fixed clearance below the status bar / top of screen. */
 const MATERIAL_SHEET_TOP_GAP_PX = 50;

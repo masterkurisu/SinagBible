@@ -42,8 +42,8 @@ export const JOURNAL_ONBOARDING_STEPS: JournalOnboardingStep[] = [
 
 export const JOURNAL_ONBOARDING_STEP_MS = 4500;
 
-/** Matches journal list FAB size (`app/(tabs)/journal/index.tsx`). */
-export const JOURNAL_NEW_ENTRY_FAB_PX = 72;
+/** Matches journal list FAB size (`src/features/journal/journalFabChrome.ts`). */
+export { JOURNAL_NEW_ENTRY_FAB_PX } from "@/src/features/journal/journalFabChrome";
 
 /** Approximate Y offset for list-area fallbacks (below header block). */
 export const JOURNAL_ONBOARDING_LIST_FALLBACK_TOP_PX = 280;
