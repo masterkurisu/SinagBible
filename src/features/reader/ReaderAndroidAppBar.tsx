@@ -1,10 +1,7 @@
 import type { ReactNode, RefObject } from "react";
-import { Platform, StyleSheet, Text, View, type ViewStyle } from "react-native";
-import Animated, { type AnimatedStyle } from "react-native-reanimated";
-import {
-  READER_HEADER_TITLE_MAIN_PX,
-  READER_HEADER_TITLE_TRANS_PX,
-} from "@/src/features/reader/ReaderHeader";
+import { Platform, StyleSheet, View, type ViewStyle } from "react-native";
+import type { AnimatedStyle } from "react-native-reanimated";
+import { READER_HEADER_TITLE_MIN_WIDTH_PX, ReaderScrollChapterTitlePill } from "@/src/features/reader/ReaderHeader";
 import {
   READER_M3_APP_BAR_CONTENT_HEIGHT_PX,
   READER_M3_APP_BAR_ICON_BUTTON_PX,
@@ -19,7 +16,6 @@ export type ReaderAndroidAppBarProps = {
   titleAnimatedStyle: AnimatedStyle<ViewStyle>;
   bookName: string;
   chapterNumber: number;
-  translationId: string;
   colors: { brown800: string; gold: string };
   bookButton: ReactNode;
   settingsButton: ReactNode;
@@ -39,7 +35,6 @@ export function ReaderAndroidAppBar({
   titleAnimatedStyle,
   bookName,
   chapterNumber,
-  translationId,
   colors,
   bookButton,
   settingsButton,
@@ -51,8 +46,13 @@ export function ReaderAndroidAppBar({
   if (Platform.OS !== "android") return null;
 
   const sideInset = Math.max(insets.left, insets.right, 4);
-  const titleSidePad =
-    READER_M3_APP_BAR_ICON_BUTTON_PX + sideInset + READER_M3_APP_BAR_ICON_BUTTON_PX * 2 + sideInset;
+  const leadingWidth = READER_M3_APP_BAR_ICON_BUTTON_PX;
+  const trailingWidth = READER_M3_APP_BAR_ICON_BUTTON_PX * 2;
+  const titleSideReserve = Math.max(leadingWidth, trailingWidth) + sideInset;
+  const titleMaxWidth = Math.max(
+    READER_HEADER_TITLE_MIN_WIDTH_PX,
+    screenW - titleSideReserve * 2,
+  );
 
   return (
     <View
@@ -80,51 +80,34 @@ export function ReaderAndroidAppBar({
         >
           <View style={styles.leading}>{settingsButton}</View>
 
-          {!toolsMenuOpen ? (
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.titleWrap,
-                {
-                  left: titleSidePad,
-                  right: titleSidePad,
-                },
-                titleAnimatedStyle,
-              ]}
-            >
-              <View style={[styles.titlePill, { maxWidth: screenW - titleSidePad * 2 }]}>
-                <View className="flex-row items-baseline justify-center" style={{ flexShrink: 1 }}>
-                  <Text
-                    style={{
-                      fontFamily: "Inter_500Medium",
-                      fontSize: READER_HEADER_TITLE_MAIN_PX,
-                      lineHeight: Math.ceil(READER_HEADER_TITLE_MAIN_PX * 1.25),
-                      color: colors.brown800,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {bookName} {chapterNumber}
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: "Inter_400Regular",
-                      fontSize: READER_HEADER_TITLE_TRANS_PX,
-                      lineHeight: Math.ceil(READER_HEADER_TITLE_TRANS_PX * 1.25),
-                      color: colors.gold,
-                    }}
-                    numberOfLines={1}
-                  >{` (${translationId})`}</Text>
-                </View>
-              </View>
-            </Animated.View>
-          ) : null}
-
           <View style={styles.trailing}>
             {bookButton}
             {fontButton}
           </View>
         </View>
       </View>
+
+      {!toolsMenuOpen ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.titleWrap,
+            {
+              top: topInsetPx,
+              height: READER_M3_APP_BAR_CONTENT_HEIGHT_PX,
+            },
+          ]}
+        >
+          <ReaderScrollChapterTitlePill
+            rc={{ sceneSurface: backgroundColor }}
+            colors={colors}
+            bookName={bookName}
+            chapterNumber={chapterNumber}
+            titleMaxWidth={titleMaxWidth}
+            animatedStyle={titleAnimatedStyle}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -157,15 +140,10 @@ const styles = StyleSheet.create({
   },
   titleWrap: {
     position: "absolute",
-    top: 0,
-    bottom: 0,
+    left: 0,
+    right: 0,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 1,
-  },
-  titlePill: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
   },
 });

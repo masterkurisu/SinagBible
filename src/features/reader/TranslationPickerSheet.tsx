@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
+  BackHandler,
   Dimensions,
   Easing,
   Keyboard,
@@ -40,7 +41,15 @@ import {
 } from "@/lib/use-translation-picker";
 import { getTranslationLanguageFilterOptions } from "@/lib/translation-language-sections";
 import { hapticLightImpact } from "@/lib/haptics";
+import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import {
+  READER_M3_ON_SURFACE,
+  READER_M3_ON_SURFACE_VARIANT,
+  READER_M3_SURFACE_CONTAINER,
+} from "@/src/features/reader/readerSettingsPanelChrome";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
+
+const M3_SHEET_TOP_RADIUS_PX = 28;
 
 type TranslationPinButtonProps = {
   isPinned: boolean;
@@ -49,27 +58,39 @@ type TranslationPinButtonProps = {
 };
 
 function TranslationPinButton({ isPinned, onPress, ui }: TranslationPinButtonProps) {
+  const isAndroidM3 = Platform.OS === "android";
   return (
     <TouchableOpacity
       onPress={onPress}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       accessibilityRole="button"
       accessibilityLabel={isPinned ? "Unpin translation" : "Pin translation"}
-      style={{
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: isPinned ? `${ui.gold}40` : `${ui.goldMuted}28`,
-        borderWidth: 1.5,
-        borderColor: isPinned ? ui.gold : `${ui.goldMuted}99`,
-      }}
+      style={
+        isAndroidM3
+          ? {
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: isPinned ? `${ui.gold}33` : "transparent",
+            }
+          : {
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: isPinned ? `${ui.gold}40` : `${ui.goldMuted}28`,
+              borderWidth: 1.5,
+              borderColor: isPinned ? ui.gold : `${ui.goldMuted}99`,
+            }
+      }
     >
       <Ionicons
         name={isPinned ? "star" : "star-outline"}
-        size={20}
-        color={isPinned ? ui.gold : ui.goldMuted}
+        size={isAndroidM3 ? 22 : 20}
+        color={isPinned ? ui.gold : isAndroidM3 ? READER_M3_ON_SURFACE_VARIANT : ui.goldMuted}
       />
     </TouchableOpacity>
   );
@@ -336,6 +357,7 @@ export function TranslationPickerSheet({
     ({ item }: { item: string }) => {
       const selected = item === langFilter;
       const ui = bundle.ui;
+      const isAndroidM3 = Platform.OS === "android";
       return (
         <TouchableOpacity
           activeOpacity={0.85}
@@ -344,19 +366,41 @@ export function TranslationPickerSheet({
             setLangFilter(item);
             closeLangSheet();
           }}
-          style={{
-            minHeight: 44,
-            borderBottomWidth: 1,
-            borderBottomColor: ui.borderSolid,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingHorizontal: 12,
-            backgroundColor: selected ? `${ui.gold}22` : "transparent",
-          }}
+          style={
+            isAndroidM3
+              ? {
+                  minHeight: 48,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingHorizontal: 24,
+                  paddingVertical: 12,
+                  backgroundColor: selected ? READER_M3_SURFACE_CONTAINER : "transparent",
+                }
+              : {
+                  minHeight: 44,
+                  borderBottomWidth: 1,
+                  borderBottomColor: ui.borderSolid,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingHorizontal: 12,
+                  backgroundColor: selected ? `${ui.gold}22` : "transparent",
+                }
+          }
         >
-          <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: ui.brown800 }}>{item}</Text>
-          {selected ? <Ionicons name="checkmark" size={16} color={ui.gold} /> : null}
+          <Text
+            style={{
+              fontFamily: isAndroidM3 ? "Inter_400Regular" : "Inter_400Regular",
+              fontSize: 16,
+              color: isAndroidM3 ? READER_M3_ON_SURFACE : ui.brown800,
+            }}
+          >
+            {item}
+          </Text>
+          {selected ? (
+            <Ionicons name="checkmark" size={20} color={isAndroidM3 ? ui.gold : ui.gold} />
+          ) : null}
         </TouchableOpacity>
       );
     },
@@ -396,6 +440,22 @@ export function TranslationPickerSheet({
     }
     dropSlideAnim.setValue(0);
     dropOpacityAnim.setValue(0);
+    if (Platform.OS === "android") {
+      Animated.timing(dropOpacityAnim, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+      translationPickerSheetTranslateY.setValue(Dimensions.get("window").height);
+      Animated.timing(translationPickerSheetTranslateY, {
+        toValue: 0,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
     Animated.parallel([
       Animated.timing(dropSlideAnim, {
         toValue: 1,
@@ -411,6 +471,30 @@ export function TranslationPickerSheet({
       }),
     ]).start();
   }, [isOpen, dropSlideAnim, dropOpacityAnim, translationPickerSheetTranslateY]);
+
+  useEffect(() => {
+    if (!isOpen || Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (langSheetOpen) {
+        onLangSheetBackdropPress();
+        return true;
+      }
+      onBackdropPress();
+      return true;
+    });
+    return () => sub.remove();
+  }, [isOpen, langSheetOpen, onBackdropPress, onLangSheetBackdropPress]);
+
+  useEffect(() => {
+    if (!langSheetOpen || Platform.OS !== "android") return;
+    langSheetTranslateY.setValue(Dimensions.get("window").height * 0.35);
+    Animated.timing(langSheetTranslateY, {
+      toValue: 0,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [langSheetOpen, langSheetTranslateY]);
 
   useEffect(() => {
     if (!langSheetOpen) {
@@ -444,526 +528,678 @@ export function TranslationPickerSheet({
       .filter((item): item is TranslationPickerItem => item != null);
   }, [translationPickerItems, favoriteTranslationIds]);
   const ui = colors;
+  const isAndroidSheet = Platform.OS === "android";
+  const m3SheetBottomPad = nativeTabSheetBottomInsetPx(insets.bottom, 0);
+  const m3SheetMaxHeight = Math.min(screenHeight * 0.92, screenHeight - insets.top - 48);
+
+  const translationRowStyle = useCallback(
+    (isSelected: boolean, isFirstPinned = false) => {
+      if (isAndroidSheet) {
+        return {
+          minHeight: 56,
+          borderRadius: 12,
+          backgroundColor: isSelected
+            ? READER_M3_SURFACE_CONTAINER
+            : isFirstPinned
+              ? `${ui.gold}18`
+              : "transparent",
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          flexDirection: "row" as const,
+          alignItems: "center" as const,
+          gap: 12,
+        };
+      }
+      return {
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: ui.borderSolid,
+        backgroundColor: isSelected || isFirstPinned ? `${ui.gold}22` : rc.popoverRow,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        flexDirection: "row" as const,
+        alignItems: "center" as const,
+        gap: 10,
+      };
+    },
+    [isAndroidSheet, rc.popoverRow, ui.borderSolid, ui.gold],
+  );
+
+  const sheetSurfaceStyle = isAndroidSheet
+    ? {
+        backgroundColor: rc.sceneSurface,
+        borderTopLeftRadius: M3_SHEET_TOP_RADIUS_PX,
+        borderTopRightRadius: M3_SHEET_TOP_RADIUS_PX,
+        overflow: "hidden" as const,
+        elevation: 10,
+        shadowColor: rc.popoverShadow,
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.14,
+        shadowRadius: 16,
+      }
+    : {
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.borderSolid,
+        backgroundColor: rc.popoverSurface,
+        overflow: "hidden" as const,
+        shadowColor: rc.popoverShadow,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.16,
+        shadowRadius: 14,
+        elevation: 8,
+      };
+
+  const sheetContentBg = isAndroidSheet ? rc.sceneSurface : ui.parchment;
+  const sheetTitleColor = isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800;
+  const sheetMutedColor = isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : ui.tan300;
+  const searchFieldStyle = isAndroidSheet
+    ? {
+        flex: 1,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: READER_M3_SURFACE_CONTAINER,
+        paddingHorizontal: 16,
+        justifyContent: "center" as const,
+      }
+    : {
+        flex: 1,
+        height: 42,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: ui.borderSolid,
+        backgroundColor: rc.popoverRow,
+        paddingHorizontal: 14,
+        justifyContent: "center" as const,
+      };
+  const filterButtonStyle = isAndroidSheet
+    ? {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: "center" as const,
+        justifyContent: "center" as const,
+      }
+    : {
+        width: 36,
+        height: 36,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: ui.borderSolid,
+        backgroundColor: rc.popoverRow,
+        alignItems: "center" as const,
+        justifyContent: "center" as const,
+      };
+
+  const renderTranslationRow = (
+    item: TranslationPickerItem,
+    opts: { isPinned: boolean; isFirstPinned?: boolean; keyPrefix?: string },
+  ) => {
+    const isSelected = item.id === resolvedTranslationApiId;
+    const abbr = getTranslationPickerAbbreviation(item);
+    const showDivider = !isAndroidSheet;
+    return (
+      <TouchableOpacity
+        key={opts.keyPrefix ? `${opts.keyPrefix}-${item.id}` : item.id}
+        activeOpacity={0.85}
+        onPress={() => selectTranslation(item.id)}
+        style={translationRowStyle(isSelected, opts.isFirstPinned)}
+      >
+        <Text
+          style={{
+            fontFamily: "Lora_400Regular_Italic",
+            fontSize: isAndroidSheet ? 13 : 12,
+            color: isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : ui.brown800,
+            width: 48,
+          }}
+        >
+          {abbr}
+        </Text>
+        {showDivider ? (
+          <View
+            style={{
+              width: 1,
+              alignSelf: "stretch",
+              backgroundColor: isSelected ? `${ui.gold}73` : ui.borderSolid,
+              opacity: isSelected ? 1 : 0.9,
+            }}
+          />
+        ) : null}
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{
+              fontFamily: isAndroidSheet ? "Inter_400Regular" : "Inter_400Regular",
+              fontSize: isAndroidSheet ? 16 : 14,
+              color: isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800,
+            }}
+            numberOfLines={1}
+          >
+            {item.label}
+          </Text>
+          <Text
+            style={{
+              fontFamily: "Inter_400Regular",
+              fontSize: isAndroidSheet ? 14 : 11,
+              color: sheetMutedColor,
+            }}
+          >
+            {item.languageSection}
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {isSelected ? <Ionicons name="checkmark" size={isAndroidSheet ? 20 : 15} color={ui.gold} /> : null}
+          <TranslationPinButton
+            isPinned={opts.isPinned}
+            onPress={() => {
+              Keyboard.dismiss();
+              toggleFavoriteTranslation(item.id);
+            }}
+            ui={ui}
+          />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const pickerBody = (
+    <>
+      <PanGestureHandler
+        onGestureEvent={onTranslationPickerDismissGestureEvent}
+        onHandlerStateChange={onTranslationPickerDismissGestureStateChange}
+        activeOffsetY={8}
+        failOffsetX={[-32, 32]}
+      >
+        <GestureHandlerTouchableOpacity
+          activeOpacity={1}
+          onPress={Keyboard.dismiss}
+          accessibilityLabel="Translation picker sheet"
+          accessibilityHint="Tap to hide keyboard, or swipe down on the handle to close"
+          style={{
+            width: "100%",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingTop: isAndroidSheet ? 12 : 6,
+            paddingBottom: isAndroidSheet ? 4 : 8,
+            minHeight: 44,
+          }}
+        >
+          <View
+            pointerEvents="none"
+            style={{
+              width: isAndroidSheet ? 32 : 40,
+              height: isAndroidSheet ? 4 : 5,
+              borderRadius: 2,
+              backgroundColor: isAndroidSheet ? "rgba(28,27,31,0.4)" : "rgba(0,0,0,0.22)",
+            }}
+          />
+        </GestureHandlerTouchableOpacity>
+      </PanGestureHandler>
+      <View
+        style={{
+          ...(showResults ? { flex: 1, minHeight: 0 } : {}),
+          backgroundColor: sheetContentBg,
+          paddingHorizontal: isAndroidSheet ? 24 : 16,
+          paddingTop: isAndroidSheet ? 0 : 6,
+          paddingBottom: isAndroidSheet ? 16 : 14,
+        }}
+      >
+        <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Hide keyboard">
+          <Text
+            style={{
+              fontFamily: isAndroidSheet ? "Inter_500Medium" : "Inter_600SemiBold",
+              fontSize: isAndroidSheet ? 22 : 20,
+              lineHeight: isAndroidSheet ? 28 : undefined,
+              color: sheetTitleColor,
+              marginBottom: isAndroidSheet ? 16 : 14,
+              textAlign: isAndroidSheet ? "left" : "left",
+            }}
+          >
+            Choose a Translation
+          </Text>
+        </Pressable>
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <View style={searchFieldStyle}>
+            <TextInput
+              placeholder="Search translation"
+              placeholderTextColor={sheetMutedColor}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={{
+                fontFamily: "Inter_400Regular",
+                fontSize: isAndroidSheet ? 16 : 14,
+                color: isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800,
+              }}
+            />
+          </View>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => {
+              Keyboard.dismiss();
+              requestAnimationFrame(() => {
+                setSearchQuery("");
+                langSheetTranslateY.setValue(0);
+                setLangSheetOpen(true);
+              });
+            }}
+            style={filterButtonStyle}
+            accessibilityRole="button"
+            accessibilityLabel="Filter by language"
+          >
+            <FilterListIcon size={isAndroidSheet ? 24 : 16} color={isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800} />
+          </TouchableOpacity>
+        </View>
+
+        {!isAndroidSheet ? (
+          <Pressable
+            onPress={Keyboard.dismiss}
+            accessibilityRole="button"
+            accessibilityLabel="Hide keyboard"
+            style={{ marginBottom: 12, minHeight: 12, justifyContent: "center" }}
+          >
+            <View style={{ height: 1, backgroundColor: ui.borderSolid, opacity: 0.9 }} />
+          </Pressable>
+        ) : null}
+
+        <ScrollView
+          style={
+            showResults
+              ? { flex: 1, minHeight: 0 }
+              : isAndroidSheet
+                ? { maxHeight: Math.min(m3SheetMaxHeight * 0.5, 320) }
+                : { maxHeight: translationCompactScrollMaxH }
+          }
+          showsVerticalScrollIndicator={isAndroidSheet}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === "ios" ? "on-drag" : "none"}
+          onScrollBeginDrag={() => Keyboard.dismiss()}
+          nestedScrollEnabled={isAndroidSheet}
+        >
+          <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Hide keyboard">
+            <Text
+              style={{
+                fontFamily: isAndroidSheet ? "Inter_500Medium" : "Inter_400Regular",
+                fontSize: isAndroidSheet ? 14 : 10,
+                letterSpacing: isAndroidSheet ? 0.1 : 1,
+                textTransform: isAndroidSheet ? "none" : "uppercase",
+                color: sheetMutedColor,
+                opacity: isAndroidSheet ? 1 : 0.75,
+                marginBottom: 8,
+              }}
+            >
+              Pinned
+            </Text>
+          </Pressable>
+
+          <View style={{ gap: isAndroidSheet ? 2 : 8, marginBottom: 16 }}>
+            {pinnedTranslations.length > 0 ? (
+              pinnedTranslations.map((item, index) =>
+                renderTranslationRow(item, { isPinned: true, isFirstPinned: index === 0 }),
+              )
+            ) : (
+              <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Hide keyboard">
+                <View style={{ gap: 6, paddingVertical: 6 }}>
+                  {!isAndroidSheet ? (
+                    <>
+                      <View style={{ height: 4, width: "72%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
+                      <View style={{ height: 4, width: "58%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
+                      <View style={{ height: 4, width: "43%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
+                    </>
+                  ) : null}
+                  <Text
+                    style={{
+                      fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular_Italic",
+                      fontSize: isAndroidSheet ? 14 : 12,
+                      color: sheetMutedColor,
+                    }}
+                  >
+                    Star a translation to pin it here
+                  </Text>
+                </View>
+              </Pressable>
+            )}
+          </View>
+
+          {showResults ? (
+            <View style={{ gap: isAndroidSheet ? 2 : 8, marginBottom: 16 }}>
+              {filteredTranslations.map((item) =>
+                renderTranslationRow(item, {
+                  isPinned: favoriteTranslationIds.includes(item.id),
+                  keyPrefix: "result",
+                }),
+              )}
+            </View>
+          ) : null}
+        </ScrollView>
+
+        {!isAndroidSheet ? (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => {
+              Keyboard.dismiss();
+              if (translationPickerSheetClosingRef.current) return;
+              hapticLightImpact();
+              animateCloseTranslationPickerSheet(0, 0);
+            }}
+            style={{
+              width: "100%",
+              borderRadius: 999,
+              paddingVertical: 12,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: ui.brown800,
+            }}
+          >
+            <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 14, color: ui.parchment }}>Done</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </>
+  );
+
+  const renderLangSheetContent = () => (
+    <View>
+      <PanGestureHandler
+        onGestureEvent={onLangSheetDismissGestureEvent}
+        onHandlerStateChange={onLangSheetDismissGestureStateChange}
+        activeOffsetY={8}
+        failOffsetX={[-32, 32]}
+      >
+        <GestureHandlerTouchableOpacity
+          activeOpacity={1}
+          onPress={dismissLangSearchKeyboard}
+          accessibilityLabel="Language filters sheet"
+          accessibilityHint="Tap to hide keyboard, or swipe down on the handle to close"
+          style={{
+            width: "100%",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingTop: isAndroidSheet ? 12 : 8,
+            paddingBottom: isAndroidSheet ? 4 : 6,
+            minHeight: 44,
+          }}
+        >
+          <View
+            pointerEvents="none"
+            style={{
+              width: isAndroidSheet ? 32 : 40,
+              height: isAndroidSheet ? 4 : 5,
+              borderRadius: 2,
+              backgroundColor: isAndroidSheet ? "rgba(28,27,31,0.4)" : "rgba(0,0,0,0.22)",
+            }}
+          />
+        </GestureHandlerTouchableOpacity>
+      </PanGestureHandler>
+      <View style={{ paddingHorizontal: isAndroidSheet ? 24 : 16, paddingBottom: 10 }}>
+        <View
+          style={{
+            alignItems: isAndroidSheet ? "flex-start" : "center",
+            justifyContent: "center",
+            marginBottom: 10,
+            minHeight: 24,
+          }}
+        >
+          <GestureHandlerTouchableOpacity
+            activeOpacity={1}
+            onPress={dismissLangSearchKeyboard}
+            accessibilityRole="button"
+            accessibilityLabel="Hide keyboard"
+          >
+            <Text
+              style={{
+                fontFamily: isAndroidSheet ? "Inter_500Medium" : "Inter_600SemiBold",
+                fontSize: isAndroidSheet ? 22 : 18,
+                color: isAndroidSheet ? READER_M3_ON_SURFACE : bundle.ui.brown800,
+              }}
+            >
+              Language
+            </Text>
+          </GestureHandlerTouchableOpacity>
+          {langFilter != null ? (
+            <TouchableOpacity
+              style={{ position: "absolute", right: 0, top: 0, bottom: 0, justifyContent: "center" }}
+              onPress={() => {
+                dismissLangSearchKeyboard();
+                setLangFilter(null);
+                closeLangSheet();
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text
+                style={{
+                  fontFamily: "Inter_500Medium",
+                  fontSize: 14,
+                  color: isAndroidSheet ? ui.gold : bundle.ui.tan300,
+                }}
+              >
+                Clear
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <View
+          style={
+            isAndroidSheet
+              ? {
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: READER_M3_SURFACE_CONTAINER,
+                  paddingHorizontal: 16,
+                  justifyContent: "center",
+                  marginBottom: 8,
+                }
+              : {
+                  height: 42,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: bundle.ui.borderSolid,
+                  backgroundColor: bundle.reader.popoverRow,
+                  paddingHorizontal: 14,
+                  justifyContent: "center",
+                  marginBottom: 8,
+                }
+          }
+        >
+          <TextInput
+            ref={langSearchInputRef}
+            value={langSearch}
+            onChangeText={setLangSearch}
+            placeholder="Search language"
+            placeholderTextColor={isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : bundle.ui.tan300}
+            style={{
+              fontFamily: "Inter_400Regular",
+              fontSize: isAndroidSheet ? 16 : 14,
+              color: isAndroidSheet ? READER_M3_ON_SURFACE : bundle.ui.brown800,
+            }}
+          />
+        </View>
+      </View>
+      <GHFlatList
+        data={filteredLanguages}
+        keyExtractor={(item) => item}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === "ios" ? "on-drag" : "none"}
+        onScrollBeginDrag={dismissLangSearchKeyboard}
+        style={{ height: langSheetListBodyHeight }}
+        showsVerticalScrollIndicator
+        persistentScrollbar={Platform.OS === "android"}
+        indicatorStyle="black"
+        removeClippedSubviews={false}
+        initialNumToRender={16}
+        windowSize={8}
+        contentContainerStyle={{ paddingHorizontal: isAndroidSheet ? 0 : 16, paddingBottom: 10 }}
+        ListFooterComponent={
+          <Pressable
+            style={{ minHeight: isAndroidSheet ? 24 : 72 }}
+            onPress={dismissLangSearchKeyboard}
+            accessibilityRole="button"
+            accessibilityLabel="Hide keyboard"
+          />
+        }
+        renderItem={renderLangSheetItem}
+      />
+      {!isAndroidSheet ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: Math.max(insets.bottom, 12) + 8 }}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => {
+              dismissLangSearchKeyboard();
+              if (langSheetClosingRef.current) return;
+              hapticLightImpact();
+              closeLangSheet();
+            }}
+            style={{
+              width: "100%",
+              borderRadius: 999,
+              paddingVertical: 12,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: bundle.ui.brown800,
+            }}
+          >
+            <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 14, color: bundle.ui.parchment }}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+    </View>
+  );
 
   return (
     <Modal visible={isOpen} transparent animationType="none" statusBarTranslucent onRequestClose={onBackdropPress}>
       <View style={{ flex: 1 }}>
+        <Animated.View
+          style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim, opacity: dropOpacityAnim }]}
+          pointerEvents="none"
+        />
         <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim }]}
+          style={StyleSheet.absoluteFill}
           onPress={onBackdropPress}
           accessibilityLabel="Dismiss translation picker"
         />
-        <Animated.View
-          pointerEvents="box-none"
-          style={{
-            position: "absolute",
-            top: sheetTopPx,
-            left: insets.left + 5,
-            right: insets.right + 5,
-            ...(showResults ? { bottom: insets.bottom + 10 } : { maxHeight: translationSheetViewportMaxH }),
-            opacity: dropOpacityAnim,
-            transform: [
-              {
-                translateY: dropSlideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-READER_MENU_SLIDE_FROM_PX, 0],
-                }),
-              },
-            ],
-          }}
-        >
-          <View
-            style={{
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: colors.borderSolid,
-              backgroundColor: rc.popoverSurface,
-              overflow: "hidden",
-              shadowColor: rc.popoverShadow,
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.16,
-              shadowRadius: 14,
-              elevation: 8,
-              ...(showResults ? { flex: 1, minHeight: 0 } : {}),
-            }}
-          >
+        {isAndroidSheet ? (
+          <View pointerEvents="box-none" style={{ flex: 1, justifyContent: "flex-end" }}>
             <Animated.View
+              pointerEvents="box-none"
               style={{
-                ...(showResults ? { flex: 1, minHeight: 0 } : {}),
+                width: "100%",
+                maxHeight: showResults ? m3SheetMaxHeight : Math.min(m3SheetMaxHeight, screenHeight * 0.72),
                 transform: [{ translateY: translationPickerSheetTranslateY }],
               }}
             >
-              <PanGestureHandler
-                onGestureEvent={onTranslationPickerDismissGestureEvent}
-                onHandlerStateChange={onTranslationPickerDismissGestureStateChange}
-                activeOffsetY={8}
-                failOffsetX={[-32, 32]}
-              >
-                <GestureHandlerTouchableOpacity
-                  activeOpacity={1}
-                  onPress={Keyboard.dismiss}
-                  accessibilityLabel="Translation picker sheet"
-                  accessibilityHint="Tap to hide keyboard, or swipe down on the handle to close"
-                  style={{
-                    width: "100%",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingTop: 6,
-                    paddingBottom: 8,
-                    minHeight: 44,
-                  }}
-                >
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      width: 40,
-                      height: 5,
-                      borderRadius: 3,
-                      backgroundColor: "rgba(0,0,0,0.22)",
-                    }}
-                  />
-                </GestureHandlerTouchableOpacity>
-              </PanGestureHandler>
-            <View
-              style={{
-                ...(showResults ? { flex: 1, minHeight: 0 } : {}),
-                backgroundColor: ui.parchment,
-                paddingHorizontal: 16,
-                paddingTop: 6,
-                paddingBottom: 14,
-              }}
-            >
-              <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Hide keyboard">
-                <Text
-                  style={{
-                    fontFamily: "Inter_600SemiBold",
-                    fontSize: 20,
-                    color: ui.brown800,
-                    marginBottom: 14,
-                  }}
-                >
-                  Choose a Translation
-                </Text>
-              </Pressable>
-
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                <View
-                  style={{
-                    flex: 1,
-                    height: 42,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: ui.borderSolid,
-                    backgroundColor: rc.popoverRow,
-                    paddingHorizontal: 14,
-                    justifyContent: "center",
-                  }}
-                >
-                  <TextInput
-                    placeholder="Search translation"
-                    placeholderTextColor={ui.tan300}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    style={{
-                      fontFamily: "Inter_400Regular",
-                      fontSize: 14,
-                      color: ui.brown800,
-                    }}
-                  />
-                </View>
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    requestAnimationFrame(() => {
-                      setSearchQuery("");
-                      langSheetTranslateY.setValue(0);
-                      setLangSheetOpen(true);
-                    });
-                  }}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: ui.borderSolid,
-                    backgroundColor: rc.popoverRow,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <FilterListIcon size={16} color={ui.brown800} />
-                </TouchableOpacity>
-              </View>
-
-              <Pressable
-                onPress={Keyboard.dismiss}
-                accessibilityRole="button"
-                accessibilityLabel="Hide keyboard"
-                style={{ marginBottom: 12, minHeight: 12, justifyContent: "center" }}
-              >
-                <View style={{ height: 1, backgroundColor: ui.borderSolid, opacity: 0.9 }} />
-              </Pressable>
-
-              <ScrollView
-                style={
-                  showResults
-                    ? { flex: 1, minHeight: 0 }
-                    : { maxHeight: translationCompactScrollMaxH }
-                }
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode={Platform.OS === "ios" ? "on-drag" : "none"}
-                onScrollBeginDrag={() => Keyboard.dismiss()}
-              >
-                <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Hide keyboard">
-                  <Text
-                    style={{
-                      fontFamily: "Inter_400Regular",
-                      fontSize: 10,
-                      letterSpacing: 1,
-                      textTransform: "uppercase",
-                      color: ui.tan300,
-                      opacity: 0.75,
-                      marginBottom: 8,
-                    }}
-                  >
-                    Pinned
-                  </Text>
-                </Pressable>
-
-                <View style={{ gap: 8, marginBottom: 16 }}>
-                  {pinnedTranslations.length > 0 ? pinnedTranslations.map((item, index) => {
-                    const abbr = getTranslationPickerAbbreviation(item);
-                    return (
-                    <TouchableOpacity
-                      key={item.id}
-                      activeOpacity={0.85}
-                      onPress={() => selectTranslation(item.id)}
-                      style={{
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: ui.borderSolid,
-                        backgroundColor: index === 0 ? `${ui.gold}22` : rc.popoverRow,
-                        paddingHorizontal: 12,
-                        paddingVertical: 10,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 10,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: "Lora_400Regular_Italic",
-                          fontSize: 12,
-                          color: ui.brown800,
-                          width: 48,
-                        }}
-                      >
-                        {abbr}
-                      </Text>
-                      <View
-                        style={{
-                          width: 1,
-                          alignSelf: "stretch",
-                          backgroundColor: index === 0 ? `${ui.gold}73` : ui.borderSolid,
-                          opacity: index === 0 ? 1 : 0.9,
-                        }}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: ui.brown800 }} numberOfLines={1}>
-                          {item.label}
-                        </Text>
-                        <Text style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: ui.tan300 }}>
-                          {item.languageSection}
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        {item.id === resolvedTranslationApiId ? <Ionicons name="checkmark" size={15} color={ui.gold} /> : null}
-                        <TranslationPinButton
-                          isPinned
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            toggleFavoriteTranslation(item.id);
-                          }}
-                          ui={ui}
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  );}) : (
-                    <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Hide keyboard">
-                    <View style={{ gap: 6, paddingVertical: 6 }}>
-                      <View style={{ height: 4, width: "72%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
-                      <View style={{ height: 4, width: "58%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
-                      <View style={{ height: 4, width: "43%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
-                      <Text style={{ fontFamily: "Lora_400Regular_Italic", fontSize: 12, color: ui.tan300 }}>
-                        Star a translation to pin it here
-                      </Text>
-                    </View>
-                    </Pressable>
-                  )}
-                </View>
-
-                {showResults ? (
-                  <View style={{ gap: 8, marginBottom: 16 }}>
-                    {filteredTranslations.map((item) => {
-                      const isPinned = favoriteTranslationIds.includes(item.id);
-                      const abbr = getTranslationPickerAbbreviation(item);
-                      return (
-                        <TouchableOpacity
-                          key={`result-${item.id}`}
-                          activeOpacity={0.85}
-                          onPress={() => selectTranslation(item.id)}
-                          style={{
-                            borderRadius: 12,
-                            borderWidth: 1,
-                            borderColor: ui.borderSolid,
-                            backgroundColor: item.id === resolvedTranslationApiId ? `${ui.gold}22` : rc.popoverRow,
-                            paddingHorizontal: 12,
-                            paddingVertical: 10,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 10,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontFamily: "Lora_400Regular_Italic",
-                              fontSize: 12,
-                              color: ui.brown800,
-                              width: 48,
-                            }}
-                          >
-                            {abbr}
-                          </Text>
-                          <View
-                            style={{
-                              width: 1,
-                              alignSelf: "stretch",
-                              backgroundColor: item.id === resolvedTranslationApiId ? `${ui.gold}73` : ui.borderSolid,
-                              opacity: item.id === resolvedTranslationApiId ? 1 : 0.9,
-                            }}
-                          />
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: ui.brown800 }} numberOfLines={1}>
-                              {item.label}
-                            </Text>
-                            <Text style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: ui.tan300 }}>
-                              {item.languageSection}
-                            </Text>
-                          </View>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            {item.id === resolvedTranslationApiId ? <Ionicons name="checkmark" size={15} color={ui.gold} /> : null}
-                            <TranslationPinButton
-                              isPinned={isPinned}
-                              onPress={() => {
-                                Keyboard.dismiss();
-                                toggleFavoriteTranslation(item.id);
-                              }}
-                              ui={ui}
-                            />
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                ) : null}
-              </ScrollView>
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  if (translationPickerSheetClosingRef.current) return;
-                  hapticLightImpact();
-                  animateCloseTranslationPickerSheet(0, 0);
-                }}
+              <View
                 style={{
-                  width: "100%",
-                  borderRadius: 999,
-                  paddingVertical: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: ui.brown800,
+                  ...sheetSurfaceStyle,
+                  ...(showResults ? { flex: 1, minHeight: 0 } : {}),
+                  paddingBottom: m3SheetBottomPad,
                 }}
               >
-                <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 14, color: ui.parchment }}>Done</Text>
-              </TouchableOpacity>
-            </View>
+                <Animated.View
+                  style={{
+                    ...(showResults ? { flex: 1, minHeight: 0 } : {}),
+                  }}
+                >
+                  {pickerBody}
+                </Animated.View>
+              </View>
             </Animated.View>
           </View>
-        </Animated.View>
-        {langSheetOpen ? (
-      <View
-        pointerEvents="box-none"
-        style={{
-          ...StyleSheet.absoluteFill,
-          zIndex: 5,
-        }}
-      >
-        <View
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: `${bundle.ui.brown800}66`,
-          }}
-        />
-        <View style={{ flex: 1 }}>
-          <Pressable
-            style={{ flex: 1 }}
-            onPress={onLangSheetBackdropPress}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss language filters"
-          />
+        ) : (
           <Animated.View
+            pointerEvents="box-none"
             style={{
               position: "absolute",
+              top: sheetTopPx,
               left: insets.left + 5,
               right: insets.right + 5,
-              top: langSheetTopPx,
-              maxHeight: langSheetMaxHeight,
-              backgroundColor: bundle.ui.parchment,
-              borderRadius: 20,
-              borderWidth: 1,
-              borderColor: bundle.ui.borderSolid,
-              overflow: "hidden",
-              transform: [{ translateY: langSheetTranslateY }],
+              ...(showResults ? { bottom: insets.bottom + 10 } : { maxHeight: translationSheetViewportMaxH }),
+              opacity: dropOpacityAnim,
+              transform: [
+                {
+                  translateY: dropSlideAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-READER_MENU_SLIDE_FROM_PX, 0],
+                  }),
+                },
+              ],
             }}
           >
-            <View>
-              <PanGestureHandler
-                onGestureEvent={onLangSheetDismissGestureEvent}
-                onHandlerStateChange={onLangSheetDismissGestureStateChange}
-                activeOffsetY={8}
-                failOffsetX={[-32, 32]}
+            <View
+              style={{
+                ...sheetSurfaceStyle,
+                ...(showResults ? { flex: 1, minHeight: 0 } : {}),
+              }}
+            >
+              <Animated.View
+                style={{
+                  ...(showResults ? { flex: 1, minHeight: 0 } : {}),
+                  transform: [{ translateY: translationPickerSheetTranslateY }],
+                }}
               >
-                <GestureHandlerTouchableOpacity
-                  activeOpacity={1}
-                  onPress={dismissLangSearchKeyboard}
-                  accessibilityLabel="Language filters sheet"
-                  accessibilityHint="Tap to hide keyboard, or swipe down on the handle to close"
-                  style={{
-                    width: "100%",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingTop: 8,
-                    paddingBottom: 6,
-                    minHeight: 44,
-                  }}
-                >
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      width: 40,
-                      height: 5,
-                      borderRadius: 3,
-                      backgroundColor: "rgba(0,0,0,0.22)",
-                    }}
-                  />
-                </GestureHandlerTouchableOpacity>
-              </PanGestureHandler>
-              <View
-                style={{ paddingHorizontal: 16, paddingBottom: 10 }}
-              >
-                <View style={{ alignItems: "center", justifyContent: "center", marginBottom: 10, minHeight: 24 }}>
-                  <GestureHandlerTouchableOpacity
-                    activeOpacity={1}
-                    onPress={dismissLangSearchKeyboard}
-                    accessibilityRole="button"
-                    accessibilityLabel="Hide keyboard"
-                  >
-                    <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 18, color: bundle.ui.brown800 }}>
-                      Language
-                    </Text>
-                  </GestureHandlerTouchableOpacity>
-                  {langFilter != null ? (
-                    <TouchableOpacity
-                      style={{ position: "absolute", right: 0 }}
-                      onPress={() => {
-                        dismissLangSearchKeyboard();
-                        setLangFilter(null);
-                        closeLangSheet();
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={{ fontFamily: "Inter_400Regular", fontSize: 13, color: bundle.ui.tan300 }}>Clear</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-                <View
-                  style={{
-                    height: 42,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: bundle.ui.borderSolid,
-                    backgroundColor: bundle.reader.popoverRow,
-                    paddingHorizontal: 14,
-                    justifyContent: "center",
-                    marginBottom: 8,
-                  }}
-                >
-                  <TextInput
-                    ref={langSearchInputRef}
-                    value={langSearch}
-                    onChangeText={setLangSearch}
-                    placeholder="Search language"
-                    placeholderTextColor={bundle.ui.tan300}
-                    style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: bundle.ui.brown800 }}
-                  />
-                </View>
-              </View>
-              <GHFlatList
-                data={filteredLanguages}
-                keyExtractor={(item) => item}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode={Platform.OS === "ios" ? "on-drag" : "none"}
-                onScrollBeginDrag={dismissLangSearchKeyboard}
-                style={{ height: langSheetListBodyHeight }}
-                showsVerticalScrollIndicator
-                persistentScrollbar
-                indicatorStyle="black"
-                removeClippedSubviews={false}
-                initialNumToRender={16}
-                windowSize={8}
-                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 10 }}
-                ListFooterComponent={
-                  <Pressable
-                    style={{ minHeight: 72 }}
-                    onPress={dismissLangSearchKeyboard}
-                    accessibilityRole="button"
-                    accessibilityLabel="Hide keyboard"
-                  />
-                }
-                renderItem={renderLangSheetItem}
-              />
-              <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: Math.max(insets.bottom, 12) + 8 }}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    dismissLangSearchKeyboard();
-                    if (langSheetClosingRef.current) return;
-                    hapticLightImpact();
-                    closeLangSheet();
-                  }}
-                  style={{
-                    width: "100%",
-                    borderRadius: 999,
-                    paddingVertical: 12,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: bundle.ui.brown800,
-                  }}
-                >
-                  <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 14, color: bundle.ui.parchment }}>Done</Text>
-                </TouchableOpacity>
-              </View>
+                {pickerBody}
+              </Animated.View>
             </View>
           </Animated.View>
-        </View>
-      </View>
+        )}
+        {langSheetOpen ? (
+          <View
+            pointerEvents="box-none"
+            style={{
+              ...StyleSheet.absoluteFill,
+              zIndex: 5,
+            }}
+          >
+            <Pressable
+              style={[StyleSheet.absoluteFill, { backgroundColor: `${bundle.ui.brown800}66` }]}
+              onPress={onLangSheetBackdropPress}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss language filters"
+            />
+            {isAndroidSheet ? (
+              <View pointerEvents="box-none" style={{ flex: 1, justifyContent: "flex-end" }}>
+                <Animated.View
+                  style={{
+                    width: "100%",
+                    maxHeight: Math.min(langSheetMaxHeight, screenHeight * 0.75),
+                    backgroundColor: rc.sceneSurface,
+                    borderTopLeftRadius: M3_SHEET_TOP_RADIUS_PX,
+                    borderTopRightRadius: M3_SHEET_TOP_RADIUS_PX,
+                    overflow: "hidden",
+                    elevation: 12,
+                    paddingBottom: m3SheetBottomPad,
+                    transform: [{ translateY: langSheetTranslateY }],
+                  }}
+                >
+                  {renderLangSheetContent()}
+                </Animated.View>
+              </View>
+            ) : (
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={onLangSheetBackdropPress}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss language filters"
+                />
+                <Animated.View
+                  style={{
+                    position: "absolute",
+                    left: insets.left + 5,
+                    right: insets.right + 5,
+                    top: langSheetTopPx,
+                    maxHeight: langSheetMaxHeight,
+                    backgroundColor: bundle.ui.parchment,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: bundle.ui.borderSolid,
+                    overflow: "hidden",
+                    transform: [{ translateY: langSheetTranslateY }],
+                  }}
+                >
+                  {renderLangSheetContent()}
+                </Animated.View>
+              </View>
+            )}
+          </View>
         ) : null}
       </View>
     </Modal>

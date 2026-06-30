@@ -107,7 +107,7 @@ import {
   ReaderSelectionLayer,
   type ReaderSelectionActivity,
 } from "@/src/features/reader/ReaderSelectionLayer";
-import { ReaderHeader } from "@/src/features/reader/ReaderHeader";
+import { ReaderHeader, ReaderIosScrollChapterTitle } from "@/src/features/reader/ReaderHeader";
 import { ReaderAndroidAppBar } from "@/src/features/reader/ReaderAndroidAppBar";
 import {
   ReaderChapterNavArrows,
@@ -1490,11 +1490,6 @@ export default function ReaderChapterScreen() {
         readerHeaderChromeHidden={readerHeaderToolsHidden}
         rc={rc}
         colors={colors}
-        screenW={screenW}
-        readerHeaderTitleAnimatedStyle={readerHeaderTitleAnimatedStyle}
-        readerHeaderBookName={readerHeaderBookName}
-        chapterNumber={chapterNumber}
-        readerHeaderTranslationId={readerHeaderTranslationId}
         readerHeaderToolsGroup={isTabletReaderLayout ? readerHeaderToolsGroup : null}
         readerHeaderToolsSide="left"
       />
@@ -1589,7 +1584,6 @@ export default function ReaderChapterScreen() {
           titleAnimatedStyle={readerHeaderTitleAnimatedStyle}
           bookName={readerHeaderBookName}
           chapterNumber={chapterNumber}
-          translationId={readerHeaderTranslationId}
           colors={colors}
           bookButton={readerHeaderBookButton}
           settingsButton={readerSettingsToolsRow}
@@ -1598,7 +1592,20 @@ export default function ReaderChapterScreen() {
           barRef={headerToolsGroupRef}
           onLayout={bumpHeaderToolsLayoutEpoch}
         />
-      ) : null}
+      ) : (
+        <ReaderIosScrollChapterTitle
+          hidden={readerHeaderToolsHidden}
+          topInsetPx={insets.top}
+          screenW={screenW}
+          titleAnimatedStyle={readerHeaderTitleAnimatedStyle}
+          bookName={readerHeaderBookName}
+          chapterNumber={chapterNumber}
+          colors={colors}
+          rc={rc}
+          hasHeaderTools={isTabletReaderLayout}
+          toolsOnLeft
+        />
+      )}
 
       <JournalNewEntrySheet
         ref={newEntrySheetRef}
