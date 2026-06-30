@@ -36,13 +36,15 @@ const CarouselCard = memo(function CarouselCard({
   return (
     <Pressable
       onLongPress={
-        item.isUserFavorite && onLongPressFavorite
+        item.isUserFavorite && !item.isDailyVerse && onLongPressFavorite
           ? () => onLongPressFavorite(item)
           : undefined
       }
       delayLongPress={420}
       accessibilityHint={
-        item.isUserFavorite ? "Long press to remove from carousel favorites" : undefined
+        item.isUserFavorite && !item.isDailyVerse
+          ? "Long press to remove from carousel favorites"
+          : undefined
       }
       style={[
         styles.cardShell,
@@ -61,6 +63,9 @@ const CarouselCard = memo(function CarouselCard({
         style={[styles.cardGradient, { borderRadius: CAROUSEL_CARD_RADIUS_PX }]}
       >
         <View style={styles.cardContent}>
+          {item.badgeLabel ? (
+            <Text style={styles.cardBadge}>{item.badgeLabel}</Text>
+          ) : null}
           <Text style={styles.cardText} numberOfLines={4}>
             {item.text}
           </Text>
@@ -105,7 +110,7 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
 
   const handleRemoveFavorite = useCallback(
     (item: CarouselDisplayVerse) => {
-      if (!item.isUserFavorite) return;
+      if (!item.isUserFavorite || item.isDailyVerse) return;
       hapticWarning();
       Alert.alert(
         "Remove from carousel?",
@@ -199,6 +204,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
     paddingTop: 28,
+  },
+  cardBadge: {
+    marginBottom: 8,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    lineHeight: 14,
+    color: "#e8dcc8",
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
   },
   cardText: {
     fontFamily: "Lora_400Regular",

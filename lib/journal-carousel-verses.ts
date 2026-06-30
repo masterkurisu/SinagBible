@@ -2,6 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { formatPassageReference, formatSelectedReference } from "@sinag-bible/core";
 import type { JournalCarouselSettings } from "@/lib/journal-carousel-settings";
 import { JOURNAL_CAROUSEL_MAX_VERSE_COUNT } from "@/lib/journal-carousel-settings";
+import {
+  dailyVerseDayKey,
+  formatDailyVerseReference,
+  getDailyVerse,
+} from "@/lib/daily-verse";
 
 const STORAGE_KEY = "sb:journal:carousel-verses";
 
@@ -31,7 +36,20 @@ export type CarouselDisplayVerse = {
   widthRatio: number;
   gradient: readonly [string, string, string];
   isUserFavorite: boolean;
+  /** Reserved first carousel slot — rotates by calendar day. */
+  isDailyVerse?: boolean;
+  badgeLabel?: string;
 };
+
+/** Stable id prefix for the pinned daily-verse carousel card. */
+export const DAILY_VERSE_CAROUSEL_ID_PREFIX = "daily-verse:";
+
+/** Warm gold gradient for the daily verse hero card. */
+const DAILY_VERSE_GRADIENT: readonly [string, string, string] = [
+  "#6b5540",
+  "#5c4f3a",
+  "#3d3428",
+];
 
 const CAROUSEL_GRADIENTS: readonly (readonly [string, string, string])[] = [
   ["#3d3428", "#2c2416", "#1a160f"],
@@ -93,6 +111,7 @@ export function carouselRecordToDisplay(
   record: Pick<CarouselVerseRecord, "id" | "reference" | "text">,
   index: number,
   isUserFavorite: boolean,
+  options?: { isDailyVerse?: boolean; badgeLabel?: string },
 ): CarouselDisplayVerse {
   return {
     id: record.id,
@@ -101,7 +120,62 @@ export function carouselRecordToDisplay(
     widthRatio: WIDTH_RATIOS[index % WIDTH_RATIOS.length]!,
     gradient: CAROUSEL_GRADIENTS[index % CAROUSEL_GRADIENTS.length]!,
     isUserFavorite,
+    isDailyVerse: options?.isDailyVerse,
+    badgeLabel: options?.badgeLabel,
   };
+}
+
+export function getDailyVerseCarouselDisplay(date: Date = new Date()): CarouselDisplayVerse {
+  const daily = getDailyVerse(date);
+  return {
+    id: `${DAILY_VERSE_CAROUSEL_ID_PREFIX}${dailyVerseDayKey(date)}`,
+    reference: formatDailyVerseReference(daily.reference),
+    text: daily.text,
+    widthRatio: WIDTH_RATIOS[0]!,
+    gradient: DAILY_VERSE_GRADIENT,
+    isUserFavorite: false,
+    isDailyVerse: true,
+    badgeLabel: "Daily Verse",
+  };
+}
+
+function normalizeCarouselReference(reference: string): string {
+  return reference.toUpperCase().replace(/\s+/g, " ").trim();
+}
+
+function matchesDailyVerseReference(reference: string, date: Date = new Date()): boolean {
+  const daily = getDailyVerse(date);
+  return (
+    normalizeCarouselReference(reference) ===
+      normalizeCarouselReference(formatDailyVerseReference(daily.reference))
+  );
+}
+
+function restyleCarouselVerses(verses: CarouselDisplayVerse[]): CarouselDisplayVerse[] {
+  return verses.map((verse, index) => ({
+    ...verse,
+    widthRatio: WIDTH_RATIOS[(index + 1) % WIDTH_RATIOS.length]!,
+    gradient: CAROUSEL_GRADIENTS[(index + 1) % CAROUSEL_GRADIENTS.length]!,
+  }));
+}
+
+function withPinnedDailyVerse(
+  verses: CarouselDisplayVerse[],
+  date: Date = new Date(),
+): CarouselDisplayVerse[] {
+  const daily = getDailyVerseCarouselDisplay(date);
+  const dailyRef = normalizeCarouselReference(daily.reference);
+  const rest = verses.filter(
+    (verse) =>
+      !verse.isDailyVerse &&
+      !verse.id.startsWith(DAILY_VERSE_CAROUSEL_ID_PREFIX) &&
+      normalizeCarouselReference(verse.reference) !== dailyRef,
+  );
+  return [daily, ...restyleCarouselVerses(rest)];
+}
+
+function excludeDailyVerseFromPool(records: CarouselPoolRecord[], date: Date = new Date()): CarouselPoolRecord[] {
+  return records.filter((record) => !matchesDailyVerseReference(record.reference, date));
 }
 
 export function mergeCarouselDisplayVerses(
@@ -125,12 +199,14 @@ function mergeCarouselDisplayVersesLegacy(favorites: CarouselVerseRecord[]): Car
 
   for (const record of sortedFavorites) {
     if (seen.has(record.id)) continue;
+    if (matchesDailyVerseReference(record.reference)) continue;
     seen.add(record.id);
     merged.push(carouselRecordToDisplay(record, merged.length, true));
-    if (merged.length >= JOURNAL_CAROUSEL_DISPLAY_CAP) return merged;
+    if (merged.length >= JOURNAL_CAROUSEL_DISPLAY_CAP - 1) break;
   }
 
   for (const fallback of DEFAULT_CAROUSEL_VERSES) {
+    if (merged.length >= JOURNAL_CAROUSEL_DISPLAY_CAP - 1) break;
     const passageKey = carouselVerseId(
       fallback.bookSlug,
       fallback.chapter,
@@ -138,12 +214,12 @@ function mergeCarouselDisplayVersesLegacy(favorites: CarouselVerseRecord[]): Car
       fallback.verseEnd,
     );
     if (seen.has(passageKey) || seen.has(fallback.id)) continue;
+    if (matchesDailyVerseReference(fallback.reference)) continue;
     seen.add(fallback.id);
     merged.push(carouselRecordToDisplay(fallback, merged.length, false));
-    if (merged.length >= JOURNAL_CAROUSEL_DISPLAY_CAP) break;
   }
 
-  return merged;
+  return withPinnedDailyVerse(merged);
 }
 
 type CarouselPoolRecord = Omit<CarouselVerseRecord, "addedAt"> & { addedAt?: string };
@@ -234,29 +310,33 @@ export function buildCarouselDisplayVerses(
       : [...DEFAULT_CAROUSEL_VERSES];
     pool.push(...defaults);
 
-    const deduped = dedupeCarouselPool(pool);
+    const deduped = excludeDailyVerseFromPool(dedupeCarouselPool(pool));
     const shuffled = seededShuffle(
       deduped,
       settings.shuffleDefaultsDaily
         ? `randomize:${carouselDailySeed()}`
         : `randomize:${deduped.map((r) => r.id).join("|")}`,
     );
-    const limit = Math.min(JOURNAL_CAROUSEL_MAX_VERSE_COUNT, shuffled.length);
-    return shuffled
+    const limit = Math.min(JOURNAL_CAROUSEL_MAX_VERSE_COUNT - 1, shuffled.length);
+    const rest = shuffled
       .slice(0, limit)
       .map((record, index) =>
-        carouselRecordToDisplay(record, index, isUserCarouselRecord(record)),
+        carouselRecordToDisplay(record, index + 1, isUserCarouselRecord(record)),
       );
+    return withPinnedDailyVerse(rest);
   }
 
-  const pool = orderedCarouselPool(
-    favorites,
-    settings.randomize ? settings.shuffleDefaultsDaily : false,
+  const pool = excludeDailyVerseFromPool(
+    orderedCarouselPool(
+      favorites,
+      settings.randomize ? settings.shuffleDefaultsDaily : false,
+    ),
   );
-  const window = rotatingWindow(pool, rotationOffset, settings.verseCount);
-  return window.map((record, index) =>
-    carouselRecordToDisplay(record, index, isUserCarouselRecord(record)),
+  const window = rotatingWindow(pool, rotationOffset, Math.max(0, settings.verseCount - 1));
+  const rest = window.map((record, index) =>
+    carouselRecordToDisplay(record, index + 1, isUserCarouselRecord(record)),
   );
+  return withPinnedDailyVerse(rest);
 }
 
 export async function loadCarouselFavorites(): Promise<CarouselVerseRecord[]> {
