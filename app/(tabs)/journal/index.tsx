@@ -23,7 +23,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 import { ReaderSettingsCogIcon } from "@/components/icons/ReaderSettingsCogIcon";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
-import { JournalDetailAndroidAppBar } from "@/src/features/journal/JournalDetailAndroidAppBar";
+import { JournalListAndroidAppBar } from "@/src/features/journal/JournalListAndroidAppBar";
 import { ReaderM3IconButton } from "@/src/features/reader/ReaderM3IconButton";
 import { READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
 import { formatBookLabel, formatPassageReference, getTestament } from "@sinag-bible/core";
@@ -72,6 +72,11 @@ import {
   JOURNAL_IOS_FAB_SIZE_PX,
   JOURNAL_NEW_ENTRY_FAB_PX,
 } from "@/src/features/journal/journalFabChrome";
+import { JournalListSearchBar } from "@/src/features/journal/JournalListSearchBar";
+import {
+  journalEntryMatchesSearchQuery,
+  journalEntrySearchRelevanceScore,
+} from "@/lib/journal-local-search";
 
 const FAB_SIZE_PX = JOURNAL_NEW_ENTRY_FAB_PX;
 const IOS_FAB_SIZE_PX = JOURNAL_IOS_FAB_SIZE_PX;
@@ -327,7 +332,11 @@ const JournalListEntryCard = memo(function JournalListEntryCard({
   );
 });
 
-const JournalListEmpty = memo(function JournalListEmpty() {
+const JournalListEmpty = memo(function JournalListEmpty({
+  variant = "default",
+}: {
+  variant?: "default" | "search";
+}) {
   const { bundle } = useMobileAppTheme();
   const emptyShadowThemed = useMemo(
     () => ({
@@ -337,6 +346,10 @@ const JournalListEmpty = memo(function JournalListEmpty() {
     [bundle.ui.brown800],
   );
   const j = bundle.journal;
+  const message =
+    variant === "search"
+      ? "No entries match your search. Try a different keyword, date, or verse."
+      : "Nothing written yet. Open the Bible, find a verse that moves you, and begin.";
   return (
     <View
       className="mx-1 rounded-2xl border px-6 py-12 items-center"
@@ -352,7 +365,7 @@ const JournalListEmpty = memo(function JournalListEmpty() {
         className="text-[15px] italic leading-relaxed text-center"
         style={{ fontFamily: "Lora_400Regular", color: j.emptyStateText }}
       >
-        Nothing written yet. Open the Bible, find a verse that moves you, and begin.
+        {message}
       </Text>
     </View>
   );
@@ -391,6 +404,8 @@ export default function JournalIndexScreen() {
   const [dateTo, setDateTo] = useState<Date | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   const [newEntrySheetKey, setNewEntrySheetKey] = useState(0);
   const listRef = useRef<FlatList<JournalRow> | null>(null);
@@ -439,15 +454,21 @@ export default function JournalIndexScreen() {
     settingsFollowUp.dismissFollowUpChrome();
   }, [settingsFollowUp, settingsMenu]);
 
+  const closeJournalSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }, []);
+
   const toggleSettingsMenu = useCallback(() => {
     setFilterSheetOpen(false);
+    closeJournalSearch();
     if (settingsMenu.toolsMenuOpen) {
       closeSettingsMenu();
       return;
     }
     settingsFollowUp.dismissFollowUpChrome();
     settingsMenu.toggleToolsMenu();
-  }, [closeSettingsMenu, settingsFollowUp, settingsMenu]);
+  }, [closeJournalSearch, closeSettingsMenu, settingsFollowUp, settingsMenu]);
 
   const filterPanelOpen = Platform.OS === "android" ? filterSheetOpen : menuOpen;
   const setFilterPanelOpen = useCallback((open: boolean) => {
@@ -600,10 +621,43 @@ export default function JournalIndexScreen() {
     return sorted;
   }, [entries, filter, sort, dateFrom, dateTo]);
 
+  const searchTrimmed = searchQuery.trim();
+  const hasActiveSearch = searchOpen && searchTrimmed.length > 0;
+
+  const searchFiltered = useMemo(() => {
+    if (!hasActiveSearch) return filteredSorted;
+    const matched = filteredSorted.filter((entry) =>
+      journalEntryMatchesSearchQuery(entry, searchTrimmed),
+    );
+    const ranked = [...matched];
+    ranked.sort((a, b) => {
+      const scoreDelta =
+        journalEntrySearchRelevanceScore(b, searchTrimmed) -
+        journalEntrySearchRelevanceScore(a, searchTrimmed);
+      if (scoreDelta !== 0) return scoreDelta;
+
+      const timeA = new Date(a.created_at).getTime();
+      const timeB = new Date(b.created_at).getTime();
+      const safeTimeA = Number.isNaN(timeA) ? 0 : timeA;
+      const safeTimeB = Number.isNaN(timeB) ? 0 : timeB;
+
+      if (sort === "newest") return safeTimeB - safeTimeA;
+      if (sort === "oldest") return safeTimeA - safeTimeB;
+
+      const bookA = a.book ? formatBookLabel(a.book) : "";
+      const bookB = b.book ? formatBookLabel(b.book) : "";
+      const byBook = bookA.localeCompare(bookB, undefined, { sensitivity: "base" });
+      if (byBook !== 0) return byBook;
+      if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+      return safeTimeB - safeTimeA;
+    });
+    return ranked;
+  }, [filteredSorted, hasActiveSearch, searchTrimmed, sort]);
+
   const rows = useMemo<JournalRow[]>(() => {
     const next: JournalRow[] = [];
     let lastLabel: string | null = null;
-    for (const item of filteredSorted) {
+    for (const item of searchFiltered) {
       const label = formatDateGroup(item.created_at).toUpperCase();
       if (label !== lastLabel) {
         next.push({ kind: "heading", key: `heading-${label}-${item.id}`, label });
@@ -612,7 +666,7 @@ export default function JournalIndexScreen() {
       next.push({ kind: "entry", key: item.id, item });
     }
     return next;
-  }, [filteredSorted]);
+  }, [searchFiltered]);
 
   const firstEntryId = useMemo(
     () => rows.find((row) => row.kind === "entry")?.item.id ?? null,
@@ -637,16 +691,25 @@ export default function JournalIndexScreen() {
     setFilterPanelOpen(false);
   }, [setFilterPanelOpen]);
 
+  const openJournalSearch = useCallback(() => {
+    if (journalOnboarding.tourActive) return;
+    closeSettingsMenu();
+    setFilterPanelOpen(false);
+    hapticLightImpact();
+    setSearchOpen(true);
+  }, [closeSettingsMenu, journalOnboarding.tourActive, setFilterPanelOpen]);
+
   const toggleFilterMenu = useCallback(() => {
     if (journalOnboarding.tourActive) return;
     closeSettingsMenu();
+    closeJournalSearch();
     hapticLightImpact();
     if (Platform.OS === "android") {
       setFilterSheetOpen((open) => !open);
       return;
     }
     setMenuOpen((open) => !open);
-  }, [closeSettingsMenu, journalOnboarding.tourActive]);
+  }, [closeJournalSearch, closeSettingsMenu, journalOnboarding.tourActive]);
 
   const handleSelectFilter = useCallback(
     (kind: FilterKind) => {
@@ -806,7 +869,10 @@ export default function JournalIndexScreen() {
     ],
   );
 
-  const journalListEmpty = useMemo(() => <JournalListEmpty />, []);
+  const journalListEmpty = useMemo(
+    () => <JournalListEmpty variant={hasActiveSearch ? "search" : "default"} />,
+    [hasActiveSearch],
+  );
 
   const refreshControl = useMemo(
     () => <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brown800} />,
@@ -873,58 +939,88 @@ export default function JournalIndexScreen() {
         className="px-4 pb-3"
         style={Platform.OS === "android" ? { paddingTop: journalAndroidAppBarBottomPx } : { paddingTop: 49 }}
       >
-        <Text className="text-[32px] font-normal" style={{ fontFamily: "Lora_400Regular", color: colors.brown800 }}>
-          Journal
-        </Text>
-        <Text
-          className="mt-0.5 text-[13px] leading-relaxed"
-          style={{ fontFamily: "Inter_400Regular", color: j.subtitleQuote }}
-        >
-          <Text className="italic" style={{ color: j.subtitleQuote }}>
-            Your Word is a lamp unto my feet and a light unto my path.{" "}
-          </Text>
-          <Text style={{ fontWeight: "700", fontStyle: "normal", color: colors.brown800 }}>Psalm 119:105</Text>
-          {"\n"}
-          Pause, reflect, and document your journey with the Word of God today.
-        </Text>
-        {Platform.OS !== "android" ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Journal filter and sort options"
-          onPress={() => {
-            if (journalOnboarding.tourActive) return;
-            setMenuOpen((open) => !open);
-          }}
-          className="mt-3 self-start rounded-full px-3 py-2 active:opacity-90"
-          style={{ backgroundColor: j.filterOpenerBackground }}
-        >
-          <Text style={{ fontFamily: "Inter_500Medium", fontSize: 13, color: j.filterOpenerText }}>
-            {filterOptionLabel(filter)} · {sortOptionLabel(sort)}
-          </Text>
-        </Pressable>
-        ) : null}
-        {menuOpen ? (
-          <View
-            className="mt-2 w-full rounded-2xl border px-3 py-3"
-            style={{ borderColor: j.panelBorder, backgroundColor: j.panelBackground }}
-            pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
-          >
-            <JournalFilterSortPanel
-              bundle={bundle}
-              filter={filter}
-              sort={sort}
-              onSelectFilter={handleSelectFilter}
-              onSelectSort={handleSelectSort}
-              dateFrom={dateFrom}
-              dateTo={dateTo}
-              onDateFromChange={handleDateFromChange}
-              onDateToChange={handleDateToChange}
-              filtersRef={filtersRef}
-              sortRef={sortRef}
-              pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
-            />
-          </View>
-        ) : null}
+        {searchOpen && Platform.OS !== "android" ? (
+          <JournalListSearchBar
+            query={searchQuery}
+            onChangeQuery={setSearchQuery}
+            onClose={closeJournalSearch}
+            autoFocus
+          />
+        ) : (
+          <>
+            <View className="flex-row items-start justify-between">
+              <Text
+                className="flex-1 text-[32px] font-normal"
+                style={{ fontFamily: "Lora_400Regular", color: colors.brown800 }}
+              >
+                Journal
+              </Text>
+              {Platform.OS !== "android" ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Search journal entries"
+                  onPress={openJournalSearch}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  className="mt-1 rounded-full p-2 active:opacity-90"
+                  style={{ backgroundColor: j.filterOpenerBackground }}
+                >
+                  <MaterialIcons name="search" size={22} color={colors.brown800} />
+                </Pressable>
+              ) : null}
+            </View>
+            <Text
+              className="mt-0.5 text-[13px] leading-relaxed"
+              style={{ fontFamily: "Inter_400Regular", color: j.subtitleQuote }}
+            >
+              <Text className="italic" style={{ color: j.subtitleQuote }}>
+                Your Word is a lamp unto my feet and a light unto my path.{" "}
+              </Text>
+              <Text style={{ fontWeight: "700", fontStyle: "normal", color: colors.brown800 }}>
+                Psalm 119:105
+              </Text>
+              {"\n"}
+              Pause, reflect, and document your journey with the Word of God today.
+            </Text>
+            {Platform.OS !== "android" ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Journal filter and sort options"
+                onPress={() => {
+                  if (journalOnboarding.tourActive) return;
+                  setMenuOpen((open) => !open);
+                }}
+                className="mt-3 self-start rounded-full px-3 py-2 active:opacity-90"
+                style={{ backgroundColor: j.filterOpenerBackground }}
+              >
+                <Text style={{ fontFamily: "Inter_500Medium", fontSize: 13, color: j.filterOpenerText }}>
+                  {filterOptionLabel(filter)} · {sortOptionLabel(sort)}
+                </Text>
+              </Pressable>
+            ) : null}
+            {menuOpen ? (
+              <View
+                className="mt-2 w-full rounded-2xl border px-3 py-3"
+                style={{ borderColor: j.panelBorder, backgroundColor: j.panelBackground }}
+                pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
+              >
+                <JournalFilterSortPanel
+                  bundle={bundle}
+                  filter={filter}
+                  sort={sort}
+                  onSelectFilter={handleSelectFilter}
+                  onSelectSort={handleSelectSort}
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  onDateFromChange={handleDateFromChange}
+                  onDateToChange={handleDateToChange}
+                  filtersRef={filtersRef}
+                  sortRef={sortRef}
+                  pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
+                />
+              </View>
+            ) : null}
+          </>
+        )}
       </View>
 
       {loading && entries.length === 0 ? (
@@ -1048,10 +1144,18 @@ export default function JournalIndexScreen() {
 
       {Platform.OS === "android" ? (
         <>
-        <JournalDetailAndroidAppBar
+        <JournalListAndroidAppBar
           topInsetPx={journalAndroidTopToolsTopPx}
           backgroundColor={j.listPageBackground}
           insets={insets}
+          windowWidth={windowWidth}
+          searchOpen={searchOpen}
+          searchQuery={searchQuery}
+          onChangeSearchQuery={setSearchQuery}
+          onOpenSearch={openJournalSearch}
+          onCloseSearch={closeJournalSearch}
+          searchIconColor={androidAppBarIconColor}
+          rippleColor={androidAppBarRipple}
           leadingAction={
             <ReaderM3IconButton
               onPress={toggleSettingsMenu}
@@ -1074,31 +1178,19 @@ export default function JournalIndexScreen() {
               </View>
             </ReaderM3IconButton>
           }
-          trailingActions={
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <ReaderM3IconButton
-                onPress={toggleFilterMenu}
-                accessibilityLabel="Journal filter and sort options"
-                accessibilityState={{ expanded: filterSheetOpen }}
-                selected={filterSheetOpen}
-                rippleColor={androidAppBarRipple}
-                suppressHaptic
-              >
-                <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
-                  <FilterListIcon size={22} color={androidAppBarIconColor} />
-                </View>
-              </ReaderM3IconButton>
-              <ReaderM3IconButton
-                onPress={() => {}}
-                accessibilityLabel="Search journal entries"
-                rippleColor={androidAppBarRipple}
-                suppressHaptic
-              >
-                <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
-                  <MaterialIcons name="search" size={24} color={androidAppBarIconColor} />
-                </View>
-              </ReaderM3IconButton>
-            </View>
+          filterAction={
+            <ReaderM3IconButton
+              onPress={toggleFilterMenu}
+              accessibilityLabel="Journal filter and sort options"
+              accessibilityState={{ expanded: filterSheetOpen }}
+              selected={filterSheetOpen}
+              rippleColor={androidAppBarRipple}
+              suppressHaptic
+            >
+              <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
+                <FilterListIcon size={22} color={androidAppBarIconColor} />
+              </View>
+            </ReaderM3IconButton>
           }
         />
         <JournalFilterSideSheet
