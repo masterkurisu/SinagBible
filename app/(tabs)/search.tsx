@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Keyboard,
+  Platform,
   Pressable,
   ScrollView,
   SectionList,
@@ -16,7 +17,6 @@ import {
   Inter_300Light,
   Inter_400Regular,
   Inter_500Medium,
-  Inter_600SemiBold,
 } from "@expo-google-fonts/inter";
 import { type Href, Link, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -76,54 +76,48 @@ function journalSearchRowTitle(entry: LocalJournalEntry): string {
 export default function SearchScreen() {
   const { bundle } = useMobileAppTheme();
   const s = bundle.search;
+  const chrome = bundle.chrome;
+  const isAndroid = Platform.OS === "android";
+  const insets = useSafeAreaInsets();
+  const searchTopInsetPx = insets.top + (isAndroid ? 8 : 12);
 
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        root: { flex: 1, backgroundColor: s.pageBackground, paddingHorizontal: 20 },
+        root: { flex: 1, backgroundColor: s.pageBackground, paddingHorizontal: 16 },
         fontsPending: { flex: 1 },
-        pageHeader: {
-          marginBottom: 16,
-        },
-        pageTitle: {
-          fontFamily: "Inter_600SemiBold",
-          fontSize: 24,
-          color: s.bodyText,
-        },
-        pageSubtitle: {
-          fontFamily: "Inter_300Light",
-          fontSize: 12,
-          color: s.subtitle,
-          marginTop: 4,
-        },
         searchBar: {
           flexDirection: "row",
           alignItems: "center",
-          backgroundColor: s.cardBackground,
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: s.searchBarBorder,
+          backgroundColor: isAndroid ? chrome.androidIndicator : s.cardBackground,
+          borderRadius: isAndroid ? 28 : 999,
+          ...(isAndroid
+            ? {}
+            : {
+                borderWidth: 1,
+                borderColor: s.searchBarBorder,
+                shadowColor: "#242423",
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.35,
+                shadowRadius: 6,
+                elevation: 5,
+              }),
           paddingLeft: 16,
           paddingRight: 12,
-          minHeight: 48,
-          shadowColor: "#242423",
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.35,
-          shadowRadius: 6,
-          elevation: 5,
+          minHeight: isAndroid ? 56 : 48,
         },
-        searchIcon: { marginRight: 10, opacity: 0.4 },
+        searchIcon: { marginRight: isAndroid ? 12 : 10, opacity: isAndroid ? 1 : 0.4 },
         inputInSearchBar: {
           flex: 1,
           fontFamily: "Inter_400Regular",
-          fontSize: 13,
+          fontSize: isAndroid ? 16 : 13,
           color: s.primaryText,
-          paddingVertical: 12,
+          paddingVertical: isAndroid ? 14 : 12,
           paddingRight: 6,
           margin: 0,
           minWidth: 0,
         },
-        body: { flex: 1, marginTop: 16 },
+        body: { flex: 1, marginTop: isAndroid ? 12 : 16 },
         bodyScroll: { flex: 1 },
         bodyScrollGrow: { flexGrow: 1 },
         bodyTapDismiss: { flex: 1, justifyContent: "flex-start" },
@@ -311,17 +305,15 @@ export default function SearchScreen() {
           gap: 8,
         },
       }),
-    [s],
+    [s, chrome, isAndroid],
   );
 
   const [fontsLoaded] = useFonts({
     Inter_300Light,
     Inter_400Regular,
     Inter_500Medium,
-    Inter_600SemiBold,
   });
 
-  const insets = useSafeAreaInsets();
   const bottomPad = useSbTabScreenPadding(24);
   const params = useLocalSearchParams<{ q?: string }>();
   const initialQ = typeof params.q === "string" ? params.q : "";
@@ -658,28 +650,23 @@ export default function SearchScreen() {
   ) : null;
 
   if (!fontsLoaded) {
-    return <View style={[styles.root, styles.fontsPending, { paddingTop: insets.top + 24 }]} />;
+    return <View style={[styles.root, styles.fontsPending, { paddingTop: searchTopInsetPx }]} />;
   }
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 12 }]}>
-      <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Search</Text>
-        <Text style={styles.pageSubtitle}>Bible, references, and journal</Text>
-      </View>
-
+    <View style={[styles.root, { paddingTop: searchTopInsetPx, paddingBottom: insets.bottom + 12 }]}>
       <View style={styles.searchBar}>
         <MaterialCommunityIcons
           name="magnify"
-          size={22}
-          color={s.bodyText}
+          size={isAndroid ? 24 : 22}
+          color={isAndroid ? s.muted : s.bodyText}
           style={styles.searchIcon}
         />
         <TextInput
           ref={searchInputRef}
           value={query}
           onChangeText={onSearchQueryChange}
-          placeholder=""
+          placeholder="Search Bible, references, and journal"
           placeholderTextColor={s.placeholder}
           style={styles.inputInSearchBar}
           returnKeyType="search"
