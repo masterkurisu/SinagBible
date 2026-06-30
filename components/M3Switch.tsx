@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet } from "react-native";
 import Animated, {
   interpolate,
@@ -28,7 +27,6 @@ type M3SwitchProps = {
   trackBorderOff?: string;
   handleColorOn?: string;
   handleColorOff?: string;
-  iconColorOn?: string;
 };
 
 export function M3Switch({
@@ -41,7 +39,6 @@ export function M3Switch({
   trackBorderOff = "#79747E",
   handleColorOn = "#FFFFFF",
   handleColorOff = "#49454F",
-  iconColorOn = "#6750A4",
 }: M3SwitchProps) {
   const progress = useSharedValue(value ? 1 : 0);
 
@@ -54,7 +51,6 @@ export function M3Switch({
   const inset = TRACK_INSET * scale;
   const handleOff = HANDLE_SIZE_OFF * scale;
   const handleOn = HANDLE_SIZE_ON * scale;
-  const travel = trackW - inset * 2 - handleOff;
 
   const trackStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(progress.value, [0, 1], [trackColorOff, trackColorOn]),
@@ -64,21 +60,21 @@ export function M3Switch({
 
   const handleStyle = useAnimatedStyle(() => {
     const size = interpolate(progress.value, [0, 1], [handleOff, handleOn]);
+    const translateX = interpolate(
+      progress.value,
+      [0, 1],
+      [inset, trackW - inset - handleOn],
+    );
     return {
       width: size,
       height: size,
       borderRadius: size / 2,
-      transform: [{ translateX: inset + progress.value * travel }],
+      transform: [{ translateX }],
     };
   });
 
   const handleFillStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(progress.value, [0, 1], [handleColorOff, handleColorOn]),
-  }));
-
-  const iconStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ scale: interpolate(progress.value, [0, 0.4, 1], [0.4, 0.85, 1]) }],
   }));
 
   return (
@@ -90,11 +86,7 @@ export function M3Switch({
       hitSlop={8}
     >
       <Animated.View style={[styles.track, { width: trackW, height: trackH, borderRadius: trackH / 2 }, trackStyle]}>
-        <Animated.View style={[styles.handle, handleStyle, handleFillStyle]}>
-          <Animated.View style={[styles.iconWrap, iconStyle]}>
-            <Ionicons name="checkmark" size={14 * scale} color={iconColorOn} />
-          </Animated.View>
-        </Animated.View>
+        <Animated.View style={[styles.handle, handleStyle, handleFillStyle]} />
       </Animated.View>
     </Pressable>
   );
@@ -103,15 +95,10 @@ export function M3Switch({
 const styles = StyleSheet.create({
   track: {
     justifyContent: "center",
+    overflow: "hidden",
   },
   handle: {
     position: "absolute",
     left: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconWrap: {
-    alignItems: "center",
-    justifyContent: "center",
   },
 });

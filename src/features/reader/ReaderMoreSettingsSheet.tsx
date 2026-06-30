@@ -23,7 +23,6 @@ import {
   subscribeHapticsEnabled,
 } from "@/lib/haptics-preference";
 import {
-  READER_M3_ON_SURFACE_VARIANT,
   READER_M3_SURFACE_CONTAINER,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
@@ -141,42 +140,13 @@ export function ReaderMoreSettingsSheet({
               >
                 More
               </Text>
-              <Pressable
-                onPress={() => {
-                  hapticLightImpact();
-                  onSelectCredits();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Credits"
-                style={({ pressed }) => ({
-                  width: "100%",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12 * sheetScale,
-                  paddingVertical: 10 * sheetScale,
-                  marginBottom: 8 * sheetScale,
-                  borderRadius: 12 * sheetScale,
-                  backgroundColor: pressed ? colors.parchmentDark : "transparent",
-                })}
-              >
-                <CreditsIcon size={22 * sheetScale} color={colors.brown800} />
-                <Text
-                  style={{
-                    fontFamily: "Inter_400Regular",
-                    fontSize: sheetRowLabelSize,
-                    lineHeight: sheetRowLabelSize * 1.35,
-                    color: colors.brown800,
-                  }}
-                >
-                  Credits
-                </Text>
-              </Pressable>
               <View
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
                   gap: 12 * sheetScale,
+                  marginBottom: 8 * sheetScale,
                 }}
               >
                 <Text
@@ -196,12 +166,45 @@ export function ReaderMoreSettingsSheet({
                   scale={switchScale}
                   trackColorOn={colors.brown800}
                   trackColorOff={READER_M3_SURFACE_CONTAINER}
-                  trackBorderOff={READER_M3_ON_SURFACE_VARIANT}
+                  trackBorderOff={colors.brown800}
                   handleColorOn="#FFFFFF"
-                  handleColorOff={READER_M3_ON_SURFACE_VARIANT}
-                  iconColorOn={colors.brown800}
+                  handleColorOff={colors.brown800}
                 />
               </View>
+              <Pressable
+                onPress={() => {
+                  hapticLightImpact();
+                  onSelectCredits();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Credits"
+                style={({ pressed }) => ({
+                  width: "100%",
+                  paddingVertical: 10 * sheetScale,
+                  borderRadius: 12 * sheetScale,
+                  backgroundColor: pressed ? colors.parchmentDark : "transparent",
+                })}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12 * sheetScale,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: "Inter_400Regular",
+                      fontSize: sheetRowLabelSize,
+                      color: colors.brown800,
+                    }}
+                  >
+                    Credits
+                  </Text>
+                  <CreditsIcon size={22 * sheetScale} color={colors.brown800} />
+                </View>
+              </Pressable>
             </View>
           </Animated.View>
         </View>
