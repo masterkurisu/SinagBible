@@ -166,14 +166,21 @@ export function useSetReaderTabBarScrollHidden(): (hidden: boolean) => void {
   return useReaderTabBarVisibilityContext().setScrollHidden;
 }
 
-export function useRegisterReaderSettingsSlideProgress(slideProgress: Animated.Value): void {
+export function useRegisterReaderSettingsSlideProgress(
+  slideProgress: Animated.Value,
+  enabled = true,
+): void {
   const ctx = useContext(ReaderTabBarVisibilityContext);
   const register = ctx?.registerReaderSettingsSlideProgress;
 
   useEffect(() => {
+    if (!enabled) {
+      register?.(null);
+      return;
+    }
     register?.(slideProgress);
     return () => register?.(null);
-  }, [register, slideProgress]);
+  }, [enabled, register, slideProgress]);
 }
 
 /** @deprecated Settings slide progress is registered via useRegisterReaderSettingsSlideProgress. */

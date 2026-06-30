@@ -1,6 +1,10 @@
 import { Platform } from "react-native";
 
 import { ANDROID_NAV_BAR_BODY_PX } from "./android-nav-bar-chrome";
+import {
+  JOURNAL_FAB_ABOVE_NAV_BAR_GAP_PX,
+  JOURNAL_NEW_ENTRY_FAB_PX,
+} from "@/src/features/journal/journalFabChrome";
 
 /**
  * Core tab bar content height (approx), before system gesture/home inset.
@@ -90,8 +94,8 @@ export function nativeTabScrollPaddingBottomPx(extraPx = 28): number {
 }
 
 /** Journal list: room below FAB plus native tab clearance. */
-export function nativeTabJournalListPaddingBottomPx(safeAreaBottom: number): number {
-  return nativeTabFabOffsetPx(safeAreaBottom) + 60 + 32;
+export function nativeTabJournalListPaddingBottomPx(_safeAreaBottom: number): number {
+  return JOURNAL_FAB_ABOVE_NAV_BAR_GAP_PX + JOURNAL_NEW_ENTRY_FAB_PX + 32;
 }
 
 /**
@@ -101,9 +105,9 @@ export function nativeTabJournalListPaddingBottomPx(safeAreaBottom: number): num
  */
 export function journalTabNewEntryFabBottomPx(
   _safeAreaBottom: number,
-  platformLiftPx: number,
+  _platformLiftPx = 0,
 ): number {
-  return nativeTabFabOffsetPx(0) + platformLiftPx;
+  return JOURNAL_FAB_ABOVE_NAV_BAR_GAP_PX;
 }
 
 /** Push new-entry sheet content down so the title is not clipped at the screen top. */

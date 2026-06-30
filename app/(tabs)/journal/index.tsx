@@ -18,7 +18,13 @@ import { useRouter } from "expo-router";
 import { useFocusEffect, useIsFocused } from "expo-router/react-navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { MaterialIcons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
+import { ReaderSettingsCogIcon } from "@/components/icons/ReaderSettingsCogIcon";
+import { FilterListIcon } from "@/components/icons/FilterListIcon";
+import { JournalDetailAndroidAppBar } from "@/src/features/journal/JournalDetailAndroidAppBar";
+import { ReaderM3IconButton } from "@/src/features/reader/ReaderM3IconButton";
+import { READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
 import { formatBookLabel, formatPassageReference, getTestament } from "@sinag-bible/core";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { loadJournalListItems, type MobileJournalListItem } from "@/lib/load-journal-entries";
@@ -46,18 +52,24 @@ import { useJournalOnboarding } from "@/src/features/journal/useJournalOnboardin
 import type { JournalOnboardingStepId } from "@/src/features/journal/journalOnboardingSteps";
 import { JournalM3ExpressiveFab } from "@/src/features/journal/JournalM3ExpressiveFab";
 import {
+  JournalFilterSortPanel,
+  type JournalFilterKind,
+  type JournalSortKind,
+} from "@/src/features/journal/JournalFilterSortPanel";
+import { journalEntryMatchesDateRange } from "@/src/features/journal/journalDateFilter";
+import { JournalFilterSideSheet } from "@/src/features/journal/JournalFilterSideSheet";
+import {
+  ReaderSettingsFollowUpLayer,
+  useReaderSettingsFollowUpState,
+} from "@/src/features/reader/ReaderSettingsFollowUpLayer";
+import { useReaderMobileSettingsMenu } from "@/src/features/reader/useReaderMobileSettingsMenu";
+import {
   JOURNAL_IOS_FAB_SIZE_PX,
   JOURNAL_NEW_ENTRY_FAB_PX,
 } from "@/src/features/journal/journalFabChrome";
 
 const FAB_SIZE_PX = JOURNAL_NEW_ENTRY_FAB_PX;
 const IOS_FAB_SIZE_PX = JOURNAL_IOS_FAB_SIZE_PX;
-/**
- * Lift above the native tab bar. Reduced by 40px after the SDK 56 NativeTabs upgrade, which
- * already insets tab content from the bottom safe area.
- */
-const JOURNAL_FAB_PLATFORM_LIFT_PX =
-  Platform.OS === "android" ? 10 : Platform.OS === "ios" ? -10 : 0;
 
 function formatDate(iso: string): string {
   const parsed = new Date(iso);
@@ -89,21 +101,8 @@ type JournalRow =
   | { kind: "heading"; key: string; label: string }
   | { kind: "entry"; key: string; item: MobileJournalListItem };
 
-type FilterKind = "all" | "new" | "old" | "favorites";
-type SortKind = "newest" | "oldest" | "book";
-
-const FILTER_MENU_ITEMS: { kind: FilterKind; label: string }[] = [
-  { kind: "all", label: "All" },
-  { kind: "new", label: "New Testament" },
-  { kind: "old", label: "Old Testament" },
-  { kind: "favorites", label: "Favorites" },
-];
-
-const SORT_MENU_ITEMS: { kind: SortKind; label: string }[] = [
-  { kind: "newest", label: "Newest" },
-  { kind: "oldest", label: "Oldest" },
-  { kind: "book", label: "Book A-Z" },
-];
+type FilterKind = JournalFilterKind;
+type SortKind = JournalSortKind;
 
 function filterOptionLabel(kind: FilterKind): string {
   switch (kind) {
@@ -366,14 +365,16 @@ export default function JournalIndexScreen() {
   const { bundle } = useMobileAppTheme();
   const colors = bundle.ui;
   const j = bundle.journal;
-  const listPadBottom =
-    nativeTabJournalListPaddingBottomPx(0) + Math.max(0, JOURNAL_FAB_PLATFORM_LIFT_PX);
+  const listPadBottom = nativeTabJournalListPaddingBottomPx(0);
   const [entries, setEntries] = useState<MobileJournalListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterKind>("all");
   const [sort, setSort] = useState<SortKind>("newest");
+  const [dateFrom, setDateFrom] = useState<Date | null>(null);
+  const [dateTo, setDateTo] = useState<Date | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   const [newEntrySheetKey, setNewEntrySheetKey] = useState(0);
   const listRef = useRef<FlatList<JournalRow> | null>(null);
@@ -395,7 +396,52 @@ export default function JournalIndexScreen() {
     [],
   );
 
-  const fabBottom = journalTabNewEntryFabBottomPx(insets.bottom, JOURNAL_FAB_PLATFORM_LIFT_PX);
+  const fabBottom = journalTabNewEntryFabBottomPx(insets.bottom);
+  const journalAndroidTopToolsTopPx = Math.max(insets.top, 8) + 2;
+  const journalAndroidAppBarBottomPx =
+    journalAndroidTopToolsTopPx + READER_M3_APP_BAR_CONTENT_HEIGHT_PX;
+  const androidAppBarIconColor = colors.brown800;
+  const androidAppBarRipple = bundle.chrome.androidRipple;
+
+  const settingsMenu = useReaderMobileSettingsMenu({
+    windowWidth,
+    windowHeight,
+    enabled: Platform.OS === "android" && isFocused && hasVisitedJournalTab,
+    onOpen: () => setFilterSheetOpen(false),
+  });
+
+  const settingsFollowUp = useReaderSettingsFollowUpState({
+    closeToolsMenu: settingsMenu.closeToolsMenu,
+    scheduleAfterMobileReaderMenuClose: settingsMenu.scheduleAfterMobileReaderMenuClose,
+    clearMobileSettingsFollowUp: settingsMenu.clearMobileSettingsFollowUp,
+    windowWidth,
+    insets,
+  });
+
+  const closeSettingsMenu = useCallback(() => {
+    settingsMenu.closeToolsMenu();
+    settingsFollowUp.dismissFollowUpChrome();
+  }, [settingsFollowUp, settingsMenu]);
+
+  const toggleSettingsMenu = useCallback(() => {
+    setFilterSheetOpen(false);
+    if (settingsMenu.toolsMenuOpen) {
+      closeSettingsMenu();
+      return;
+    }
+    settingsFollowUp.dismissFollowUpChrome();
+    settingsMenu.toggleToolsMenu();
+  }, [closeSettingsMenu, settingsFollowUp, settingsMenu]);
+
+  const filterPanelOpen = Platform.OS === "android" ? filterSheetOpen : menuOpen;
+  const setFilterPanelOpen = useCallback((open: boolean) => {
+    if (Platform.OS === "android") {
+      setFilterSheetOpen(open);
+    } else {
+      setMenuOpen(open);
+    }
+  }, []);
+
   const fabSpin = useRef(new Animated.Value(0)).current;
   const newEntryFormRef = useRef<JournalNewEntryFormHandle | null>(null);
   const newEntrySheetRef = useRef<JournalNewEntrySheetHandle | null>(null);
@@ -431,6 +477,7 @@ export default function JournalIndexScreen() {
       openNewEntrySheet();
     }
   };
+
 
   const load = useCallback(async () => {
     try {
@@ -508,6 +555,7 @@ export default function JournalIndexScreen() {
 
   const filteredSorted = useMemo(() => {
     const filtered = entries.filter((entry) => {
+      if (!journalEntryMatchesDateRange(entry.created_at, dateFrom, dateTo)) return false;
       if (filter === "all") return true;
       if (filter === "favorites") return entry.is_favorite === true;
       if (!entry.book || entry.chapter <= 0) return false;
@@ -534,7 +582,7 @@ export default function JournalIndexScreen() {
     });
 
     return sorted;
-  }, [entries, filter, sort]);
+  }, [entries, filter, sort, dateFrom, dateTo]);
 
   const rows = useMemo<JournalRow[]>(() => {
     const next: JournalRow[] = [];
@@ -561,13 +609,58 @@ export default function JournalIndexScreen() {
 
   const journalOnboarding = useJournalOnboarding({
     journalContentReady: !loading,
-    menuOpen,
-    setMenuOpen,
+    menuOpen: filterPanelOpen,
+    setMenuOpen: setFilterPanelOpen,
     targetRefs: journalOnboardingTargetRefs,
     screenW: windowWidth,
     screenH: windowHeight,
     newEntryFabBottomPx: fabBottom,
   });
+
+  const closeFilterPanel = useCallback(() => {
+    setFilterPanelOpen(false);
+  }, [setFilterPanelOpen]);
+
+  const toggleFilterMenu = useCallback(() => {
+    if (journalOnboarding.tourActive) return;
+    closeSettingsMenu();
+    hapticLightImpact();
+    if (Platform.OS === "android") {
+      setFilterSheetOpen((open) => !open);
+      return;
+    }
+    setMenuOpen((open) => !open);
+  }, [closeSettingsMenu, journalOnboarding.tourActive]);
+
+  const handleSelectFilter = useCallback(
+    (kind: FilterKind) => {
+      setFilter(kind);
+      closeFilterPanel();
+    },
+    [closeFilterPanel],
+  );
+
+  const handleSelectSort = useCallback(
+    (kind: SortKind) => {
+      setSort(kind);
+      closeFilterPanel();
+    },
+    [closeFilterPanel],
+  );
+
+  const handleDateFromChange = useCallback((date: Date | null) => {
+    setDateFrom(date);
+    if (date && dateTo && date > dateTo) {
+      setDateTo(date);
+    }
+  }, [dateTo]);
+
+  const handleDateToChange = useCallback((date: Date | null) => {
+    setDateTo(date);
+    if (date && dateFrom && date < dateFrom) {
+      setDateFrom(date);
+    }
+  }, [dateFrom]);
 
   const journalRowOffsets = useMemo(() => {
     const offsets: number[] = [];
@@ -722,8 +815,42 @@ export default function JournalIndexScreen() {
 
   return (
     <View className="flex-1" style={{ overflow: "visible", backgroundColor: bundle.journal.listPageBackground }}>
-      <View style={{ flex: 1, zIndex: 0 }}>
-      <View className="px-4 pb-3 pt-[49px]">
+      {Platform.OS === "android" ? (
+        <ReaderSettingsFollowUpLayer
+          bundle={bundle}
+          insets={insets}
+          windowWidth={windowWidth}
+          scrollPaddingTop={journalAndroidAppBarBottomPx + 10}
+          toolsMenuOpen={settingsMenu.toolsMenuOpen}
+          isTabletReaderLayout={settingsMenu.isTabletReaderLayout}
+          railWidthPx={settingsMenu.readerMobileSettingsSlidePx}
+          rippleColor={androidAppBarRipple}
+          closeToolsMenu={settingsMenu.closeToolsMenu}
+          scheduleAfterMobileReaderMenuClose={settingsMenu.scheduleAfterMobileReaderMenuClose}
+          clearMobileSettingsFollowUp={settingsMenu.clearMobileSettingsFollowUp}
+          onNavigate={(href) => router.push(href)}
+          followUp={settingsFollowUp}
+          hideTranslationAndStudyNotes
+        />
+      ) : null}
+
+      <Animated.View
+        style={{
+          flex: 1,
+          zIndex: 0,
+          ...(Platform.OS === "android"
+            ? { transform: [{ translateX: settingsMenu.readerMobileSettingsSlideTranslateX }] }
+            : null),
+        }}
+        {...(Platform.OS === "android" && settingsMenu.toolsMenuOpen
+          ? settingsMenu.readerSettingsMenuPanHandlers
+          : {})}
+        pointerEvents={Platform.OS === "android" && settingsMenu.toolsMenuOpen ? "box-none" : "auto"}
+      >
+      <View
+        className="px-4 pb-3"
+        style={Platform.OS === "android" ? { paddingTop: journalAndroidAppBarBottomPx } : { paddingTop: 49 }}
+      >
         <Text className="text-[32px] font-normal" style={{ fontFamily: "Lora_400Regular", color: colors.brown800 }}>
           Journal
         </Text>
@@ -738,6 +865,7 @@ export default function JournalIndexScreen() {
           {"\n"}
           Pause, reflect, and document your journey with the Word of God today.
         </Text>
+        {Platform.OS !== "android" ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Journal filter and sort options"
@@ -752,87 +880,27 @@ export default function JournalIndexScreen() {
             {filterOptionLabel(filter)} · {sortOptionLabel(sort)}
           </Text>
         </Pressable>
+        ) : null}
         {menuOpen ? (
           <View
             className="mt-2 w-full rounded-2xl border px-3 py-3"
             style={{ borderColor: j.panelBorder, backgroundColor: j.panelBackground }}
             pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
           >
-            <View ref={filtersRef} collapsable={false}>
-              <Text
-                className="text-[11px] uppercase tracking-[0.16em]"
-                style={{ fontFamily: "Inter_500Medium", color: j.dateHeading }}
-              >
-                Filter
-              </Text>
-              <View className="mt-2 flex-row flex-wrap gap-2">
-                {FILTER_MENU_ITEMS.map((item) => {
-                  const active = item.kind === filter;
-                  return (
-                    <Pressable
-                      key={item.kind}
-                      onPress={() => {
-                        setFilter(item.kind);
-                        setMenuOpen(false);
-                      }}
-                      className="rounded-full border px-3 py-1.5"
-                      style={{
-                        borderColor: active ? j.chipActiveBorder : j.chipInactiveBorder,
-                        backgroundColor: active ? j.chipActiveBackground : j.chipInactiveBackground,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: "Inter_500Medium",
-                          fontSize: 12,
-                          color: active ? j.chipActiveText : j.chipInactiveText,
-                        }}
-                      >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View ref={sortRef} collapsable={false}>
-              <Text
-                className="mt-3 text-[11px] uppercase tracking-[0.16em]"
-                style={{ fontFamily: "Inter_500Medium", color: j.dateHeading }}
-              >
-                Sort
-              </Text>
-              <View className="mt-2 flex-row flex-wrap gap-2">
-                {SORT_MENU_ITEMS.map((item) => {
-                  const active = item.kind === sort;
-                  return (
-                    <Pressable
-                      key={item.kind}
-                      onPress={() => {
-                        setSort(item.kind);
-                        setMenuOpen(false);
-                      }}
-                      className="rounded-full border px-3 py-1.5"
-                      style={{
-                        borderColor: active ? j.chipActiveBorder : j.chipInactiveBorder,
-                        backgroundColor: active ? j.chipActiveBackground : j.chipInactiveBackground,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: "Inter_500Medium",
-                          fontSize: 12,
-                          color: active ? j.chipActiveText : j.chipInactiveText,
-                        }}
-                      >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
+            <JournalFilterSortPanel
+              bundle={bundle}
+              filter={filter}
+              sort={sort}
+              onSelectFilter={handleSelectFilter}
+              onSelectSort={handleSelectSort}
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onDateFromChange={handleDateFromChange}
+              onDateToChange={handleDateToChange}
+              filtersRef={filtersRef}
+              sortRef={sortRef}
+              pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
+            />
           </View>
         ) : null}
       </View>
@@ -858,7 +926,7 @@ export default function JournalIndexScreen() {
           renderItem={renderJournalRow}
         />
       )}
-      </View>
+      </Animated.View>
 
       {/* Full-screen layer so the FAB/sheet sit above FlatList native stacking (iOS/Android native tabs). */}
       <View
@@ -953,6 +1021,82 @@ export default function JournalIndexScreen() {
           arrow: "#FFFFFF",
         }}
       />
+
+      {Platform.OS === "android" ? (
+        <>
+        <JournalDetailAndroidAppBar
+          topInsetPx={journalAndroidTopToolsTopPx}
+          backgroundColor={j.listPageBackground}
+          insets={insets}
+          leadingAction={
+            <ReaderM3IconButton
+              onPress={toggleSettingsMenu}
+              accessibilityLabel={settingsMenu.toolsMenuOpen ? "Close reader tools" : "Reader settings"}
+              accessibilityState={{ expanded: settingsMenu.toolsMenuOpen }}
+              selected={settingsMenu.toolsMenuOpen}
+              rippleColor={androidAppBarRipple}
+              suppressHaptic
+            >
+              <View
+                style={{
+                  width: 24,
+                  height: 24,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transform: [{ translateX: 2 }, { translateY: -4 }],
+                }}
+              >
+                <ReaderSettingsCogIcon size={26} color={androidAppBarIconColor} />
+              </View>
+            </ReaderM3IconButton>
+          }
+          trailingActions={
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <ReaderM3IconButton
+                onPress={toggleFilterMenu}
+                accessibilityLabel="Journal filter and sort options"
+                accessibilityState={{ expanded: filterSheetOpen }}
+                selected={filterSheetOpen}
+                rippleColor={androidAppBarRipple}
+                suppressHaptic
+              >
+                <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
+                  <FilterListIcon size={22} color={androidAppBarIconColor} />
+                </View>
+              </ReaderM3IconButton>
+              <ReaderM3IconButton
+                onPress={() => {}}
+                accessibilityLabel="Search journal entries"
+                rippleColor={androidAppBarRipple}
+                suppressHaptic
+              >
+                <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
+                  <MaterialIcons name="search" size={24} color={androidAppBarIconColor} />
+                </View>
+              </ReaderM3IconButton>
+            </View>
+          }
+        />
+        <JournalFilterSideSheet
+          open={filterSheetOpen}
+          onClose={closeFilterPanel}
+          bundle={bundle}
+          screenWidth={windowWidth}
+          insets={insets}
+          filter={filter}
+          sort={sort}
+          onSelectFilter={handleSelectFilter}
+          onSelectSort={handleSelectSort}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={handleDateFromChange}
+          onDateToChange={handleDateToChange}
+          filtersRef={filtersRef}
+          sortRef={sortRef}
+          pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
+        />
+        </>
+      ) : null}
     </View>
   );
 }

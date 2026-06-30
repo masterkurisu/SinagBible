@@ -40,6 +40,7 @@ export type ReaderSettingsNavigationRailProps = {
   toolsMenuOpen: boolean;
   headerTools?: ReactNode | null;
   hideFontSettings?: boolean;
+  hideTranslationAndStudyNotes?: boolean;
   onSelectFontSettings?: () => void;
   onSelectThemes: () => void;
   onSelectMore: () => void;
@@ -62,6 +63,7 @@ export function ReaderSettingsNavigationRail({
   toolsMenuOpen,
   headerTools = null,
   hideFontSettings = false,
+  hideTranslationAndStudyNotes = false,
   onSelectFontSettings,
   onSelectThemes,
   onSelectMore,
@@ -76,18 +78,22 @@ export function ReaderSettingsNavigationRail({
   const contentPaddingLeft = insets.left;
 
   const destinations: RailDestination[] = [
-    {
-      id: "translation",
-      label: "Translation",
-      onPress: onSelectTranslation,
-      Icon: BookIcon,
-    },
-    {
-      id: "study-notes",
-      label: "Study Notes",
-      onPress: onSelectCommentary,
-      Icon: StudyNotesResearchIcon,
-    },
+    ...(hideTranslationAndStudyNotes
+      ? []
+      : [
+          {
+            id: "translation" as const,
+            label: "Translation",
+            onPress: onSelectTranslation,
+            Icon: BookIcon,
+          },
+          {
+            id: "study-notes" as const,
+            label: "Study Notes",
+            onPress: onSelectCommentary,
+            Icon: StudyNotesResearchIcon,
+          },
+        ]),
     ...(hideFontSettings || onSelectFontSettings == null
       ? []
       : [
