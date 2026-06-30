@@ -1484,15 +1484,6 @@ export default function ReaderChapterScreen() {
           backgroundColor: rc.sceneSurface,
           transform: [{ translateX: readerMobileSettingsSlideTranslateX }],
           zIndex: 1,
-          ...(toolsMenuOpen
-            ? {
-                shadowColor: "#000000",
-                shadowOpacity: 0.4,
-                shadowOffset: { width: -4, height: 0 },
-                shadowRadius: 16,
-                elevation: 14,
-              }
-            : {}),
         }}
       >
       <ReaderHeader

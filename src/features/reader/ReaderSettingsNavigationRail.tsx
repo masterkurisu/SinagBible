@@ -174,7 +174,6 @@ export function ReaderSettingsNavigationRail({
             width: railWidthPx,
             backgroundColor: toolsMenuOpen ? READER_MOBILE_SETTINGS_PANEL_BG : "transparent",
             borderTopRightRadius: toolsMenuOpen ? 28 : 0,
-            borderBottomRightRadius: toolsMenuOpen ? 28 : 0,
           },
         ]}
       >
