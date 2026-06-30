@@ -73,6 +73,8 @@ const FORMAT_ACTION_COUNT = 4;
 const FORM_HORIZONTAL_PADDING = 10;
 /** Pulls the reflection editor’s bottom edge up (journal card, reader sheet, fullscreen). */
 const REFLECTION_FIELD_BOTTOM_TRIM_PX = 50;
+/** Phone bottom sheets (journal + reader): save row clearance from the screen edge. */
+const SHEET_SAVE_BOTTOM_PADDING_PX = 30;
 /**
  * Reader new-entry modal only: matches reader sheet `bottom` lift — save row `paddingBottom` trim.
  */
@@ -203,8 +205,6 @@ type Props = {
   readerCardBottomLiftPx?: number;
   /** Android: show save confirmation via parent toast instead of a native alert dialog. */
   onSaveToast?: (message: string) => void;
-  /** Bump when the parent sheet opens so editor onboarding can restart in dev. */
-  onboardingSessionKey?: number;
 };
 
 export type JournalNewEntryFormHandle = {
@@ -223,7 +223,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     readerNewEntryScrollable,
     readerCardBottomLiftPx = READER_NEW_ENTRY_CARD_BOTTOM_LIFT_PX,
     onSaveToast,
-    onboardingSessionKey = 0,
   }: Props,
   ref,
 ) {
@@ -232,6 +231,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isTabletForm = isTabletLayout(windowWidth, windowHeight);
   const isLandscapeForm = windowWidth > windowHeight;
+  /** Journal/reader new-entry bottom sheet on a phone (not tablet / fullscreen route). */
+  const isPhoneSheetForm = contentScrollMaxHeight != null && !isTabletForm;
   const { bundle } = useMobileAppTheme();
   const colors = bundle.ui;
   const j = bundle.journal;
@@ -264,8 +265,17 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const newEntryTopFieldsMaxScrollHeight =
     contentScrollMaxHeight != null
       ? Math.min(
-          Math.round(contentScrollMaxHeight * (isTabletForm && isLandscapeForm ? 0.36 : 0.5)),
-          isTabletForm && isLandscapeForm ? 260 : 320,
+          Math.round(
+            contentScrollMaxHeight *
+              (isPhoneSheetForm
+                ? isLandscapeForm
+                  ? 0.28
+                  : 0.3
+                : isTabletForm && isLandscapeForm
+                  ? 0.36
+                  : 0.5),
+          ),
+          isPhoneSheetForm ? 220 : isTabletForm && isLandscapeForm ? 260 : 320,
         )
       : Math.min(
           400,
@@ -336,8 +346,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const editorOnboarding = useJournalEditorOnboarding({
     enabled: !editDraft,
-    sessionKey: onboardingSessionKey,
     isReaderNewEntry: readerNewEntryScrollable === true && editDraft == null,
+    isPhoneSheetForm,
     targetRefs: editorOnboardingTargetRefs,
     screenW: windowWidth,
     screenH: windowHeight,
@@ -815,18 +825,20 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   /** Reader new entry (not edit). */
   const readerNewEntryFromReader = readerNewEntryScrollable === true && !isEditMode;
   /**
-   * Phone-only: one ScrollView for passage + reflection + save (keyboard). Tablets use the same
-   * split layout as the journal tab so reflection gets flex height and the sheet is not half empty.
+   * Phone-only: one ScrollView for passage + reflection + save (keyboard). Tablets and full-height
+   * bottom sheets use split layout so reflection flexes into the extra vertical space.
    */
-  const readerMergedScrollMode = readerNewEntryFromReader && !isTabletForm;
+  const readerMergedScrollMode = readerNewEntryFromReader && !isTabletForm && !isPhoneSheetForm;
   /**
    * Android phones: merged scroll keeps the reflection field reachable when the keyboard is open.
-   * iOS journal keeps the split layout (passage/title scroll + flex reflection viewport).
+   * Full-height bottom sheets use split layout so reflection can flex into the extra vertical space.
    */
-  const androidPhoneMergedScrollMode = Platform.OS === "android" && !isTabletForm;
+  const androidPhoneMergedScrollMode =
+    Platform.OS === "android" && !isTabletForm && !isPhoneSheetForm;
   const mergedFormScrollMode = readerMergedScrollMode || androidPhoneMergedScrollMode;
 
-  const trim = REFLECTION_FIELD_BOTTOM_TRIM_PX;
+  const reflectionBottomTrimPx = isPhoneSheetForm ? 0 : REFLECTION_FIELD_BOTTOM_TRIM_PX;
+  const trim = reflectionBottomTrimPx;
   const splitReflectionMinHeight =
     isTabletForm && isLandscapeForm && !mergedFormScrollMode ? 200 : 0;
 
@@ -839,14 +851,27 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         marginBottom: trim,
       };
   const reflectionParchmentStyle = mergedFormScrollMode
-    ? { marginTop: 5, minHeight: 240 - trim }
-    : { marginTop: 5, flex: 1, minHeight: 0 };
+    ? {
+        marginTop: 5,
+        minHeight: isPhoneSheetForm
+          ? Math.max(280, Math.round((contentScrollMaxHeight ?? windowHeight) * 0.42))
+          : 240 - trim,
+      }
+    : { marginTop: 5, flex: 1, minHeight: isPhoneSheetForm ? 200 : 0 };
   const reflectionInnerPadStyle = mergedFormScrollMode
-    ? { minHeight: 220 - trim, paddingHorizontal: 8, paddingBottom: 19 }
+    ? {
+        minHeight: isPhoneSheetForm
+          ? Math.max(260, Math.round((contentScrollMaxHeight ?? windowHeight) * 0.4))
+          : 220 - trim,
+        paddingHorizontal: 8,
+        paddingBottom: 19,
+      }
     : { flex: 1, minHeight: 0, paddingHorizontal: 8, paddingBottom: 19 };
   const reflectionRichEditorLayoutStyle = mergedFormScrollMode
     ? {
-        minHeight: 200 - trim,
+        minHeight: isPhoneSheetForm
+          ? Math.max(240, Math.round((contentScrollMaxHeight ?? windowHeight) * 0.38))
+          : 200 - trim,
         alignSelf: "stretch" as const,
         width: "100%" as const,
         borderRadius: 0,
@@ -854,7 +879,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       }
     : {
         flex: 1,
-        minHeight: 0,
+        minHeight: isPhoneSheetForm ? 180 : 0,
         alignSelf: "stretch" as const,
         width: "100%" as const,
         borderRadius: 0,
@@ -1182,9 +1207,11 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     </>
   );
 
-  const saveRowPaddingBottom = readerNewEntryFromReader
-    ? Math.max(8, Math.max(insets.bottom, 12) - readerCardBottomLiftPx)
-    : Math.max(insets.bottom, 12);
+  const saveRowPaddingBottom = isPhoneSheetForm
+    ? SHEET_SAVE_BOTTOM_PADDING_PX
+    : readerNewEntryFromReader
+      ? Math.max(8, Math.max(insets.bottom, 12) - readerCardBottomLiftPx)
+      : Math.max(insets.bottom, 12);
 
   const saveFooterShellStyle = {
     paddingTop: 14,
@@ -1595,7 +1622,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       visible={editorOnboarding.showLayer}
       step={editorOnboarding.currentStep}
       stepAnchor={editorOnboarding.stepAnchor}
-      useWindowOverlay={readerNewEntryFromReader}
+      useWindowOverlay={readerNewEntryFromReader || isPhoneSheetForm}
       colors={{
         tooltipBackground: colors.brown800,
         tooltipText: "#f5f2ec",

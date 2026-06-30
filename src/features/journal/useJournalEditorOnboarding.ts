@@ -6,7 +6,6 @@ import {
 } from "@/lib/feature-onboarding-storage";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import { adjustAnchorForOnboardingModal } from "@/src/components/feature-onboarding/onboardingOverlayCoords";
-import { JOURNAL_EDITOR_ONBOARDING_DEBUG_ALWAYS_START } from "@/src/features/journal/journalEditorOnboardingDebug";
 import {
   JOURNAL_EDITOR_ONBOARDING_STEP_MS,
   JOURNAL_EDITOR_ONBOARDING_STEPS,
@@ -19,23 +18,30 @@ const TOOLBAR_BTN_PX = 40;
 
 type UseJournalEditorOnboardingArgs = {
   enabled: boolean;
-  /** Bump when the parent sheet opens so the tour can restart (pairs with debug flag). */
-  sessionKey: number;
   isReaderNewEntry: boolean;
+  isPhoneSheetForm: boolean;
   targetRefs: Record<JournalEditorOnboardingStepId, RefObject<View | null>>;
   screenW: number;
   screenH: number;
 };
 
-function fallbackTarget(stepId: JournalEditorOnboardingStepId, screenW: number, screenH: number): LayoutRectangle {
-  const toolbarY = screenH * 0.52;
+function fallbackTarget(
+  stepId: JournalEditorOnboardingStepId,
+  screenW: number,
+  screenH: number,
+  isPhoneSheetForm: boolean,
+): LayoutRectangle {
+  const sheetTopPx = isPhoneSheetForm ? 50 : 0;
+  const passageY = sheetTopPx + 32;
+  const titleY = sheetTopPx + 68;
+  const toolbarY = isPhoneSheetForm ? sheetTopPx + 178 : screenH * 0.52 - 70;
   const toolbarRightX = screenW - 16 - TOOLBAR_BTN_PX;
 
   switch (stepId) {
     case "passage-anchoring":
-      return { x: 24, y: screenH * 0.22, width: screenW - 48, height: 44 };
+      return { x: 24, y: passageY, width: screenW - 48, height: 44 };
     case "optional-title":
-      return { x: 24, y: screenH * 0.32, width: screenW - 48, height: 44 };
+      return { x: 24, y: titleY, width: screenW - 48, height: 44 };
     case "rich-text-toolbar":
       return { x: toolbarRightX - TOOLBAR_BTN_PX * 2 - 20, y: toolbarY, width: TOOLBAR_BTN_PX, height: TOOLBAR_BTN_PX };
     case "photo-attachment":
@@ -52,8 +58,8 @@ function anchorWithCoachmarkVerticalOffset(anchor: LayoutRectangle, offsetPx: nu
 
 export function useJournalEditorOnboarding({
   enabled,
-  sessionKey,
   isReaderNewEntry,
+  isPhoneSheetForm,
   targetRefs,
   screenW,
   screenH,
@@ -83,9 +89,7 @@ export function useJournalEditorOnboarding({
   const finishTour = useCallback(() => {
     sessionTokenRef.current += 1;
     resetSession();
-    if (!JOURNAL_EDITOR_ONBOARDING_DEBUG_ALWAYS_START) {
-      void markFeatureOnboardingDone("journalEditor");
-    }
+    void markFeatureOnboardingDone("journalEditor");
   }, [resetSession]);
 
   const measureCurrentStep = useCallback(
@@ -99,15 +103,15 @@ export function useJournalEditorOnboarding({
       });
       if (token !== sessionTokenRef.current) return;
 
-      const rawAnchor = measured ?? fallbackTarget(step.id, screenW, screenH);
+      const rawAnchor = measured ?? fallbackTarget(step.id, screenW, screenH, isPhoneSheetForm);
       const modalAnchor = adjustAnchorForOnboardingModal(rawAnchor);
-      const offsetPx = journalEditorCoachmarkVerticalOffsetPx(step.id, isReaderNewEntry);
+      const offsetPx = journalEditorCoachmarkVerticalOffsetPx(step.id, isReaderNewEntry, isPhoneSheetForm);
       const anchor = anchorWithCoachmarkVerticalOffset(modalAnchor, offsetPx);
 
       setStepAnchor(anchor);
       setPresentedStepIndex(index);
     },
-    [isReaderNewEntry, screenH, screenW, targetRefs],
+    [isPhoneSheetForm, isReaderNewEntry, screenH, screenW, targetRefs],
   );
 
   useEffect(() => {
@@ -122,9 +126,7 @@ export function useJournalEditorOnboarding({
 
     const startTimeout = setTimeout(() => {
       void (async () => {
-        const done = JOURNAL_EDITOR_ONBOARDING_DEBUG_ALWAYS_START
-          ? false
-          : await isFeatureOnboardingDone("journalEditor");
+        const done = await isFeatureOnboardingDone("journalEditor");
         if (token !== sessionTokenRef.current) return;
         if (done) return;
 
@@ -146,7 +148,7 @@ export function useJournalEditorOnboarding({
     return () => {
       clearTimeout(startTimeout);
     };
-  }, [enabled, sessionKey, finishTour, resetSession]);
+  }, [enabled, finishTour, resetSession]);
 
   useEffect(() => {
     if (!active) return;

@@ -1,18 +1,9 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  type Dispatch,
-  type RefObject,
-  type SetStateAction,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 import type { GestureResponderEvent, PanResponderGestureState } from "react-native";
-import { Alert, Animated, BackHandler, Dimensions, Easing, PanResponder, Platform } from "react-native";
+import { Animated, BackHandler, Dimensions, Easing, PanResponder, Platform } from "react-native";
 import Reanimated from "react-native-reanimated";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
-import type { JournalNewEntryFormHandle } from "@/components/journal-new-entry-form";
 import type { TranslationId } from "@sinag-bible/core/bible-translations";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
 
@@ -89,10 +80,6 @@ export function useReaderGestures({
   readerDropdown,
   toolsMenuOpen,
   settingsMenuAnchor,
-  newEntrySheetOpen,
-  setNewEntrySheetOpen,
-  newEntryHasDraft,
-  newEntryFormRef,
   setBookViewMenuOpen,
 }: {
   bookSlug: string | undefined;
@@ -112,10 +99,6 @@ export function useReaderGestures({
   readerDropdown: "book" | "translation" | "theme" | null;
   toolsMenuOpen: boolean;
   settingsMenuAnchor: import("react-native").LayoutRectangle | null;
-  newEntrySheetOpen: boolean;
-  setNewEntrySheetOpen: Dispatch<SetStateAction<boolean>>;
-  newEntryHasDraft: boolean;
-  newEntryFormRef: RefObject<JournalNewEntryFormHandle | null>;
   setBookViewMenuOpen: Dispatch<SetStateAction<boolean>>;
 }) {
   const dropSlideAnim = useRef(new Animated.Value(0)).current;
@@ -134,10 +117,6 @@ export function useReaderGestures({
   const readerScrollRef = useRef<FlashListRef<ReaderVerseFlashItem> | null>(null);
   /** Drives cross-fade between in-content heading and stack header title (native scroll events). */
   const readerScrollYAnim = useRef(new Animated.Value(0)).current;
-
-  const newEntrySheetOpacity = useRef(new Animated.Value(0)).current;
-  const newEntrySheetTranslate = useRef(new Animated.Value(20)).current;
-  const newEntrySheetClosingRef = useRef(false);
 
   useEffect(() => {
     return registerTabScrollRef("reader", {
@@ -388,191 +367,6 @@ export function useReaderGestures({
     dismissReaderChromeFromBackgroundPress();
   }, [dismissReaderChromeFromBackgroundPress]);
 
-  const animateCloseNewEntrySheet = useCallback(
-    (velocityY = 0, draggedY = 0) => {
-      if (newEntrySheetClosingRef.current) return;
-      newEntrySheetClosingRef.current = true;
-
-      const screenHeight = Dimensions.get("window").height;
-      const sheetMaxHeight = Math.min(660, screenHeight * 0.8);
-      const targetTranslateY = sheetMaxHeight + 40;
-      const clampedDragY = Math.max(0, draggedY);
-      const velocity = Math.max(0, velocityY);
-      const duration = Math.max(150, Math.min(320, Math.round(280 - Math.min(1.8, velocity) * 90)));
-
-      Animated.parallel([
-        Animated.timing(newEntrySheetTranslate, {
-          toValue: targetTranslateY,
-          duration,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(newEntrySheetOpacity, {
-          toValue: 0,
-          duration: Math.max(180, duration + 90),
-          delay: 80,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        newEntrySheetClosingRef.current = false;
-        setNewEntrySheetOpen(false);
-        newEntrySheetTranslate.setValue(20);
-        newEntrySheetOpacity.setValue(0);
-      });
-
-      if (clampedDragY > 0) {
-        newEntrySheetTranslate.setValue(clampedDragY);
-      }
-    },
-    [newEntrySheetOpacity, newEntrySheetTranslate, setNewEntrySheetOpen],
-  );
-
-  const closeNewEntrySheet = useCallback(() => {
-    animateCloseNewEntrySheet(0.45, 0);
-  }, [animateCloseNewEntrySheet]);
-
-  const springReaderNewEntryOpen = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(newEntrySheetTranslate, {
-        toValue: 0,
-        friction: 9,
-        tension: 75,
-        useNativeDriver: true,
-      }),
-      Animated.timing(newEntrySheetOpacity, {
-        toValue: 1,
-        duration: 170,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [newEntrySheetOpacity, newEntrySheetTranslate]);
-
-  const confirmReaderNewEntryDraftClose = useCallback(() => {
-    Alert.alert("Save or discard?", "You have unsaved text in this draft.", [
-      { text: "Keep editing", style: "cancel" },
-      { text: "Save", onPress: () => newEntryFormRef.current?.save() },
-      { text: "Discard", style: "destructive", onPress: closeNewEntrySheet },
-    ]);
-  }, [closeNewEntrySheet, newEntryFormRef]);
-
-  useEffect(() => {
-    if (!newEntrySheetOpen) return;
-    newEntrySheetClosingRef.current = false;
-    newEntrySheetOpacity.setValue(0);
-    newEntrySheetTranslate.setValue(20);
-    Animated.parallel([
-      Animated.timing(newEntrySheetOpacity, {
-        toValue: 1,
-        duration: 240,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.spring(newEntrySheetTranslate, {
-        toValue: 0,
-        friction: 8,
-        tension: 65,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [newEntrySheetOpen, newEntrySheetOpacity, newEntrySheetTranslate]);
-
-  const newEntryHandlePanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => newEntrySheetOpen,
-        onMoveShouldSetPanResponder: (_e, g) =>
-          newEntrySheetOpen && g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
-        onPanResponderTerminationRequest: () => true,
-        onPanResponderGrant: () => {
-          newEntrySheetTranslate.stopAnimation();
-          newEntrySheetOpacity.stopAnimation();
-        },
-        onPanResponderMove: (_e, g) => {
-          if (!newEntrySheetOpen || newEntrySheetClosingRef.current) return;
-          const dragY = Math.max(0, g.dy);
-          newEntrySheetTranslate.setValue(dragY);
-          newEntrySheetOpacity.setValue(Math.max(0.82, 1 - dragY / 900));
-        },
-        onPanResponderRelease: (_e, g) => {
-          if (!newEntrySheetOpen || newEntrySheetClosingRef.current) return;
-          const dragY = Math.max(0, g.dy);
-          const shouldClose = dragY > 90 || g.vy > 0.55;
-          if (shouldClose) {
-            if (newEntryHasDraft) {
-              springReaderNewEntryOpen();
-              confirmReaderNewEntryDraftClose();
-              return;
-            }
-            animateCloseNewEntrySheet(g.vy, dragY);
-            return;
-          }
-          Animated.parallel([
-            Animated.spring(newEntrySheetTranslate, {
-              toValue: 0,
-              velocity: Math.max(0, g.vy),
-              friction: 9,
-              tension: 75,
-              useNativeDriver: true,
-            }),
-            Animated.timing(newEntrySheetOpacity, {
-              toValue: 1,
-              duration: 170,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]).start();
-        },
-        onPanResponderTerminate: (_e, g) => {
-          if (!newEntrySheetOpen || newEntrySheetClosingRef.current) return;
-          const dragY = Math.max(0, g.dy);
-          const shouldClose = dragY > 90 || g.vy > 0.55;
-          if (shouldClose) {
-            if (newEntryHasDraft) {
-              springReaderNewEntryOpen();
-              confirmReaderNewEntryDraftClose();
-              return;
-            }
-            animateCloseNewEntrySheet(g.vy, dragY);
-            return;
-          }
-          Animated.parallel([
-            Animated.spring(newEntrySheetTranslate, {
-              toValue: 0,
-              velocity: Math.max(0, g.vy),
-              friction: 9,
-              tension: 75,
-              useNativeDriver: true,
-            }),
-            Animated.timing(newEntrySheetOpacity, {
-              toValue: 1,
-              duration: 170,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]).start();
-        },
-      }),
-    [
-      animateCloseNewEntrySheet,
-      confirmReaderNewEntryDraftClose,
-      newEntryHasDraft,
-      newEntrySheetOpen,
-      newEntrySheetOpacity,
-      newEntrySheetTranslate,
-      springReaderNewEntryOpen,
-    ],
-  );
-
-  const requestCloseReaderNewEntrySheet = useCallback(() => {
-    if (!newEntryHasDraft) {
-      closeNewEntrySheet();
-      return;
-    }
-    confirmReaderNewEntryDraftClose();
-  }, [newEntryHasDraft, closeNewEntrySheet, confirmReaderNewEntryDraftClose]);
-
   return {
     dropSlideAnim,
     dropOpacityAnim,
@@ -590,13 +384,6 @@ export function useReaderGestures({
     chapterSwipePan,
     noopChapterSwipePan,
     onReaderScrollBeginDrag,
-    newEntrySheetOpacity,
-    newEntrySheetTranslate,
-    newEntryHandlePanResponder,
-    animateCloseNewEntrySheet,
-    closeNewEntrySheet,
-    confirmReaderNewEntryDraftClose,
-    requestCloseReaderNewEntrySheet,
     chapterSwipePanHandlers: (readerOverlayOpen ? noopChapterSwipePan : chapterSwipePan).panHandlers,
   };
 }

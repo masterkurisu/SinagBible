@@ -39,11 +39,6 @@ import { FullWindowOverlay } from "react-native-screens";
 import { getUsfmBookId } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import { mobileAppThemePickerOptions } from "@sinag-bible/tokens";
-import {
-  JournalNewEntryForm,
-  type JournalNewEntryFormHandle,
-  type JournalNewEntryInitialParams,
-} from "@/components/journal-new-entry-form";
 import { BookIcon } from "@/components/icons/BookIcon";
 import { StudyNotesResearchIcon } from "@/components/icons/StudyNotesResearchIcon";
 import { ReaderFontSettingsIcon } from "@/components/icons/ReaderFontSettingsIcon";
@@ -355,7 +350,6 @@ export type ReaderModalsProps = {
   bundle: MobileAppThemeBundle;
   chapter: BibleChapter;
   closeCommentaryPanel: () => void;
-  closeNewEntrySheet: () => void;
   closeReaderDropdown: () => void;
   colors: {
     borderSolid: string;
@@ -379,17 +373,6 @@ export type ReaderModalsProps = {
     ref: React.RefObject<View | null>,
     kind: ReaderToolsDropdown,
   ) => void;
-  newEntryFormRef: React.RefObject<JournalNewEntryFormHandle | null>;
-  newEntryHandlePanResponder: ReturnType<typeof import("react-native").PanResponder.create>;
-  newEntryInitialParams: JournalNewEntryInitialParams | null;
-  newEntrySheetBottomPx: number;
-  newEntrySheetKey: number;
-  newEntrySheetLeft: number;
-  newEntrySheetOpacity: Animated.Value;
-  newEntrySheetOpen: boolean;
-  newEntrySheetTopPx: number;
-  newEntrySheetTranslate: Animated.Value;
-  newEntrySheetWidth: number;
   noteDraft: string;
   noteModalVisible: boolean;
   commentaryPanelOpen: boolean;
@@ -406,13 +389,10 @@ export type ReaderModalsProps = {
   readerDropdownLeft: number;
   readerDropdownMaxW: number;
   readerDropdownTop: number;
-  readerNewEntrySheetBottomLiftPx: number;
-  requestCloseReaderNewEntrySheet: () => void;
   resolvedTranslationId: string;
   translationLanguageLabel: string;
   saveNoteFromModal: () => void;
   selectedVerses: number[];
-  setNewEntryHasDraft: (v: boolean) => void;
   setNoteDraft: React.Dispatch<React.SetStateAction<string>>;
   setNoteModalVisible: React.Dispatch<React.SetStateAction<boolean>>;
   setNoteTargetVerse: React.Dispatch<React.SetStateAction<number | null>>;
@@ -465,7 +445,6 @@ bundle,
     setBookSheetExitAnimationStarted,
     commentaryPanelOpen,
     closeCommentaryPanel,
-    closeNewEntrySheet,
     closeReaderDropdown,
     colors,
     dropOpacityAnim,
@@ -475,17 +454,6 @@ bundle,
     insets,
     isTabletReaderLayout,
     measureAndSetDropdown,
-    newEntryFormRef,
-    newEntryHandlePanResponder,
-    newEntryInitialParams,
-    newEntrySheetBottomPx,
-    newEntrySheetKey,
-    newEntrySheetLeft,
-    newEntrySheetOpacity,
-    newEntrySheetOpen,
-    newEntrySheetTopPx,
-    newEntrySheetTranslate,
-    newEntrySheetWidth,
     noteDraft,
     noteModalVisible,
     noteTargetVerse,
@@ -501,13 +469,10 @@ bundle,
     readerDropdownLeft,
     readerDropdownMaxW,
     readerDropdownTop,
-    readerNewEntrySheetBottomLiftPx,
-    requestCloseReaderNewEntrySheet,
     resolvedTranslationId,
     translationLanguageLabel,
     saveNoteFromModal,
     selectedVerses,
-    setNewEntryHasDraft,
     setNoteDraft,
     setNoteModalVisible,
     setNoteTargetVerse,
@@ -790,97 +755,6 @@ bundle,
 
   return (
     <>
-<Modal
-  visible={newEntrySheetOpen}
-  transparent
-  animationType="none"
-  statusBarTranslucent
-  onRequestClose={requestCloseReaderNewEntrySheet}
->
-  <View pointerEvents="box-none" style={{ flex: 1 }}>
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Dismiss new entry"
-      onPress={requestCloseReaderNewEntrySheet}
-      style={[StyleSheet.absoluteFill, { backgroundColor: bundle.journal.newEntryRouteScrim }]}
-    />
-    <Animated.View
-      pointerEvents="box-none"
-      style={{
-        position: "absolute",
-        left: newEntrySheetLeft,
-        width: newEntrySheetWidth,
-        top: newEntrySheetTopPx,
-        bottom: newEntrySheetBottomPx + readerNewEntrySheetBottomLiftPx,
-        opacity: newEntrySheetOpacity,
-        transform: [{ translateY: newEntrySheetTranslate }],
-      }}
-    >
-      <View style={{ flex: 1, minHeight: 0 }}>
-        <View
-          style={{
-            flex: 1,
-            minHeight: 0,
-            borderRadius: 24,
-            borderWidth: 1,
-            borderColor: bundle.journal.newEntrySheetBorder,
-            backgroundColor: bundle.journal.newEntrySheetBackground,
-            overflow: "hidden",
-            shadowColor: rc.popoverShadow,
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.14,
-            shadowRadius: 16,
-            elevation: 10,
-          }}
-        >
-          <View
-            {...newEntryHandlePanResponder.panHandlers}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              paddingTop: 6,
-              paddingBottom: 4,
-              backgroundColor: bundle.journal.newEntryDragAreaBackground,
-            }}
-          >
-            <View
-              style={{
-                width: 56,
-                height: 6,
-                borderRadius: 999,
-                backgroundColor: "rgba(123,106,86,0.35)",
-              }}
-            />
-          </View>
-          <View
-            style={{
-              flex: 1,
-              minHeight: 0,
-              paddingHorizontal: 0,
-              paddingTop: 4,
-              paddingBottom: 8,
-            }}
-          >
-            <JournalNewEntryForm
-              ref={newEntryFormRef}
-              key={newEntrySheetKey}
-              onboardingSessionKey={newEntrySheetKey}
-              initialParams={newEntryInitialParams ?? undefined}
-              contentHorizontalPadding={10}
-              readerNewEntryScrollable
-              readerCardBottomLiftPx={readerNewEntrySheetBottomLiftPx}
-              onDirtyChange={setNewEntryHasDraft}
-              onAfterSave={() => {
-                closeNewEntrySheet();
-              }}
-            />
-          </View>
-        </View>
-      </View>
-    </Animated.View>
-  </View>
-</Modal>
-
 <Modal
   visible={readerDropdown === "theme"}
   transparent

@@ -64,19 +64,22 @@ import { ReaderSettingsCogIcon } from "@/components/icons/ReaderSettingsCogIcon"
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
-import { nativeTabFabOffsetPx, nativeTabSheetBottomInsetPx, readerAndroidListBottomPaddingPx, readerAndroidTabBarClearancePx } from "@/lib/native-tab-chrome";
+import { nativeTabFabOffsetPx, readerAndroidListBottomPaddingPx, readerAndroidTabBarClearancePx } from "@/lib/native-tab-chrome";
 import { READER_SCROLL_JS_BRIDGE_DELTA_PX } from "@/lib/device-capability";
 import { useReaderTabBarScrollHidden, useRegisterReaderSettingsSlideProgress } from "@/lib/reader-tab-bar-visibility-context";
 import {
   READER_SETTINGS_MENU_SPRING_CLOSE,
   READER_SETTINGS_MENU_SPRING_OPEN,
 } from "@/lib/reader-settings-menu-motion";
-import { isTabletLayout, isReaderTabletLandscapeTwoColumn, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
+import { isTabletLayout, isReaderTabletLandscapeTwoColumn } from "@/lib/tablet-layout";
 import {
-  JournalNewEntryForm,
   type JournalNewEntryFormHandle,
   type JournalNewEntryInitialParams,
 } from "@/components/journal-new-entry-form";
+import {
+  JournalNewEntrySheet,
+  type JournalNewEntrySheetHandle,
+} from "@/src/features/journal/JournalNewEntrySheet";
 import { PrivacyPolicySheet } from "@/components/privacy-policy-sheet";
 import { CreditsSheet } from "@/components/credits-sheet";
 import { TermsOfServiceSheet } from "@/components/terms-of-service-sheet";
@@ -276,7 +279,6 @@ export default function ReaderChapterScreen() {
   const [newEntrySheetKey, setNewEntrySheetKey] = useState(0);
   const [newEntryInitialParams, setNewEntryInitialParams] =
     useState<JournalNewEntryInitialParams | null>(null);
-  const [newEntryHasDraft, setNewEntryHasDraft] = useState(false);
   const [selectionActivity, setSelectionActivity] = useState<ReaderSelectionActivity>(() => ({
     selectedVerses: [],
     noteModalVisible: false,
@@ -333,10 +335,7 @@ export default function ReaderChapterScreen() {
     [readerHeadingFadeEndPx],
   );
   const newEntryFormRef = useRef<JournalNewEntryFormHandle | null>(null);
-
-  const newEntrySheetOpacity = useRef(new Animated.Value(0)).current;
-  const newEntrySheetTranslate = useRef(new Animated.Value(20)).current;
-  const newEntrySheetClosingRef = useRef(false);
+  const newEntrySheetRef = useRef<JournalNewEntrySheetHandle | null>(null);
 
   const readerSettingsSlideProgress = useRef(new Animated.Value(0)).current;
   const readerSettingsMenuDragStartProgressRef = useRef(1);
@@ -622,190 +621,9 @@ export default function ReaderChapterScreen() {
     setCommentaryPanelOpen(true);
   }, []);
 
-  const animateCloseNewEntrySheet = useCallback(
-    (velocityY = 0, draggedY = 0) => {
-      if (newEntrySheetClosingRef.current) return;
-      newEntrySheetClosingRef.current = true;
-
-      const screenHeight = Dimensions.get("window").height;
-      const sheetMaxHeight = Math.min(660, screenHeight * 0.8);
-      const targetTranslateY = sheetMaxHeight + 40;
-      const clampedDragY = Math.max(0, draggedY);
-      const velocity = Math.max(0, velocityY);
-      const duration = Math.max(150, Math.min(320, Math.round(280 - Math.min(1.8, velocity) * 90)));
-
-      Animated.parallel([
-        Animated.timing(newEntrySheetTranslate, {
-          toValue: targetTranslateY,
-          duration,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(newEntrySheetOpacity, {
-          toValue: 0,
-          duration: Math.max(180, duration + 90),
-          delay: 80,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        newEntrySheetClosingRef.current = false;
-        setNewEntrySheetOpen(false);
-        newEntrySheetTranslate.setValue(20);
-        newEntrySheetOpacity.setValue(0);
-      });
-
-      if (clampedDragY > 0) {
-        newEntrySheetTranslate.setValue(clampedDragY);
-      }
-    },
-    [newEntrySheetOpacity, newEntrySheetTranslate],
-  );
-
   const closeNewEntrySheet = useCallback(() => {
-    animateCloseNewEntrySheet(0.45, 0);
-  }, [animateCloseNewEntrySheet]);
-
-  const springReaderNewEntryOpen = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(newEntrySheetTranslate, {
-        toValue: 0,
-        friction: 9,
-        tension: 75,
-        useNativeDriver: true,
-      }),
-      Animated.timing(newEntrySheetOpacity, {
-        toValue: 1,
-        duration: 170,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [newEntrySheetOpacity, newEntrySheetTranslate]);
-
-  const confirmReaderNewEntryDraftClose = useCallback(() => {
-    Alert.alert("Save or discard?", "You have unsaved text in this draft.", [
-      { text: "Keep editing", style: "cancel" },
-      { text: "Save", onPress: () => newEntryFormRef.current?.save() },
-      { text: "Discard", style: "destructive", onPress: closeNewEntrySheet },
-    ]);
-  }, [closeNewEntrySheet]);
-
-  const requestCloseReaderNewEntrySheet = useCallback(() => {
-    if (!newEntryHasDraft) {
-      closeNewEntrySheet();
-      return;
-    }
-    confirmReaderNewEntryDraftClose();
-  }, [newEntryHasDraft, closeNewEntrySheet, confirmReaderNewEntryDraftClose]);
-
-  useEffect(() => {
-    if (!newEntrySheetOpen) return;
-    newEntrySheetClosingRef.current = false;
-    newEntrySheetOpacity.setValue(0);
-    newEntrySheetTranslate.setValue(20);
-    Animated.parallel([
-      Animated.timing(newEntrySheetOpacity, {
-        toValue: 1,
-        duration: 240,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.spring(newEntrySheetTranslate, {
-        toValue: 0,
-        friction: 8,
-        tension: 65,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [newEntrySheetOpen, newEntrySheetOpacity, newEntrySheetTranslate]);
-
-  const newEntryHandlePanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => newEntrySheetOpen,
-        onMoveShouldSetPanResponder: (_e, g) =>
-          newEntrySheetOpen && g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
-        onPanResponderTerminationRequest: () => true,
-        onPanResponderGrant: () => {
-          newEntrySheetTranslate.stopAnimation();
-          newEntrySheetOpacity.stopAnimation();
-        },
-        onPanResponderMove: (_e, g) => {
-          if (!newEntrySheetOpen || newEntrySheetClosingRef.current) return;
-          const dragY = Math.max(0, g.dy);
-          newEntrySheetTranslate.setValue(dragY);
-          newEntrySheetOpacity.setValue(Math.max(0.82, 1 - dragY / 900));
-        },
-        onPanResponderRelease: (_e, g) => {
-          if (!newEntrySheetOpen || newEntrySheetClosingRef.current) return;
-          const dragY = Math.max(0, g.dy);
-          const shouldClose = dragY > 90 || g.vy > 0.55;
-          if (shouldClose) {
-            if (newEntryHasDraft) {
-              springReaderNewEntryOpen();
-              confirmReaderNewEntryDraftClose();
-              return;
-            }
-            animateCloseNewEntrySheet(g.vy, dragY);
-            return;
-          }
-          Animated.parallel([
-            Animated.spring(newEntrySheetTranslate, {
-              toValue: 0,
-              velocity: Math.max(0, g.vy),
-              friction: 9,
-              tension: 75,
-              useNativeDriver: true,
-            }),
-            Animated.timing(newEntrySheetOpacity, {
-              toValue: 1,
-              duration: 170,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]).start();
-        },
-        onPanResponderTerminate: (_e, g) => {
-          if (!newEntrySheetOpen || newEntrySheetClosingRef.current) return;
-          const dragY = Math.max(0, g.dy);
-          const shouldClose = dragY > 90 || g.vy > 0.55;
-          if (shouldClose) {
-            if (newEntryHasDraft) {
-              springReaderNewEntryOpen();
-              confirmReaderNewEntryDraftClose();
-              return;
-            }
-            animateCloseNewEntrySheet(g.vy, dragY);
-            return;
-          }
-          Animated.parallel([
-            Animated.spring(newEntrySheetTranslate, {
-              toValue: 0,
-              velocity: Math.max(0, g.vy),
-              friction: 9,
-              tension: 75,
-              useNativeDriver: true,
-            }),
-            Animated.timing(newEntrySheetOpacity, {
-              toValue: 1,
-              duration: 170,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]).start();
-        },
-      }),
-    [
-      animateCloseNewEntrySheet,
-      confirmReaderNewEntryDraftClose,
-      newEntryHasDraft,
-      newEntrySheetOpen,
-      newEntrySheetOpacity,
-      newEntrySheetTranslate,
-      springReaderNewEntryOpen,
-    ],
-  );
+    setNewEntrySheetOpen(false);
+  }, []);
 
   const measureAndSetDropdown = useCallback(
     (ref: RefObject<View | null>, kind: ReaderToolsDropdown) => {
@@ -1455,7 +1273,6 @@ export default function ReaderChapterScreen() {
    */
   const chapterSwipePanHandlers = (readerOverlayOpen ? noopChapterSwipePan : chapterSwipePan).panHandlers;
 
-  const newEntrySheetBottomPx = nativeTabSheetBottomInsetPx(insets.bottom, 10);
   /** Book picker sheet: 20px gap above the bottom safe area (full-window overlay; not tab-bar offset). */
   const readerBookSheetBottomPx = insets.bottom + 20;
   /**
@@ -1463,23 +1280,6 @@ export default function ReaderChapterScreen() {
    * tablets need less or the in-card layout leaves a big empty band above the save row.
    */
   const readerNewEntrySheetBottomLiftPx = isTabletLayout(windowWidth, windowHeight) ? 12 : 50;
-  const newEntrySheetTopGutterPx = insets.top + 8;
-  const newEntrySheetBottomInsetWithLiftPx = newEntrySheetBottomPx + readerNewEntrySheetBottomLiftPx;
-  const newEntrySheetAvailableHeightPx = Math.max(
-    320,
-    windowHeight - newEntrySheetTopGutterPx - newEntrySheetBottomInsetWithLiftPx,
-  );
-  /**
-   * Reader new-entry sheet:
-   * - iOS/tablet: keep existing fill behavior from top gutter to bottom inset.
-   * - Android phones: cap height so very tall screens do not introduce a large empty area.
-   */
-  const newEntrySheetTargetHeightPx =
-    Platform.OS === "android" && !isTabletReaderLayout
-      ? Math.min(newEntrySheetAvailableHeightPx, Math.round(windowHeight * 0.76))
-      : newEntrySheetAvailableHeightPx;
-  const newEntrySheetTopPx =
-    windowHeight - newEntrySheetBottomInsetWithLiftPx - newEntrySheetTargetHeightPx;
 
   const screenW = windowWidth;
   /** Horizontal gap between sheet card and window edge. */
@@ -1494,14 +1294,6 @@ export default function ReaderChapterScreen() {
   const readerChapterGridCellW =
     (readerBookSheetContentW - readerBookSheetPad * 2 - readerBookGridGap * (readerChapterCols - 1)) /
     readerChapterCols;
-  const newEntrySheetHorizontalInset = insets.left + 2;
-  const newEntrySheetWidth = Math.min(
-    windowWidth - newEntrySheetHorizontalInset * 2,
-    isTabletLayout(windowWidth, windowHeight)
-      ? TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX
-      : windowWidth - newEntrySheetHorizontalInset * 2,
-  );
-  const newEntrySheetLeft = Math.max(newEntrySheetHorizontalInset, (windowWidth - newEntrySheetWidth) / 2);
   /** Keep a floor so theme/translation popovers always get a sane width (avoids 0‑width tiles when `screenW` is briefly 0). */
   const readerDropdownMaxW = Math.min(340, Math.max(200, screenW - 24));
   const fontSettingsScale = isTabletReaderLayout ? 1.5 : 1;
@@ -1832,12 +1624,23 @@ export default function ReaderChapterScreen() {
         </View>
       ) : null}
 
+      <JournalNewEntrySheet
+        ref={newEntrySheetRef}
+        open={newEntrySheetOpen}
+        onClose={closeNewEntrySheet}
+        sheetKey={newEntrySheetKey}
+        variant="reader"
+        formRef={newEntryFormRef}
+        initialParams={newEntryInitialParams ?? undefined}
+        readerBottomLiftPx={readerNewEntrySheetBottomLiftPx}
+        onAfterSave={closeNewEntrySheet}
+      />
+
       <ReaderModals
         bundle={bundle}
         chapter={chapter}
         commentaryPanelOpen={commentaryPanelOpen}
         closeCommentaryPanel={() => setCommentaryPanelOpen(false)}
-        closeNewEntrySheet={closeNewEntrySheet}
         closeReaderDropdown={closeReaderDropdown}
         colors={colors}
         dropOpacityAnim={dropOpacityAnim}
@@ -1849,17 +1652,6 @@ export default function ReaderChapterScreen() {
         insets={insets}
         isTabletReaderLayout={isTabletReaderLayout}
         measureAndSetDropdown={measureAndSetDropdown}
-        newEntryFormRef={newEntryFormRef}
-        newEntryHandlePanResponder={newEntryHandlePanResponder}
-        newEntryInitialParams={newEntryInitialParams}
-        newEntrySheetBottomPx={newEntrySheetBottomPx}
-        newEntrySheetKey={newEntrySheetKey}
-        newEntrySheetLeft={newEntrySheetLeft}
-        newEntrySheetOpacity={newEntrySheetOpacity}
-        newEntrySheetOpen={newEntrySheetOpen}
-        newEntrySheetTopPx={newEntrySheetTopPx}
-        newEntrySheetTranslate={newEntrySheetTranslate}
-        newEntrySheetWidth={newEntrySheetWidth}
         noteDraft={noteDraft}
         noteModalVisible={noteModalVisible}
         noteTargetVerse={noteTargetVerse}
@@ -1875,13 +1667,10 @@ export default function ReaderChapterScreen() {
         readerDropdownLeft={readerDropdownLeft}
         readerDropdownMaxW={readerDropdownMaxW}
         readerDropdownTop={readerDropdownTop}
-        readerNewEntrySheetBottomLiftPx={readerNewEntrySheetBottomLiftPx}
-        requestCloseReaderNewEntrySheet={requestCloseReaderNewEntrySheet}
         resolvedTranslationId={resolvedTranslationId}
         translationLanguageLabel={readerHeaderLanguageLabel}
         saveNoteFromModal={saveNoteFromModal}
         selectedVerses={selectedVerses}
-        setNewEntryHasDraft={setNewEntryHasDraft}
         setNoteDraft={setNoteDraft}
         setNoteModalVisible={setNoteModalVisible}
         setNoteTargetVerse={setNoteTargetVerse}

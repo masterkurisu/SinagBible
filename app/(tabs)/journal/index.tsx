@@ -7,8 +7,6 @@ import {
   StyleSheet,
   Animated,
   Easing,
-  Keyboard,
-  PanResponder,
   Platform,
   InteractionManager,
   useWindowDimensions,
@@ -32,13 +30,14 @@ import {
 import { stripHtmlPreview } from "@/lib/journal-preview";
 import {
   journalTabNewEntryFabBottomPx,
-  JOURNAL_NEW_ENTRY_FORM_TOP_OFFSET_PX,
-  nativeFloatingTabBarTopReservePx,
   nativeTabJournalListPaddingBottomPx,
 } from "@/lib/native-tab-chrome";
-import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 import { ScreenLoadingSkeleton } from "@/components/loading-skeleton";
-import { JournalNewEntryForm, type JournalNewEntryFormHandle } from "@/components/journal-new-entry-form";
+import { type JournalNewEntryFormHandle } from "@/components/journal-new-entry-form";
+import {
+  JournalNewEntrySheet,
+  type JournalNewEntrySheetHandle,
+} from "@/src/features/journal/JournalNewEntrySheet";
 import { JournalSwipeableListRow } from "@/components/journal-swipeable-list-row";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
 import { hapticLightImpact } from "@/lib/haptics";
@@ -46,10 +45,7 @@ import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboarding
 import { useJournalOnboarding } from "@/src/features/journal/useJournalOnboarding";
 import type { JournalOnboardingStepId } from "@/src/features/journal/journalOnboardingSteps";
 
-const SHEET_GAP_ABOVE_FAB_PX = 12;
 const FAB_SIZE_PX = 72;
-/** Journal tab new-entry sheet: total drop from screen top (base offset + extra clearance). */
-const JOURNAL_TAB_NEW_ENTRY_TOP_OFFSET_PX = JOURNAL_NEW_ENTRY_FORM_TOP_OFFSET_PX + 30;
 /**
  * Lift above the native tab bar. Reduced by 40px after the SDK 56 NativeTabs upgrade, which
  * already insets tab content from the bottom safe area.
@@ -374,8 +370,6 @@ export default function JournalIndexScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   const [newEntrySheetKey, setNewEntrySheetKey] = useState(0);
-  const [newEntryHasDraft, setNewEntryHasDraft] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   const listRef = useRef<FlatList<JournalRow> | null>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastAnimRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -396,39 +390,11 @@ export default function JournalIndexScreen() {
   );
 
   const fabBottom = journalTabNewEntryFabBottomPx(insets.bottom, JOURNAL_FAB_PLATFORM_LIFT_PX);
-  const cardBottom = fabBottom + FAB_SIZE_PX + SHEET_GAP_ABOVE_FAB_PX;
-  const isTablet = isTabletLayout(windowWidth, windowHeight);
-  const sheetHorizontalInset = insets.left + 2;
-  const sheetMaxWidth = isTablet ? TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX : undefined;
-  const sheetWidth = Math.min(
-    windowWidth - sheetHorizontalInset * 2,
-    sheetMaxWidth ?? windowWidth - sheetHorizontalInset * 2,
-  );
-  const sheetLeft = Math.max(sheetHorizontalInset, (windowWidth - sheetWidth) / 2);
-  /**
-   * Keep sheet top below status bar; on iPad landscape add space for the floating top tab pill
-   * (not part of safe-area insets).
-   */
-  const sheetTopGutter =
-    12 +
-    nativeFloatingTabBarTopReservePx(
-      windowWidth > windowHeight,
-      isTablet,
-    );
-  const sheetMaxHeight = Math.max(
-    280,
-    Math.min(
-      600,
-      windowHeight * 0.72 + 80,
-      Math.max(280, windowHeight - cardBottom - insets.top - sheetTopGutter),
-    ) - JOURNAL_TAB_NEW_ENTRY_TOP_OFFSET_PX,
-  );
-
   const fabSpin = useRef(new Animated.Value(0)).current;
-  const sheetOpacity = useRef(new Animated.Value(0)).current;
-  const sheetTranslate = useRef(new Animated.Value(20)).current;
-  const sheetClosingRef = useRef(false);
   const newEntryFormRef = useRef<JournalNewEntryFormHandle | null>(null);
+  const newEntrySheetRef = useRef<JournalNewEntrySheetHandle | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
   useEffect(() => {
     Animated.timing(fabSpin, {
       toValue: newEntryOpen ? 1 : 0,
@@ -438,200 +404,18 @@ export default function JournalIndexScreen() {
     }).start();
   }, [newEntryOpen, fabSpin]);
 
-  useEffect(() => {
-    if (!newEntryOpen) return;
-    sheetClosingRef.current = false;
-    sheetOpacity.setValue(0);
-    sheetTranslate.setValue(20);
-    Animated.parallel([
-      Animated.timing(sheetOpacity, {
-        toValue: 1,
-        duration: 240,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.spring(sheetTranslate, {
-        toValue: 0,
-        friction: 8,
-        tension: 65,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [newEntryOpen, sheetOpacity, sheetTranslate]);
-
-  const animateCloseNewEntrySheet = useCallback(
-    (velocityY = 0, draggedY = 0) => {
-      if (sheetClosingRef.current) return;
-      sheetClosingRef.current = true;
-      Keyboard.dismiss();
-
-      const targetTranslateY = sheetMaxHeight + 40;
-      const clampedDragY = Math.max(0, draggedY);
-      const velocity = Math.max(0, velocityY);
-      const duration = Math.max(150, Math.min(320, Math.round(280 - Math.min(1.8, velocity) * 90)));
-
-      if (clampedDragY > 0) {
-        sheetTranslate.setValue(clampedDragY);
-      }
-
-      Animated.parallel([
-        Animated.timing(sheetTranslate, {
-          toValue: targetTranslateY,
-          duration,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(sheetOpacity, {
-          toValue: 0,
-          duration: Math.max(180, duration + 90),
-          delay: 80,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        sheetClosingRef.current = false;
-        setNewEntryOpen(false);
-        sheetTranslate.setValue(20);
-        sheetOpacity.setValue(0);
-      });
-    },
-    [sheetMaxHeight, sheetOpacity, sheetTranslate],
-  );
-
   const closeNewEntrySheet = useCallback(() => {
-    animateCloseNewEntrySheet(0.45, 0);
-  }, [animateCloseNewEntrySheet]);
-
-  const springJournalNewEntryOpen = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(sheetTranslate, {
-        toValue: 0,
-        friction: 9,
-        tension: 75,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetOpacity, {
-        toValue: 1,
-        duration: 170,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [sheetOpacity, sheetTranslate]);
-
-  const confirmJournalNewEntryDraftClose = useCallback(() => {
-    Alert.alert("Save or discard?", "You have unsaved text in this draft.", [
-      { text: "Keep editing", style: "cancel" },
-      { text: "Save", onPress: () => newEntryFormRef.current?.save() },
-      { text: "Discard", style: "destructive", onPress: closeNewEntrySheet },
-    ]);
-  }, [closeNewEntrySheet]);
-
-  const newEntryHandlePanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => newEntryOpen,
-        onMoveShouldSetPanResponder: (_e, g) =>
-          newEntryOpen && g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
-        onPanResponderTerminationRequest: () => true,
-        onPanResponderGrant: () => {
-          sheetTranslate.stopAnimation();
-          sheetOpacity.stopAnimation();
-        },
-        onPanResponderMove: (_e, g) => {
-          if (!newEntryOpen || sheetClosingRef.current) return;
-          const dragY = Math.max(0, g.dy);
-          sheetTranslate.setValue(dragY);
-          sheetOpacity.setValue(Math.max(0.82, 1 - dragY / 900));
-        },
-        onPanResponderRelease: (_e, g) => {
-          if (!newEntryOpen || sheetClosingRef.current) return;
-          const dragY = Math.max(0, g.dy);
-          const shouldClose = dragY > 90 || g.vy > 0.55;
-          if (shouldClose) {
-            if (newEntryHasDraft) {
-              springJournalNewEntryOpen();
-              confirmJournalNewEntryDraftClose();
-              return;
-            }
-            animateCloseNewEntrySheet(g.vy, dragY);
-            return;
-          }
-          Animated.parallel([
-            Animated.spring(sheetTranslate, {
-              toValue: 0,
-              velocity: Math.max(0, g.vy),
-              friction: 9,
-              tension: 75,
-              useNativeDriver: true,
-            }),
-            Animated.timing(sheetOpacity, {
-              toValue: 1,
-              duration: 170,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]).start();
-        },
-        onPanResponderTerminate: (_e, g) => {
-          if (!newEntryOpen || sheetClosingRef.current) return;
-          const dragY = Math.max(0, g.dy);
-          const shouldClose = dragY > 90 || g.vy > 0.55;
-          if (shouldClose) {
-            if (newEntryHasDraft) {
-              springJournalNewEntryOpen();
-              confirmJournalNewEntryDraftClose();
-              return;
-            }
-            animateCloseNewEntrySheet(g.vy, dragY);
-            return;
-          }
-          Animated.parallel([
-            Animated.spring(sheetTranslate, {
-              toValue: 0,
-              velocity: Math.max(0, g.vy),
-              friction: 9,
-              tension: 75,
-              useNativeDriver: true,
-            }),
-            Animated.timing(sheetOpacity, {
-              toValue: 1,
-              duration: 170,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]).start();
-        },
-      }),
-    [
-      animateCloseNewEntrySheet,
-      confirmJournalNewEntryDraftClose,
-      newEntryHasDraft,
-      newEntryOpen,
-      sheetOpacity,
-      sheetTranslate,
-      springJournalNewEntryOpen,
-    ],
-  );
-
-  const fabIconRotate = fabSpin.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "45deg"],
-  });
+    setNewEntryOpen(false);
+  }, []);
 
   const openNewEntrySheet = () => {
     setNewEntrySheetKey((k) => k + 1);
-    setNewEntryHasDraft(false);
     setNewEntryOpen(true);
   };
 
   const requestCloseNewEntrySheet = useCallback(() => {
-    if (!newEntryHasDraft) {
-      closeNewEntrySheet();
-      return;
-    }
-    confirmJournalNewEntryDraftClose();
-  }, [closeNewEntrySheet, confirmJournalNewEntryDraftClose, newEntryHasDraft]);
+    newEntrySheetRef.current?.requestClose();
+  }, []);
 
   const toggleNewEntrySheet = () => {
     hapticLightImpact();
@@ -707,7 +491,6 @@ export default function JournalIndexScreen() {
         task.cancel();
         // Release RichEditor WebViews when leaving the tab (Hermes / native memory).
         setNewEntryOpen(false);
-        setNewEntryHasDraft(false);
       };
     }, [load]),
   );
@@ -910,19 +693,12 @@ export default function JournalIndexScreen() {
     [colors.brown800, refreshing, onRefresh],
   );
 
-  const listContentContainerStyle = useMemo(() => ({ paddingBottom: listPadBottom }), [listPadBottom]);
+  const fabIconRotate = fabSpin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "45deg"],
+  });
 
-  const sheetCardThemed = useMemo(
-    () => [
-      styles.sheetCard,
-      {
-        backgroundColor: j.newEntrySheetBackground,
-        borderColor: j.newEntrySheetBorder,
-        shadowColor: colors.brown800,
-      },
-    ],
-    [j.newEntrySheetBackground, j.newEntrySheetBorder, colors.brown800],
-  );
+  const listContentContainerStyle = useMemo(() => ({ paddingBottom: listPadBottom }), [listPadBottom]);
 
   useEffect(() => {
     return registerTabScrollRef("journal", {
@@ -1084,79 +860,20 @@ export default function JournalIndexScreen() {
         style={[StyleSheet.absoluteFill, styles.fabOverlay]}
         collapsable={false}
       >
-        {newEntryOpen ? (
-          <Pressable
-            accessibilityLabel="Dismiss new entry"
-            accessibilityRole="button"
-            onPress={requestCloseNewEntrySheet}
-            style={[styles.sheetBackdrop, StyleSheet.absoluteFill]}
-          />
-        ) : null}
-
-        {newEntryOpen ? (
-          <Animated.View
-            pointerEvents="box-none"
-            style={[
-              styles.sheetWrap,
-              {
-                left: sheetLeft,
-                width: sheetWidth,
-                bottom: cardBottom,
-                height: sheetMaxHeight,
-                maxHeight: sheetMaxHeight,
-                opacity: sheetOpacity,
-                transform: [{ translateY: sheetTranslate }],
-              },
-            ]}
-          >
-            <View style={styles.sheetKeyboardView}>
-              <View style={sheetCardThemed}>
-                <View
-                  {...newEntryHandlePanResponder.panHandlers}
-                  style={{
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingTop: 6,
-                    paddingBottom: 4,
-                    backgroundColor: j.newEntryDragAreaBackground,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 56,
-                      height: 6,
-                      borderRadius: 999,
-                      backgroundColor: "rgba(123,106,86,0.35)",
-                    }}
-                  />
-                </View>
-                <View
-                  style={{
-                    flex: 1,
-                    minHeight: 0,
-                    paddingHorizontal: 0,
-                    paddingTop: 4,
-                    paddingBottom: 8,
-                  }}
-                >
-                  <JournalNewEntryForm
-                    ref={newEntryFormRef}
-                    key={newEntrySheetKey}
-                    onboardingSessionKey={newEntrySheetKey}
-                    contentScrollMaxHeight={sheetMaxHeight - 42}
-                    contentHorizontalPadding={10}
-                    onDirtyChange={setNewEntryHasDraft}
-                    onSaveToast={showJournalToast}
-                    onAfterSave={() => {
-                      closeNewEntrySheet();
-                      void load();
-                    }}
-                  />
-                </View>
-              </View>
-            </View>
-          </Animated.View>
-        ) : null}
+        <JournalNewEntrySheet
+          ref={newEntrySheetRef}
+          open={newEntryOpen}
+          onClose={closeNewEntrySheet}
+          sheetKey={newEntrySheetKey}
+          variant="journal"
+          formRef={newEntryFormRef}
+          journalFabBottomPx={fabBottom}
+          onSaveToast={showJournalToast}
+          onAfterSave={() => {
+            closeNewEntrySheet();
+            void load();
+          }}
+        />
 
         <View
           pointerEvents="box-none"
@@ -1263,37 +980,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: "center",
-  },
-  sheetBackdrop: {
-    backgroundColor: "rgba(36, 36, 35, 0.42)",
-    zIndex: 1,
-  },
-  /** Horizontal inset is `insets.left/right + 2` inline (matches reader new-entry sheet). */
-  sheetWrap: {
-    position: "absolute",
-    zIndex: 2,
-  },
-  sheetKeyboardView: {
-    flex: 1,
-    maxHeight: "100%",
-  },
-  sheetCard: {
-    flex: 1,
-    minHeight: 280,
-    borderRadius: 24,
-    backgroundColor: "#fdfbf7",
-    borderWidth: 1,
-    borderColor: "#ece7dd",
-    paddingHorizontal: 0,
-    paddingTop: 0,
-    paddingBottom: 0,
-    maxHeight: "100%",
-    overflow: "hidden",
-    shadowColor: "#2c2416",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 16,
-    elevation: 10,
   },
   fab: {
     width: FAB_SIZE_PX,
