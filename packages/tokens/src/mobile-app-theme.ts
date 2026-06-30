@@ -20,7 +20,7 @@ export const mobileAppThemePickerSwatches: Record<MobileAppThemeId, string> = {
   night: "#000000",
   mono: "#888888",
   sage: "#43a047",
-  /** Primary accent; tab bar uses a multi-color set via `chrome.tabTints` */
+  /** Primary accent; iOS tab bar uses a multi-color set via `chrome.tabTints`. */
   spectrum: "#4285f4",
 };
 
@@ -82,12 +82,17 @@ export type MobileAppThemeBundle = {
     searchBarBorder: string;
   };
   chrome: {
+    /** M3 `primary` / active icon + label on Android Navigation bar. */
     tabTint: string;
+    /** M3 `onSurfaceVariant` — inactive icon (and label when visible). */
     tabMuted: string;
+    /** M3 `surfaceContainer` — navigation bar background. */
     tabBarBackground: string;
+    /** M3 press ripple (`primary` at low alpha). */
     androidRipple: string;
+    /** M3 `secondaryContainer` — active indicator pill behind the icon. */
     androidIndicator: string;
-    /** Per-tab selected accent colors. Index matches tab order: 0=Home, 1=Bible, 2=Journal, 3=Search. */
+    /** Per-tab selected accent on iOS only. Index: 0=Home, 1=Bible, 2=Journal, 3=Search. */
     tabTints?: readonly [string, string, string, string];
   };
   journal: {
@@ -182,7 +187,7 @@ const defaultThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     tabMuted: "#8B7E6A",
     tabBarBackground: defaultUi.parchmentMid,
     androidRipple: "rgba(92, 79, 58, 0.14)",
-    androidIndicator: "rgba(92, 79, 58, 0.12)",
+    androidIndicator: "#E3DDD2",
   },
   journal: {
     dateHeading: "#8a7b68",
@@ -269,7 +274,7 @@ const darkThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     tabMuted: "#6b5a45",
     tabBarBackground: "#332e28",
     androidRipple: "rgba(201,169,110,0.14)",
-    androidIndicator: "rgba(201,169,110,0.12)",
+    androidIndicator: "#3D3830",
   },
   journal: {
     dateHeading: "#8a7e6d",
@@ -357,7 +362,7 @@ const nightThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     tabMuted: "#4a3c2a",
     tabBarBackground: "#0d0b09",
     androidRipple: "rgba(184,148,90,0.14)",
-    androidIndicator: "rgba(184,148,90,0.12)",
+    androidIndicator: "#1C1914",
   },
   journal: {
     dateHeading: "#7a6b54",
@@ -444,7 +449,7 @@ const monoThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     tabMuted: "#aaaaaa",
     tabBarBackground: "#f0f0ee",
     androidRipple: "rgba(17,17,17,0.10)",
-    androidIndicator: "rgba(17,17,17,0.08)",
+    androidIndicator: "#E4E4E2",
   },
   journal: {
     dateHeading: "#888888",
@@ -532,7 +537,7 @@ const sageThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     tabMuted: "#8fa080",
     tabBarBackground: "#eaede6",
     androidRipple: "rgba(46,125,50,0.12)",
-    androidIndicator: "rgba(46,125,50,0.10)",
+    androidIndicator: "#DDE8D6",
   },
   journal: {
     dateHeading: "#7a8e6e",
@@ -620,7 +625,7 @@ const spectrumThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     tabMuted: "#9aa0a6",
     tabBarBackground: "#f1f3f4",
     androidRipple: "rgba(66,133,244,0.12)",
-    androidIndicator: "rgba(66,133,244,0.10)",
+    androidIndicator: "#DCE8FC",
     tabTints: ["#4285f4", "#34a853", "#fbbc04", "#ea4335"],
   },
   journal: {

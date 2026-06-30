@@ -1,9 +1,10 @@
 import { Platform } from "react-native";
 
+import { ANDROID_NAV_BAR_BODY_PX } from "./android-nav-bar-chrome";
+
 /**
  * Core tab bar content height (approx), before system gesture/home inset.
- * iOS ~49pt. Android: Material bottom nav with `labelVisibilityMode="labeled"` is taller than 56dp;
- * use a slightly generous value so FABs/sheets clear the bar on devices with small bottom inset.
+ * iOS ~49pt. Android: M3 Navigation bar with `labelVisibilityMode="selected"`.
  */
 const NATIVE_TAB_BAR_CORE_PX = Platform.select({
   ios: 20,
@@ -11,8 +12,8 @@ const NATIVE_TAB_BAR_CORE_PX = Platform.select({
   default: 40,
 });
 
-/** Material bottom nav body height (labels visible); excludes gesture inset. */
-export const ANDROID_NATIVE_TAB_BAR_BODY_PX = 52;
+/** M3 Navigation bar body height (selected label visible); excludes gesture inset. */
+export const ANDROID_NATIVE_TAB_BAR_BODY_PX = ANDROID_NAV_BAR_BODY_PX;
 
 /**
  * When `NativeTabs hidden` is true on Android, BottomNavigationView can still block touches
