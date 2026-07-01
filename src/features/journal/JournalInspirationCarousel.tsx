@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import {
   Alert,
   Platform,
@@ -14,7 +14,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import type { CarouselDisplayVerse } from "@/lib/journal-carousel-verses";
 import { useJournalCarouselVerses } from "@/lib/use-journal-carousel-verses";
 import { useCarouselBackgroundUrls } from "@/lib/use-carousel-background-urls";
+import {
+  copyCarouselCardImage,
+  saveCarouselCardImage,
+  shareCarouselCardImage,
+} from "@/lib/carousel-card-image-actions";
+import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { hapticLightImpact, hapticWarning } from "@/lib/haptics";
+import { JournalCarouselCardContextMenu } from "@/src/features/journal/JournalCarouselCardContextMenu";
 
 /** M3 uncontained carousel — large shape (28dp). */
 const CAROUSEL_CARD_RADIUS_PX = 28;
@@ -25,14 +32,16 @@ type CarouselCardProps = {
   item: CarouselDisplayVerse;
   cardWidth: number;
   imageUrl: string | null;
-  onLongPressFavorite?: (item: CarouselDisplayVerse) => void;
+  captureRef: (node: View | null) => void;
+  onLongPress: (item: CarouselDisplayVerse) => void;
 };
 
 const CarouselCard = memo(function CarouselCard({
   item,
   cardWidth,
   imageUrl,
-  onLongPressFavorite,
+  captureRef,
+  onLongPress,
 }: CarouselCardProps) {
   const cardHeight = Math.round(cardWidth * 1.12);
   const borderRadius = CAROUSEL_CARD_RADIUS_PX;
@@ -40,17 +49,9 @@ const CarouselCard = memo(function CarouselCard({
 
   return (
     <Pressable
-      onLongPress={
-        item.isUserFavorite && !item.isDailyVerse && onLongPressFavorite
-          ? () => onLongPressFavorite(item)
-          : undefined
-      }
+      onLongPress={() => onLongPress(item)}
       delayLongPress={420}
-      accessibilityHint={
-        item.isUserFavorite && !item.isDailyVerse
-          ? "Long press to remove from carousel favorites"
-          : undefined
-      }
+      accessibilityHint="Long press for share and image options"
       style={[
         styles.cardShell,
         {
@@ -60,52 +61,66 @@ const CarouselCard = memo(function CarouselCard({
         },
       ]}
     >
-      <LinearGradient
-        colors={[...item.gradient]}
-        locations={[0, 0.55, 1]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[StyleSheet.absoluteFill, { borderRadius }]}
-      />
-
-      {showImage ? (
-        <Image
-          source={{ uri: imageUrl! }}
-          style={[StyleSheet.absoluteFill, { borderRadius }]}
-          contentFit="cover"
-          cachePolicy="disk"
-          recyclingKey={imageUrl!}
-          transition={0}
-          accessibilityIgnoresInvertColors
+      <View
+        ref={captureRef}
+        collapsable={false}
+        style={[StyleSheet.absoluteFill, { borderRadius, overflow: "hidden" }]}
+      >
+        <LinearGradient
+          colors={[...item.gradient]}
+          locations={[0, 0.55, 1]}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
         />
-      ) : null}
 
-      <LinearGradient
-        colors={["rgba(26,22,15,0.08)", "rgba(26,22,15,0.52)", "rgba(26,22,15,0.82)"]}
-        locations={[0, 0.45, 1]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={[StyleSheet.absoluteFill, { borderRadius }]}
-      />
-
-      <View style={styles.cardContent}>
-        {item.badgeLabel ? (
-          <Text style={styles.cardBadge}>{item.badgeLabel}</Text>
+        {showImage ? (
+          <Image
+            source={{ uri: imageUrl! }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            cachePolicy="disk"
+            recyclingKey={imageUrl!}
+            transition={0}
+            accessibilityIgnoresInvertColors
+          />
         ) : null}
-        <Text style={styles.cardText} numberOfLines={4}>
-          {item.text}
-        </Text>
-        <Text style={styles.cardReference}>{item.reference}</Text>
+
+        <LinearGradient
+          colors={["rgba(26,22,15,0.08)", "rgba(26,22,15,0.52)", "rgba(26,22,15,0.82)"]}
+          locations={[0, 0.45, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+
+        <View style={styles.cardContent}>
+          {item.badgeLabel ? (
+            <Text style={styles.cardBadge}>{item.badgeLabel}</Text>
+          ) : null}
+          <Text style={styles.cardText} numberOfLines={4}>
+            {item.text}
+          </Text>
+          <Text style={styles.cardReference}>{item.reference}</Text>
+        </View>
       </View>
     </Pressable>
   );
 });
 
+type MenuState = {
+  item: CarouselDisplayVerse;
+};
+
 export const JournalInspirationCarousel = memo(function JournalInspirationCarousel() {
   const { width: windowWidth } = useWindowDimensions();
+  const { bundle } = useMobileAppTheme();
   const { displayVerses, removeFavorite } = useJournalCarouselVerses();
   const { getImageUrl } = useCarouselBackgroundUrls(displayVerses);
   const listRef = useRef<FlatList<CarouselDisplayVerse> | null>(null);
+  const captureRefs = useRef(new Map<string, View>());
+  const [menuState, setMenuState] = useState<MenuState | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
 
   const cardWidths = useMemo(
     () => displayVerses.map((verse) => Math.round(windowWidth * verse.widthRatio)),
@@ -128,28 +143,83 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
     return tallestCard + CAROUSEL_VERTICAL_PADDING_PX * 2;
   }, [cardWidths]);
 
-  const handleRemoveFavorite = useCallback(
-    (item: CarouselDisplayVerse) => {
-      if (!item.isUserFavorite || item.isDailyVerse) return;
-      hapticWarning();
-      Alert.alert(
-        "Remove from carousel?",
-        `${item.reference} will be removed from your journal carousel favorites.`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Remove",
-            style: "destructive",
-            onPress: () => {
-              hapticLightImpact();
-              void removeFavorite(item.id);
-            },
-          },
-        ],
-      );
+  const setCaptureRef = useCallback((id: string) => {
+    return (node: View | null) => {
+      if (node) captureRefs.current.set(id, node);
+      else captureRefs.current.delete(id);
+    };
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    if (exportBusy) return;
+    setMenuState(null);
+  }, [exportBusy]);
+
+  const handleLongPress = useCallback((item: CarouselDisplayVerse) => {
+    hapticLightImpact();
+    setMenuState({ item });
+  }, []);
+
+  const captureRefForMenu = useCallback((): RefObject<View | null> => {
+    const node = menuState ? captureRefs.current.get(menuState.item.id) ?? null : null;
+    return { current: node };
+  }, [menuState]);
+
+  const runImageAction = useCallback(
+    async (action: (ref: RefObject<View | null>) => Promise<void>) => {
+      if (!menuState || exportBusy) return;
+      setExportBusy(true);
+      try {
+        await action(captureRefForMenu());
+      } finally {
+        setExportBusy(false);
+        setMenuState(null);
+      }
     },
-    [removeFavorite],
+    [captureRefForMenu, exportBusy, menuState],
   );
+
+  const handleShare = useCallback(() => {
+    if (!menuState) return;
+    const title = menuState.item.reference;
+    void runImageAction(async (ref) => {
+      await shareCarouselCardImage(ref, title);
+    });
+  }, [menuState, runImageAction]);
+
+  const handleSaveImage = useCallback(() => {
+    void runImageAction(async (ref) => {
+      await saveCarouselCardImage(ref);
+    });
+  }, [runImageAction]);
+
+  const handleCopyImage = useCallback(() => {
+    void runImageAction(async (ref) => {
+      await copyCarouselCardImage(ref);
+    });
+  }, [runImageAction]);
+
+  const handleRemoveFavorite = useCallback(() => {
+    if (!menuState?.item.isUserFavorite || menuState.item.isDailyVerse) return;
+    const item = menuState.item;
+    closeMenu();
+    hapticWarning();
+    Alert.alert(
+      "Remove from carousel?",
+      `${item.reference} will be removed from your journal carousel favorites.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            hapticLightImpact();
+            void removeFavorite(item.id);
+          },
+        },
+      ],
+    );
+  }, [closeMenu, menuState, removeFavorite]);
 
   const renderItem = useMemo<ListRenderItem<CarouselDisplayVerse>>(
     () =>
@@ -158,10 +228,11 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
           item={item}
           cardWidth={cardWidths[index]!}
           imageUrl={getImageUrl(item)}
-          onLongPressFavorite={handleRemoveFavorite}
+          captureRef={setCaptureRef(item.id)}
+          onLongPress={handleLongPress}
         />
       ),
-    [cardWidths, getImageUrl, handleRemoveFavorite],
+    [cardWidths, getImageUrl, handleLongPress, setCaptureRef],
   );
 
   const keyExtractor = (item: CarouselDisplayVerse) => item.id;
@@ -171,25 +242,39 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
   }
 
   return (
-    <View style={[styles.root, { height: carouselHeight }]}>
-      <FlatList
-        ref={listRef}
-        data={displayVerses}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        decelerationRate="fast"
-        snapToOffsets={snapOffsets}
-        snapToAlignment="start"
-        disableIntervalMomentum
-        nestedScrollEnabled={Platform.OS === "android"}
-        contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={CarouselSeparator}
-        accessibilityRole="list"
-        accessibilityLabel="Inspirational Bible verses"
+    <>
+      <View style={[styles.root, { height: carouselHeight }]}>
+        <FlatList
+          ref={listRef}
+          data={displayVerses}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToOffsets={snapOffsets}
+          snapToAlignment="start"
+          disableIntervalMomentum
+          nestedScrollEnabled={Platform.OS === "android"}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={CarouselSeparator}
+          accessibilityRole="list"
+          accessibilityLabel="Inspirational Bible verses"
+        />
+      </View>
+
+      <JournalCarouselCardContextMenu
+        visible={menuState != null}
+        item={menuState?.item ?? null}
+        busy={exportBusy}
+        bundle={bundle}
+        onClose={closeMenu}
+        onShare={handleShare}
+        onSaveImage={handleSaveImage}
+        onCopyImage={handleCopyImage}
+        onRemoveFavorite={handleRemoveFavorite}
       />
-    </View>
+    </>
   );
 });
 
