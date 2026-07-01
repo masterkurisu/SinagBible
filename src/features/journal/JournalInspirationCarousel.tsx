@@ -1,6 +1,7 @@
-import { memo, useCallback, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   Platform,
   StyleSheet,
   Text,
@@ -10,9 +11,11 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { FlatList, Pressable } from "react-native-gesture-handler";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import type { CarouselDisplayVerse } from "@/lib/journal-carousel-verses";
 import { useJournalCarouselVerses } from "@/lib/use-journal-carousel-verses";
+import { useCarouselBackgroundUrls } from "@/lib/use-carousel-background-urls";
 import { hapticLightImpact, hapticWarning } from "@/lib/haptics";
 
 /** M3 uncontained carousel — large shape (28dp). */
@@ -23,15 +26,64 @@ const CAROUSEL_VERTICAL_PADDING_PX = 16;
 type CarouselCardProps = {
   item: CarouselDisplayVerse;
   cardWidth: number;
+  imageUrl: string | null;
   onLongPressFavorite?: (item: CarouselDisplayVerse) => void;
 };
+
+const CarouselCardShimmer = memo(function CarouselCardShimmer({
+  borderRadius,
+}: {
+  borderRadius: number;
+}) {
+  const opacity = useRef(new Animated.Value(0.45)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.85,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.45,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        styles.shimmer,
+        { borderRadius, opacity },
+      ]}
+    />
+  );
+});
 
 const CarouselCard = memo(function CarouselCard({
   item,
   cardWidth,
+  imageUrl,
   onLongPressFavorite,
 }: CarouselCardProps) {
   const cardHeight = Math.round(cardWidth * 1.12);
+  const borderRadius = CAROUSEL_CARD_RADIUS_PX;
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  useEffect(() => {
+    setImageLoaded(false);
+  }, [imageUrl]);
+
+  const showImage = Boolean(imageUrl);
+  const showShimmer = showImage && !imageLoaded;
 
   return (
     <Pressable
@@ -51,27 +103,52 @@ const CarouselCard = memo(function CarouselCard({
         {
           width: cardWidth,
           height: cardHeight,
-          borderRadius: CAROUSEL_CARD_RADIUS_PX,
+          borderRadius,
         },
       ]}
     >
+      {showImage ? (
+        <>
+          <Image
+            source={{ uri: imageUrl! }}
+            style={[StyleSheet.absoluteFill, { borderRadius }]}
+            contentFit="cover"
+            cachePolicy="disk"
+            transition={240}
+            onLoadStart={() => setImageLoaded(false)}
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageLoaded(false)}
+            accessibilityIgnoresInvertColors
+          />
+          {showShimmer ? <CarouselCardShimmer borderRadius={borderRadius} /> : null}
+        </>
+      ) : (
+        <LinearGradient
+          colors={[...item.gradient]}
+          locations={[0, 0.55, 1]}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[StyleSheet.absoluteFill, { borderRadius }]}
+        />
+      )}
+
       <LinearGradient
-        colors={[...item.gradient]}
-        locations={[0, 0.55, 1]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.cardGradient, { borderRadius: CAROUSEL_CARD_RADIUS_PX }]}
-      >
-        <View style={styles.cardContent}>
-          {item.badgeLabel ? (
-            <Text style={styles.cardBadge}>{item.badgeLabel}</Text>
-          ) : null}
-          <Text style={styles.cardText} numberOfLines={4}>
-            {item.text}
-          </Text>
-          <Text style={styles.cardReference}>{item.reference}</Text>
-        </View>
-      </LinearGradient>
+        colors={["rgba(26,22,15,0.08)", "rgba(26,22,15,0.52)", "rgba(26,22,15,0.82)"]}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={[StyleSheet.absoluteFill, { borderRadius }]}
+      />
+
+      <View style={styles.cardContent}>
+        {item.badgeLabel ? (
+          <Text style={styles.cardBadge}>{item.badgeLabel}</Text>
+        ) : null}
+        <Text style={styles.cardText} numberOfLines={4}>
+          {item.text}
+        </Text>
+        <Text style={styles.cardReference}>{item.reference}</Text>
+      </View>
     </Pressable>
   );
 });
@@ -79,6 +156,7 @@ const CarouselCard = memo(function CarouselCard({
 export const JournalInspirationCarousel = memo(function JournalInspirationCarousel() {
   const { width: windowWidth } = useWindowDimensions();
   const { displayVerses, reload, removeFavorite } = useJournalCarouselVerses();
+  const { getImageUrl } = useCarouselBackgroundUrls(displayVerses);
   const listRef = useRef<FlatList<CarouselDisplayVerse> | null>(null);
 
   useFocusEffect(
@@ -137,10 +215,11 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
         <CarouselCard
           item={item}
           cardWidth={cardWidths[index]!}
+          imageUrl={getImageUrl(item)}
           onLongPressFavorite={handleRemoveFavorite}
         />
       ),
-    [cardWidths, handleRemoveFavorite],
+    [cardWidths, getImageUrl, handleRemoveFavorite],
   );
 
   const keyExtractor = (item: CarouselDisplayVerse) => item.id;
@@ -196,11 +275,12 @@ const styles = StyleSheet.create({
           shadowRadius: 10,
         }),
   },
-  cardGradient: {
-    flex: 1,
-    justifyContent: "flex-end",
+  shimmer: {
+    backgroundColor: "#5c4f3a",
   },
   cardContent: {
+    flex: 1,
+    justifyContent: "flex-end",
     paddingHorizontal: 20,
     paddingBottom: 20,
     paddingTop: 28,

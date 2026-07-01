@@ -7,6 +7,10 @@ import {
   formatDailyVerseReference,
   getDailyVerse,
 } from "@/lib/daily-verse";
+import {
+  getCarouselImageCategoryForBookSlug,
+  type CarouselImageCategory,
+} from "@/lib/pexels-image-mapper";
 
 const STORAGE_KEY = "sb:journal:carousel-verses";
 
@@ -35,6 +39,8 @@ export type CarouselDisplayVerse = {
   text: string;
   widthRatio: number;
   gradient: readonly [string, string, string];
+  /** Pexels search bucket — stable per book category for URL caching. */
+  imageCategory: CarouselImageCategory;
   isUserFavorite: boolean;
   /** Reserved first carousel slot — rotates by calendar day. */
   isDailyVerse?: boolean;
@@ -108,7 +114,7 @@ export function carouselVerseId(
 }
 
 export function carouselRecordToDisplay(
-  record: Pick<CarouselVerseRecord, "id" | "reference" | "text">,
+  record: Pick<CarouselVerseRecord, "id" | "reference" | "text" | "bookSlug">,
   index: number,
   isUserFavorite: boolean,
   options?: { isDailyVerse?: boolean; badgeLabel?: string },
@@ -119,6 +125,9 @@ export function carouselRecordToDisplay(
     text: record.text,
     widthRatio: WIDTH_RATIOS[index % WIDTH_RATIOS.length]!,
     gradient: CAROUSEL_GRADIENTS[index % CAROUSEL_GRADIENTS.length]!,
+    imageCategory: options?.isDailyVerse
+      ? "daily-verse"
+      : getCarouselImageCategoryForBookSlug(record.bookSlug),
     isUserFavorite,
     isDailyVerse: options?.isDailyVerse,
     badgeLabel: options?.badgeLabel,
@@ -133,6 +142,7 @@ export function getDailyVerseCarouselDisplay(date: Date = new Date()): CarouselD
     text: daily.text,
     widthRatio: WIDTH_RATIOS[0]!,
     gradient: DAILY_VERSE_GRADIENT,
+    imageCategory: "daily-verse",
     isUserFavorite: false,
     isDailyVerse: true,
     badgeLabel: "Daily Verse",

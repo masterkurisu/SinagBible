@@ -271,6 +271,24 @@ export function CreditsSheet({
 
               <View style={styles.divider} />
 
+              {/* ── Photography ── */}
+              <Text style={styles.sectionHeading}>Photography</Text>
+
+              <Text style={styles.body}>
+                Beautiful photos provided by{" "}
+                <Text
+                  style={styles.link}
+                  onPress={() => void Linking.openURL("https://www.pexels.com")}
+                  accessibilityRole="link"
+                  accessibilityLabel="Pexels website"
+                >
+                  Pexels
+                </Text>
+                .
+              </Text>
+
+              <View style={styles.divider} />
+
               {/* ── Open Source ── */}
               <Text style={styles.sectionHeading}>Open Source</Text>
 
