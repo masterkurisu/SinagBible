@@ -33,6 +33,7 @@ import {
   isTranslationId,
 } from "@sinag-bible/core/bible-translations";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import type { BibleBookNavItem } from "@sinag-bible/types";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import {
   compareTranslationPickerAbbreviations,
@@ -41,6 +42,7 @@ import {
 } from "@/lib/use-translation-picker";
 import { getTranslationLanguageFilterOptions } from "@/lib/translation-language-sections";
 import { hapticLightImpact } from "@/lib/haptics";
+import { prefetchTranslationChaptersForReader } from "@/lib/reader-chapter-load";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 import {
   READER_M3_ON_SURFACE,
@@ -107,6 +109,10 @@ export type TranslationPickerSheetProps = {
   favoriteTranslationIds: string[];
   toggleFavoriteTranslation: (id: string) => void;
   resolvedTranslationId: string;
+  /** Current reader chapter — used to prefetch chapters when pinning a translation. */
+  readerBookSlug?: string;
+  readerChapterNumber?: number;
+  readerBooks?: BibleBookNavItem[] | null;
 };
 
 export function TranslationPickerSheet({
@@ -120,6 +126,9 @@ export function TranslationPickerSheet({
   favoriteTranslationIds,
   toggleFavoriteTranslation,
   resolvedTranslationId,
+  readerBookSlug,
+  readerChapterNumber,
+  readerBooks,
 }: TranslationPickerSheetProps) {
   const colors = bundle.ui;
   const rc = bundle.reader;
@@ -131,6 +140,7 @@ export function TranslationPickerSheet({
   const [searchQuery, setSearchQuery] = useState("");
   const [langSheetOpen, setLangSheetOpen] = useState(false);
   const [langSheetKeyboardHeight, setLangSheetKeyboardHeight] = useState(0);
+  const [searchKeyboardHeight, setSearchKeyboardHeight] = useState(0);
   const [langSearch, setLangSearch] = useState("");
   const [langFilter, setLangFilter] = useState<string | null>(null);
 
@@ -173,6 +183,13 @@ export function TranslationPickerSheet({
   const showResults = useMemo(
     () => searchQuery.trim().length > 0 || langFilter != null,
     [searchQuery, langFilter],
+  );
+
+  const sheetKeyboardMode = searchKeyboardHeight > 0;
+  const sheetKeyboardTopPx = useMemo(() => insets.top + 8, [insets.top]);
+  const sheetKeyboardBottomPx = useMemo(
+    () => searchKeyboardHeight + Math.max(insets.bottom, 12),
+    [searchKeyboardHeight, insets.bottom],
   );
 
   const translationSheetViewportMaxH = useMemo(
@@ -418,11 +435,37 @@ export function TranslationPickerSheet({
     (id: string) => {
       Keyboard.dismiss();
       hapticLightImpact();
+      if (readerBookSlug && readerChapterNumber != null) {
+        const internalId = getInternalIdFromApiId(id);
+        prefetchTranslationChaptersForReader(
+          internalId ?? id,
+          readerBookSlug,
+          readerChapterNumber,
+          readerBooks,
+        );
+      }
       onClose();
       const internalId = getInternalIdFromApiId(id);
       onSelectTranslation(internalId ?? id);
     },
-    [onClose, onSelectTranslation],
+    [onClose, onSelectTranslation, readerBookSlug, readerChapterNumber, readerBooks],
+  );
+
+  const handleTogglePin = useCallback(
+    (id: string, isPinned: boolean) => {
+      Keyboard.dismiss();
+      toggleFavoriteTranslation(id);
+      if (!isPinned && readerBookSlug && readerChapterNumber != null) {
+        const internalId = getInternalIdFromApiId(id);
+        prefetchTranslationChaptersForReader(
+          internalId ?? id,
+          readerBookSlug,
+          readerChapterNumber,
+          readerBooks,
+        );
+      }
+    },
+    [toggleFavoriteTranslation, readerBookSlug, readerChapterNumber, readerBooks],
   );
 
   useEffect(() => {
@@ -434,6 +477,7 @@ export function TranslationPickerSheet({
       setLangFilter(null);
       setLangSearch("");
       setSearchQuery("");
+      setSearchKeyboardHeight(0);
       dropSlideAnim.setValue(0);
       dropOpacityAnim.setValue(0);
       return;
@@ -520,6 +564,23 @@ export function TranslationPickerSheet({
       subHide.remove();
     };
   }, [langSheetOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchKeyboardHeight(0);
+      return;
+    }
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const onShow = (e: KeyboardEvent) => setSearchKeyboardHeight(e.endCoordinates.height);
+    const onHide = () => setSearchKeyboardHeight(0);
+    const subShow = Keyboard.addListener(showEvt, onShow);
+    const subHide = Keyboard.addListener(hideEvt, onHide);
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [isOpen]);
 
   const pinnedTranslations = useMemo(() => {
     const byId = new Map(translationPickerItems.map((item) => [item.id, item]));
@@ -690,10 +751,7 @@ export function TranslationPickerSheet({
           {isSelected ? <Ionicons name="checkmark" size={isAndroidSheet ? 20 : 15} color={ui.gold} /> : null}
           <TranslationPinButton
             isPinned={opts.isPinned}
-            onPress={() => {
-              Keyboard.dismiss();
-              toggleFavoriteTranslation(item.id);
-            }}
+            onPress={() => handleTogglePin(item.id, opts.isPinned)}
             ui={ui}
           />
         </View>
@@ -1077,25 +1135,35 @@ export function TranslationPickerSheet({
           accessibilityLabel="Dismiss translation picker"
         />
         {isAndroidSheet ? (
-          <View pointerEvents="box-none" style={{ flex: 1, justifyContent: "flex-end" }}>
+          <View pointerEvents="box-none" style={{ flex: 1, justifyContent: sheetKeyboardMode ? "flex-start" : "flex-end" }}>
             <Animated.View
               pointerEvents="box-none"
               style={{
                 width: "100%",
-                maxHeight: showResults ? m3SheetMaxHeight : Math.min(m3SheetMaxHeight, screenHeight * 0.72),
+                ...(sheetKeyboardMode
+                  ? {
+                      position: "absolute",
+                      top: sheetKeyboardTopPx,
+                      left: 0,
+                      right: 0,
+                      bottom: sheetKeyboardBottomPx,
+                    }
+                  : {
+                      maxHeight: showResults ? m3SheetMaxHeight : Math.min(m3SheetMaxHeight, screenHeight * 0.72),
+                    }),
                 transform: [{ translateY: translationPickerSheetTranslateY }],
               }}
             >
               <View
                 style={{
                   ...sheetSurfaceStyle,
-                  ...(showResults ? { flex: 1, minHeight: 0 } : {}),
+                  ...(sheetKeyboardMode || showResults ? { flex: 1, minHeight: 0 } : {}),
                   paddingBottom: m3SheetBottomPad,
                 }}
               >
                 <Animated.View
                   style={{
-                    ...(showResults ? { flex: 1, minHeight: 0 } : {}),
+                    ...(sheetKeyboardMode || showResults ? { flex: 1, minHeight: 0 } : {}),
                   }}
                 >
                   {pickerBody}
@@ -1108,10 +1176,19 @@ export function TranslationPickerSheet({
             pointerEvents="box-none"
             style={{
               position: "absolute",
-              top: sheetTopPx,
-              left: insets.left + 5,
-              right: insets.right + 5,
-              ...(showResults ? { bottom: insets.bottom + 10 } : { maxHeight: translationSheetViewportMaxH }),
+              ...(sheetKeyboardMode || showResults
+                ? {
+                    top: sheetKeyboardMode ? sheetKeyboardTopPx : insets.top + 8,
+                    left: insets.left + 5,
+                    right: insets.right + 5,
+                    bottom: sheetKeyboardMode ? sheetKeyboardBottomPx : insets.bottom + 10,
+                  }
+                : {
+                    top: sheetTopPx,
+                    left: insets.left + 5,
+                    right: insets.right + 5,
+                    maxHeight: translationSheetViewportMaxH,
+                  }),
               opacity: dropOpacityAnim,
               transform: [
                 {

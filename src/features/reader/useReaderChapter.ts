@@ -28,18 +28,37 @@ function hasChapterInlineAnnotations(chapter: BibleChapter): boolean {
   return (chapter.verseInlineContent ?? []).some((segments) => segments.length > 0);
 }
 
+function payloadMatchesRoute(
+  payload: ReaderChapterPayload,
+  translationId: string,
+  bookSlug: string,
+  chapterNumber: number,
+): boolean {
+  return (
+    payload.resolvedTranslationId === translationId &&
+    payload.chapter.bookSlug === bookSlug &&
+    payload.chapter.chapterNumber === chapterNumber
+  );
+}
+
 export function useReaderChapter(bookSlug: string, chapterNumber: number, translationId: string) {
-  const [readerPayload, setReaderPayload] = useState<ReaderChapterPayload | null>(null);
+  const cacheKey = readerChapterCacheKey(translationId, bookSlug, chapterNumber);
+  const [readerPayload, setReaderPayload] = useState<ReaderChapterPayload | null>(
+    () => getCachedReaderChapter(cacheKey) ?? null,
+  );
   const readerPayloadRef = useRef(readerPayload);
   readerPayloadRef.current = readerPayload;
   const [error, setError] = useState<ReaderChapterError | null>(null);
 
+  const syncedPayload =
+    getCachedReaderChapter(cacheKey) ??
+    (readerPayload && payloadMatchesRoute(readerPayload, translationId, bookSlug, chapterNumber)
+      ? readerPayload
+      : null);
+
   useEffect(() => {
     let cancelled = false;
 
-    const slug = bookSlug;
-    const resolved = translationId;
-    const cacheKey = readerChapterCacheKey(resolved, slug, chapterNumber);
     const memHit = getCachedReaderChapter(cacheKey);
     if (memHit) {
       setReaderPayload(memHit);
@@ -47,64 +66,75 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
       return;
     }
 
-    const task = InteractionManager.runAfterInteractions(() => {
-      void (async () => {
-        try {
-          setError(null);
+    const loadChapter = async () => {
+      try {
+        setError(null);
 
-          let resolvedTranslation = resolved;
-          const cachedPayload = readerPayloadRef.current;
-          const cachedBooks =
-            cachedPayload?.resolvedTranslationId === resolvedTranslation && cachedPayload.books.length > 0
-              ? cachedPayload.books
-              : null;
+        let resolvedTranslation = translationId;
+        const cachedPayload = readerPayloadRef.current;
+        const cachedBooks =
+          cachedPayload?.resolvedTranslationId === resolvedTranslation && cachedPayload.books.length > 0
+            ? cachedPayload.books
+            : null;
 
-          let books: BibleBookNavItem[];
-          let chapter: BibleChapter | null;
+        let books: BibleBookNavItem[];
+        let chapter: BibleChapter | null;
 
-          [books, chapter] = await Promise.all([
-            resolveReaderBooksForTranslation(resolvedTranslation, cachedBooks),
-            resolvedTranslation === "KJV"
-              ? getChapterBySlugForTranslation("KJV", slug, chapterNumber)
-              : fetchReaderChapterContent(resolvedTranslation, slug, chapterNumber),
-          ]);
+        [books, chapter] = await Promise.all([
+          resolveReaderBooksForTranslation(resolvedTranslation, cachedBooks),
+          resolvedTranslation === "KJV"
+            ? getChapterBySlugForTranslation("KJV", bookSlug, chapterNumber)
+            : fetchReaderChapterContent(resolvedTranslation, bookSlug, chapterNumber),
+        ]);
 
-          if (!chapter) {
-            resolvedTranslation = "KJV";
-            books = await resolveReaderBooksForTranslation("KJV", null);
-            chapter = await getChapterBySlugForTranslation("KJV", slug, chapterNumber);
-          }
-
-          if (cancelled) return;
-
-          if (!chapter) {
-            setReaderPayload(null);
-            setError("chapter_not_found");
-            return;
-          }
-
-          const payload = { resolvedTranslationId: resolvedTranslation, books, chapter };
-          setCachedReaderChapter(cacheKey, payload);
-          setReaderPayload(payload);
-        } catch {
-          if (!cancelled) {
-            setReaderPayload(null);
-            setError("load_failed");
-          }
+        if (!chapter) {
+          resolvedTranslation = "KJV";
+          books = await resolveReaderBooksForTranslation("KJV", null);
+          chapter = await getChapterBySlugForTranslation("KJV", bookSlug, chapterNumber);
         }
-      })();
+
+        if (cancelled) return;
+
+        if (!chapter) {
+          setReaderPayload(null);
+          setError("chapter_not_found");
+          return;
+        }
+
+        const payload = { resolvedTranslationId: resolvedTranslation, books, chapter };
+        setCachedReaderChapter(cacheKey, payload);
+        setReaderPayload(payload);
+      } catch {
+        if (!cancelled) {
+          setReaderPayload(null);
+          setError("load_failed");
+        }
+      }
+    };
+
+    const hasDisplayedPayload = readerPayloadRef.current != null;
+    if (hasDisplayedPayload) {
+      void loadChapter();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      void loadChapter();
     });
 
     return () => {
       cancelled = true;
       task.cancel();
     };
-  }, [translationId, bookSlug, chapterNumber]);
+  }, [translationId, bookSlug, chapterNumber, cacheKey]);
 
   const kjvInlineEnrichmentKey =
     readerPayload?.resolvedTranslationId === "KJV" &&
-    !hasChapterInlineAnnotations(readerPayload.chapter)
-      ? `${readerPayload.chapter.bookSlug}:${readerPayload.chapter.chapterNumber}`
+    syncedPayload?.chapter &&
+    !hasChapterInlineAnnotations(syncedPayload.chapter)
+      ? `${syncedPayload.chapter.bookSlug}:${syncedPayload.chapter.chapterNumber}`
       : null;
 
   useEffect(() => {
@@ -115,7 +145,6 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
     if (!usfm) return;
     let cancelled = false;
     const task = InteractionManager.runAfterInteractions(() => {
-      // Keep first paint fast; enrich KJV inline spans after initial chapter render and gestures settle.
       void (async () => {
         try {
           const helloKjv = await fetchApiChapter("eng_kjv", usfm, chapterNum);
@@ -158,15 +187,15 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
       READER_CHAPTER_PREFETCH_DEPTH,
     );
     for (const target of targets) {
-      primeReaderChapterFetch(translationId, target);
+      primeReaderChapterFetch(translationId, target, booksForPrefetch);
     }
   }, [translationId, bookSlug, chapterNumber, readerPayload?.books]);
 
-  const chapter = readerPayload?.chapter;
-  const books = readerPayload?.books;
-  const resolvedTranslationId = readerPayload?.resolvedTranslationId;
-  const isLoading =
-    error == null && (chapter == null || books == null || resolvedTranslationId == null);
+  const chapter = (syncedPayload ?? readerPayload)?.chapter;
+  const books = (syncedPayload ?? readerPayload)?.books;
+  const resolvedTranslationId = (syncedPayload ?? readerPayload)?.resolvedTranslationId;
+  const isContentSynced = syncedPayload != null;
+  const isLoading = error == null && readerPayload == null;
 
-  return { chapter, books, resolvedTranslationId, isLoading, error };
+  return { chapter, books, resolvedTranslationId, isContentSynced, isLoading, error };
 }

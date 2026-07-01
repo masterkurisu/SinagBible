@@ -82,25 +82,18 @@ export function parseYvpBibleId(translationId: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+/** Curated language ranges for the translation picker (fast parallel fetch). */
+const YVP_PICKER_LANGUAGE_RANGES = ["en", "fil", "tl", "ceb", "es"] as const;
+
 function getYvpAppKey(): string {
   const key =
     (Constants.expoConfig?.extra as { yvpAppKey?: string } | undefined)?.yvpAppKey ??
+    process.env.EXPO_PUBLIC_YVP_APP_KEY ??
     process.env.YVP_APP_KEY;
   if (!key) {
     throw new Error("youversion-api: YVP_APP_KEY is not configured");
   }
   return key;
-}
-
-function languageLabelFromTag(tag: string): string {
-  const base = tag.split("-")[0]?.trim();
-  if (!base) return tag;
-  try {
-    const dn = new Intl.DisplayNames(["en"], { type: "language" });
-    return dn.of(base) ?? tag;
-  } catch {
-    return tag;
-  }
 }
 
 function mapYvpBible(record: YvpBibleRecord): YvpBible {
@@ -199,38 +192,51 @@ function parseYvpChapterHtml(html: string): { number: number; text: string }[] {
 }
 
 /**
- * Fetches the full YouVersion catalog (paginated server-side).
+ * Fetches YouVersion Bibles for picker languages (English, Filipino, Tagalog, …).
  * Result is cached for the app session.
  */
 export function fetchYvpBibles(): Promise<YvpBible[]> {
-  const cacheKey = "all";
+  const cacheKey = "picker";
   const cached = yvpBiblesCache.get(cacheKey);
   if (cached) return cached;
 
   const p = (async () => {
-    const all: YvpBible[] = [];
-    let pageToken: string | undefined;
-
-    do {
-      const params: Record<string, string> = {
-        "language_ranges[]": "*",
-        all_available: "true",
-        page_size: "99",
-      };
-      if (pageToken) params.page_token = pageToken;
-
-      const page = await yvpFetch<YvpBiblesPage>("/bibles", params);
-      const records = Array.isArray(page?.data) ? page.data : [];
-      all.push(...records.map(mapYvpBible));
-      pageToken = page.next_page_token;
-    } while (pageToken);
-
-    return all;
+    const pages = await Promise.all(
+      YVP_PICKER_LANGUAGE_RANGES.map((range) => fetchYvpBiblesForLanguageRange(range)),
+    );
+    const byId = new Map<number, YvpBible>();
+    for (const bibles of pages) {
+      for (const bible of bibles) {
+        byId.set(bible.id, bible);
+      }
+    }
+    return [...byId.values()];
   })();
 
   yvpBiblesCache.set(cacheKey, p);
   void p.catch(() => yvpBiblesCache.delete(cacheKey));
   return p;
+}
+
+async function fetchYvpBiblesForLanguageRange(range: string): Promise<YvpBible[]> {
+  const all: YvpBible[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const params: Record<string, string> = {
+      "language_ranges[]": range,
+      all_available: "true",
+      page_size: "99",
+    };
+    if (pageToken) params.page_token = pageToken;
+
+    const page = await yvpFetch<YvpBiblesPage>("/bibles", params);
+    const records = Array.isArray(page?.data) ? page.data : [];
+    all.push(...records.map(mapYvpBible));
+    pageToken = page.next_page_token;
+  } while (pageToken);
+
+  return all;
 }
 
 /** Reader book navigation for a YouVersion Bible id. */

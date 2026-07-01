@@ -438,6 +438,9 @@ export function ReaderSettingsFollowUpLayer({
         favoriteTranslationIds={favoriteTranslationIds}
         toggleFavoriteTranslation={toggleFavoriteTranslation}
         resolvedTranslationId={resolvedTranslationForModals}
+        readerBookSlug={settingsBookSlug}
+        readerChapterNumber={settingsChapterNumber}
+        readerBooks={booksForModals}
       />
       <ReaderFontSettingsSheet
         isOpen={followUp.fontSettingsSheetOpen}

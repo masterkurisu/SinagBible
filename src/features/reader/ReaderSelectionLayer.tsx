@@ -24,6 +24,10 @@ import type { JournalNewEntryInitialParams } from "@/components/journal-new-entr
 import { hapticLightImpact, hapticSelection } from "@/lib/haptics";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import {
+  ReaderTranslationLoadingOverlay,
+  type ReaderTranslationLoadingPhase,
+} from "@/src/features/reader/ReaderTranslationLoadingOverlay";
+import {
   buildCarouselVerseFromSelection,
   selectionMatchesCarouselRecord,
 } from "@/lib/journal-carousel-verses";
@@ -549,6 +553,8 @@ export type ReaderSelectionLayerProps = {
   onOpenJournal: (params: JournalNewEntryInitialParams) => void;
   onOpenStudyNotes: () => void;
   onSelectionActivityChange?: (activity: ReaderSelectionActivity) => void;
+  translationLoadingPhase?: ReaderTranslationLoadingPhase;
+  translationLoadingAccentColor?: string;
 };
 
 export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
@@ -602,6 +608,8 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   onOpenJournal,
   onOpenStudyNotes,
   onSelectionActivityChange,
+  translationLoadingPhase = "idle",
+  translationLoadingAccentColor,
 }: ReaderSelectionLayerProps) {
   const actionBarOnboardingStudyNotesRef = useRef<View | null>(null);
   const actionBarOnboardingHighlightRef = useRef<View | null>(null);
@@ -924,31 +932,38 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
 
   return (
     <>
-      <ReaderVerseList
-        rc={rc}
-        readerScrollRef={readerScrollRef}
-        chapterSwipePanHandlers={chapterSwipePanHandlers}
-        readerVerseEstimatedItemSize={readerVerseEstimatedItemSize}
-        onScroll={onScroll}
-        onScrollBeginDrag={onScrollBeginDrag}
-        onScrollEndDrag={onScrollEndDrag}
-        onMomentumScrollEnd={onMomentumScrollEnd}
-        dismissReaderChromeFromBackgroundPress={dismissReaderChromeFromBackgroundPress}
-        verseFlashListDataForList={verseFlashListDataForList}
-        renderReaderVerseFlashItem={renderReaderVerseFlashItem}
-        readerVerseFlashKeyExtractor={readerVerseFlashKeyExtractor}
-        flashListExtraData={flashListExtraData}
-        readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
-        listHeader={listHeader}
-        readerChapterFlashListFooter={readerChapterFlashListFooter}
-        hasVerseSelection={hasVerseSelection}
-        actionBarMode={actionBarMode}
-        actionBarBottomPx={actionBarBottomPx}
-        androidListPaddingBottomHidden={androidListPaddingBottomHidden}
-        readerVersesOpacityAnim={readerVersesOpacityAnim}
-        onListContentSizeChange={onListContentSizeChange}
-        onListLayoutHeight={onListLayoutHeight}
-      />
+      <View style={{ flex: 1 }}>
+        <ReaderVerseList
+          rc={rc}
+          readerScrollRef={readerScrollRef}
+          chapterSwipePanHandlers={chapterSwipePanHandlers}
+          readerVerseEstimatedItemSize={readerVerseEstimatedItemSize}
+          onScroll={onScroll}
+          onScrollBeginDrag={onScrollBeginDrag}
+          onScrollEndDrag={onScrollEndDrag}
+          onMomentumScrollEnd={onMomentumScrollEnd}
+          dismissReaderChromeFromBackgroundPress={dismissReaderChromeFromBackgroundPress}
+          verseFlashListDataForList={verseFlashListDataForList}
+          renderReaderVerseFlashItem={renderReaderVerseFlashItem}
+          readerVerseFlashKeyExtractor={readerVerseFlashKeyExtractor}
+          flashListExtraData={flashListExtraData}
+          readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
+          listHeader={listHeader}
+          readerChapterFlashListFooter={readerChapterFlashListFooter}
+          hasVerseSelection={hasVerseSelection}
+          actionBarMode={actionBarMode}
+          actionBarBottomPx={actionBarBottomPx}
+          androidListPaddingBottomHidden={androidListPaddingBottomHidden}
+          readerVersesOpacityAnim={readerVersesOpacityAnim}
+          onListContentSizeChange={onListContentSizeChange}
+          onListLayoutHeight={onListLayoutHeight}
+        />
+        <ReaderTranslationLoadingOverlay
+          phase={translationLoadingPhase}
+          accentColor={translationLoadingAccentColor ?? "#6750A4"}
+          surfaceColor={rc.sceneSurface}
+        />
+      </View>
 
       {copyToastVisible ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 51 }]}>

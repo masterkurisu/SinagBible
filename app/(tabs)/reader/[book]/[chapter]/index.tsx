@@ -122,6 +122,7 @@ import {
 import { ReaderFeatureOnboardingLayer } from "@/src/features/reader/ReaderFeatureOnboardingLayer";
 import { useReaderFeatureOnboarding, type ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
+import { useReaderTranslationLoadingPhase } from "@/src/features/reader/ReaderTranslationLoadingOverlay";
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
 import { readerSettingsSideSheetWidthPx, READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
@@ -249,8 +250,9 @@ export default function ReaderChapterScreen() {
   /** True from the moment the sheet close animation starts until `closeReaderDropdown` runs — shows native header chrome during the slide-out. */
   const [bookSheetExitAnimationStarted, setBookSheetExitAnimationStarted] = useState(false);
   const readerVersesOpacityAnim = useRef(new Animated.Value(1)).current;
-  /** True after we've shown synced content then lost sync (chapter change), not initial null payload. */
+  /** True after translation switch desync — not used for same-translation chapter navigation. */
   const readerVersesHadDesyncRef = useRef(false);
+  const readerChapterScrollKeyRef = useRef("");
 
   const [newEntrySheetOpen, setNewEntrySheetOpen] = useState(false);
   const [newEntrySheetKey, setNewEntrySheetKey] = useState(0);
@@ -756,11 +758,27 @@ export default function ReaderChapterScreen() {
       resolvedTranslationId === requestedTranslationId,
   );
 
+  const isTranslationSwitching = Boolean(
+    resolvedTranslationId && requestedTranslationId !== resolvedTranslationId,
+  );
+
+  const translationLoadingPhase = useReaderTranslationLoadingPhase(isTranslationSwitching);
+
   useEffect(() => {
-    if (!isReaderContentCurrent) {
+    if (isTranslationSwitching) {
       readerVersesHadDesyncRef.current = true;
       readerVersesOpacityAnim.stopAnimation();
       readerVersesOpacityAnim.setValue(0);
+      return;
+    }
+
+    if (translationLoadingPhase !== "idle") {
+      readerVersesOpacityAnim.stopAnimation();
+      readerVersesOpacityAnim.setValue(0);
+      return;
+    }
+
+    if (!isReaderContentCurrent) {
       return;
     }
 
@@ -777,7 +795,7 @@ export default function ReaderChapterScreen() {
     } else {
       readerVersesOpacityAnim.setValue(1);
     }
-  }, [isReaderContentCurrent, readerVersesOpacityAnim]);
+  }, [isReaderContentCurrent, isTranslationSwitching, translationLoadingPhase, readerVersesOpacityAnim]);
 
   const chapterNav = useMemo(() => {
     if (!chapter || !books) {
@@ -819,7 +837,7 @@ export default function ReaderChapterScreen() {
     const target = chapterNav.prevChapter;
     if (!target) return;
     const tid = resolvedTranslationId ?? requestedTranslationId;
-    primeReaderChapterFetch(tid, target);
+    primeReaderChapterFetch(tid, target, books);
     if (books) {
       primeReaderChapterFetch(
         tid,
@@ -828,6 +846,7 @@ export default function ReaderChapterScreen() {
           { bookSlug: target.slug, chapterNumber: target.chapter },
           target.chapter,
         ).prevChapter,
+        books,
       );
     }
     closeToolsMenu();
@@ -845,7 +864,7 @@ export default function ReaderChapterScreen() {
     const target = chapterNav.nextChapter;
     if (!target) return;
     const tid = resolvedTranslationId ?? requestedTranslationId;
-    primeReaderChapterFetch(tid, target);
+    primeReaderChapterFetch(tid, target, books);
     if (books) {
       primeReaderChapterFetch(
         tid,
@@ -854,6 +873,7 @@ export default function ReaderChapterScreen() {
           { bookSlug: target.slug, chapterNumber: target.chapter },
           target.chapter,
         ).nextChapter,
+        books,
       );
     }
     closeToolsMenu();
@@ -886,9 +906,19 @@ export default function ReaderChapterScreen() {
   }, [chapter, readerTabletLandscapeTwoColumn, readerTwoColumnSplitIndex]);
 
   const verseFlashListDataForList = useMemo(
-    () => (isReaderContentCurrent ? verseFlashListData : []),
-    [isReaderContentCurrent, verseFlashListData],
+    () => (isTranslationSwitching ? [] : verseFlashListData),
+    [isTranslationSwitching, verseFlashListData],
   );
+
+  const readerChapterScrollKey = `${bookSlug ?? ""}:${chapterNumber}:${requestedTranslationId}`;
+  useEffect(() => {
+    if (!isReaderContentCurrent || isTranslationSwitching) return;
+    if (readerChapterScrollKeyRef.current === readerChapterScrollKey) return;
+    readerChapterScrollKeyRef.current = readerChapterScrollKey;
+    requestAnimationFrame(() => {
+      readerScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
+    });
+  }, [isReaderContentCurrent, isTranslationSwitching, readerChapterScrollKey]);
 
   /** Typical single-line verse row height; FlashList v2 measures real layouts (no `estimatedItemSize` prop). */
   const readerVerseEstimatedItemSize = readerVerseEstimatedFlashListItemSizePx(readerVerseLineHeight);
@@ -1176,10 +1206,10 @@ export default function ReaderChapterScreen() {
     const tryChapterSwipeNavigate = (g: PanResponderGestureState) => {
       if (!chapterSwipeReleaseShouldNavigate(g, releaseThresholdPx)) return;
       if (g.dx <= -releaseThresholdPx && nextChapter) {
-        primeReaderChapterFetch(tid, nextChapter);
+        primeReaderChapterFetch(tid, nextChapter, books);
         goToReaderChapter(nextChapter.slug, nextChapter.chapter, tid);
       } else if (g.dx >= releaseThresholdPx && prevChapter) {
-        primeReaderChapterFetch(tid, prevChapter);
+        primeReaderChapterFetch(tid, prevChapter, books);
         goToReaderChapter(prevChapter.slug, prevChapter.chapter, tid);
       }
     };
@@ -1203,7 +1233,7 @@ export default function ReaderChapterScreen() {
         tryChapterSwipeNavigate(g);
       },
     });
-  }, [chapterNav, resolvedTranslationId, goToReaderChapter, hideChapterNavArrowsFromMotion]);
+  }, [chapterNav, resolvedTranslationId, books, goToReaderChapter, hideChapterNavArrowsFromMotion]);
 
   if (readerChapterError) {
     return (
@@ -1524,6 +1554,8 @@ export default function ReaderChapterScreen() {
         onOpenJournal={handleOpenJournalFromSelection}
         onOpenStudyNotes={handleOpenStudyNotesFromSelection}
         onSelectionActivityChange={handleSelectionActivityChange}
+        translationLoadingPhase={translationLoadingPhase}
+        translationLoadingAccentColor={colors.gold}
       />
 
       </Animated.View>
@@ -1644,6 +1676,9 @@ export default function ReaderChapterScreen() {
         favoriteTranslationIds={favoriteTranslationIds}
         toggleFavoriteTranslation={toggleFavoriteTranslation}
         resolvedTranslationId={resolvedTranslationId}
+        readerBookSlug={bookSlug}
+        readerChapterNumber={chapterNumber}
+        readerBooks={books}
       />
       <ReaderFontSettingsSheet
         isOpen={fontSettingsSheetOpen}

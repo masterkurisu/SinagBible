@@ -159,6 +159,11 @@ export function useTranslationPicker(): {
       }
       if (yvpResult.status === "fulfilled") {
         setYvpItems(yvpResult.value);
+      } else if (__DEV__) {
+        console.warn(
+          "[useTranslationPicker] YouVersion catalog failed:",
+          yvpResult.reason,
+        );
       }
       setLoading(false);
     })();
