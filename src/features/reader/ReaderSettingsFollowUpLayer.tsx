@@ -24,7 +24,6 @@ import { ReaderModals, ReaderMobileSettingsPanel, type ReaderToolsDropdown } fro
 import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
 import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
-import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
 
 const STUB_CHAPTER = {
   bookName: "Genesis",
@@ -275,13 +274,9 @@ export function ReaderSettingsFollowUpLayer({
   onSelectVerseCarousel,
   panelBackgroundColor,
   followUp,
-  settingsOnboardingRowRefs,
   onSettingsPanelLayout,
 }: ReaderSettingsFollowUpLayerProps & {
   followUp: ReturnType<typeof useReaderSettingsFollowUpState>;
-  settingsOnboardingRowRefs?: Partial<
-    Record<ReaderSettingsOnboardingStepId | "more", RefObject<View | null>>
-  >;
   onSettingsPanelLayout?: () => void;
 }) {
   const colors = bundle.ui;
@@ -361,7 +356,6 @@ export function ReaderSettingsFollowUpLayer({
       onSelectVerseCarousel,
       panelBackgroundColor,
       rippleColor,
-      settingsOnboardingRowRefs,
       onSettingsPanelLayout,
     }),
     [
@@ -376,7 +370,6 @@ export function ReaderSettingsFollowUpLayer({
       panelBackgroundColor,
       rippleColor,
       scrollPaddingTop,
-      settingsOnboardingRowRefs,
       toolsMenuOpen,
       windowWidth,
     ],

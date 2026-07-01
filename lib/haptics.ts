@@ -23,6 +23,11 @@ export function hapticSelection() {
   run(() => Haptics.selectionAsync());
 }
 
+/** Subtle pop when a contextual tooltip or popover appears (long-press reveal). */
+export function hapticSoftPop() {
+  run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
+}
+
 export function hapticWarning() {
   run(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
 }

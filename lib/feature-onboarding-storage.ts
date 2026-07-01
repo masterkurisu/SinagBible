@@ -5,7 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  * Trim this list as each tour is finalized.
  */
 export const FEATURE_ONBOARDING_FORCE_PAGES: ReadonlySet<FeatureOnboardingPage> = __DEV__
-  ? new Set<FeatureOnboardingPage>(["readerSettings"])
+  ? new Set<FeatureOnboardingPage>()
   : new Set();
 
 /**

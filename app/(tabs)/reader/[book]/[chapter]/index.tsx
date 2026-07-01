@@ -120,10 +120,7 @@ import {
   type ReaderToolsDropdown,
 } from "@/src/features/reader/ReaderModals";
 import { ReaderFeatureOnboardingLayer } from "@/src/features/reader/ReaderFeatureOnboardingLayer";
-import { ReaderSettingsOnboardingLayer } from "@/src/features/reader/ReaderSettingsOnboardingLayer";
 import { useReaderFeatureOnboarding, type ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
-import { useReaderSettingsOnboarding } from "@/src/features/reader/useReaderSettingsOnboarding";
-import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
@@ -243,22 +240,6 @@ export default function ReaderChapterScreen() {
   const chapterNavPrevArrowRef = useRef<View | null>(null);
   const chapterNavNextArrowRef = useRef<View | null>(null);
   const [headerToolsLayoutEpoch, setHeaderToolsLayoutEpoch] = useState(0);
-  const [settingsLayoutEpoch, setSettingsLayoutEpoch] = useState(0);
-  const settingsOnboardingTranslationRef = useRef<View | null>(null);
-  const settingsOnboardingStudyNotesRef = useRef<View | null>(null);
-  const settingsOnboardingFontSettingsRef = useRef<View | null>(null);
-  const settingsOnboardingThemesRef = useRef<View | null>(null);
-  const settingsOnboardingDeleteMyDataRef = useRef<View | null>(null);
-  const settingsOnboardingRowRefs = useMemo(
-    (): Record<ReaderSettingsOnboardingStepId, React.RefObject<View | null>> => ({
-      translation: settingsOnboardingTranslationRef,
-      "study-notes": settingsOnboardingStudyNotesRef,
-      "font-settings": settingsOnboardingFontSettingsRef,
-      themes: settingsOnboardingThemesRef,
-      "delete-my-data": settingsOnboardingDeleteMyDataRef,
-    }),
-    [],
-  );
   const translationFanRef = useRef<View | null>(null);
   const themesFanRef = useRef<View | null>(null);
 
@@ -1072,10 +1053,6 @@ export default function ReaderChapterScreen() {
     setHeaderToolsLayoutEpoch((epoch) => epoch + 1);
   }, []);
 
-  const bumpSettingsLayoutEpoch = useCallback(() => {
-    setSettingsLayoutEpoch((epoch) => epoch + 1);
-  }, []);
-
   const readerFeatureOnboarding = useReaderFeatureOnboarding({
     readerContentReady: !readerChapterLoading && readerChapterError == null && chapter != null,
     readerOverlayOpen,
@@ -1227,18 +1204,6 @@ export default function ReaderChapterScreen() {
       },
     });
   }, [chapterNav, resolvedTranslationId, goToReaderChapter, hideChapterNavArrowsFromMotion]);
-
-  const readerSettingsOnboarding = useReaderSettingsOnboarding({
-    toolsMenuOpen,
-    isNavigationRailLayout: !isTabletReaderLayout,
-    rowRefs: settingsOnboardingRowRefs,
-    scrollPaddingTop: readerMobileSettingsScrollPaddingTop,
-    screenW: windowWidth,
-    screenH: windowHeight,
-    insets,
-    settingsLayoutEpoch,
-    settingsRevealedStripWidthPx: settingsPanelWidthPx,
-  });
 
   if (readerChapterError) {
     return (
@@ -1475,8 +1440,6 @@ export default function ReaderChapterScreen() {
     onSelectDeleteMyData: openDeleteMyDataConfirmFromMenu,
     panelBackgroundColor: rc.sceneSurface,
     rippleColor: Platform.OS === "android" ? androidAppBarRipple : undefined,
-    settingsOnboardingRowRefs,
-    onSettingsPanelLayout: bumpSettingsLayoutEpoch,
   };
 
   return (
@@ -1748,19 +1711,6 @@ export default function ReaderChapterScreen() {
           tooltipBackground: rc.selectionBackground,
           tooltipText: rc.selectionText,
           scrim: "rgba(0,0,0,0.45)",
-        }}
-      />
-
-      <ReaderSettingsOnboardingLayer
-        visible={readerSettingsOnboarding.showLayer}
-        step={readerSettingsOnboarding.currentStep}
-        rowAnchor={readerSettingsOnboarding.rowAnchor}
-        railSide="left"
-        sideSheetWidthPx={settingsPanelWidthPx}
-        colors={{
-          tooltipBackground: rc.selectionBackground,
-          tooltipText: rc.selectionText,
-          arrow: "#FFFFFF",
         }}
       />
 

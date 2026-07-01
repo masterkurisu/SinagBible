@@ -1,4 +1,4 @@
-import { useCallback, useRef, type ComponentType, type RefObject } from "react";
+import { useCallback, useRef, type ComponentType } from "react";
 import {
   Animated,
   Platform,
@@ -6,9 +6,10 @@ import {
   StyleSheet,
   Text,
   View,
-  type View as RNView,
+  type LayoutRectangle,
 } from "react-native";
-import { hapticLightImpact } from "@/lib/haptics";
+import { hapticLightImpact, hapticSoftPop } from "@/lib/haptics";
+import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import {
   READER_M3_ERROR,
   READER_M3_ERROR_CONTAINER,
@@ -29,8 +30,14 @@ export type ReaderM3RailDestinationProps = {
   iconSize?: number;
   destructive?: boolean;
   rippleColor?: string;
-  rowRef?: RefObject<RNView | null>;
   contentPaddingLeft: number;
+  tooltipTitle?: string;
+  tooltipDescription?: string;
+  onShowTooltip?: (payload: {
+    anchor: LayoutRectangle;
+    title: string;
+    description: string;
+  }) => void;
 };
 
 const RAIL_ICON_SIZE = 24;
@@ -45,10 +52,13 @@ export function ReaderM3RailDestination({
   iconSize = RAIL_ICON_SIZE,
   destructive = false,
   rippleColor = READER_M3_ICON_BUTTON_RIPPLE,
-  rowRef,
   contentPaddingLeft,
+  tooltipTitle,
+  tooltipDescription,
+  onShowTooltip,
 }: ReaderM3RailDestinationProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const rowMeasureRef = useRef<View | null>(null);
   const iconColor = destructive ? READER_M3_ERROR : READER_M3_ON_SURFACE_VARIANT;
   const labelColor = destructive ? READER_M3_ON_ERROR_CONTAINER : READER_M3_ON_SURFACE;
   const destructiveRipple = "rgba(179,38,30,0.12)";
@@ -76,15 +86,36 @@ export function ReaderM3RailDestination({
     }).start();
   }, [scaleAnim]);
 
+  const handleLongPress = useCallback(() => {
+    if (!tooltipTitle || !onShowTooltip) return;
+    hapticSoftPop();
+    void (async () => {
+      const measured = await measureOnboardingTarget(rowMeasureRef, {
+        minWidth: 40,
+        minHeight: 20,
+      });
+      if (!measured) return;
+      onShowTooltip({
+        anchor: measured,
+        title: tooltipTitle,
+        description: tooltipDescription ?? "",
+      });
+    })();
+  }, [onShowTooltip, tooltipDescription, tooltipTitle]);
+
   const useM3Press = Platform.OS === "android";
+  const hasTooltip = tooltipTitle != null && onShowTooltip != null;
 
   return (
     <Pressable
       onPress={handlePress}
+      onLongPress={hasTooltip ? handleLongPress : undefined}
+      delayLongPress={420}
       onPressIn={useM3Press ? handlePressIn : undefined}
       onPressOut={useM3Press ? handlePressOut : undefined}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={hasTooltip ? "Press and hold for more information" : undefined}
       android_ripple={
         useM3Press
           ? { color: destructive ? destructiveRipple : rippleColor }
@@ -99,7 +130,7 @@ export function ReaderM3RailDestination({
       ]}
     >
       <Animated.View
-        ref={rowRef}
+        ref={rowMeasureRef}
         collapsable={false}
         style={[
           styles.railItemInner,

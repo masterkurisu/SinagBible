@@ -19,6 +19,7 @@ import {
   TouchableWithoutFeedback,
   View,
   type KeyboardEvent,
+  type LayoutRectangle,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
@@ -46,6 +47,13 @@ import { ReaderThemesPaletteIcon } from "@/components/icons/ReaderThemesPaletteI
 import { DeleteMyDataIcon } from "@/components/icons/DeleteMyDataIcon";
 import { SettingsMoreIcon } from "@/components/icons/SettingsMoreIcon";
 import { ReaderSettingsSideSheet } from "@/src/features/reader/ReaderSettingsSideSheet";
+import { M3RichTooltipOverlay } from "@/src/components/m3/M3RichTooltipOverlay";
+import {
+  getReaderSettingsTooltip,
+  type ReaderSettingsTooltipId,
+} from "@/src/features/reader/readerSettingsOnboardingSteps";
+import { useSettingsRowTooltip } from "@/src/features/reader/useSettingsRowTooltip";
+import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import {
   READER_M3_ERROR,
   READER_M3_ERROR_CONTAINER,
@@ -54,10 +62,8 @@ import {
   READER_M3_ON_SURFACE_VARIANT,
   READER_M3_SURFACE_CONTAINER,
 } from "@/src/features/reader/readerSettingsPanelChrome";
-import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
-import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { nativeTabSheetBottomInsetPx, readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
-import { hapticLightImpact } from "@/lib/haptics";
+import { hapticLightImpact, hapticSoftPop } from "@/lib/haptics";
 import { READER_MENU_SLIDE_FROM_PX } from "./useReaderGestures";
 import { BookPickerSheet } from "@/src/features/reader/BookPickerSheet";
 export type { BookSelectorViewMode, SelectorTestamentTab } from "@/src/features/reader/BookPickerSheet";
@@ -149,9 +155,6 @@ export type ReaderMobileSettingsPanelProps = {
   panelBackgroundColor: string;
   /** Theme-aware M3 ripple for settings destinations (Android). */
   rippleColor?: string;
-  settingsOnboardingRowRefs?: Partial<
-    Record<ReaderSettingsOnboardingStepId, RefObject<View | null>>
-  >;
   onSettingsPanelLayout?: () => void;
 };
 
@@ -201,7 +204,6 @@ export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps)
         onSelectVerseCarousel={props.onSelectVerseCarousel}
         panelBackgroundColor={props.panelBackgroundColor}
         rippleColor={props.rippleColor}
-        settingsOnboardingRowRefs={props.settingsOnboardingRowRefs}
         onSettingsPanelLayout={props.onSettingsPanelLayout}
       />
     );
@@ -224,13 +226,14 @@ function ReaderMobileSettingsPanelTablet(props: ReaderMobileSettingsPanelProps) 
     onSelectTranslation,
     onSelectCommentary,
     onSelectDeleteMyData,
-    settingsOnboardingRowRefs,
     onSettingsPanelLayout,
   } = props;
   const deleteMyDataBottomPx = readerSettingsDeleteMyDataPanelBottomPx();
+  const { tooltip, showTooltip, dismissTooltip, tooltipVisible } = useSettingsRowTooltip();
+  const deleteRowRef = useRef<View | null>(null);
 
   const rows: {
-    id: ReaderSettingsOnboardingStepId;
+    id: ReaderSettingsTooltipId;
     label: string;
     onPress: () => void;
     Icon: ComponentType<ReaderSettingsMenuIconProps>;
@@ -293,72 +296,30 @@ function ReaderMobileSettingsPanelTablet(props: ReaderMobileSettingsPanelProps) 
         }}
       >
         <View className="gap-2.5">
-        {rows.map(({ id, label, onPress, Icon, iconSize }) => (
-          <TouchableOpacity
+        {rows.map(({ id, label, onPress, Icon, iconSize }) => {
+          const tooltipContent = getReaderSettingsTooltip(id);
+          return (
+          <SettingsTabletRow
             key={id}
-            style={{ width: "100%" }}
-            onPress={() => {
-              hapticLightImpact();
-              onPress();
-            }}
-            activeOpacity={0.75}
-            accessibilityLabel={label}
-            accessibilityRole="button"
-          >
-            <View
-              ref={settingsOnboardingRowRefs?.[id]}
-              collapsable={false}
-              style={[
-                READER_MOBILE_SETTINGS_MENU_ROW,
-                { backgroundColor: READER_M3_SURFACE_CONTAINER },
-              ]}
-            >
-              <Icon size={iconSize ?? SETTINGS_MENU_ICON_SIZE} color={READER_M3_ON_SURFACE_VARIANT} />
-              <Text
-                style={{
-                  fontFamily: "Inter_400Regular",
-                  fontSize: SETTINGS_MENU_LABEL_SIZE,
-                  color: READER_M3_ON_SURFACE,
-                  textAlign: "left",
-                  flex: 1,
-                }}
-              >
-                {label}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-          <TouchableOpacity
-            style={{ width: "100%" }}
-            onPress={() => {
-              hapticLightImpact();
-              onSelectMore();
-            }}
-            activeOpacity={0.75}
-            accessibilityLabel="More"
-            accessibilityRole="button"
-          >
-            <View
-              collapsable={false}
-              style={[
-                READER_MOBILE_SETTINGS_MENU_ROW,
-                { backgroundColor: READER_M3_SURFACE_CONTAINER },
-              ]}
-            >
-              <SettingsMoreIcon size={SETTINGS_MENU_ICON_SIZE} color={READER_M3_ON_SURFACE_VARIANT} />
-              <Text
-                style={{
-                  fontFamily: "Inter_400Regular",
-                  fontSize: SETTINGS_MENU_LABEL_SIZE,
-                  color: READER_M3_ON_SURFACE,
-                  textAlign: "left",
-                  flex: 1,
-                }}
-              >
-                More
-              </Text>
-            </View>
-          </TouchableOpacity>
+            label={label}
+            onPress={onPress}
+            Icon={Icon}
+            iconSize={iconSize ?? SETTINGS_MENU_ICON_SIZE}
+            tooltipTitle={tooltipContent?.title}
+            tooltipDescription={tooltipContent?.description}
+            onShowTooltip={tooltipContent ? showTooltip : undefined}
+          />
+        );
+        })}
+          <SettingsTabletRow
+            label="More"
+            onPress={onSelectMore}
+            Icon={SettingsMoreIcon}
+            iconSize={SETTINGS_MENU_ICON_SIZE}
+            tooltipTitle={getReaderSettingsTooltip("more")?.title}
+            tooltipDescription={getReaderSettingsTooltip("more")?.description}
+            onShowTooltip={getReaderSettingsTooltip("more") ? showTooltip : undefined}
+          />
         </View>
       </ScrollView>
       <TouchableOpacity
@@ -372,12 +333,31 @@ function ReaderMobileSettingsPanelTablet(props: ReaderMobileSettingsPanelProps) 
           hapticLightImpact();
           onSelectDeleteMyData();
         }}
+        onLongPress={() => {
+          const deleteTooltip = getReaderSettingsTooltip("delete-my-data");
+          if (!deleteTooltip) return;
+          hapticSoftPop();
+          void (async () => {
+            const measured = await measureOnboardingTarget(deleteRowRef, {
+              minWidth: 40,
+              minHeight: 20,
+            });
+            if (!measured) return;
+            showTooltip({
+              anchor: measured,
+              title: deleteTooltip.title,
+              description: deleteTooltip.description,
+            });
+          })();
+        }}
+        delayLongPress={420}
         activeOpacity={0.75}
         accessibilityLabel="Delete My Data"
+        accessibilityHint="Press and hold for more information"
         accessibilityRole="button"
       >
         <View
-          ref={settingsOnboardingRowRefs?.["delete-my-data"]}
+          ref={deleteRowRef}
           collapsable={false}
           style={[READER_MOBILE_SETTINGS_MENU_ROW, { backgroundColor: READER_M3_ERROR_CONTAINER }]}
         >
@@ -395,7 +375,95 @@ function ReaderMobileSettingsPanelTablet(props: ReaderMobileSettingsPanelProps) 
           </Text>
         </View>
       </TouchableOpacity>
+      {tooltip ? (
+        <M3RichTooltipOverlay
+          visible={tooltipVisible}
+          anchor={tooltip.anchor}
+          title={tooltip.title}
+          description={tooltip.description}
+          onDismiss={dismissTooltip}
+        />
+      ) : null}
     </View>
+  );
+}
+
+type SettingsTabletRowProps = {
+  label: string;
+  onPress: () => void;
+  Icon: ComponentType<ReaderSettingsMenuIconProps>;
+  iconSize: number;
+  tooltipTitle?: string;
+  tooltipDescription?: string;
+  onShowTooltip?: (payload: {
+    anchor: LayoutRectangle;
+    title: string;
+    description: string;
+  }) => void;
+};
+
+function SettingsTabletRow({
+  label,
+  onPress,
+  Icon,
+  iconSize,
+  tooltipTitle,
+  tooltipDescription,
+  onShowTooltip,
+}: SettingsTabletRowProps) {
+  const rowRef = useRef<View | null>(null);
+  const hasTooltip = tooltipTitle != null && onShowTooltip != null;
+
+  const handleLongPress = useCallback(() => {
+    if (!hasTooltip || !tooltipTitle || !onShowTooltip) return;
+    hapticSoftPop();
+    void (async () => {
+      const measured = await measureOnboardingTarget(rowRef, {
+        minWidth: 40,
+        minHeight: 20,
+      });
+      if (!measured) return;
+      onShowTooltip({
+        anchor: measured,
+        title: tooltipTitle,
+        description: tooltipDescription ?? "",
+      });
+    })();
+  }, [hasTooltip, onShowTooltip, tooltipDescription, tooltipTitle]);
+
+  return (
+    <TouchableOpacity
+      style={{ width: "100%" }}
+      onPress={() => {
+        hapticLightImpact();
+        onPress();
+      }}
+      onLongPress={hasTooltip ? handleLongPress : undefined}
+      delayLongPress={420}
+      activeOpacity={0.75}
+      accessibilityLabel={label}
+      accessibilityHint={hasTooltip ? "Press and hold for more information" : undefined}
+      accessibilityRole="button"
+    >
+      <View
+        ref={rowRef}
+        collapsable={false}
+        style={[READER_MOBILE_SETTINGS_MENU_ROW, { backgroundColor: READER_M3_SURFACE_CONTAINER }]}
+      >
+        <Icon size={iconSize} color={READER_M3_ON_SURFACE_VARIANT} />
+        <Text
+          style={{
+            fontFamily: "Inter_400Regular",
+            fontSize: SETTINGS_MENU_LABEL_SIZE,
+            color: READER_M3_ON_SURFACE,
+            textAlign: "left",
+            flex: 1,
+          }}
+        >
+          {label}
+        </Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 

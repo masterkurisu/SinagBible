@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode, RefObject } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Text,
   View,
-  type View as RNView,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { BookIcon } from "@/components/icons/BookIcon";
@@ -24,7 +23,9 @@ import {
 } from "@/lib/reader-settings-menu-motion";
 import { readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
 import { ReaderM3RailDestination } from "@/src/features/reader/ReaderM3RailDestination";
-import type { ReaderSettingsOnboardingStepId } from "@/src/features/reader/readerSettingsOnboardingSteps";
+import { M3RichTooltipOverlay } from "@/src/components/m3/M3RichTooltipOverlay";
+import { getReaderSettingsTooltip } from "@/src/features/reader/readerSettingsOnboardingSteps";
+import { useSettingsRowTooltip } from "@/src/features/reader/useSettingsRowTooltip";
 import {
   READER_SETTINGS_NAV_RAIL_ITEM_HEIGHT_PX,
   readerSettingsSideSheetWidthPx,
@@ -35,7 +36,7 @@ const HEADER_TOOLS_ROW_HEIGHT = 44;
 type ReaderSettingsMenuIconProps = { size?: number; color?: string };
 
 type SideSheetDestination = {
-  id: ReaderSettingsOnboardingStepId | "more" | "verse-carousel";
+  id: string;
   label: string;
   onPress: () => void;
   Icon: ComponentType<ReaderSettingsMenuIconProps>;
@@ -61,9 +62,6 @@ export type ReaderSettingsSideSheetProps = {
   onSelectVerseCarousel?: () => void;
   panelBackgroundColor: string;
   rippleColor?: string;
-  settingsOnboardingRowRefs?: Partial<
-    Record<ReaderSettingsOnboardingStepId | "more", RefObject<RNView | null>>
-  >;
   onSettingsPanelLayout?: () => void;
 };
 
@@ -90,7 +88,6 @@ export function ReaderSettingsSideSheet({
   onSelectVerseCarousel,
   panelBackgroundColor,
   rippleColor,
-  settingsOnboardingRowRefs,
   onSettingsPanelLayout,
 }: ReaderSettingsSideSheetProps) {
   const sheetWidth = readerSettingsSideSheetWidthPx(screenWidth);
@@ -98,6 +95,7 @@ export function ReaderSettingsSideSheet({
   const contentPaddingLeft = insets.left;
   const slideProgress = useRef(new Animated.Value(0)).current;
   const [sheetMounted, setSheetMounted] = useState(open);
+  const { tooltip, showTooltip, dismissTooltip, tooltipVisible } = useSettingsRowTooltip();
 
   const scrimOpacity = slideProgress.interpolate({
     inputRange: [0, 1],
@@ -181,6 +179,8 @@ export function ReaderSettingsSideSheet({
 
   if (!sheetMounted) return null;
 
+  const deleteTooltip = getReaderSettingsTooltip("delete-my-data");
+
   return (
     <Modal visible={sheetMounted} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.root} pointerEvents="box-none" onLayout={onSettingsPanelLayout}>
@@ -236,7 +236,9 @@ export function ReaderSettingsSideSheet({
               },
             ]}
           >
-            {destinations.map((destination) => (
+            {destinations.map((destination) => {
+              const tooltipContent = getReaderSettingsTooltip(destination.id);
+              return (
               <ReaderM3RailDestination
                 key={destination.id}
                 label={destination.label}
@@ -245,16 +247,13 @@ export function ReaderSettingsSideSheet({
                 iconSize={destination.iconSize}
                 destructive={destination.destructive}
                 rippleColor={rippleColor}
-                rowRef={
-                  destination.id === "verse-carousel"
-                    ? undefined
-                    : settingsOnboardingRowRefs?.[
-                        destination.id as ReaderSettingsOnboardingStepId | "more"
-                      ]
-                }
+                tooltipTitle={tooltipContent?.title}
+                tooltipDescription={tooltipContent?.description}
+                onShowTooltip={tooltipContent ? showTooltip : undefined}
                 contentPaddingLeft={contentPaddingLeft}
               />
-            ))}
+            );
+            })}
           </ScrollView>
 
           <View style={[styles.deleteWrap, { bottom: deleteMyDataBottomPx }]}>
@@ -264,12 +263,23 @@ export function ReaderSettingsSideSheet({
               Icon={DeleteMyDataIcon}
               destructive
               rippleColor={rippleColor}
-              rowRef={settingsOnboardingRowRefs?.["delete-my-data"]}
+              tooltipTitle={deleteTooltip?.title}
+              tooltipDescription={deleteTooltip?.description}
+              onShowTooltip={deleteTooltip ? showTooltip : undefined}
               contentPaddingLeft={contentPaddingLeft}
             />
           </View>
         </Animated.View>
       </View>
+      {tooltip ? (
+        <M3RichTooltipOverlay
+          visible={tooltipVisible}
+          anchor={tooltip.anchor}
+          title={tooltip.title}
+          description={tooltip.description}
+          onDismiss={dismissTooltip}
+        />
+      ) : null}
     </Modal>
   );
 }

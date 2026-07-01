@@ -1,19 +1,21 @@
 import { Platform } from "react-native";
 
-export type ReaderSettingsOnboardingStepId =
+export type ReaderSettingsTooltipId =
   | "translation"
   | "study-notes"
   | "font-settings"
   | "themes"
+  | "verse-carousel"
+  | "more"
   | "delete-my-data";
 
-export type ReaderSettingsOnboardingStep = {
-  id: ReaderSettingsOnboardingStepId;
+export type ReaderSettingsTooltipContent = {
+  id: ReaderSettingsTooltipId;
   title: string;
   description: string;
 };
 
-export const READER_SETTINGS_ONBOARDING_STEPS: ReaderSettingsOnboardingStep[] = [
+export const READER_SETTINGS_TOOLTIPS: ReaderSettingsTooltipContent[] = [
   {
     id: "translation",
     title: "Translation",
@@ -35,6 +37,18 @@ export const READER_SETTINGS_ONBOARDING_STEPS: ReaderSettingsOnboardingStep[] = 
     description: "Change the reader's look — including dark and night modes.",
   },
   {
+    id: "verse-carousel",
+    title: "Verse Carousel",
+    description:
+      "Customize the inspiration carousel on your journal — shuffle order, favorites, and how many verses appear.",
+  },
+  {
+    id: "more",
+    title: "More",
+    description:
+      "Turn haptic feedback on or off, and open credits for translations and attributions.",
+  },
+  {
     id: "delete-my-data",
     title: "Delete My Data",
     description:
@@ -42,12 +56,35 @@ export const READER_SETTINGS_ONBOARDING_STEPS: ReaderSettingsOnboardingStep[] = 
   },
 ];
 
-/** Settings onboarding steps — font settings live in the Android app bar, not the settings panel. */
-export function readerSettingsOnboardingStepsForPlatform(): ReaderSettingsOnboardingStep[] {
+/** Font settings live in the Android app bar, not the settings panel. */
+const ANDROID_READER_SETTINGS_TOOLTIPS = READER_SETTINGS_TOOLTIPS.filter(
+  (step) => step.id !== "font-settings",
+);
+
+export function readerSettingsTooltipsForPlatform(): ReaderSettingsTooltipContent[] {
   if (Platform.OS === "android") {
-    return READER_SETTINGS_ONBOARDING_STEPS.filter((step) => step.id !== "font-settings");
+    return ANDROID_READER_SETTINGS_TOOLTIPS;
   }
-  return READER_SETTINGS_ONBOARDING_STEPS;
+  return READER_SETTINGS_TOOLTIPS;
 }
 
-export const READER_SETTINGS_ONBOARDING_STEP_MS = 3000;
+const TOOLTIP_BY_ID = new Map(
+  READER_SETTINGS_TOOLTIPS.map((entry) => [entry.id, entry] as const),
+);
+
+export function getReaderSettingsTooltip(
+  id: string,
+): Pick<ReaderSettingsTooltipContent, "title" | "description"> | null {
+  const entry = TOOLTIP_BY_ID.get(id as ReaderSettingsTooltipId);
+  if (!entry) return null;
+  return { title: entry.title, description: entry.description };
+}
+
+/** @deprecated Use `ReaderSettingsTooltipId`. */
+export type ReaderSettingsOnboardingStepId = ReaderSettingsTooltipId;
+
+/** @deprecated Use `READER_SETTINGS_TOOLTIPS`. */
+export const READER_SETTINGS_ONBOARDING_STEPS = READER_SETTINGS_TOOLTIPS;
+
+/** @deprecated Use `readerSettingsTooltipsForPlatform`. */
+export const readerSettingsOnboardingStepsForPlatform = readerSettingsTooltipsForPlatform;
