@@ -1,2 +1,2 @@
-/** Flip to true in dev to draw red boxes at measured onboarding targets. */
-export const READER_ONBOARDING_DEBUG_TARGETS = __DEV__ && false;
+/** Red boxes at measured onboarding targets — dev overlay, off during normal tours. */
+export const READER_ONBOARDING_DEBUG_TARGETS = false;

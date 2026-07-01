@@ -1080,6 +1080,8 @@ export default function ReaderChapterScreen() {
     readerContentReady: !readerChapterLoading && readerChapterError == null && chapter != null,
     readerOverlayOpen,
     headerToolsGroupRef,
+    bookButtonRef: bookFanRef,
+    settingsButtonRef,
     selectionBannerRef: selectionBannerLiveRef,
     chapterNavPrevArrowRef,
     chapterNavNextArrowRef,
@@ -1091,6 +1093,8 @@ export default function ReaderChapterScreen() {
     hasNextChapter: chapterNav.nextChapter != null,
     selectionBannerTopPx,
     androidTopToolsTopPx: readerAndroidTopToolsTopPx,
+    headerToolsTopPx: readerMobileSettingsToolsTopPx,
+    isNavigationRailLayout: !isTabletReaderLayout,
     toolsOnLeft: true,
     selectedVerseCount: selectedVerses.length,
     onTourComplete: () => clearVerseSelectionRef.current?.(),
@@ -1736,6 +1740,7 @@ export default function ReaderChapterScreen() {
         message={readerFeatureOnboarding.message}
         subtitle={readerFeatureOnboarding.subtitle}
         spotlightTargets={readerFeatureOnboarding.spotlightTargets}
+        spotlightTargetsStep={readerFeatureOnboarding.spotlightTargetsStep}
         coachMarkAnchor={readerFeatureOnboarding.coachMarkAnchor}
         onDismiss={readerFeatureOnboarding.dismissCurrentStep}
         colors={{

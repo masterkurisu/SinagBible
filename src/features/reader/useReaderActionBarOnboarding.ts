@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { type LayoutRectangle, type View } from "react-native";
 import {
   isFeatureOnboardingDone,
+  isFeatureOnboardingPrerequisiteDone,
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
@@ -132,7 +133,7 @@ export function useReaderActionBarOnboarding({
 
     const startTimeout = setTimeout(() => {
       void (async () => {
-        const readerDone = await isFeatureOnboardingDone("reader");
+        const readerDone = await isFeatureOnboardingPrerequisiteDone("reader");
         if (cancelled || !readerDone) return;
 
         const actionBarDone = await isFeatureOnboardingDone("readerActionBar");

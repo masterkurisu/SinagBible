@@ -12,6 +12,21 @@ export const READER_HEADER_TOOL_BUTTON_SIZE = 44;
 const IOS_NAV_BAR_HEIGHT = 44;
 const HEADER_TOOLS_EDGE_INSET = 16;
 
+/** iOS phone navigation rail — book/settings pill sits below the status bar, not in the stack header. */
+export function estimateReaderNavigationRailToolsPillRect(
+  insets: EdgeInsets,
+  headerToolsTopPx: number,
+): LayoutRectangle {
+  const height = READER_HEADER_TOOL_BUTTON_SIZE;
+  const width = READER_HEADER_TOOLS_PILL_WIDTH;
+  return {
+    x: Math.max(insets.left, HEADER_TOOLS_EDGE_INSET),
+    y: headerToolsTopPx,
+    width,
+    height,
+  };
+}
+
 export function isPlausibleHeaderToolsPillRect(
   rect: LayoutRectangle | null | undefined,
   insets: EdgeInsets,

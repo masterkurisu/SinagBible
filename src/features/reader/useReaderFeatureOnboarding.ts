@@ -21,6 +21,7 @@ import {
 } from "@/src/features/reader/ReaderChapterNavArrows";
 import {
   estimateReaderHeaderToolsPillRect,
+  estimateReaderNavigationRailToolsPillRect,
   isPlausibleAndroidAppBarRect,
   isPlausibleHeaderToolsPillRect,
   readerAndroidAppBarToolTargetsFromBar,
@@ -61,6 +62,8 @@ type UseReaderFeatureOnboardingArgs = {
   readerContentReady: boolean;
   readerOverlayOpen: boolean;
   headerToolsGroupRef: RefObject<View | null>;
+  bookButtonRef: RefObject<View | null>;
+  settingsButtonRef: RefObject<View | null>;
   selectionBannerRef: RefObject<View | null>;
   chapterNavPrevArrowRef: RefObject<View | null>;
   chapterNavNextArrowRef: RefObject<View | null>;
@@ -72,6 +75,8 @@ type UseReaderFeatureOnboardingArgs = {
   hasNextChapter: boolean;
   selectionBannerTopPx: number;
   androidTopToolsTopPx: number;
+  headerToolsTopPx: number;
+  isNavigationRailLayout: boolean;
   toolsOnLeft: boolean;
   selectedVerseCount: number;
   onTourComplete?: () => void;
@@ -86,6 +91,23 @@ function circleSpotlightTarget(rect: LayoutRectangle): SpotlightTarget {
     borderRadius: Math.max(rect.width, rect.height) / 2,
     shape: "circle",
   };
+}
+
+function headerToolSpotlightFromLayout(rect: LayoutRectangle): SpotlightTarget {
+  return circleSpotlightTarget(adjustAnchorForOnboardingModal(rect));
+}
+
+function headerToolSpotlightFromFallback(
+  which: "book" | "settings",
+  pillRect: LayoutRectangle,
+  insets: EdgeInsets,
+  screenW: number,
+): SpotlightTarget {
+  const fallback =
+    Platform.OS === "android" && isPlausibleAndroidAppBarRect(pillRect, screenW)
+      ? readerAndroidAppBarToolTargetsFromBar(pillRect, insets, screenW)[which]
+      : readerHeaderToolTargetsFromPill(pillRect)[which];
+  return headerToolSpotlightFromLayout(fallback);
 }
 
 function chapterNavArrowFallbackTargets(
@@ -126,6 +148,8 @@ async function measureHeaderToolsPillRect(
   insets: EdgeInsets,
   screenW: number,
   androidTopToolsTopPx: number,
+  headerToolsTopPx: number,
+  isNavigationRailLayout: boolean,
   toolsOnLeft: boolean,
 ): Promise<LayoutRectangle> {
   const measured = await measureOnboardingTarget(headerToolsGroupRef, {
@@ -146,13 +170,49 @@ async function measureHeaderToolsPillRect(
       height: 56,
     };
   }
+  if (isNavigationRailLayout) {
+    return estimateReaderNavigationRailToolsPillRect(insets, headerToolsTopPx);
+  }
   return estimateReaderHeaderToolsPillRect(insets, screenW, androidTopToolsTopPx, toolsOnLeft);
+}
+
+async function measureHeaderToolSpotlightTarget(
+  which: "book" | "settings",
+  buttonRef: RefObject<View | null>,
+  headerToolsGroupRef: RefObject<View | null>,
+  insets: EdgeInsets,
+  screenW: number,
+  androidTopToolsTopPx: number,
+  headerToolsTopPx: number,
+  isNavigationRailLayout: boolean,
+  toolsOnLeft: boolean,
+): Promise<SpotlightTarget> {
+  const measuredButton = await measureOnboardingTarget(buttonRef, {
+    minWidth: 20,
+    minHeight: 20,
+  });
+  if (measuredButton) {
+    return headerToolSpotlightFromLayout(measuredButton);
+  }
+
+  const pillRect = await measureHeaderToolsPillRect(
+    headerToolsGroupRef,
+    insets,
+    screenW,
+    androidTopToolsTopPx,
+    headerToolsTopPx,
+    isNavigationRailLayout,
+    toolsOnLeft,
+  );
+  return headerToolSpotlightFromFallback(which, pillRect, insets, screenW);
 }
 
 export function useReaderFeatureOnboarding({
   readerContentReady,
   readerOverlayOpen,
   headerToolsGroupRef,
+  bookButtonRef,
+  settingsButtonRef,
   selectionBannerRef,
   chapterNavPrevArrowRef,
   chapterNavNextArrowRef,
@@ -164,6 +224,8 @@ export function useReaderFeatureOnboarding({
   hasNextChapter,
   selectionBannerTopPx,
   androidTopToolsTopPx,
+  headerToolsTopPx,
+  isNavigationRailLayout,
   toolsOnLeft,
   selectedVerseCount,
   onTourComplete,
@@ -171,6 +233,7 @@ export function useReaderFeatureOnboarding({
   const [active, setActive] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [spotlightTargets, setSpotlightTargets] = useState<SpotlightTarget[]>([]);
+  const [spotlightTargetsStep, setSpotlightTargetsStep] = useState<ReaderOnboardingStep | null>(null);
   const [coachMarkAnchor, setCoachMarkAnchor] = useState<LayoutRectangle | null>(null);
   const [targetsReady, setTargetsReady] = useState(false);
   const storageCheckedRef = useRef(false);
@@ -205,36 +268,38 @@ export function useReaderFeatureOnboarding({
     }
 
     if (currentStep === "book-selector") {
-      const pillRect = await measureHeaderToolsPillRect(
+      const bookTarget = await measureHeaderToolSpotlightTarget(
+        "book",
+        bookButtonRef,
         headerToolsGroupRef,
         insets,
         screenW,
         androidTopToolsTopPx,
+        headerToolsTopPx,
+        isNavigationRailLayout,
         toolsOnLeft,
       );
-      const bookTarget =
-        Platform.OS === "android" && isPlausibleAndroidAppBarRect(pillRect, screenW)
-          ? readerAndroidAppBarToolTargetsFromBar(pillRect, insets, screenW).book
-          : readerHeaderToolTargetsFromPill(pillRect).book;
       setSpotlightTargets([bookTarget]);
+      setSpotlightTargetsStep("book-selector");
       setCoachMarkAnchor(null);
       setTargetsReady(true);
       return;
     }
 
     if (currentStep === "settings") {
-      const pillRect = await measureHeaderToolsPillRect(
+      const settingsTarget = await measureHeaderToolSpotlightTarget(
+        "settings",
+        settingsButtonRef,
         headerToolsGroupRef,
         insets,
         screenW,
         androidTopToolsTopPx,
+        headerToolsTopPx,
+        isNavigationRailLayout,
         toolsOnLeft,
       );
-      const settingsTarget =
-        Platform.OS === "android" && isPlausibleAndroidAppBarRect(pillRect, screenW)
-          ? readerAndroidAppBarToolTargetsFromBar(pillRect, insets, screenW).settings
-          : readerHeaderToolTargetsFromPill(pillRect).settings;
       setSpotlightTargets([settingsTarget]);
+      setSpotlightTargetsStep("settings");
       setCoachMarkAnchor(null);
       setTargetsReady(true);
       return;
@@ -266,6 +331,7 @@ export function useReaderFeatureOnboarding({
       setSpotlightTargets(
         adjustAnchorsForOnboardingModal(targets).map(circleSpotlightTarget),
       );
+      setSpotlightTargetsStep("page-turns");
       setCoachMarkAnchor(null);
       setTargetsReady(targets.length > 0);
       return;
@@ -273,6 +339,7 @@ export function useReaderFeatureOnboarding({
 
     if (currentStep === "tap-select-verse" || currentStep === "long-press-highlight") {
       setSpotlightTargets([]);
+      setSpotlightTargetsStep(null);
       setCoachMarkAnchor(null);
       setTargetsReady(true);
       return;
@@ -290,6 +357,7 @@ export function useReaderFeatureOnboarding({
           shape: "pill",
         },
       ]);
+      setSpotlightTargetsStep("clear-selection");
       setCoachMarkAnchor(null);
       setTargetsReady(selectedVerseCount > 0 || measured != null);
       return;
@@ -297,18 +365,22 @@ export function useReaderFeatureOnboarding({
   }, [
     active,
     androidTopToolsTopPx,
+    bookButtonRef,
     headerToolsGroupRef,
     chapterNavNextArrowRef,
     chapterNavPrevArrowRef,
     currentStep,
     hasNextChapter,
     hasPrevChapter,
+    headerToolsTopPx,
     insets,
+    isNavigationRailLayout,
     screenH,
     screenW,
     selectionBannerRef,
     selectionBannerTopPx,
     selectedVerseCount,
+    settingsButtonRef,
     toolsOnLeft,
   ]);
 
@@ -362,6 +434,7 @@ export function useReaderFeatureOnboarding({
     isCoachMarkStep: currentStep != null && !isSpotlightStep,
     isInteractionCoachMark,
     spotlightTargets,
+    spotlightTargetsStep,
     coachMarkAnchor,
     forceChapterNavArrowsVisible,
     dismissCurrentStep,

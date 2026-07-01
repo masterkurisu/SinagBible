@@ -39,8 +39,8 @@ type SpotlightOverlayProps = {
   };
 };
 
-const TARGET_MORPH_MS = 380;
-const LABEL_CROSSFADE_MS = 220;
+const TARGET_MORPH_MS = 520;
+const LABEL_CROSSFADE_MS = 300;
 
 function toCircleTarget(target: SpotlightTarget, pad: number): SpotlightTarget {
   const cx = target.x + target.width / 2;
@@ -81,20 +81,26 @@ function paddedTarget(target: SpotlightTarget, pad: number): SpotlightTarget {
   };
 }
 
-function targetsMatchForMorph(a: SpotlightTarget[], b: SpotlightTarget[]): boolean {
-  if (a.length !== b.length || a.length === 0) return false;
-  return a.every((target, index) => target.shape === b[index]?.shape);
+function targetsCanMorph(a: SpotlightTarget[], b: SpotlightTarget[]): boolean {
+  if (a.length === 0 || b.length === 0) return false;
+  const shapeOf = (target: SpotlightTarget) => target.shape ?? "rect";
+  const fromShape = shapeOf(a[0]!);
+  return a.every((target) => shapeOf(target) === fromShape) && b.every((target) => shapeOf(target) === fromShape);
 }
 
 function lerpTargets(from: SpotlightTarget[], to: SpotlightTarget[], t: number): SpotlightTarget[] {
-  return from.map((start, index) => {
-    const end = to[index]!;
+  const count = Math.max(from.length, to.length);
+  return Array.from({ length: count }, (_, index) => {
+    const start = from[Math.min(index, from.length - 1)]!;
+    const end = to[Math.min(index, to.length - 1)]!;
+    const startRadius = start.borderRadius ?? 0;
+    const endRadius = end.borderRadius ?? startRadius;
     return {
       x: start.x + (end.x - start.x) * t,
       y: start.y + (end.y - start.y) * t,
       width: start.width + (end.width - start.width) * t,
       height: start.height + (end.height - start.height) * t,
-      borderRadius: start.borderRadius ?? end.borderRadius,
+      borderRadius: startRadius + (endRadius - startRadius) * t,
       shape: start.shape,
     };
   });
@@ -244,7 +250,7 @@ function useMorphingTargets(paddedTargets: SpotlightTarget[]): SpotlightTarget[]
 
     morphAnimRef.current?.stop();
 
-    if (!targetsMatchForMorph(previous, next)) {
+    if (!targetsCanMorph(previous, next)) {
       prevTargetsRef.current = next;
       setRenderTargets(next);
       return;
@@ -258,7 +264,7 @@ function useMorphingTargets(paddedTargets: SpotlightTarget[]): SpotlightTarget[]
     morphAnimRef.current = Animated.timing(progress, {
       toValue: 1,
       duration: TARGET_MORPH_MS,
-      easing: Easing.out(Easing.cubic),
+      easing: Easing.inOut(Easing.cubic),
       useNativeDriver: false,
     });
 
@@ -293,8 +299,8 @@ function useCrossfadingLabel(message: string, subtitle?: string) {
 
     fadeAnimRef.current?.stop();
     fadeAnimRef.current = Animated.timing(labelOpacity, {
-      toValue: 0,
-      duration: LABEL_CROSSFADE_MS,
+      toValue: 0.2,
+      duration: LABEL_CROSSFADE_MS * 0.4,
       easing: Easing.in(Easing.quad),
       useNativeDriver: true,
     });
@@ -309,8 +315,8 @@ function useCrossfadingLabel(message: string, subtitle?: string) {
 
       fadeAnimRef.current = Animated.timing(labelOpacity, {
         toValue: 1,
-        duration: LABEL_CROSSFADE_MS,
-        easing: Easing.out(Easing.quad),
+        duration: LABEL_CROSSFADE_MS * 0.6,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       });
       fadeAnimRef.current.start(({ finished: fadeInFinished }) => {
@@ -410,7 +416,10 @@ export function SpotlightOverlay({
         />
       )}
 
-      <Animated.View pointerEvents="none" style={[styles.labelWrap, labelStyle, { opacity: labelOpacity }]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.labelWrap, labelStyle, { opacity: labelOpacity }]}
+      >
         <View style={[onboardingTooltipStyles.card, { backgroundColor: colors.tooltipBackground }]}>
           <Text style={[onboardingTooltipStyles.message, { color: colors.tooltipText }]}>{displayMessage}</Text>
           {displaySubtitle ? (

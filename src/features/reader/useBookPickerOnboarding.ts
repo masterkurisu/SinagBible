@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { type LayoutRectangle, type View } from "react-native";
 import type { EdgeInsets } from "react-native-safe-area-context";
 import {
+  FEATURE_ONBOARDING_FORCE_ALL,
   isFeatureOnboardingDone,
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
@@ -9,7 +10,6 @@ import { measureOnboardingTarget } from "@/src/components/feature-onboarding/mea
 import { adjustAnchorForOnboardingModal } from "@/src/components/feature-onboarding/onboardingOverlayCoords";
 import {
   BOOK_PICKER_FILTER_ONBOARDING_STEP,
-  BOOK_PICKER_ONBOARDING_ALWAYS_SHOW_FOR_TESTING,
   BOOK_PICKER_ONBOARDING_SETTLE_MS,
   BOOK_PICKER_ONBOARDING_STEP_MS,
 } from "@/src/features/reader/bookPickerOnboardingSteps";
@@ -72,7 +72,7 @@ export function useBookPickerOnboarding({
   const finishTour = useCallback(() => {
     sessionTokenRef.current += 1;
     resetSession();
-    if (!BOOK_PICKER_ONBOARDING_ALWAYS_SHOW_FOR_TESTING) {
+    if (!FEATURE_ONBOARDING_FORCE_ALL) {
       void markFeatureOnboardingDone("readerBookPicker");
     }
   }, [resetSession]);
@@ -103,7 +103,7 @@ export function useBookPickerOnboarding({
     const token = sessionTokenRef.current;
     const startTimeout = setTimeout(() => {
       void (async () => {
-        const done = BOOK_PICKER_ONBOARDING_ALWAYS_SHOW_FOR_TESTING
+        const done = FEATURE_ONBOARDING_FORCE_ALL
           ? false
           : await isFeatureOnboardingDone("readerBookPicker");
         if (token !== sessionTokenRef.current) return;
