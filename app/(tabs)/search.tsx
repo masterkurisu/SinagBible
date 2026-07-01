@@ -1,6 +1,6 @@
 import { View } from "react-native";
 
-/** Transparent shell — search UI is `TabBarSearchLayer`; route exists only for the tab trigger. */
-export default function SearchTabPlaceholder() {
+/** Transparent shell — reserves the fourth nav-bar slot for `TabBarSearchFab`. */
+export default function SearchFabNavSlotPlaceholder() {
   return <View style={{ flex: 1, backgroundColor: "transparent" }} />;
 }

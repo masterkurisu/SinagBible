@@ -7,10 +7,10 @@ export function tabHapticKeyFromPathname(pathname: string | null): string | null
   if (first === "(tabs)") {
     const second = parts[1];
     if (second == null || second === "" || second === "index") return "index";
-    if (second === "reader" || second === "journal" || second === "search") return second;
+    if (second === "reader" || second === "journal") return second;
     return null;
   }
-  if (first === "reader" || first === "journal" || first === "search") return first;
+  if (first === "reader" || first === "journal") return first;
   if (first === "index") return "index";
   return null;
 }

@@ -29,18 +29,26 @@ export type IosNavTabIcon = {
 };
 
 export type NavTabDefinition = {
-  name: "index" | "reader" | "journal" | "search";
+  name: "index" | "reader" | "journal";
   label: string;
   tabIndex: number;
   androidIcon: AndroidNavTabIcon;
   iosIcon: IosNavTabIcon;
 };
 
+/** Bottom nav lays out one slot per trigger; the FAB overlays the fourth. */
+export const BOTTOM_NAV_SLOT_COUNT = 4;
+
+/** Reserved fourth slot for the overlaid search FAB — not a navigable destination. */
+export const NAV_SEARCH_FAB_SLOT = {
+  name: "search",
+  tabIndex: 3,
+} as const;
+
 export const NAV_TAB_SF = {
   index: { default: "house", selected: "house.fill" },
   reader: { default: "book.closed", selected: "book.closed.fill" },
   journal: { default: "square.and.pencil", selected: "square.and.pencil" },
-  search: { default: "magnifyingglass", selected: "magnifyingglass" },
 } as const;
 
 export const NAV_TAB_DEFINITIONS: readonly NavTabDefinition[] = [
@@ -64,13 +72,6 @@ export const NAV_TAB_DEFINITIONS: readonly NavTabDefinition[] = [
     tabIndex: 2,
     androidIcon: { default: "edit-note", selected: "edit-note" },
     iosIcon: { default: "square-edit-outline", selected: "square-edit-outline" },
-  },
-  {
-    name: "search",
-    label: "Search",
-    tabIndex: 3,
-    androidIcon: { default: "search", selected: "search" },
-    iosIcon: { default: "magnify", selected: "magnify" },
   },
 ];
 

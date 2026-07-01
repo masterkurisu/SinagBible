@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState, Platform, View } from "react-native";
-import { type Href, usePathname, useRouter } from "expo-router";
+import { usePathname } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -9,6 +9,7 @@ import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import {
   ANDROID_NAV_LABEL_VISIBILITY_MODE,
   getNavTabSelectedAccent,
+  NAV_SEARCH_FAB_SLOT,
   NAV_TAB_DEFINITIONS,
   NAV_TAB_SF,
 } from "@/lib/android-nav-bar-chrome";
@@ -22,7 +23,7 @@ import {
 } from "@/lib/reader-tab-bar-visibility-context";
 import { mixHexColors } from "@/lib/mix-hex-color";
 import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
-import { TabBarSearchProvider, useTabBarSearch } from "@/lib/tab-bar-search-context";
+import { TabBarSearchProvider } from "@/lib/tab-bar-search-context";
 import { TabBarSearchLayer } from "@/src/features/search/TabBarSearchLayer";
 import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
 import { refreshLocalEntriesCache } from "@/lib/journal-local";
@@ -63,13 +64,9 @@ export default function TabLayout() {
 
 function TabLayoutInner() {
   const pathname = usePathname();
-  const router = useRouter();
-  const { isOpen: isSearchOpen, openSearch, closeSearch } = useTabBarSearch();
   const nativeTabBarHidden = useReaderNativeTabBarHidden();
   const readerSettingsTabBarTint = useReaderSettingsTabBarTint();
   const prevTabHapticKeyRef = useRef<string | null>(null);
-  const lastNonSearchPathRef = useRef<string>("/(tabs)/");
-  const prevActiveTabKeyRef = useRef<string | null>(null);
   const activeTabKey = tabHapticKeyFromPathname(pathname);
   const readerChapterAndroidScrollHide =
     Platform.OS === "android" &&
@@ -98,27 +95,6 @@ function TabLayoutInner() {
     void refreshLocalEntriesCache();
     void getPreferredReaderTranslation().then(warmReaderTranslationSearchCache);
   }, []);
-
-  useEffect(() => {
-    if (activeTabKey != null && activeTabKey !== "search") {
-      lastNonSearchPathRef.current = pathname;
-    }
-  }, [pathname, activeTabKey]);
-
-  /** Keep the prior tab (reader/journal/home) visible under the search overlay. */
-  useEffect(() => {
-    const prev = prevActiveTabKeyRef.current;
-    prevActiveTabKeyRef.current = activeTabKey;
-    if (activeTabKey !== "search" || prev === "search") return;
-
-    const restorePath = lastNonSearchPathRef.current || "/(tabs)/";
-    if (isSearchOpen) {
-      closeSearch();
-    } else {
-      openSearch();
-    }
-    router.replace(restorePath as Href);
-  }, [activeTabKey, closeSearch, isSearchOpen, openSearch, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -238,14 +214,12 @@ function TabLayoutInner() {
       >
         {NAV_TAB_DEFINITIONS.map((tab) => {
           const selectedAccent = getNavTabSelectedAccent(chrome, tab.tabIndex);
-          const isSearchTab = tab.name === "search";
           return (
             <NativeTabs.Trigger
               key={tab.name}
               name={tab.name}
               disablePopToTop
               disableScrollToTop
-              {...(isSearchTab ? { contentStyle: { backgroundColor: "transparent" } } : {})}
             >
               <NativeTabs.Trigger.Icon
                 selectedColor={selectedAccent}
@@ -288,6 +262,14 @@ function TabLayoutInner() {
             </NativeTabs.Trigger>
           );
         })}
+        <NativeTabs.Trigger
+          key={NAV_SEARCH_FAB_SLOT.name}
+          name={NAV_SEARCH_FAB_SLOT.name}
+          disabled
+          disablePopToTop
+          disableScrollToTop
+          contentStyle={{ backgroundColor: "transparent" }}
+        />
       </NativeTabs>
       {!readerChapterAndroidScrollHide ? <TabBarSearchFab /> : null}
       <TabBarSearchLayer />

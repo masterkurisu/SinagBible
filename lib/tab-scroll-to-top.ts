@@ -2,7 +2,7 @@ type ScrollToOffsetLike = {
   scrollToOffset: (args: { offset: number; animated?: boolean }) => void;
 };
 
-export type TabKey = "index" | "reader" | "journal" | "search";
+export type TabKey = "index" | "reader" | "journal";
 
 const tabScrollRegistry = new Map<TabKey, ScrollToOffsetLike>();
 
