@@ -7,8 +7,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import {
-  ANDROID_NAV_LABEL_FONT_SIZE,
-  ANDROID_NAV_LABEL_FONT_WEIGHT,
   ANDROID_NAV_LABEL_VISIBILITY_MODE,
   getNavTabSelectedAccent,
   NAV_TAB_DEFINITIONS,
@@ -206,10 +204,6 @@ function TabLayoutInner() {
     prevTabHapticKeyRef.current = key;
   }, [activeTabKey]);
 
-  const labelFontSize = Platform.OS === "android" ? ANDROID_NAV_LABEL_FONT_SIZE : 10;
-  const labelFontWeight = Platform.OS === "android" ? ANDROID_NAV_LABEL_FONT_WEIGHT : "500";
-  const selectedLabelFontWeight = Platform.OS === "android" ? ANDROID_NAV_LABEL_FONT_WEIGHT : "600";
-
   const iosTabBarSurfaceProps =
     Platform.OS === "ios"
       ? bundle.id === "default"
@@ -242,18 +236,6 @@ function TabLayoutInner() {
           },
           default: {},
         })}
-        labelStyle={{
-          default: {
-            color: TAB_MUTED,
-            fontSize: labelFontSize,
-            fontWeight: labelFontWeight,
-          },
-          selected: {
-            color: TAB_TINT,
-            fontSize: labelFontSize,
-            fontWeight: selectedLabelFontWeight,
-          },
-        }}
       >
         {NAV_TAB_DEFINITIONS.map((tab) => {
           const selectedAccent = getNavTabSelectedAccent(chrome, tab.tabIndex);
@@ -264,51 +246,43 @@ function TabLayoutInner() {
               name={tab.name}
               disablePopToTop
               disableScrollToTop
-              disabled={isSearchTab}
               {...(isSearchTab ? { contentStyle: { backgroundColor: "transparent" } } : {})}
             >
-              {!isSearchTab ? (
-                <>
-                  <NativeTabs.Trigger.Label selectedStyle={{ color: selectedAccent }}>
-                    {tab.label}
-                  </NativeTabs.Trigger.Label>
-                  <NativeTabs.Trigger.Icon
-                    selectedColor={selectedAccent}
-                    sf={NAV_TAB_SF[tab.name]}
-                    src={
-                      Platform.OS === "android"
-                        ? {
-                            default: (
-                              <NativeTabs.Trigger.VectorIcon
-                                family={MaterialIcons}
-                                name={tab.androidIcon.default}
-                              />
-                            ),
-                            selected: (
-                              <NativeTabs.Trigger.VectorIcon
-                                family={MaterialIcons}
-                                name={tab.androidIcon.selected}
-                              />
-                            ),
-                          }
-                        : {
-                            default: (
-                              <NativeTabs.Trigger.VectorIcon
-                                family={MaterialCommunityIcons}
-                                name={tab.iosIcon.default}
-                              />
-                            ),
-                            selected: (
-                              <NativeTabs.Trigger.VectorIcon
-                                family={MaterialCommunityIcons}
-                                name={tab.iosIcon.selected}
-                              />
-                            ),
-                          }
-                    }
-                  />
-                </>
-              ) : null}
+              <NativeTabs.Trigger.Icon
+                selectedColor={selectedAccent}
+                sf={NAV_TAB_SF[tab.name]}
+                src={
+                  Platform.OS === "android"
+                    ? {
+                        default: (
+                          <NativeTabs.Trigger.VectorIcon
+                            family={MaterialIcons}
+                            name={tab.androidIcon.default}
+                          />
+                        ),
+                        selected: (
+                          <NativeTabs.Trigger.VectorIcon
+                            family={MaterialIcons}
+                            name={tab.androidIcon.selected}
+                          />
+                        ),
+                      }
+                    : {
+                        default: (
+                          <NativeTabs.Trigger.VectorIcon
+                            family={MaterialCommunityIcons}
+                            name={tab.iosIcon.default}
+                          />
+                        ),
+                        selected: (
+                          <NativeTabs.Trigger.VectorIcon
+                            family={MaterialCommunityIcons}
+                            name={tab.iosIcon.selected}
+                          />
+                        ),
+                      }
+                }
+              />
               {tab.name === "journal" && hasJournalDraft ? (
                 <NativeTabs.Trigger.Badge>{" "}</NativeTabs.Trigger.Badge>
               ) : null}

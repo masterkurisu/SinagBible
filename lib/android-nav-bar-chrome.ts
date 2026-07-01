@@ -5,14 +5,14 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { getTabTint } from "@sinag-bible/tokens";
 
-/** M3 Navigation bar: only the selected destination shows a label (recommended for 4 tabs). */
-export const ANDROID_NAV_LABEL_VISIBILITY_MODE = "selected" as const;
+/** M3 Navigation bar: icons only — no text labels under destinations. */
+export const ANDROID_NAV_LABEL_VISIBILITY_MODE = "unlabeled" as const;
 
 /** M3 label medium — 12sp, same weight for active and inactive (Expressive spec). */
 export const ANDROID_NAV_LABEL_FONT_SIZE = 12;
 export const ANDROID_NAV_LABEL_FONT_WEIGHT = "500" as const;
 
-/** M3 expressive navigation bar body height (icon row + selected label); excludes gesture inset. */
+/** M3 navigation bar body height (icon-only row); excludes gesture inset. */
 export const ANDROID_NAV_BAR_BODY_PX = 56;
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>["name"];
