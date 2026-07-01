@@ -1,6 +1,21 @@
 import type { LayoutRectangle } from "react-native";
 import type { EdgeInsets } from "react-native-safe-area-context";
-import { READER_SETTINGS_NAV_RAIL_ITEM_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
+import {
+  READER_SETTINGS_NAV_RAIL_ITEM_HEIGHT_PX,
+} from "@/src/features/reader/readerSettingsPanelChrome";
+
+/** Matches `ReaderM3RailDestination` label metrics. */
+const RAIL_ROW_PAD_V_PX = 4;
+const RAIL_LABEL_LINE_HEIGHT_PX = 20;
+
+/** Vertical center of the single-line rail label within a measured row inner bounds. */
+export function settingsOnboardingCoachmarkCenterY(rowAnchor: LayoutRectangle): number {
+  const contentHeight = Math.max(
+    RAIL_LABEL_LINE_HEIGHT_PX,
+    rowAnchor.height - RAIL_ROW_PAD_V_PX * 2,
+  );
+  return rowAnchor.y + RAIL_ROW_PAD_V_PX + contentHeight / 2;
+}
 
 /** Resolves a full-width settings row measurement to the visible left-hand strip. */
 export function visibleSettingsRowAnchor(

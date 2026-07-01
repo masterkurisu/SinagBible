@@ -6,7 +6,6 @@ import {
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
 import { readerSettingsDeleteMyDataScreenBottomPx } from "@/lib/native-tab-chrome";
-import { adjustAnchorForOnboardingModal } from "@/src/components/feature-onboarding/onboardingOverlayCoords";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import {
   READER_SETTINGS_ONBOARDING_STEP_MS,
@@ -124,17 +123,15 @@ export function useReaderSettingsOnboarding({
         minHeight: 20,
       });
       if (requestId !== measureRequestRef.current) return;
-      const anchor = adjustAnchorForOnboardingModal(
-        resolveSettingsRowAnchor(
-          step.id,
-          measured,
-          screenW,
-          screenH,
-          scrollPaddingTop,
-          insets,
-          settingsRevealedStripWidthPx,
-          isNavigationRailLayout,
-        ),
+      const anchor = resolveSettingsRowAnchor(
+        step.id,
+        measured,
+        screenW,
+        screenH,
+        scrollPaddingTop,
+        insets,
+        settingsRevealedStripWidthPx,
+        isNavigationRailLayout,
       );
       setRowAnchor(anchor);
       setPresentedStepIndex(index);

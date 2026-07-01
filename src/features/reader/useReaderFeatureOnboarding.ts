@@ -11,7 +11,6 @@ import {
 } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import {
   adjustAnchorForOnboardingModal,
-  adjustAnchorsForOnboardingModal,
 } from "@/src/components/feature-onboarding/onboardingOverlayCoords";
 import type { SpotlightTarget } from "@/src/components/feature-onboarding/SpotlightOverlay";
 import {
@@ -20,6 +19,7 @@ import {
   READER_CHAPTER_NAV_ARROW_RIGHT_EDGE_INSET_PX,
 } from "@/src/features/reader/ReaderChapterNavArrows";
 import {
+  estimateReaderAndroidAppBarToolRect,
   estimateReaderHeaderToolsPillRect,
   estimateReaderNavigationRailToolsPillRect,
   isPlausibleAndroidAppBarRect,
@@ -27,27 +27,33 @@ import {
   readerAndroidAppBarToolTargetsFromBar,
   readerHeaderToolTargetsFromPill,
 } from "@/src/features/reader/readerHeaderToolTargets";
+import {
+  readerHeaderIconSpotlight,
+  readerPageTurnIconSpotlight,
+} from "@/src/features/reader/readerOnboardingSpotlightTargets";
 
 export type ReaderOnboardingStep =
   | "book-selector"
   | "settings"
+  | "font-settings"
   | "page-turns"
   | "tap-select-verse"
   | "long-press-highlight"
   | "clear-selection";
 
-const READER_ONBOARDING_STEPS: ReaderOnboardingStep[] = [
-  "book-selector",
-  "settings",
-  "page-turns",
-  "tap-select-verse",
-  "long-press-highlight",
-  "clear-selection",
-];
+function readerOnboardingStepsForPlatform(): ReaderOnboardingStep[] {
+  const steps: ReaderOnboardingStep[] = ["book-selector", "settings"];
+  if (Platform.OS === "android") {
+    steps.push("font-settings");
+  }
+  steps.push("page-turns", "tap-select-verse", "long-press-highlight", "clear-selection");
+  return steps;
+}
 
 export const READER_ONBOARDING_MESSAGES: Record<ReaderOnboardingStep, string> = {
   "book-selector": "Choose any book and chapter from here.",
-  settings: "Open reader settings — translation, fonts, themes, and more.",
+  settings: "Open reader settings — translation, themes, and more.",
+  "font-settings": "Adjust size, spacing, and choose a font that's easy on your eyes.",
   "page-turns": "Turn pages with these arrows, or swipe left and right.",
   "tap-select-verse": "Single tap a verse to select it.",
   "long-press-highlight": "Long press a verse to highlight it.",
@@ -64,6 +70,7 @@ type UseReaderFeatureOnboardingArgs = {
   headerToolsGroupRef: RefObject<View | null>;
   bookButtonRef: RefObject<View | null>;
   settingsButtonRef: RefObject<View | null>;
+  fontButtonRef: RefObject<View | null>;
   selectionBannerRef: RefObject<View | null>;
   chapterNavPrevArrowRef: RefObject<View | null>;
   chapterNavNextArrowRef: RefObject<View | null>;
@@ -93,21 +100,33 @@ function circleSpotlightTarget(rect: LayoutRectangle): SpotlightTarget {
   };
 }
 
-function headerToolSpotlightFromLayout(rect: LayoutRectangle): SpotlightTarget {
-  return circleSpotlightTarget(adjustAnchorForOnboardingModal(rect));
+function headerToolSpotlightFromLayout(
+  which: "book" | "settings" | "font",
+  rect: LayoutRectangle,
+): SpotlightTarget {
+  return readerHeaderIconSpotlight(which, adjustAnchorForOnboardingModal(rect));
 }
 
 function headerToolSpotlightFromFallback(
-  which: "book" | "settings",
+  which: "book" | "settings" | "font",
   pillRect: LayoutRectangle,
   insets: EdgeInsets,
   screenW: number,
+  androidTopToolsTopPx: number,
 ): SpotlightTarget {
+  if (which === "font") {
+    const fontRect =
+      Platform.OS === "android" && isPlausibleAndroidAppBarRect(pillRect, screenW)
+        ? readerAndroidAppBarToolTargetsFromBar(pillRect, insets, screenW).font
+        : estimateReaderAndroidAppBarToolRect("font", insets, screenW, androidTopToolsTopPx);
+    return headerToolSpotlightFromLayout(which, fontRect);
+  }
+
   const fallback =
     Platform.OS === "android" && isPlausibleAndroidAppBarRect(pillRect, screenW)
       ? readerAndroidAppBarToolTargetsFromBar(pillRect, insets, screenW)[which]
       : readerHeaderToolTargetsFromPill(pillRect)[which];
-  return headerToolSpotlightFromLayout(fallback);
+  return headerToolSpotlightFromLayout(which, fallback);
 }
 
 function chapterNavArrowFallbackTargets(
@@ -177,7 +196,7 @@ async function measureHeaderToolsPillRect(
 }
 
 async function measureHeaderToolSpotlightTarget(
-  which: "book" | "settings",
+  which: "book" | "settings" | "font",
   buttonRef: RefObject<View | null>,
   headerToolsGroupRef: RefObject<View | null>,
   insets: EdgeInsets,
@@ -192,7 +211,7 @@ async function measureHeaderToolSpotlightTarget(
     minHeight: 20,
   });
   if (measuredButton) {
-    return headerToolSpotlightFromLayout(measuredButton);
+    return headerToolSpotlightFromLayout(which, measuredButton);
   }
 
   const pillRect = await measureHeaderToolsPillRect(
@@ -204,7 +223,7 @@ async function measureHeaderToolSpotlightTarget(
     isNavigationRailLayout,
     toolsOnLeft,
   );
-  return headerToolSpotlightFromFallback(which, pillRect, insets, screenW);
+  return headerToolSpotlightFromFallback(which, pillRect, insets, screenW, androidTopToolsTopPx);
 }
 
 export function useReaderFeatureOnboarding({
@@ -213,6 +232,7 @@ export function useReaderFeatureOnboarding({
   headerToolsGroupRef,
   bookButtonRef,
   settingsButtonRef,
+  fontButtonRef,
   selectionBannerRef,
   chapterNavPrevArrowRef,
   chapterNavNextArrowRef,
@@ -238,10 +258,11 @@ export function useReaderFeatureOnboarding({
   const [targetsReady, setTargetsReady] = useState(false);
   const storageCheckedRef = useRef(false);
 
-  const currentStep = READER_ONBOARDING_STEPS[stepIndex] ?? null;
+  const currentStep = readerOnboardingStepsForPlatform()[stepIndex] ?? null;
   const isSpotlightStep =
     currentStep === "book-selector" ||
     currentStep === "settings" ||
+    currentStep === "font-settings" ||
     currentStep === "page-turns" ||
     currentStep === "clear-selection";
   const isInteractionCoachMark =
@@ -305,6 +326,25 @@ export function useReaderFeatureOnboarding({
       return;
     }
 
+    if (currentStep === "font-settings") {
+      const fontTarget = await measureHeaderToolSpotlightTarget(
+        "font",
+        fontButtonRef,
+        headerToolsGroupRef,
+        insets,
+        screenW,
+        androidTopToolsTopPx,
+        headerToolsTopPx,
+        isNavigationRailLayout,
+        toolsOnLeft,
+      );
+      setSpotlightTargets([fontTarget]);
+      setSpotlightTargetsStep("font-settings");
+      setCoachMarkAnchor(null);
+      setTargetsReady(true);
+      return;
+    }
+
     if (currentStep === "page-turns") {
       const [measuredPrev, measuredNext] = await measureOnboardingTargets(
         [
@@ -314,23 +354,29 @@ export function useReaderFeatureOnboarding({
         { minWidth: 20, minHeight: 20 },
       );
 
-      const measuredTargets: LayoutRectangle[] = [];
-      if (hasPrevChapter && measuredPrev) measuredTargets.push(measuredPrev);
-      if (hasNextChapter && measuredNext) measuredTargets.push(measuredNext);
-
-      const targets =
-        measuredTargets.length > 0
-          ? measuredTargets
-          : chapterNavArrowFallbackTargets(
-              screenW,
-              screenH,
-              hasPrevChapter,
-              hasNextChapter,
-            );
-
-      setSpotlightTargets(
-        adjustAnchorsForOnboardingModal(targets).map(circleSpotlightTarget),
+      const fallbackTargets = chapterNavArrowFallbackTargets(
+        screenW,
+        screenH,
+        hasPrevChapter,
+        hasNextChapter,
       );
+      const targets: SpotlightTarget[] = [];
+      let fallbackIndex = 0;
+
+      if (hasPrevChapter) {
+        const rect = adjustAnchorForOnboardingModal(
+          measuredPrev ?? fallbackTargets[fallbackIndex++]!,
+        );
+        targets.push(readerPageTurnIconSpotlight("prev", rect));
+      }
+      if (hasNextChapter) {
+        const rect = adjustAnchorForOnboardingModal(
+          measuredNext ?? fallbackTargets[fallbackIndex++]!,
+        );
+        targets.push(readerPageTurnIconSpotlight("next", rect));
+      }
+
+      setSpotlightTargets(targets);
       setSpotlightTargetsStep("page-turns");
       setCoachMarkAnchor(null);
       setTargetsReady(targets.length > 0);
@@ -366,6 +412,7 @@ export function useReaderFeatureOnboarding({
     active,
     androidTopToolsTopPx,
     bookButtonRef,
+    fontButtonRef,
     headerToolsGroupRef,
     chapterNavNextArrowRef,
     chapterNavPrevArrowRef,
@@ -400,8 +447,9 @@ export function useReaderFeatureOnboarding({
   ]);
 
   const advanceStep = useCallback(() => {
+    const steps = readerOnboardingStepsForPlatform();
     const nextIndex = stepIndex + 1;
-    if (nextIndex >= READER_ONBOARDING_STEPS.length) {
+    if (nextIndex >= steps.length) {
       setActive(false);
       void markFeatureOnboardingDone("reader");
       onTourComplete?.();

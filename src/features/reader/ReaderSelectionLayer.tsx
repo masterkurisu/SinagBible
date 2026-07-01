@@ -346,6 +346,7 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
                     ? "Remove from journal carousel"
                     : "Add to journal carousel"
                 }
+                buttonRef={actionBarButtonRefs.favorite}
               >
                 <View
                   style={{
@@ -606,6 +607,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   const actionBarOnboardingHighlightRef = useRef<View | null>(null);
   const actionBarOnboardingCopyRef = useRef<View | null>(null);
   const actionBarOnboardingNoteRef = useRef<View | null>(null);
+  const actionBarOnboardingFavoriteRef = useRef<View | null>(null);
   const actionBarOnboardingJournalRef = useRef<View | null>(null);
 
   const actionBarButtonRefs = useMemo(
@@ -614,6 +616,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
       highlight: actionBarOnboardingHighlightRef,
       copy: actionBarOnboardingCopyRef,
       note: actionBarOnboardingNoteRef,
+      favorite: actionBarOnboardingFavoriteRef,
       journal: actionBarOnboardingJournalRef,
     }),
     [],

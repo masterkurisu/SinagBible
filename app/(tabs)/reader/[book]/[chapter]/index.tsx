@@ -1082,6 +1082,7 @@ export default function ReaderChapterScreen() {
     headerToolsGroupRef,
     bookButtonRef: bookFanRef,
     settingsButtonRef,
+    fontButtonRef: fontSettingsButtonRef,
     selectionBannerRef: selectionBannerLiveRef,
     chapterNavPrevArrowRef,
     chapterNavNextArrowRef,
@@ -1755,6 +1756,7 @@ export default function ReaderChapterScreen() {
         step={readerSettingsOnboarding.currentStep}
         rowAnchor={readerSettingsOnboarding.rowAnchor}
         railSide="left"
+        sideSheetWidthPx={settingsPanelWidthPx}
         colors={{
           tooltipBackground: rc.selectionBackground,
           tooltipText: rc.selectionText,

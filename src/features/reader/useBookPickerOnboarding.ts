@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { type LayoutRectangle, type View } from "react-native";
 import type { EdgeInsets } from "react-native-safe-area-context";
 import {
-  FEATURE_ONBOARDING_FORCE_ALL,
   isFeatureOnboardingDone,
+  isFeatureOnboardingForced,
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
@@ -72,7 +72,7 @@ export function useBookPickerOnboarding({
   const finishTour = useCallback(() => {
     sessionTokenRef.current += 1;
     resetSession();
-    if (!FEATURE_ONBOARDING_FORCE_ALL) {
+    if (!isFeatureOnboardingForced("readerBookPicker")) {
       void markFeatureOnboardingDone("readerBookPicker");
     }
   }, [resetSession]);
@@ -103,7 +103,7 @@ export function useBookPickerOnboarding({
     const token = sessionTokenRef.current;
     const startTimeout = setTimeout(() => {
       void (async () => {
-        const done = FEATURE_ONBOARDING_FORCE_ALL
+        const done = isFeatureOnboardingForced("readerBookPicker")
           ? false
           : await isFeatureOnboardingDone("readerBookPicker");
         if (token !== sessionTokenRef.current) return;

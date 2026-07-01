@@ -1,9 +1,7 @@
-import { useMemo } from "react";
 import { CoachMarkOverlay } from "@/src/components/feature-onboarding/CoachMarkOverlay";
 import { FeatureOnboardingModal } from "@/src/components/feature-onboarding/FeatureOnboardingModal";
 import { OnboardingTargetDebugOverlay } from "@/src/components/feature-onboarding/OnboardingTargetDebugOverlay";
 import { SpotlightOverlay } from "@/src/components/feature-onboarding/SpotlightOverlay";
-import { applyReaderFeatureOnboardingSpotlightAdjustments } from "@/src/features/reader/readerFeatureOnboardingSpotlightAdjustments";
 import { READER_ONBOARDING_DEBUG_TARGETS } from "@/src/features/reader/readerOnboardingDebug";
 import type { ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import { StyleSheet, View } from "react-native";
@@ -32,6 +30,8 @@ function spotlightLabelConfig(step: ReaderOnboardingStep) {
       return { labelPosition: "below" as const, labelGap: 86, labelAnchorTargetIndex: 0 };
     case "settings":
       return { labelPosition: "below" as const, labelGap: 86, labelAnchorTargetIndex: 0 };
+    case "font-settings":
+      return { labelPosition: "below" as const, labelGap: 86, labelAnchorTargetIndex: 0 };
     case "page-turns":
       return { labelPosition: "above" as const, labelGap: 28, labelAnchorTargetIndex: 0 };
     case "clear-selection":
@@ -49,7 +49,6 @@ export function ReaderFeatureOnboardingLayer({
   message,
   subtitle,
   spotlightTargets,
-  spotlightTargetsStep,
   coachMarkAnchor,
   onDismiss,
   colors,
@@ -57,13 +56,11 @@ export function ReaderFeatureOnboardingLayer({
   const spotlightVisible = visible && isSpotlightStep && step != null;
   const interactionVisible = visible && isInteractionCoachMark && step != null;
   const labelConfig = step ? spotlightLabelConfig(step) : null;
-  const adjustedSpotlightTargets = useMemo(
-    () =>
-      spotlightTargetsStep
-        ? applyReaderFeatureOnboardingSpotlightAdjustments(spotlightTargetsStep, spotlightTargets)
-        : spotlightTargets,
-    [spotlightTargets, spotlightTargetsStep],
-  );
+  const iconSpotlightStep =
+    step === "book-selector" ||
+    step === "settings" ||
+    step === "font-settings" ||
+    step === "page-turns";
 
   return (
     <>
@@ -71,7 +68,7 @@ export function ReaderFeatureOnboardingLayer({
         {spotlightVisible && step && labelConfig ? (
           <>
             <SpotlightOverlay
-              targets={adjustedSpotlightTargets}
+              targets={spotlightTargets}
               message={message}
               subtitle={subtitle}
               onDismiss={onDismiss}
@@ -82,12 +79,10 @@ export function ReaderFeatureOnboardingLayer({
               labelPosition={labelConfig.labelPosition}
               labelGap={labelConfig.labelGap}
               labelAnchorTargetIndex={labelConfig.labelAnchorTargetIndex}
-              targetPadding={
-                spotlightTargetsStep === "book-selector" || spotlightTargetsStep === "settings" ? 12 : 8
-              }
+              targetPadding={iconSpotlightStep ? 6 : 8}
             />
             <OnboardingTargetDebugOverlay
-              targets={adjustedSpotlightTargets}
+              targets={spotlightTargets}
               enabled={READER_ONBOARDING_DEBUG_TARGETS}
             />
           </>

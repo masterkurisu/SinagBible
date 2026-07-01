@@ -1,10 +1,22 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
- * Dev-only: re-show every feature onboarding tour and skip persisting completion.
- * Set back to `false` before release.
+ * Dev-only: always re-run these tours and skip persisting completion.
+ * Trim this list as each tour is finalized.
  */
-export const FEATURE_ONBOARDING_FORCE_ALL = __DEV__ && true;
+export const FEATURE_ONBOARDING_FORCE_PAGES: ReadonlySet<FeatureOnboardingPage> = __DEV__
+  ? new Set<FeatureOnboardingPage>(["readerSettings"])
+  : new Set();
+
+/**
+ * Dev-only: treat these tours as completed (suppress onboarding).
+ */
+export const FEATURE_ONBOARDING_SKIP_PAGES: ReadonlySet<FeatureOnboardingPage> = __DEV__
+  ? new Set<FeatureOnboardingPage>(["reader", "readerActionBar"])
+  : new Set();
+
+/** @deprecated Use `FEATURE_ONBOARDING_FORCE_PAGES` — true when any page is forced. */
+export const FEATURE_ONBOARDING_FORCE_ALL = FEATURE_ONBOARDING_FORCE_PAGES.size > 0;
 
 /** AsyncStorage keys for per-screen first-use feature tours. */
 export const FEATURE_ONBOARDING_STORAGE_KEYS = {
@@ -19,8 +31,17 @@ export const FEATURE_ONBOARDING_STORAGE_KEYS = {
 
 export type FeatureOnboardingPage = keyof typeof FEATURE_ONBOARDING_STORAGE_KEYS;
 
+export function isFeatureOnboardingForced(page: FeatureOnboardingPage): boolean {
+  return FEATURE_ONBOARDING_FORCE_PAGES.has(page);
+}
+
+export function isFeatureOnboardingSkipped(page: FeatureOnboardingPage): boolean {
+  return FEATURE_ONBOARDING_SKIP_PAGES.has(page);
+}
+
 export async function isFeatureOnboardingDone(page: FeatureOnboardingPage): Promise<boolean> {
-  if (FEATURE_ONBOARDING_FORCE_ALL) return false;
+  if (isFeatureOnboardingSkipped(page)) return true;
+  if (isFeatureOnboardingForced(page)) return false;
   try {
     const v = await AsyncStorage.getItem(FEATURE_ONBOARDING_STORAGE_KEYS[page]);
     return v === "true";
@@ -29,16 +50,17 @@ export async function isFeatureOnboardingDone(page: FeatureOnboardingPage): Prom
   }
 }
 
-/** Prerequisite checks (e.g. reader before action bar) — bypass storage when force-all is on. */
+/** Prerequisite checks (e.g. reader before action bar). */
 export async function isFeatureOnboardingPrerequisiteDone(
   page: FeatureOnboardingPage,
 ): Promise<boolean> {
-  if (FEATURE_ONBOARDING_FORCE_ALL) return true;
+  if (isFeatureOnboardingSkipped(page)) return true;
+  if (isFeatureOnboardingForced(page)) return true;
   return isFeatureOnboardingDone(page);
 }
 
 export async function markFeatureOnboardingDone(page: FeatureOnboardingPage): Promise<void> {
-  if (FEATURE_ONBOARDING_FORCE_ALL) return;
+  if (isFeatureOnboardingForced(page) || isFeatureOnboardingSkipped(page)) return;
   try {
     await AsyncStorage.setItem(FEATURE_ONBOARDING_STORAGE_KEYS[page], "true");
   } catch {

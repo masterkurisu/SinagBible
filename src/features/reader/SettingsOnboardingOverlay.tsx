@@ -5,22 +5,29 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type LayoutRectangle,
 } from "react-native";
 import { CoachmarkArrowIcon } from "@/src/components/feature-onboarding/CoachmarkArrowIcon";
 import { onboardingTooltipStyles } from "@/src/components/feature-onboarding/onboarding-tooltip-styles";
+import { settingsOnboardingCoachmarkCenterY } from "@/src/features/reader/readerSettingsOnboardingAnchor";
 import type { ReaderSettingsOnboardingStep } from "@/src/features/reader/readerSettingsOnboardingSteps";
 
 const ARROW_SIZE_PX = 30;
 const ARROW_GAP_PX = 12;
 const ARROW_NUDGE_PX = 10;
-const TOOLTIP_EST_HEIGHT_PX = 120;
+const TOOLTIP_WIDTH_PX = 228;
+const TOOLTIP_MIN_WIDTH_PX = 200;
+const TOOLTIP_EST_HEIGHT_PX = 96;
+const SCREEN_EDGE_INSET_PX = 16;
 
 type SettingsOnboardingOverlayProps = {
   step: ReaderSettingsOnboardingStep;
   rowAnchor: LayoutRectangle;
   /** Which edge the settings rail sits on (tooltip appears on the opposite side). */
   railSide?: "left" | "right";
+  /** Width of the revealed settings side sheet (positions coachmarks beside the panel). */
+  sideSheetWidthPx: number;
   colors: {
     tooltipBackground: string;
     tooltipText: string;
@@ -28,12 +35,43 @@ type SettingsOnboardingOverlayProps = {
   };
 };
 
+function coachmarkLayoutForLeftRail(
+  rowAnchor: LayoutRectangle,
+  sideSheetWidthPx: number,
+  screenW: number,
+): {
+  arrowLeft: number;
+  arrowTop: number;
+  tooltipLeft: number;
+  tooltipWidth: number;
+  coachmarkCenterY: number;
+} {
+  const coachmarkCenterY = settingsOnboardingCoachmarkCenterY(rowAnchor);
+  const sheetRight = sideSheetWidthPx;
+  const arrowLeft = sheetRight + ARROW_GAP_PX;
+  const tooltipLeft = arrowLeft + ARROW_SIZE_PX + 12;
+  const tooltipWidth = Math.min(
+    TOOLTIP_WIDTH_PX,
+    Math.max(TOOLTIP_MIN_WIDTH_PX, screenW - tooltipLeft - SCREEN_EDGE_INSET_PX),
+  );
+
+  return {
+    arrowLeft,
+    arrowTop: coachmarkCenterY - ARROW_SIZE_PX / 2,
+    tooltipLeft,
+    tooltipWidth,
+    coachmarkCenterY,
+  };
+}
+
 export function SettingsOnboardingOverlay({
   step,
   rowAnchor,
   railSide = "right",
+  sideSheetWidthPx,
   colors,
 }: SettingsOnboardingOverlayProps) {
+  const { width: screenW } = useWindowDimensions();
   const arrowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -58,21 +96,24 @@ export function SettingsOnboardingOverlay({
     return () => loop.stop();
   }, [arrowAnim, step.id]);
 
-  const rowCenterY = rowAnchor.y + rowAnchor.height / 2;
-
+  const coachmarkCenterY = settingsOnboardingCoachmarkCenterY(rowAnchor);
   const isLeftRail = railSide === "left";
-  const arrowLeft = isLeftRail
-    ? rowAnchor.x + rowAnchor.width + ARROW_GAP_PX
-    : Math.max(16, rowAnchor.x - ARROW_SIZE_PX - ARROW_GAP_PX);
-  const arrowTop = rowCenterY - ARROW_SIZE_PX / 2;
 
-  const tooltipMaxWidth = isLeftRail
-    ? Math.min(320, Math.max(180, rowAnchor.x + rowAnchor.width + 80))
-    : Math.min(320, Math.max(180, rowAnchor.x - ARROW_SIZE_PX - ARROW_GAP_PX - 32));
-  const tooltipLeft = isLeftRail
-    ? arrowLeft + ARROW_SIZE_PX + 10
-    : Math.max(16, arrowLeft - tooltipMaxWidth - 10);
-  const tooltipTop = Math.max(20, rowCenterY - TOOLTIP_EST_HEIGHT_PX / 2);
+  const layout =
+    isLeftRail && sideSheetWidthPx > 0
+      ? coachmarkLayoutForLeftRail(rowAnchor, sideSheetWidthPx, screenW)
+      : {
+          arrowLeft: rowAnchor.x - ARROW_SIZE_PX - ARROW_GAP_PX,
+          arrowTop: coachmarkCenterY - ARROW_SIZE_PX / 2,
+          tooltipLeft: Math.max(
+            SCREEN_EDGE_INSET_PX,
+            rowAnchor.x - ARROW_SIZE_PX - ARROW_GAP_PX - TOOLTIP_WIDTH_PX - 12,
+          ),
+          tooltipWidth: TOOLTIP_WIDTH_PX,
+          coachmarkCenterY,
+        };
+
+  const tooltipTop = Math.max(20, layout.coachmarkCenterY - TOOLTIP_EST_HEIGHT_PX / 2);
 
   const arrowTranslateX = arrowAnim.interpolate({
     inputRange: [0, 1],
@@ -85,8 +126,8 @@ export function SettingsOnboardingOverlay({
         style={[
           styles.arrowWrap,
           {
-            left: arrowLeft,
-            top: arrowTop,
+            left: layout.arrowLeft,
+            top: layout.arrowTop,
             transform: [{ translateX: arrowTranslateX }],
           },
         ]}
@@ -103,8 +144,8 @@ export function SettingsOnboardingOverlay({
           styles.tooltipWrap,
           {
             top: tooltipTop,
-            left: tooltipLeft,
-            width: tooltipMaxWidth,
+            left: layout.tooltipLeft,
+            width: layout.tooltipWidth,
           },
         ]}
       >

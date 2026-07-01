@@ -3,7 +3,8 @@ export type ReaderActionBarOnboardingStepId =
   | "note"
   | "copy"
   | "journal"
-  | "study-notes";
+  | "study-notes"
+  | "favorite";
 
 export type ReaderActionBarOnboardingStep = {
   id: ReaderActionBarOnboardingStepId;
@@ -33,6 +34,11 @@ export const READER_ACTION_BAR_ONBOARDING_STEPS: ReaderActionBarOnboardingStep[]
     description: "Add inline notes displayed beneath the verse.",
   },
   {
+    id: "favorite",
+    title: "Favorite",
+    description: "Pin a verse to your carousel",
+  },
+  {
     id: "journal",
     title: "Journal",
     description: "Start a journal entry anchored to the selected passage.",
@@ -47,6 +53,7 @@ export const READER_ACTION_BAR_BUTTON_INDEX: Record<ReaderActionBarOnboardingSte
   highlight: 1,
   copy: 2,
   note: 3,
+  favorite: 4,
   journal: 5,
 };
 
