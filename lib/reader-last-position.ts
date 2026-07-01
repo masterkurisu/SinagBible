@@ -69,10 +69,17 @@ export async function saveReaderLastPosition(position: ReaderLastPosition): Prom
 
 const FALLBACK_TRANSLATION: TranslationId = "KJV";
 
-/** Translation from last reader session (AsyncStorage), validated; use for search, deep links, etc. */
-export async function getPreferredReaderTranslationId(): Promise<TranslationId> {
+/** Translation from last reader session (AsyncStorage); use for search, deep links, etc. */
+export async function getPreferredReaderTranslation(): Promise<string> {
   const pos = await loadReaderLastPosition();
-  const tid = pos?.translationId;
-  if (tid && isTranslationId(tid)) return tid;
+  const tid = pos?.translationId?.trim();
+  if (tid) return tid;
+  return FALLBACK_TRANSLATION;
+}
+
+/** @deprecated Prefer {@link getPreferredReaderTranslation} for API/YVP ids. */
+export async function getPreferredReaderTranslationId(): Promise<TranslationId> {
+  const tid = await getPreferredReaderTranslation();
+  if (isTranslationId(tid)) return tid;
   return FALLBACK_TRANSLATION;
 }

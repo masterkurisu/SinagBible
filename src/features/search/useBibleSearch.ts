@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  getSearchResultsForTranslation,
-  isTranslationId,
-  type TranslationId,
-} from "@sinag-bible/core/bible-translations";
+  getSearchResultsForReaderTranslation,
+  warmReaderTranslationSearchCache,
+} from "@/lib/bible-search-service";
 import type { BookSuggestion, LocalJournalEntry, SearchResult } from "@sinag-bible/types";
 import {
   loadSearchHistory,
@@ -12,22 +11,21 @@ import {
 } from "@/lib/search-history";
 import { buildSearchQuickPicks } from "@/lib/search-quick-picks";
 import {
-  getPreferredReaderTranslationId,
+  getPreferredReaderTranslation,
   peekReaderLastPosition,
   saveReaderLastPosition,
 } from "@/lib/reader-last-position";
 import { filterLocalJournalEntriesByQuery } from "@/lib/journal-local-search";
-import { getCachedLocalEntries } from "@/lib/journal-local";
+import { getCachedLocalEntries, refreshLocalEntriesCache } from "@/lib/journal-local";
 import { hapticSelection } from "@/lib/haptics";
 import { type Href } from "expo-router";
 import { readerChapterHref } from "@/lib/reader-navigation";
 
-const FALLBACK_TRANSLATION: TranslationId = "KJV";
+const FALLBACK_TRANSLATION = "KJV";
 const DEBOUNCE_MS = 280;
 
-function translationFromPeek(): TranslationId {
-  const t = peekReaderLastPosition()?.translationId;
-  return t && isTranslationId(t) ? t : FALLBACK_TRANSLATION;
+function translationFromPeek(): string {
+  return peekReaderLastPosition()?.translationId?.trim() || FALLBACK_TRANSLATION;
 }
 
 export function useBibleSearch({ enabled }: { enabled: boolean }) {
@@ -39,7 +37,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
   const [pending, setPending] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [recentQueries, setRecentQueries] = useState<string[]>([]);
-  const [searchTranslationId, setSearchTranslationId] = useState<TranslationId>(translationFromPeek);
+  const [searchTranslationId, setSearchTranslationId] = useState<string>(translationFromPeek);
   const [quickPicksSeed, setQuickPicksSeed] = useState(0);
 
   const recordNextRef = useRef(false);
@@ -48,7 +46,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
   const latestSearchRequestIdRef = useRef(0);
   const queryRef = useRef(query);
   queryRef.current = query;
-  const prevSearchTranslationRef = useRef<TranslationId | null>(null);
+  const prevSearchTranslationRef = useRef<string | null>(null);
 
   const flushDebouncedSearch = useCallback(() => {
     if (debounceTimerRef.current) {
@@ -73,14 +71,11 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     setPending(true);
     setSearchError(null);
     try {
-      const outcome = await getSearchResultsForTranslation(searchTranslationId, q);
+      const outcome = await getSearchResultsForReaderTranslation(searchTranslationId, q);
       if (requestId !== latestSearchRequestIdRef.current) return;
       setVerseResults(outcome.results);
       setBookSuggestion(outcome.bookSuggestion);
       setNearbyBooks(outcome.nearbyBooks);
-      const journalEntries = getCachedLocalEntries();
-      if (requestId !== latestSearchRequestIdRef.current) return;
-      setJournalResults(filterLocalJournalEntriesByQuery(journalEntries, q));
       if (shouldRecord) {
         const next = await prependSearchHistory(q);
         if (requestId !== latestSearchRequestIdRef.current) return;
@@ -89,7 +84,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     } catch {
       if (requestId !== latestSearchRequestIdRef.current) return;
       setVerseResults([]);
-      setJournalResults([]);
       setBookSuggestion(null);
       setNearbyBooks([]);
       setSearchError("Search is unavailable right now. Please try again.");
@@ -114,7 +108,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
   useEffect(() => {
     if (!enabled) return;
     setQuickPicksSeed((n) => n + 1);
-    void getPreferredReaderTranslationId()
+    void getPreferredReaderTranslation()
       .then(setSearchTranslationId)
       .catch(() => {
         /* keep fallback */
@@ -122,7 +116,33 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     void loadSearchHistory()
       .then(setRecentQueries)
       .catch(() => setRecentQueries([]));
+    let cancelled = false;
+    void refreshLocalEntriesCache().then((entries) => {
+      if (cancelled) return;
+      const q = queryRef.current.trim();
+      if (q) {
+        setJournalResults(filterLocalJournalEntriesByQuery(entries, q));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    warmReaderTranslationSearchCache(searchTranslationId);
+  }, [enabled, searchTranslationId]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const q = query.trim();
+    if (!q) {
+      setJournalResults([]);
+      return;
+    }
+    setJournalResults(filterLocalJournalEntriesByQuery(getCachedLocalEntries(), q));
+  }, [enabled, query]);
 
   useEffect(() => {
     if (!enabled) {
@@ -156,17 +176,14 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
       setPending(true);
       setSearchError(null);
       try {
-        const outcome = await getSearchResultsForTranslation(searchTranslationId, q);
+        const outcome = await getSearchResultsForReaderTranslation(searchTranslationId, q);
         if (cancelled) return;
         setVerseResults(outcome.results);
         setBookSuggestion(outcome.bookSuggestion);
         setNearbyBooks(outcome.nearbyBooks);
-        const journalEntries = getCachedLocalEntries();
-        setJournalResults(filterLocalJournalEntriesByQuery(journalEntries, q));
       } catch {
         if (!cancelled) {
           setVerseResults([]);
-          setJournalResults([]);
           setBookSuggestion(null);
           setNearbyBooks([]);
           setSearchError("Search is unavailable right now. Please try again.");
@@ -260,13 +277,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
 
   const showEmptyState = query.trim().length === 0;
   const hasQuery = query.trim().length > 0;
-  const noMatches = hasQuery && !pending && journalResults.length === 0 && verseResults.length === 0;
-  const showBookSuggestionBanner =
-    bookSuggestion != null && bookSuggestion.distance > 0 && verseResults.length > 0;
-  const emptyNearbyBooks = useMemo(
-    () => nearbyBooks.filter((book) => book.distance > 0),
-    [nearbyBooks],
-  );
   const searchSections = useMemo(() => {
     const sections: { title: string; data: (SearchResult | LocalJournalEntry)[] }[] = [];
     if (journalResults.length > 0) {
@@ -277,6 +287,14 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     }
     return sections;
   }, [journalResults, verseResults]);
+  const showSearchSkeleton = pending && searchSections.length === 0;
+  const noMatches = hasQuery && !pending && journalResults.length === 0 && verseResults.length === 0;
+  const showBookSuggestionBanner =
+    bookSuggestion != null && bookSuggestion.distance > 0 && verseResults.length > 0;
+  const emptyNearbyBooks = useMemo(
+    () => nearbyBooks.filter((book) => book.distance > 0),
+    [nearbyBooks],
+  );
   const recentShown = recentQueries.slice(0, 3);
   const quickPicks = useMemo(
     () =>
@@ -295,6 +313,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     onRemoveRecent,
     runImmediateSearch,
     pending,
+    showSearchSkeleton,
     searchError,
     showEmptyState,
     noMatches,

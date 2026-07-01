@@ -212,6 +212,14 @@ function createSearchBodyStyles(s: MobileAppThemeBundle["search"]) {
       paddingTop: 12,
       justifyContent: "flex-start",
     },
+    biblePendingHint: {
+      marginTop: 8,
+      marginBottom: 16,
+      textAlign: "center",
+      fontFamily: "Inter_400Regular",
+      fontSize: 13,
+      color: s.muted,
+    },
     emptyScrollContent: { paddingTop: 4 },
     scroll: { flex: 1 },
   });
@@ -259,7 +267,7 @@ export function SearchResultsBody({
       </View>
     ) : null;
 
-  if (search.pending) {
+  if (search.showSearchSkeleton) {
     return (
       <Pressable style={styles.bodyTapDismiss} onPress={Keyboard.dismiss}>
         <ScreenLoadingSkeleton lines={6} caption="Searching…" style={styles.searchPendingSkeleton} />
@@ -372,7 +380,12 @@ export function SearchResultsBody({
       keyboardShouldPersistTaps="always"
       keyboardDismissMode="on-drag"
       ListFooterComponent={
-        <Pressable style={styles.tapToDismissFiller} onPress={Keyboard.dismiss} accessibilityRole="none" />
+        <>
+          {search.pending ? (
+            <Text style={styles.biblePendingHint}>Searching Bible…</Text>
+          ) : null}
+          <Pressable style={styles.tapToDismissFiller} onPress={Keyboard.dismiss} accessibilityRole="none" />
+        </>
       }
       renderItem={({ item, section }) =>
         section.title === "Journal" ? (

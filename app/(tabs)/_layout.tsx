@@ -27,6 +27,9 @@ import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
 import { TabBarSearchProvider, useTabBarSearch } from "@/lib/tab-bar-search-context";
 import { TabBarSearchLayer } from "@/src/features/search/TabBarSearchLayer";
 import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
+import { refreshLocalEntriesCache } from "@/lib/journal-local";
+import { warmReaderTranslationSearchCache } from "@/lib/bible-search-service";
+import { getPreferredReaderTranslation } from "@/lib/reader-last-position";
 
 /** True when the active reader tab is showing a chapter (not the redirect index). */
 function isReaderChapterRoute(pathname: string | null): boolean {
@@ -70,13 +73,12 @@ function TabLayoutInner() {
   const lastNonSearchPathRef = useRef<string>("/(tabs)/");
   const prevActiveTabKeyRef = useRef<string | null>(null);
   const activeTabKey = tabHapticKeyFromPathname(pathname);
-  const hideTabBarOnAndroidHome = Platform.OS === "android" && activeTabKey === "index";
   const hideTabBarOnAndroidReaderScroll =
     Platform.OS === "android" &&
     activeTabKey === "reader" &&
     isReaderChapterRoute(pathname) &&
     readerTabBarScrollHidden;
-  const hideTabBarOnAndroid = hideTabBarOnAndroidHome || hideTabBarOnAndroidReaderScroll;
+  const hideTabBarOnAndroid = hideTabBarOnAndroidReaderScroll;
   const { bundle } = useMobileAppTheme();
   const chrome = bundle.chrome;
   const reader = bundle.reader;
@@ -91,9 +93,13 @@ function TabLayoutInner() {
   const lastDraftDiscoveryAtRef = useRef(0);
 
   useEffect(() => {
-    if (peekReaderLastPosition() != null) return;
-    // Warm memory cache so /reader can redirect without waiting on AsyncStorage.
-    void loadReaderLastPosition();
+    if (peekReaderLastPosition() == null) {
+      // Warm memory cache so /reader can redirect without waiting on AsyncStorage.
+      void loadReaderLastPosition();
+    }
+    // Warm journal cache so tab-bar search can filter entries without waiting on AsyncStorage.
+    void refreshLocalEntriesCache();
+    void getPreferredReaderTranslation().then(warmReaderTranslationSearchCache);
   }, []);
 
   useEffect(() => {
