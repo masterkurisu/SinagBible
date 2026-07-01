@@ -8,64 +8,129 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Animated, Easing, Platform, StyleSheet, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
-import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import { Animated, Platform, View } from "react-native";
+import { usePathname } from "expo-router";
+import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
+import { ReaderBottomNavSlideChrome } from "@/src/features/search/ReaderBottomNavSlideChrome";
+import {
+  M3_EMPHASIZED_ACCELERATE_EASING,
+  M3_EMPHASIZED_DECELERATE_EASING,
+  M3_MOTION_DURATION_SHORT3_MS,
+  M3_MOTION_DURATION_SHORT4_MS,
+} from "@/src/components/m3/m3-motion";
 
 /** Matches `READER_MOBILE_SETTINGS_PANEL_BG` in readerSettingsPanelChrome (settings strip + tab bar). */
 export { READER_MOBILE_SETTINGS_PANEL_BG as READER_TOOLS_MENU_TAB_BAR_COLOR } from "@/src/features/reader/readerSettingsPanelChrome";
 
-const TAB_BAR_SLIDE_MS = 220;
-/** Material standard deceleration — reads as a physical slide, not a fade. */
-const TAB_BAR_SLIDE_EASING = Easing.bezier(0.4, 0, 0.2, 1);
+/** M3 emphasized motion — faster exit, slightly softer enter. */
+const TAB_BAR_SLIDE_HIDE_MS = M3_MOTION_DURATION_SHORT3_MS;
+const TAB_BAR_SLIDE_SHOW_MS = M3_MOTION_DURATION_SHORT4_MS;
+
+/** True when the active reader tab is showing a chapter (not the redirect index). */
+function isReaderChapterRoute(pathname: string | null): boolean {
+  if (pathname == null || pathname === "") return false;
+  const parts = pathname.split("/").filter(Boolean);
+  let i = 0;
+  if (parts[0] === "(tabs)") i = 1;
+  if (parts[i] !== "reader") return false;
+  const afterReader = parts.slice(i + 1);
+  return afterReader.length >= 2 && afterReader[0] !== "index";
+}
 
 type ReaderTabBarVisibilityContextValue = {
-  /** Native tab bar hidden while reading mid-chapter (Android). */
+  /** Layout / reader chrome — updates immediately when scroll crosses threshold. */
   scrollHidden: boolean;
+  /** NativeTabs `hidden` — deferred until slide-out completes; held during slide-in. */
+  nativeTabBarHidden: boolean;
   /** 0–1 tint for the reader settings menu tab bar (Android, tab bar visible only). */
   settingsTabBarTint: number;
   /** Reader settings menu slide (0 = closed, 1 = open) when on the chapter screen. */
   settingsSlideProgress: Animated.Value | null;
-  /** 0 = tab bar shown, 1 = slid down off-screen — native-driver slide overlay. */
+  /** 0 = tab bar shown, 1 = slid down off-screen — snapped for list padding. */
   hideProgress: Animated.Value;
+  /** 0 = on-screen, 1 = off-screen below — drives translateY slide (no opacity). */
+  tabBarSlideProgress: Animated.Value;
   setScrollHidden: (hidden: boolean) => void;
+  /** Instant reset — chapter changes, route leave (no slide animation). */
+  snapScrollHidden: (hidden: boolean) => void;
   registerReaderSettingsSlideProgress: (progress: Animated.Value | null) => void;
 };
 
 const ReaderTabBarVisibilityContext = createContext<ReaderTabBarVisibilityContextValue | null>(null);
 
 export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [scrollHidden, setScrollHiddenState] = useState(false);
+  const [nativeTabBarHidden, setNativeTabBarHidden] = useState(false);
   const [settingsSlideProgress, setSettingsSlideProgress] = useState<Animated.Value | null>(null);
   const [settingsTabBarTint, setSettingsTabBarTint] = useState(0);
-  /** Snapped for list padding; slide overlay uses tabBarSlideProgress. */
   const hideProgress = useRef(new Animated.Value(0)).current;
-  /** 0 = tab bar shown, 1 = tab bar slid down — drives translateY on the slide overlay. */
   const tabBarSlideProgress = useRef(new Animated.Value(0)).current;
   const scrollHiddenRef = useRef(false);
   const slideAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
   const [slideOverlayActive, setSlideOverlayActive] = useState(false);
 
+  const stopSlideAnimation = useCallback(() => {
+    slideAnimationRef.current?.stop();
+    tabBarSlideProgress.stopAnimation();
+  }, [tabBarSlideProgress]);
+
+  const snapScrollHidden = useCallback(
+    (hidden: boolean) => {
+      stopSlideAnimation();
+      scrollHiddenRef.current = hidden;
+      setScrollHiddenState(hidden);
+      setNativeTabBarHidden(hidden);
+      hideProgress.setValue(hidden ? 1 : 0);
+      tabBarSlideProgress.setValue(hidden ? 1 : 0);
+      setSlideOverlayActive(false);
+    },
+    [hideProgress, stopSlideAnimation, tabBarSlideProgress],
+  );
+
   const playTabBarSlide = useCallback(
     (hidden: boolean) => {
       if (Platform.OS !== "android") return;
-      slideAnimationRef.current?.stop();
-      tabBarSlideProgress.stopAnimation();
+
+      stopSlideAnimation();
       setSlideOverlayActive(true);
+
+      if (hidden) {
+        setSlideOverlayActive(true);
+        setNativeTabBarHidden(true);
+        tabBarSlideProgress.setValue(0);
+        requestAnimationFrame(() => {
+          slideAnimationRef.current = Animated.timing(tabBarSlideProgress, {
+            toValue: 1,
+            duration: TAB_BAR_SLIDE_HIDE_MS,
+            easing: M3_EMPHASIZED_ACCELERATE_EASING,
+            useNativeDriver: true,
+          });
+          slideAnimationRef.current.start(({ finished }) => {
+            if (finished) {
+              setSlideOverlayActive(false);
+            }
+          });
+        });
+        return;
+      }
+
+      setNativeTabBarHidden(true);
+      tabBarSlideProgress.setValue(1);
       slideAnimationRef.current = Animated.timing(tabBarSlideProgress, {
-        toValue: hidden ? 1 : 0,
-        duration: TAB_BAR_SLIDE_MS,
-        easing: TAB_BAR_SLIDE_EASING,
+        toValue: 0,
+        duration: TAB_BAR_SLIDE_SHOW_MS,
+        easing: M3_EMPHASIZED_DECELERATE_EASING,
         useNativeDriver: true,
       });
       slideAnimationRef.current.start(({ finished }) => {
         if (finished) {
+          setNativeTabBarHidden(false);
           setSlideOverlayActive(false);
         }
       });
     },
-    [tabBarSlideProgress],
+    [stopSlideAnimation, tabBarSlideProgress],
   );
 
   const setScrollHidden = useCallback(
@@ -82,6 +147,14 @@ export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNo
   useEffect(() => () => {
     slideAnimationRef.current?.stop();
   }, []);
+
+  useEffect(() => {
+    const onReaderChapter =
+      tabHapticKeyFromPathname(pathname) === "reader" && isReaderChapterRoute(pathname);
+    if (!onReaderChapter) {
+      snapScrollHidden(false);
+    }
+  }, [pathname, snapScrollHidden]);
 
   const registerReaderSettingsSlideProgress = useCallback((progress: Animated.Value | null) => {
     setSettingsSlideProgress(progress);
@@ -112,18 +185,24 @@ export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNo
   const value = useMemo(
     () => ({
       scrollHidden,
+      nativeTabBarHidden,
       settingsTabBarTint,
       settingsSlideProgress,
       hideProgress,
+      tabBarSlideProgress,
       setScrollHidden,
+      snapScrollHidden,
       registerReaderSettingsSlideProgress,
     }),
     [
       scrollHidden,
+      nativeTabBarHidden,
       settingsTabBarTint,
       settingsSlideProgress,
       hideProgress,
+      tabBarSlideProgress,
       setScrollHidden,
+      snapScrollHidden,
       registerReaderSettingsSlideProgress,
     ],
   );
@@ -132,9 +211,12 @@ export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNo
     <ReaderTabBarVisibilityContext.Provider value={value}>
       <View style={{ flex: 1 }}>
         {children}
-        <ReaderTabBarChromeOverlays
+        <ReaderBottomNavSlideChrome
           tabBarSlideProgress={tabBarSlideProgress}
           slideOverlayActive={slideOverlayActive}
+          nativeTabBarHidden={nativeTabBarHidden}
+          settingsTabBarTint={settingsTabBarTint}
+          tabBarInteractionHidden={scrollHidden}
         />
       </View>
     </ReaderTabBarVisibilityContext.Provider>
@@ -153,6 +235,10 @@ export function useReaderTabBarScrollHidden(): boolean {
   return useReaderTabBarVisibilityContext().scrollHidden;
 }
 
+export function useReaderNativeTabBarHidden(): boolean {
+  return useReaderTabBarVisibilityContext().nativeTabBarHidden;
+}
+
 export function useReaderSettingsTabBarTint(): number {
   const ctx = useContext(ReaderTabBarVisibilityContext);
   return ctx?.settingsTabBarTint ?? 0;
@@ -162,8 +248,16 @@ export function useReaderTabBarHideProgress(): Animated.Value {
   return useReaderTabBarVisibilityContext().hideProgress;
 }
 
+export function useReaderTabBarSlideProgress(): Animated.Value {
+  return useReaderTabBarVisibilityContext().tabBarSlideProgress;
+}
+
 export function useSetReaderTabBarScrollHidden(): (hidden: boolean) => void {
   return useReaderTabBarVisibilityContext().setScrollHidden;
+}
+
+export function useSnapReaderTabBarScrollHidden(): (hidden: boolean) => void {
+  return useReaderTabBarVisibilityContext().snapScrollHidden;
 }
 
 export function useRegisterReaderSettingsSlideProgress(
@@ -195,50 +289,3 @@ export const ReaderTabBarCoverProvider = ReaderTabBarVisibilityProvider;
 export function useSetReaderTabBarCoverFromReaderMenuDeprecated(): ((covers: boolean) => void) | null {
   return useSetReaderTabBarCoverFromReaderMenu();
 }
-
-function ReaderTabBarChromeOverlays({
-  tabBarSlideProgress,
-  slideOverlayActive,
-}: {
-  tabBarSlideProgress: Animated.Value;
-  slideOverlayActive: boolean;
-}) {
-  const insets = useSafeAreaInsets();
-  const { bundle } = useMobileAppTheme();
-  const tabBarHeight = nativeTabSheetBottomInsetPx(insets.bottom, 0);
-  const tabBarSurface = bundle.chrome.tabBarBackground;
-
-  const slideTranslateY = tabBarSlideProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, tabBarHeight],
-  });
-
-  if (Platform.OS !== "android") return null;
-
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Animated.View
-        style={[
-          styles.overlay,
-          {
-            height: tabBarHeight,
-            backgroundColor: tabBarSurface,
-            opacity: slideOverlayActive ? 1 : 0,
-            transform: [{ translateY: slideTranslateY }],
-          },
-        ]}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  overlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1,
-    elevation: 1,
-  },
-});

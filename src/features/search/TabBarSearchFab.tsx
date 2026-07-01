@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import {
   Animated,
   Easing,
@@ -22,12 +22,16 @@ import {
 } from "@/src/features/search/tabBarSearchFabChrome";
 
 export type TabBarSearchFabProps = {
-  hidden?: boolean;
+  /** Disable taps while the tab bar is scroll-hidden or mid-slide. */
+  tabBarInteractionHidden?: boolean;
   style?: ViewStyle;
 };
 
 /** Large circular search control — sits in the fourth bottom-nav slot (M3 expressive). */
-export function TabBarSearchFab({ hidden = false, style }: TabBarSearchFabProps) {
+export function TabBarSearchFab({
+  tabBarInteractionHidden = false,
+  style,
+}: TabBarSearchFabProps) {
   const insets = useSafeAreaInsets();
   const { width: screenW } = useWindowDimensions();
   const { bundle } = useMobileAppTheme();
@@ -82,7 +86,7 @@ export function TabBarSearchFab({ hidden = false, style }: TabBarSearchFabProps)
     ]).start();
   }, [elevationAnim, scaleAnim]);
 
-  if (hidden || isOpen) {
+  if (isOpen) {
     return null;
   }
 
@@ -93,7 +97,7 @@ export function TabBarSearchFab({ hidden = false, style }: TabBarSearchFabProps)
 
   return (
     <Animated.View
-      pointerEvents="box-none"
+      pointerEvents={tabBarInteractionHidden ? "none" : "box-none"}
       style={[
         styles.host,
         {

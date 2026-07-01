@@ -18,7 +18,7 @@ import {
   ReaderTabBarVisibilityProvider,
   READER_TOOLS_MENU_TAB_BAR_COLOR,
   useReaderSettingsTabBarTint,
-  useReaderTabBarScrollHidden,
+  useReaderNativeTabBarHidden,
 } from "@/lib/reader-tab-bar-visibility-context";
 import { mixHexColors } from "@/lib/mix-hex-color";
 import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
@@ -53,11 +53,11 @@ const DRAFT_DISCOVERY_INTERVAL_MS = 60_000;
 
 export default function TabLayout() {
   return (
-    <ReaderTabBarVisibilityProvider>
-      <TabBarSearchProvider>
+    <TabBarSearchProvider>
+      <ReaderTabBarVisibilityProvider>
         <TabLayoutInner />
-      </TabBarSearchProvider>
-    </ReaderTabBarVisibilityProvider>
+      </ReaderTabBarVisibilityProvider>
+    </TabBarSearchProvider>
   );
 }
 
@@ -65,18 +65,17 @@ function TabLayoutInner() {
   const pathname = usePathname();
   const router = useRouter();
   const { isOpen: isSearchOpen, openSearch, closeSearch } = useTabBarSearch();
-  const readerTabBarScrollHidden = useReaderTabBarScrollHidden();
+  const nativeTabBarHidden = useReaderNativeTabBarHidden();
   const readerSettingsTabBarTint = useReaderSettingsTabBarTint();
   const prevTabHapticKeyRef = useRef<string | null>(null);
   const lastNonSearchPathRef = useRef<string>("/(tabs)/");
   const prevActiveTabKeyRef = useRef<string | null>(null);
   const activeTabKey = tabHapticKeyFromPathname(pathname);
-  const hideTabBarOnAndroidReaderScroll =
+  const readerChapterAndroidScrollHide =
     Platform.OS === "android" &&
     activeTabKey === "reader" &&
-    isReaderChapterRoute(pathname) &&
-    readerTabBarScrollHidden;
-  const hideTabBarOnAndroid = hideTabBarOnAndroidReaderScroll;
+    isReaderChapterRoute(pathname);
+  const hideTabBarOnAndroid = readerChapterAndroidScrollHide && nativeTabBarHidden;
   const { bundle } = useMobileAppTheme();
   const chrome = bundle.chrome;
   const reader = bundle.reader;
@@ -290,7 +289,7 @@ function TabLayoutInner() {
           );
         })}
       </NativeTabs>
-      <TabBarSearchFab hidden={hideTabBarOnAndroid} />
+      {!readerChapterAndroidScrollHide ? <TabBarSearchFab /> : null}
       <TabBarSearchLayer />
     </View>
   );

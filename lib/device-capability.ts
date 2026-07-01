@@ -16,5 +16,8 @@ export const READER_FLASH_LIST_DRAW_DISTANCE_PX = isLowEndDevice ? 200 : 500;
 /** FlashList scrollEventThrottle — fewer JS bridge crossings on low-RAM Android. */
 export const READER_SCROLL_EVENT_THROTTLE = isLowEndDevice ? 32 : 8;
 
-/** Min scroll delta (px) before runOnJS tab-bar / nav-arrow side effects fire. */
+/** Min scroll delta (px) before runOnJS nav-arrow side effects fire. */
 export const READER_SCROLL_JS_BRIDGE_DELTA_PX = isLowEndDevice ? 24 : 8;
+
+/** Tab bar auto-hide — tighter bridge so chrome reacts sooner than nav arrows. */
+export const READER_TAB_BAR_SCROLL_JS_BRIDGE_DELTA_PX = isLowEndDevice ? 12 : 4;

@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Animated, Platform } from "react-native";
 import { ANDROID_NAV_BAR_BODY_PX } from "@/lib/android-nav-bar-chrome";
 
 /** M3 expressive extra-large circular icon button in the nav bar search slot. */
@@ -20,4 +20,29 @@ export function tabBarSearchFabBottomPx(safeAreaBottom: number): number {
 /** `left` position to center the FAB in the fourth nav-bar slot (4-tab layout). */
 export function tabBarSearchFabLeftPx(screenWidth: number): number {
   return screenWidth * (7 / 8) - TAB_BAR_SEARCH_FAB_SIZE_PX / 2;
+}
+
+/** Full translateY to slide the FAB completely below the screen edge (with scroll-hide). */
+export function tabBarSearchFabHideTranslatePx(safeAreaBottom: number): number {
+  return tabBarSearchFabBottomPx(safeAreaBottom) + TAB_BAR_SEARCH_FAB_SIZE_PX + 8;
+}
+
+/**
+ * Shared scroll-hide slide distance for the native tab bar overlay and search FAB.
+ * Both must use the same translateY range so they move as one bottom-nav unit.
+ */
+export function androidBottomNavChromeHideSlidePx(safeAreaBottom: number): number {
+  return tabBarSearchFabHideTranslatePx(safeAreaBottom);
+}
+
+/** Interpolate shared bottom-nav slide progress to translateY. */
+export function androidBottomNavChromeSlideTranslateY(
+  slideProgress: Animated.Value,
+  safeAreaBottom: number,
+): Animated.AnimatedInterpolation<number> {
+  const distancePx = androidBottomNavChromeHideSlidePx(safeAreaBottom);
+  return slideProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, distancePx],
+  });
 }

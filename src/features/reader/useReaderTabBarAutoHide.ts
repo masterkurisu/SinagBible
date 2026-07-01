@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
-import { useSetReaderTabBarScrollHidden } from "@/lib/reader-tab-bar-visibility-context";
+import {
+  useSetReaderTabBarScrollHidden,
+  useSnapReaderTabBarScrollHidden,
+} from "@/lib/reader-tab-bar-visibility-context";
 
-const TOP_EDGE_PX = 40;
+/** Small dead zone at chapter top — keeps tab bar visible for tiny scroll corrections. */
+const TOP_EDGE_PX = 16;
 const BOTTOM_EDGE_PX = 48;
 /**
  * Extra slack before hiding again after reaching the chapter end.
@@ -32,6 +36,7 @@ export function useReaderTabBarAutoHide({
   forceVisible: boolean;
 }) {
   const setScrollHidden = useSetReaderTabBarScrollHidden();
+  const snapScrollHidden = useSnapReaderTabBarScrollHidden();
   const hiddenRef = useRef(false);
   const metricsRef = useRef<ScrollMetrics>({ y: 0, contentHeight: 0, viewportHeight: 0 });
   const bottomPinnedRef = useRef(false);
@@ -128,8 +133,8 @@ export function useReaderTabBarAutoHide({
     bottomPinnedRef.current = false;
     metricsCooldownUntilRef.current = 0;
     metricsRef.current = { y: 0, contentHeight: 0, viewportHeight: 0 };
-    setScrollHidden(false);
-  }, [chapterRouteKey, setScrollHidden]);
+    snapScrollHidden(false);
+  }, [chapterRouteKey, snapScrollHidden]);
 
   useEffect(() => {
     if (forceVisible) {
