@@ -10,6 +10,7 @@ import {
   READER_ACTION_BAR_BUTTON_GAP_PX,
   READER_ACTION_BAR_BUTTON_INDEX,
   READER_ACTION_BAR_BUTTON_PX,
+  READER_ACTION_BAR_ICON_BUTTON_COUNT,
   READER_ACTION_BAR_ONBOARDING_STEP_MS,
   READER_ACTION_BAR_ONBOARDING_STEPS,
   READER_ACTION_BAR_PILL_PAD_H_PX,
@@ -35,10 +36,11 @@ function fallbackActionBarButtonTarget(
   actionBarBottomPx: number,
 ): LayoutRectangle {
   const buttonIndex = READER_ACTION_BAR_BUTTON_INDEX[stepId];
+  const buttonCount = READER_ACTION_BAR_ICON_BUTTON_COUNT + 1;
   const barWidth =
     READER_ACTION_BAR_PILL_PAD_H_PX * 2 +
-    READER_ACTION_BAR_BUTTON_PX * 5 +
-    READER_ACTION_BAR_BUTTON_GAP_PX * 4;
+    READER_ACTION_BAR_BUTTON_PX * buttonCount +
+    READER_ACTION_BAR_BUTTON_GAP_PX * (buttonCount - 1);
   const barLeft = (screenW - barWidth) / 2;
   const x =
     barLeft +

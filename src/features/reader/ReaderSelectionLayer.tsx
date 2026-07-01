@@ -22,6 +22,7 @@ import {
 import { StudyNotesBookmarkIcon } from "@/components/icons/StudyNotesBookmarkIcon";
 import type { JournalNewEntryInitialParams } from "@/components/journal-new-entry-form";
 import { hapticLightImpact, hapticSelection } from "@/lib/haptics";
+import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import {
   buildCarouselVerseFromSelection,
   selectionMatchesCarouselRecord,
@@ -37,17 +38,21 @@ import { useReaderSelection } from "@/src/features/reader/useReaderSelection";
 import { ReaderActionBarOnboardingLayer } from "@/src/features/reader/ReaderActionBarOnboardingLayer";
 import type { ReaderActionBarOnboardingStepId } from "@/src/features/reader/readerActionBarOnboardingSteps";
 import {
-  READER_ACTION_BAR_BUTTON_GAP_PX,
-  READER_ACTION_BAR_BUTTON_PX,
   READER_ACTION_BAR_ICON_BOX_PX,
   READER_ACTION_BAR_ICON_SIZE_PX,
   READER_ACTION_BAR_PILL_PAD_H_HIGHLIGHT_PX,
-  READER_ACTION_BAR_PILL_PAD_H_PX,
-  READER_ACTION_BAR_PILL_PAD_V_DEFAULT_PX,
   READER_ACTION_BAR_PILL_PAD_V_HIGHLIGHT_PX,
-  READER_ACTION_BAR_ROW_GAP_PX,
 } from "@/src/features/reader/readerActionBarOnboardingSteps";
 import { useReaderActionBarOnboarding } from "@/src/features/reader/useReaderActionBarOnboarding";
+import {
+  ReaderActionBarIconButton,
+  ReaderActionBarJournalButton,
+  READER_M3_ON_SURFACE_VARIANT,
+} from "@/src/features/reader/ReaderActionBarButtons";
+import {
+  READER_M3_FLOATING_TOOLBAR_CONTAINER,
+  readerM3FloatingToolbarPillStyle,
+} from "@/src/features/reader/readerActionBarChrome";
 import type { ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import type { ReaderVerseTextAlign } from "@/src/features/reader/useReaderPreferences";
 
@@ -69,11 +74,6 @@ const readerVerseListStyles = StyleSheet.create({
   },
 });
 
-const ACTION_BAR_BUTTON_STYLE = {
-  width: READER_ACTION_BAR_BUTTON_PX,
-  height: READER_ACTION_BAR_BUTTON_PX,
-} as const;
-
 const ACTION_BAR_ICON_SCALE = {
   studyNotes: 1.01,
   highlight: 1.19,
@@ -82,6 +82,13 @@ const ACTION_BAR_ICON_SCALE = {
   favorite: 1.05,
   journal: 1.08,
 } as const;
+
+function readerActionBarIconColor(
+  rc: ReaderThemeBundle,
+  platformMuted: string,
+): string {
+  return Platform.OS === "android" ? platformMuted : rc.actionIconMuted;
+}
 
 export type ReaderSelectionActivity = {
   selectedVerses: number[];
@@ -152,6 +159,18 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
   openJournalFromSelection,
   actionBarButtonRefs,
 }: ReaderSelectionActionBarProps) {
+  const { bundle } = useMobileAppTheme();
+  const journalChrome = bundle.journal;
+  const iconMuted = readerActionBarIconColor(rc, READER_M3_ON_SURFACE_VARIANT);
+  const toolbarPillStyle = useMemo(
+    () =>
+      readerM3FloatingToolbarPillStyle(
+        READER_M3_FLOATING_TOOLBAR_CONTAINER,
+        colors.parchmentMid,
+      ),
+    [colors.parchmentMid],
+  );
+
   return (
     <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: 45 }]}>
       <Animated.View
@@ -162,35 +181,21 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
           left: 0,
           right: 0,
           alignItems: "center",
-          paddingLeft: 16,
-          paddingRight: actionBarMode === "highlight" ? 4 : 16,
+          paddingHorizontal: 16,
         }}
       >
         <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            flexWrap: "wrap",
-            rowGap: READER_ACTION_BAR_ROW_GAP_PX,
-            columnGap: READER_ACTION_BAR_BUTTON_GAP_PX,
-            backgroundColor: colors.parchmentMid,
-            borderRadius: 999,
-            paddingLeft: actionBarMode === "highlight" ? READER_ACTION_BAR_PILL_PAD_H_HIGHLIGHT_PX : READER_ACTION_BAR_PILL_PAD_H_PX,
-            paddingRight: actionBarMode === "highlight" ? READER_ACTION_BAR_PILL_PAD_H_HIGHLIGHT_PX : READER_ACTION_BAR_PILL_PAD_H_PX,
-            paddingVertical:
-              actionBarMode === "highlight"
-                ? READER_ACTION_BAR_PILL_PAD_V_HIGHLIGHT_PX
-                : READER_ACTION_BAR_PILL_PAD_V_DEFAULT_PX,
-            borderWidth: 1,
-            borderColor: colors.borderSolid,
-            shadowColor: "#242423",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.2,
-            shadowRadius: 4,
-            elevation: 4,
-            maxWidth: "100%",
-          }}
+          style={
+            actionBarMode === "highlight"
+              ? [
+                  toolbarPillStyle,
+                  {
+                    paddingHorizontal: READER_ACTION_BAR_PILL_PAD_H_HIGHLIGHT_PX,
+                    paddingVertical: READER_ACTION_BAR_PILL_PAD_V_HIGHLIGHT_PX,
+                  },
+                ]
+              : toolbarPillStyle
+          }
         >
           {actionBarMode === "highlight" ? (
             <>
@@ -259,147 +264,131 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
             </>
           ) : (
             <>
-              <View ref={actionBarButtonRefs["study-notes"]} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
-                <TouchableOpacity
-                  onPress={openStudyNotesFromSelection}
-                  accessibilityLabel="Open study notes for selection"
-                  className="rounded-full items-center justify-center"
-                  style={ACTION_BAR_BUTTON_STYLE}
-                  activeOpacity={0.7}
-                >
-                  <View
-                    style={{
-                      width: READER_ACTION_BAR_ICON_BOX_PX,
-                      height: READER_ACTION_BAR_ICON_BOX_PX,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transform: [{ scale: ACTION_BAR_ICON_SCALE.studyNotes }],
-                    }}
-                  >
-                    <StudyNotesBookmarkIcon color={rc.actionIconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
-                  </View>
-                </TouchableOpacity>
-              </View>
-              <View ref={actionBarButtonRefs.highlight} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
-                <TouchableOpacity
-                  onPress={() => {
-                    const first = selectedVerses[0];
-                    const existing = first != null ? highlights[first] : undefined;
-                    if (existing) setPickedHighlightColor(existing);
-                    setActionBarMode("highlight");
+              <ReaderActionBarIconButton
+                onPress={openStudyNotesFromSelection}
+                accessibilityLabel="Open study notes for selection"
+                buttonRef={actionBarButtonRefs["study-notes"]}
+              >
+                <View
+                  style={{
+                    width: READER_ACTION_BAR_ICON_BOX_PX,
+                    height: READER_ACTION_BAR_ICON_BOX_PX,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transform: [{ scale: ACTION_BAR_ICON_SCALE.studyNotes }],
                   }}
-                  accessibilityLabel="Highlight"
-                  className="rounded-full items-center justify-center"
-                  style={ACTION_BAR_BUTTON_STYLE}
-                  activeOpacity={0.7}
                 >
-                  <View
-                    style={{
-                      width: READER_ACTION_BAR_ICON_BOX_PX,
-                      height: READER_ACTION_BAR_ICON_BOX_PX,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transform: [{ scale: ACTION_BAR_ICON_SCALE.highlight }],
-                    }}
-                  >
-                    <ReaderHighlightIcon color={rc.actionIconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
-                  </View>
-                </TouchableOpacity>
-              </View>
-              <View ref={actionBarButtonRefs.copy} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
-                <TouchableOpacity
-                  onPress={() => {
-                    void copySelectedVerses();
+                  <StudyNotesBookmarkIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
+                </View>
+              </ReaderActionBarIconButton>
+              <ReaderActionBarIconButton
+                onPress={() => {
+                  const first = selectedVerses[0];
+                  const existing = first != null ? highlights[first] : undefined;
+                  if (existing) setPickedHighlightColor(existing);
+                  setActionBarMode("highlight");
+                }}
+                accessibilityLabel="Highlight"
+                buttonRef={actionBarButtonRefs.highlight}
+              >
+                <View
+                  style={{
+                    width: READER_ACTION_BAR_ICON_BOX_PX,
+                    height: READER_ACTION_BAR_ICON_BOX_PX,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transform: [{ scale: ACTION_BAR_ICON_SCALE.highlight }],
                   }}
-                  accessibilityLabel="Copy"
-                  className="rounded-full items-center justify-center"
-                  style={ACTION_BAR_BUTTON_STYLE}
-                  activeOpacity={0.7}
                 >
-                  <View
-                    style={{
-                      width: READER_ACTION_BAR_ICON_BOX_PX,
-                      height: READER_ACTION_BAR_ICON_BOX_PX,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transform: [{ scale: ACTION_BAR_ICON_SCALE.copy }],
-                    }}
-                  >
-                    <ReaderCopyIcon color={rc.actionIconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
-                  </View>
-                </TouchableOpacity>
-              </View>
-              <View ref={actionBarButtonRefs.note} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
-                <TouchableOpacity
-                  onPress={openNoteForSelection}
-                  accessibilityLabel="Note"
-                  className="rounded-full items-center justify-center"
-                  style={ACTION_BAR_BUTTON_STYLE}
-                  activeOpacity={0.7}
+                  <ReaderHighlightIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
+                </View>
+              </ReaderActionBarIconButton>
+              <ReaderActionBarIconButton
+                onPress={() => {
+                  void copySelectedVerses();
+                }}
+                accessibilityLabel="Copy"
+                buttonRef={actionBarButtonRefs.copy}
+              >
+                <View
+                  style={{
+                    width: READER_ACTION_BAR_ICON_BOX_PX,
+                    height: READER_ACTION_BAR_ICON_BOX_PX,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transform: [{ scale: ACTION_BAR_ICON_SCALE.copy }],
+                  }}
                 >
-                  <View
-                    style={{
-                      width: READER_ACTION_BAR_ICON_BOX_PX,
-                      height: READER_ACTION_BAR_ICON_BOX_PX,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transform: [{ scale: ACTION_BAR_ICON_SCALE.note }],
-                    }}
-                  >
-                    <ReaderNoteIcon color={rc.actionIconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
-                  </View>
-                </TouchableOpacity>
-              </View>
-              <View collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
-                <TouchableOpacity
-                  onPress={toggleFavoriteFromSelection}
-                  accessibilityLabel={
-                    selectionIsFavorited
-                      ? "Remove from journal carousel"
-                      : "Add to journal carousel"
-                  }
-                  className="rounded-full items-center justify-center"
-                  style={ACTION_BAR_BUTTON_STYLE}
-                  activeOpacity={0.7}
+                  <ReaderCopyIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
+                </View>
+              </ReaderActionBarIconButton>
+              <ReaderActionBarIconButton
+                onPress={openNoteForSelection}
+                accessibilityLabel="Note"
+                buttonRef={actionBarButtonRefs.note}
+              >
+                <View
+                  style={{
+                    width: READER_ACTION_BAR_ICON_BOX_PX,
+                    height: READER_ACTION_BAR_ICON_BOX_PX,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transform: [{ scale: ACTION_BAR_ICON_SCALE.note }],
+                  }}
                 >
-                  <View
-                    style={{
-                      width: READER_ACTION_BAR_ICON_BOX_PX,
-                      height: READER_ACTION_BAR_ICON_BOX_PX,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transform: [{ scale: ACTION_BAR_ICON_SCALE.favorite }],
-                    }}
-                  >
-                    <ReaderFavoriteIcon
-                      color={selectionIsFavorited ? "#c45c5c" : rc.actionIconMuted}
-                      filled={selectionIsFavorited}
-                      size={READER_ACTION_BAR_ICON_SIZE_PX}
-                    />
-                  </View>
-                </TouchableOpacity>
-              </View>
-              <View ref={actionBarButtonRefs.journal} collapsable={false} style={ACTION_BAR_BUTTON_STYLE}>
-                <TouchableOpacity
-                  onPress={openJournalFromSelection}
-                  accessibilityLabel="New journal entry from selection"
-                  className="rounded-full items-center justify-center"
-                  style={[ACTION_BAR_BUTTON_STYLE, { backgroundColor: colors.brown800 }]}
-                  activeOpacity={0.85}
+                  <ReaderNoteIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
+                </View>
+              </ReaderActionBarIconButton>
+              <ReaderActionBarIconButton
+                onPress={toggleFavoriteFromSelection}
+                accessibilityLabel={
+                  selectionIsFavorited
+                    ? "Remove from journal carousel"
+                    : "Add to journal carousel"
+                }
+              >
+                <View
+                  style={{
+                    width: READER_ACTION_BAR_ICON_BOX_PX,
+                    height: READER_ACTION_BAR_ICON_BOX_PX,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transform: [{ scale: ACTION_BAR_ICON_SCALE.favorite }],
+                  }}
                 >
-                  <View
-                    style={{
-                      width: READER_ACTION_BAR_ICON_BOX_PX,
-                      height: READER_ACTION_BAR_ICON_BOX_PX,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transform: [{ scale: ACTION_BAR_ICON_SCALE.journal }],
-                    }}
-                  >
-                    <ReaderJournalIcon color={rc.selectionText} size={READER_ACTION_BAR_ICON_SIZE_PX} />
-                  </View>
-                </TouchableOpacity>
-              </View>
+                  <ReaderFavoriteIcon
+                    color={selectionIsFavorited ? "#c45c5c" : iconMuted}
+                    filled={selectionIsFavorited}
+                    size={READER_ACTION_BAR_ICON_SIZE_PX}
+                  />
+                </View>
+              </ReaderActionBarIconButton>
+              <ReaderActionBarJournalButton
+                onPress={openJournalFromSelection}
+                accessibilityLabel="New journal entry from selection"
+                containerColor={
+                  Platform.OS === "android" ? journalChrome.fabContainer : colors.brown800
+                }
+                rippleColor={journalChrome.fabRipple}
+                buttonRef={actionBarButtonRefs.journal}
+              >
+                <View
+                  style={{
+                    width: READER_ACTION_BAR_ICON_BOX_PX,
+                    height: READER_ACTION_BAR_ICON_BOX_PX,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transform: [{ scale: ACTION_BAR_ICON_SCALE.journal }],
+                  }}
+                >
+                  <ReaderJournalIcon
+                    color={
+                      Platform.OS === "android" ? journalChrome.fabOnContainer : rc.selectionText
+                    }
+                    size={READER_ACTION_BAR_ICON_SIZE_PX}
+                  />
+                </View>
+              </ReaderActionBarJournalButton>
             </>
           )}
         </View>

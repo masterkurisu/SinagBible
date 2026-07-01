@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { AppState, Platform } from "react-native";
-import { usePathname } from "expo-router";
+import { AppState, Platform, View } from "react-native";
+import { type Href, usePathname, useRouter } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -23,23 +23,10 @@ import {
   useReaderTabBarScrollHidden,
 } from "@/lib/reader-tab-bar-visibility-context";
 import { mixHexColors } from "@/lib/mix-hex-color";
-
-/** Path segments map to the primary tab (`(tabs)` group may or may not appear in the path). */
-function tabHapticKeyFromPathname(pathname: string | null): string | null {
-  if (pathname == null || pathname === "" || pathname === "/") return "index";
-  const parts = pathname.split("/").filter(Boolean);
-  const first = parts[0];
-  if (!first) return "index";
-  if (first === "(tabs)") {
-    const second = parts[1];
-    if (second == null || second === "" || second === "index") return "index";
-    if (second === "reader" || second === "journal" || second === "search") return second;
-    return null;
-  }
-  if (first === "reader" || first === "journal" || first === "search") return first;
-  if (first === "index") return "index";
-  return null;
-}
+import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
+import { TabBarSearchProvider, useTabBarSearch } from "@/lib/tab-bar-search-context";
+import { TabBarSearchLayer } from "@/src/features/search/TabBarSearchLayer";
+import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
 
 /** True when the active reader tab is showing a chapter (not the redirect index). */
 function isReaderChapterRoute(pathname: string | null): boolean {
@@ -66,16 +53,22 @@ const DRAFT_DISCOVERY_INTERVAL_MS = 60_000;
 export default function TabLayout() {
   return (
     <ReaderTabBarVisibilityProvider>
-      <TabLayoutInner />
+      <TabBarSearchProvider>
+        <TabLayoutInner />
+      </TabBarSearchProvider>
     </ReaderTabBarVisibilityProvider>
   );
 }
 
 function TabLayoutInner() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { isOpen: isSearchOpen, openSearch, closeSearch } = useTabBarSearch();
   const readerTabBarScrollHidden = useReaderTabBarScrollHidden();
   const readerSettingsTabBarTint = useReaderSettingsTabBarTint();
   const prevTabHapticKeyRef = useRef<string | null>(null);
+  const lastNonSearchPathRef = useRef<string>("/(tabs)/");
+  const prevActiveTabKeyRef = useRef<string | null>(null);
   const activeTabKey = tabHapticKeyFromPathname(pathname);
   const hideTabBarOnAndroidHome = Platform.OS === "android" && activeTabKey === "index";
   const hideTabBarOnAndroidReaderScroll =
@@ -102,6 +95,27 @@ function TabLayoutInner() {
     // Warm memory cache so /reader can redirect without waiting on AsyncStorage.
     void loadReaderLastPosition();
   }, []);
+
+  useEffect(() => {
+    if (activeTabKey != null && activeTabKey !== "search") {
+      lastNonSearchPathRef.current = pathname;
+    }
+  }, [pathname, activeTabKey]);
+
+  /** Keep the prior tab (reader/journal/home) visible under the search overlay. */
+  useEffect(() => {
+    const prev = prevActiveTabKeyRef.current;
+    prevActiveTabKeyRef.current = activeTabKey;
+    if (activeTabKey !== "search" || prev === "search") return;
+
+    const restorePath = lastNonSearchPathRef.current || "/(tabs)/";
+    if (isSearchOpen) {
+      closeSearch();
+    } else {
+      openSearch();
+    }
+    router.replace(restorePath as Href);
+  }, [activeTabKey, closeSearch, isSearchOpen, openSearch, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,82 +220,98 @@ function TabLayoutInner() {
       : ({} as Record<string, unknown>);
 
   return (
-    <NativeTabs
-      {...iosTabBarSurfaceProps}
-      {...tabHiddenProps}
-      tintColor={TAB_TINT}
-      iconColor={{ default: TAB_MUTED, selected: TAB_TINT }}
-      badgeBackgroundColor="#e53935"
-      backgroundColor={tabBarBackgroundColor}
-      {...Platform.select({
-        android: {
-          labelVisibilityMode: ANDROID_NAV_LABEL_VISIBILITY_MODE,
-          rippleColor: androidRipple,
-          indicatorColor: androidIndicator,
-        },
-        default: {},
-      })}
-      labelStyle={{
-        default: {
-          color: TAB_MUTED,
-          fontSize: labelFontSize,
-          fontWeight: labelFontWeight,
-        },
-        selected: {
-          color: TAB_TINT,
-          fontSize: labelFontSize,
-          fontWeight: selectedLabelFontWeight,
-        },
-      }}
-    >
-      {NAV_TAB_DEFINITIONS.map((tab) => {
-        const selectedAccent = getNavTabSelectedAccent(chrome, tab.tabIndex);
-        return (
-          <NativeTabs.Trigger key={tab.name} name={tab.name} disablePopToTop disableScrollToTop>
-            <NativeTabs.Trigger.Label selectedStyle={{ color: selectedAccent }}>
-              {tab.label}
-            </NativeTabs.Trigger.Label>
-            <NativeTabs.Trigger.Icon
-              selectedColor={selectedAccent}
-              sf={NAV_TAB_SF[tab.name]}
-              src={
-                Platform.OS === "android"
-                  ? {
-                      default: (
-                        <NativeTabs.Trigger.VectorIcon
-                          family={MaterialIcons}
-                          name={tab.androidIcon.default}
-                        />
-                      ),
-                      selected: (
-                        <NativeTabs.Trigger.VectorIcon
-                          family={MaterialIcons}
-                          name={tab.androidIcon.selected}
-                        />
-                      ),
+    <View style={{ flex: 1 }}>
+      <NativeTabs
+        {...iosTabBarSurfaceProps}
+        {...tabHiddenProps}
+        tintColor={TAB_TINT}
+        iconColor={{ default: TAB_MUTED, selected: TAB_TINT }}
+        badgeBackgroundColor="#e53935"
+        backgroundColor={tabBarBackgroundColor}
+        {...Platform.select({
+          android: {
+            labelVisibilityMode: ANDROID_NAV_LABEL_VISIBILITY_MODE,
+            rippleColor: androidRipple,
+            indicatorColor: androidIndicator,
+          },
+          default: {},
+        })}
+        labelStyle={{
+          default: {
+            color: TAB_MUTED,
+            fontSize: labelFontSize,
+            fontWeight: labelFontWeight,
+          },
+          selected: {
+            color: TAB_TINT,
+            fontSize: labelFontSize,
+            fontWeight: selectedLabelFontWeight,
+          },
+        }}
+      >
+        {NAV_TAB_DEFINITIONS.map((tab) => {
+          const selectedAccent = getNavTabSelectedAccent(chrome, tab.tabIndex);
+          const isSearchTab = tab.name === "search";
+          return (
+            <NativeTabs.Trigger
+              key={tab.name}
+              name={tab.name}
+              disablePopToTop
+              disableScrollToTop
+              disabled={isSearchTab}
+              {...(isSearchTab ? { contentStyle: { backgroundColor: "transparent" } } : {})}
+            >
+              {!isSearchTab ? (
+                <>
+                  <NativeTabs.Trigger.Label selectedStyle={{ color: selectedAccent }}>
+                    {tab.label}
+                  </NativeTabs.Trigger.Label>
+                  <NativeTabs.Trigger.Icon
+                    selectedColor={selectedAccent}
+                    sf={NAV_TAB_SF[tab.name]}
+                    src={
+                      Platform.OS === "android"
+                        ? {
+                            default: (
+                              <NativeTabs.Trigger.VectorIcon
+                                family={MaterialIcons}
+                                name={tab.androidIcon.default}
+                              />
+                            ),
+                            selected: (
+                              <NativeTabs.Trigger.VectorIcon
+                                family={MaterialIcons}
+                                name={tab.androidIcon.selected}
+                              />
+                            ),
+                          }
+                        : {
+                            default: (
+                              <NativeTabs.Trigger.VectorIcon
+                                family={MaterialCommunityIcons}
+                                name={tab.iosIcon.default}
+                              />
+                            ),
+                            selected: (
+                              <NativeTabs.Trigger.VectorIcon
+                                family={MaterialCommunityIcons}
+                                name={tab.iosIcon.selected}
+                              />
+                            ),
+                          }
                     }
-                  : {
-                      default: (
-                        <NativeTabs.Trigger.VectorIcon
-                          family={MaterialCommunityIcons}
-                          name={tab.iosIcon.default}
-                        />
-                      ),
-                      selected: (
-                        <NativeTabs.Trigger.VectorIcon
-                          family={MaterialCommunityIcons}
-                          name={tab.iosIcon.selected}
-                        />
-                      ),
-                    }
-              }
-            />
-            {tab.name === "journal" && hasJournalDraft ? (
-              <NativeTabs.Trigger.Badge>{" "}</NativeTabs.Trigger.Badge>
-            ) : null}
-          </NativeTabs.Trigger>
-        );
-      })}
-    </NativeTabs>
+                  />
+                </>
+              ) : null}
+              {tab.name === "journal" && hasJournalDraft ? (
+                <NativeTabs.Trigger.Badge>{" "}</NativeTabs.Trigger.Badge>
+              ) : null}
+            </NativeTabs.Trigger>
+          );
+        })}
+      </NativeTabs>
+      <TabBarSearchFab hidden={hideTabBarOnAndroid} />
+      <TabBarSearchLayer />
+    </View>
   );
 }
