@@ -14,6 +14,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { KofiSupportBlock } from "@/components/kofi-support-block";
 import { M3Switch } from "@/components/M3Switch";
 import { CreditsIcon } from "@/components/icons/CreditsIcon";
 import { hapticLightImpact } from "@/lib/haptics";
@@ -54,7 +55,7 @@ export function ReaderMoreSettingsSheet({
 
   const sheetScale = isTabletReaderLayout ? 1.5 : 1;
   const sheetSideInsetPx = 12 + 30;
-  const sheetMaxW = Math.min(isTabletReaderLayout ? 360 : 280, screenW - sheetSideInsetPx * 2);
+  const sheetMaxW = Math.min(isTabletReaderLayout ? 380 : 300, screenW - sheetSideInsetPx * 2);
   const sheetPadH = 16 * sheetScale;
   const sheetPadTop = 16 * sheetScale;
   const sheetPadBottom = 16 * sheetScale;
@@ -205,6 +206,19 @@ export function ReaderMoreSettingsSheet({
                   <CreditsIcon size={22 * sheetScale} color={colors.brown800} />
                 </View>
               </Pressable>
+              <View
+                style={{
+                  height: StyleSheet.hairlineWidth,
+                  backgroundColor: colors.borderSolid,
+                  marginVertical: 8 * sheetScale,
+                }}
+              />
+              <KofiSupportBlock
+                bodyColor={colors.brown800}
+                bodyFontSize={13 * sheetScale}
+                bodyLineHeight={19 * sheetScale}
+                buttonWidth={168 * sheetScale}
+              />
             </View>
           </Animated.View>
         </View>

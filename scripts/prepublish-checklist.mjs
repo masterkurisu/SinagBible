@@ -39,7 +39,7 @@ async function main() {
   else fail("Missing @sentry/react-native/expo plugin in app.json.");
 
   console.log("\nManual checks:");
-  console.log("- Confirm Ko-fi support link is visible in Credits on iOS and Android.");
+  console.log("- Confirm Ko-fi support link is visible in More settings on iOS and Android.");
   console.log("- Confirm live privacy policy URL is reachable:");
   console.log("  https://doc-hosting.flycricket.io/sinag-bible-privacy-policy/14d3d32d-19f6-4899-8b43-c30f46a2f6d3/privacy");
   console.log("- Verify EXPO_PUBLIC_SENTRY_DSN is configured in EAS secrets for production.");

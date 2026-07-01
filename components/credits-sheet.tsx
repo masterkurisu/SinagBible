@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
 import { CarouselPexelsAttribution } from "@/components/carousel-pexels-attribution";
-import { Image } from "expo-image";
 import {
   Animated,
   Dimensions,
@@ -17,17 +16,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@sinag-bible/ui";
-
-/**
- * Your public Ko-fi page, e.g. `https://ko-fi.com/yourname`.
- * Leave empty until you set it — `Linking.openURL` rejects on many devices for fake/invalid URLs.
- * Button graphic: `assets/support-me-on-kofi.png` (Ko-fi "Support me on Ko-fi" badge).
- */
-const KOFI_SUPPORT_URL = "https://ko-fi.com/sinagbible";
-
-const KOFI_BUTTON_IMAGE = require("../assets/support-me-on-kofi.png");
-/** Native pixel size of `support-me-on-kofi.png` (980×198). */
-const KOFI_BUTTON_ASPECT = 980 / 198;
 
 /** Body copy (paragraphs, list text). */
 const BODY_FONT = "Inter_400Regular" as const;
@@ -87,15 +75,6 @@ export function CreditsSheet({
       onClose();
     });
   }, [onClose, slideAnim]);
-
-  const openKofi = useCallback(() => {
-    const url = KOFI_SUPPORT_URL.trim();
-    if (!url) return;
-    void Linking.openURL(url).catch(() => {
-      /* User or OS blocked open; avoid uncaught promise in dev overlay */
-    });
-  }, []);
-  const showKofiSupport = KOFI_SUPPORT_URL.trim().length > 0;
 
   return (
     <Modal
@@ -332,34 +311,6 @@ export function CreditsSheet({
                 <Text style={styles.body}>.</Text>
               </View>
 
-              <View style={styles.divider} />
-
-              {showKofiSupport ? (
-                <>
-                  {/* ── Support ── */}
-                  <Text style={styles.sectionHeading}>Support</Text>
-
-                  <Text style={styles.body}>
-                    This app is free, no strings attached. But if you would like to support its development, a
-                    small Ko-fi goes a long way.
-                  </Text>
-
-                  <Pressable
-                    onPress={openKofi}
-                    style={styles.kofiButton}
-                    accessibilityRole="link"
-                    accessibilityLabel="Support me on Ko-fi"
-                  >
-                    <Image
-                      source={KOFI_BUTTON_IMAGE}
-                      style={styles.kofiButtonImage}
-                      contentFit="contain"
-                      accessibilityIgnoresInvertColors
-                    />
-                  </Pressable>
-                </>
-              ) : null}
-
               <Text style={styles.thankYou}>Thank you for using Sinag Bible.</Text>
             </ScrollView>
           </Animated.View>
@@ -456,16 +407,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
-  },
-  kofiButton: {
-    alignSelf: "center",
-    marginTop: 4,
-    maxWidth: "100%",
-  },
-  kofiButtonImage: {
-    width: 180,
-    maxWidth: "100%",
-    aspectRatio: KOFI_BUTTON_ASPECT,
   },
   thankYou: {
     fontFamily: BODY_FONT,
