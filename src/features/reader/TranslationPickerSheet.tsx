@@ -42,6 +42,8 @@ import {
 } from "@/lib/use-translation-picker";
 import { getTranslationLanguageFilterOptions } from "@/lib/translation-language-sections";
 import { hapticLightImpact } from "@/lib/haptics";
+import { MAX_PINNED_TRANSLATIONS } from "@/lib/default-pinned-translations";
+import type { ToggleFavoriteTranslationResult } from "@/lib/use-favorite-translations";
 import { prefetchTranslationChaptersForReader } from "@/lib/reader-chapter-load";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 import {
@@ -50,6 +52,9 @@ import {
   READER_M3_SURFACE_CONTAINER,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
+import { M3Snackbar } from "@/src/components/m3/M3Snackbar";
+
+const PIN_LIMIT_SNACKBAR_MESSAGE = `You can pin up to ${MAX_PINNED_TRANSLATIONS} translations. Unpin older ones to add another.`;
 
 const M3_SHEET_TOP_RADIUS_PX = 28;
 
@@ -107,7 +112,7 @@ export type TranslationPickerSheetProps = {
   insets: { top: number; bottom: number; left: number; right: number };
   translationPickerItems: TranslationPickerItem[];
   favoriteTranslationIds: string[];
-  toggleFavoriteTranslation: (id: string) => void;
+  toggleFavoriteTranslation: (id: string) => ToggleFavoriteTranslationResult;
   resolvedTranslationId: string;
   /** Current reader chapter — used to prefetch chapters when pinning a translation. */
   readerBookSlug?: string;
@@ -143,6 +148,7 @@ export function TranslationPickerSheet({
   const [searchKeyboardHeight, setSearchKeyboardHeight] = useState(0);
   const [langSearch, setLangSearch] = useState("");
   const [langFilter, setLangFilter] = useState<string | null>(null);
+  const [pinLimitSnackbarVisible, setPinLimitSnackbarVisible] = useState(false);
 
   const screenHeight = Dimensions.get("screen").height;
   const dropSlideAnim = useRef(new Animated.Value(0)).current;
@@ -184,6 +190,8 @@ export function TranslationPickerSheet({
     () => searchQuery.trim().length > 0 || langFilter != null,
     [searchQuery, langFilter],
   );
+  const languageFilterActive = langFilter != null;
+  const showPinnedInPicker = !languageFilterActive;
 
   const sheetKeyboardMode = searchKeyboardHeight > 0;
   const sheetKeyboardTopPx = useMemo(() => insets.top + 8, [insets.top]);
@@ -380,6 +388,7 @@ export function TranslationPickerSheet({
           activeOpacity={0.85}
           onPress={() => {
             dismissLangSearchKeyboard();
+            hapticLightImpact();
             setLangFilter(item);
             closeLangSheet();
           }}
@@ -454,8 +463,12 @@ export function TranslationPickerSheet({
   const handleTogglePin = useCallback(
     (id: string, isPinned: boolean) => {
       Keyboard.dismiss();
-      toggleFavoriteTranslation(id);
-      if (!isPinned && readerBookSlug && readerChapterNumber != null) {
+      const result = toggleFavoriteTranslation(id);
+      if (result === "limit_reached") {
+        setPinLimitSnackbarVisible(true);
+        return;
+      }
+      if (result === "pinned" && readerBookSlug && readerChapterNumber != null) {
         const internalId = getInternalIdFromApiId(id);
         prefetchTranslationChaptersForReader(
           internalId ?? id,
@@ -468,6 +481,10 @@ export function TranslationPickerSheet({
     [toggleFavoriteTranslation, readerBookSlug, readerChapterNumber, readerBooks],
   );
 
+  const dismissPinLimitSnackbar = useCallback(() => {
+    setPinLimitSnackbarVisible(false);
+  }, []);
+
   useEffect(() => {
     if (!isOpen) {
       translationPickerSheetClosingRef.current = false;
@@ -478,6 +495,7 @@ export function TranslationPickerSheet({
       setLangSearch("");
       setSearchQuery("");
       setSearchKeyboardHeight(0);
+      setPinLimitSnackbarVisible(false);
       dropSlideAnim.setValue(0);
       dropOpacityAnim.setValue(0);
       return;
@@ -848,6 +866,74 @@ export function TranslationPickerSheet({
           </TouchableOpacity>
         </View>
 
+        {languageFilterActive ? (
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+            <View
+              style={
+                isAndroidSheet
+                  ? {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      height: 32,
+                      borderRadius: 8,
+                      backgroundColor: READER_M3_SURFACE_CONTAINER,
+                      paddingLeft: 12,
+                      paddingRight: 4,
+                    }
+                  : {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: ui.borderSolid,
+                      backgroundColor: `${ui.gold}18`,
+                      paddingLeft: 12,
+                      paddingRight: 4,
+                      paddingVertical: 4,
+                    }
+              }
+            >
+              <Text
+                style={{
+                  fontFamily: "Inter_500Medium",
+                  fontSize: isAndroidSheet ? 14 : 13,
+                  color: isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800,
+                }}
+              >
+                {langFilter}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setLangFilter(null);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Clear ${langFilter} language filter`}
+                style={
+                  isAndroidSheet
+                    ? {
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }
+                    : undefined
+                }
+              >
+                <Ionicons
+                  name="close"
+                  size={isAndroidSheet ? 18 : 16}
+                  color={isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : ui.tan300}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
         {!isAndroidSheet ? (
           <Pressable
             onPress={Keyboard.dismiss}
@@ -873,58 +959,90 @@ export function TranslationPickerSheet({
           onScrollBeginDrag={() => Keyboard.dismiss()}
           nestedScrollEnabled={isAndroidSheet}
         >
-          <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Hide keyboard">
-            <Text
-              style={{
-                fontFamily: isAndroidSheet ? "Inter_500Medium" : "Inter_400Regular",
-                fontSize: isAndroidSheet ? 14 : 10,
-                letterSpacing: isAndroidSheet ? 0.1 : 1,
-                textTransform: isAndroidSheet ? "none" : "uppercase",
-                color: sheetMutedColor,
-                opacity: isAndroidSheet ? 1 : 0.75,
-                marginBottom: 8,
-              }}
-            >
-              Pinned
-            </Text>
-          </Pressable>
-
-          <View style={{ gap: isAndroidSheet ? 2 : 8, marginBottom: 16 }}>
-            {pinnedTranslations.length > 0 ? (
-              pinnedTranslations.map((item, index) =>
-                renderTranslationRow(item, { isPinned: true, isFirstPinned: index === 0 }),
-              )
-            ) : (
+          {showPinnedInPicker ? (
+            <>
               <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Hide keyboard">
-                <View style={{ gap: 6, paddingVertical: 6 }}>
-                  {!isAndroidSheet ? (
-                    <>
-                      <View style={{ height: 4, width: "72%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
-                      <View style={{ height: 4, width: "58%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
-                      <View style={{ height: 4, width: "43%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
-                    </>
-                  ) : null}
-                  <Text
-                    style={{
-                      fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular_Italic",
-                      fontSize: isAndroidSheet ? 14 : 12,
-                      color: sheetMutedColor,
-                    }}
-                  >
-                    Star a translation to pin it here
-                  </Text>
-                </View>
+                <Text
+                  style={{
+                    fontFamily: isAndroidSheet ? "Inter_500Medium" : "Inter_400Regular",
+                    fontSize: isAndroidSheet ? 14 : 10,
+                    letterSpacing: isAndroidSheet ? 0.1 : 1,
+                    textTransform: isAndroidSheet ? "none" : "uppercase",
+                    color: sheetMutedColor,
+                    opacity: isAndroidSheet ? 1 : 0.75,
+                    marginBottom: 8,
+                  }}
+                >
+                  Pinned
+                </Text>
               </Pressable>
-            )}
-          </View>
+
+              <View style={{ gap: isAndroidSheet ? 2 : 8, marginBottom: 16 }}>
+                {pinnedTranslations.length > 0 ? (
+                  pinnedTranslations.map((item, index) =>
+                    renderTranslationRow(item, { isPinned: true, isFirstPinned: index === 0 }),
+                  )
+                ) : (
+                  <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Hide keyboard">
+                    <View style={{ gap: 6, paddingVertical: 6 }}>
+                      {!isAndroidSheet ? (
+                        <>
+                          <View style={{ height: 4, width: "72%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
+                          <View style={{ height: 4, width: "58%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
+                          <View style={{ height: 4, width: "43%", borderRadius: 999, backgroundColor: ui.borderSolid }} />
+                        </>
+                      ) : null}
+                      <Text
+                        style={{
+                          fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular_Italic",
+                          fontSize: isAndroidSheet ? 14 : 12,
+                          color: sheetMutedColor,
+                        }}
+                      >
+                        Star a translation to pin it here
+                      </Text>
+                    </View>
+                  </Pressable>
+                )}
+              </View>
+            </>
+          ) : null}
 
           {showResults ? (
             <View style={{ gap: isAndroidSheet ? 2 : 8, marginBottom: 16 }}>
-              {filteredTranslations.map((item) =>
-                renderTranslationRow(item, {
-                  isPinned: favoriteTranslationIds.includes(item.id),
-                  keyPrefix: "result",
-                }),
+              {languageFilterActive ? (
+                <Text
+                  style={{
+                    fontFamily: isAndroidSheet ? "Inter_500Medium" : "Inter_400Regular",
+                    fontSize: isAndroidSheet ? 14 : 10,
+                    letterSpacing: isAndroidSheet ? 0.1 : 1,
+                    textTransform: isAndroidSheet ? "none" : "uppercase",
+                    color: sheetMutedColor,
+                    opacity: isAndroidSheet ? 1 : 0.75,
+                    marginBottom: 4,
+                  }}
+                >
+                  {langFilter}
+                </Text>
+              ) : null}
+              {filteredTranslations.length > 0 ? (
+                filteredTranslations.map((item) =>
+                  renderTranslationRow(item, {
+                    isPinned: favoriteTranslationIds.includes(item.id),
+                    keyPrefix: "result",
+                  }),
+                )
+              ) : (
+                <Text
+                  style={{
+                    fontFamily: "Inter_400Regular",
+                    fontSize: isAndroidSheet ? 14 : 13,
+                    color: sheetMutedColor,
+                    paddingVertical: 8,
+                  }}
+                >
+                  No translations found{langFilter ? ` for ${langFilter}` : ""}.
+                </Text>
               )}
             </View>
           ) : null}
@@ -1148,9 +1266,14 @@ export function TranslationPickerSheet({
                       right: 0,
                       bottom: sheetKeyboardBottomPx,
                     }
-                  : {
-                      maxHeight: showResults ? m3SheetMaxHeight : Math.min(m3SheetMaxHeight, screenHeight * 0.72),
-                    }),
+                  : showResults
+                    ? {
+                        height: m3SheetMaxHeight,
+                        maxHeight: m3SheetMaxHeight,
+                      }
+                    : {
+                        maxHeight: Math.min(m3SheetMaxHeight, screenHeight * 0.72),
+                      }),
                 transform: [{ translateY: translationPickerSheetTranslateY }],
               }}
             >
@@ -1278,6 +1401,12 @@ export function TranslationPickerSheet({
             )}
           </View>
         ) : null}
+        <M3Snackbar
+          message={PIN_LIMIT_SNACKBAR_MESSAGE}
+          visible={pinLimitSnackbarVisible}
+          onDismiss={dismissPinLimitSnackbar}
+          bottomInset={m3SheetBottomPad + 8}
+        />
       </View>
     </Modal>
   );

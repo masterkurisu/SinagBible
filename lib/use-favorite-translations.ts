@@ -3,7 +3,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   DEFAULTS_MIGRATION_KEY,
   getDefaultPinnedTranslationIds,
+  MAX_PINNED_TRANSLATIONS,
 } from "@/lib/default-pinned-translations";
+
+export type ToggleFavoriteTranslationResult = "pinned" | "unpinned" | "limit_reached";
 
 const STORAGE_KEY = "sb:reader:favorite-translations";
 
@@ -56,7 +59,7 @@ async function saveFavorites(ids: string[]): Promise<void> {
 
 export function useFavoriteTranslations(): {
   favoriteTranslationIds: string[];
-  toggleFavoriteTranslation: (id: string) => void;
+  toggleFavoriteTranslation: (id: string) => ToggleFavoriteTranslationResult;
 } {
   const [favoriteTranslationIds, setFavoriteTranslationIds] = useState<string[]>([]);
 
@@ -68,12 +71,25 @@ export function useFavoriteTranslations(): {
       });
   }, []);
 
-  const toggleFavoriteTranslation = useCallback((id: string) => {
+  const toggleFavoriteTranslation = useCallback((id: string): ToggleFavoriteTranslationResult => {
+    let result: ToggleFavoriteTranslationResult = "unpinned";
     setFavoriteTranslationIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      if (prev.includes(id)) {
+        result = "unpinned";
+        const next = prev.filter((x) => x !== id);
+        void saveFavorites(next);
+        return next;
+      }
+      if (prev.length >= MAX_PINNED_TRANSLATIONS) {
+        result = "limit_reached";
+        return prev;
+      }
+      result = "pinned";
+      const next = [...prev, id];
       void saveFavorites(next);
       return next;
     });
+    return result;
   }, []);
 
   return { favoriteTranslationIds, toggleFavoriteTranslation };

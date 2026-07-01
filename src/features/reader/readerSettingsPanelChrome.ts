@@ -41,3 +41,7 @@ export const READER_M3_ICON_BUTTON_RIPPLE = "rgba(28,27,31,0.12)";
 export const READER_M3_ERROR = "#B3261E";
 export const READER_M3_ERROR_CONTAINER = "#F9DEDC";
 export const READER_M3_ON_ERROR_CONTAINER = "#410E0B";
+
+/** M3 snackbar — inverse surface (light theme). */
+export const READER_M3_INVERSE_SURFACE = "#322F35";
+export const READER_M3_INVERSE_ON_SURFACE = "#F5EFF7";
