@@ -45,3 +45,34 @@ export const READER_M3_ON_ERROR_CONTAINER = "#410E0B";
 /** M3 snackbar — inverse surface (light theme). */
 export const READER_M3_INVERSE_SURFACE = "#322F35";
 export const READER_M3_INVERSE_ON_SURFACE = "#F5EFF7";
+
+/** M3 modal bottom sheet — top corner radius (28dp). */
+export const READER_M3_BOTTOM_SHEET_RADIUS_PX = 28;
+
+/** M3 bottom sheet drag handle. */
+export const READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX = 32;
+export const READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX = 4;
+
+/** M3 `outlineVariant` — dividers, inactive slider track, sheet handle. */
+export const READER_M3_OUTLINE_VARIANT = "rgba(28,27,31,0.12)";
+
+/** M3 `secondaryContainer` — selected segmented button fill. */
+export const READER_M3_SECONDARY_CONTAINER = "#E8DEF8";
+/** M3 `onSecondaryContainer` — icon/text on selected segment. */
+export const READER_M3_ON_SECONDARY_CONTAINER = "#1D192B";
+
+/** M3 title medium — sheet headings (16sp). */
+export const READER_M3_SHEET_TITLE_FONT_PX = 16;
+export const READER_M3_SHEET_TITLE_LINE_HEIGHT_PX = 24;
+
+/** M3 label medium — section labels (12sp). */
+export const READER_M3_LABEL_FONT_PX = 12;
+export const READER_M3_LABEL_LINE_HEIGHT_PX = 16;
+export const READER_M3_LABEL_LETTER_SPACING = 0.5;
+
+/** M3 body large — dropdown values (16sp). */
+export const READER_M3_BODY_FONT_PX = 16;
+export const READER_M3_BODY_LINE_HEIGHT_PX = 24;
+
+/** M3 segmented button row height (48dp). */
+export const READER_M3_SEGMENTED_BUTTON_HEIGHT_PX = 48;
