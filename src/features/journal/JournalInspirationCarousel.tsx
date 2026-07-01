@@ -1,7 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
 import {
   Alert,
-  Animated,
   Platform,
   StyleSheet,
   Text,
@@ -9,7 +8,6 @@ import {
   useWindowDimensions,
   type ListRenderItem,
 } from "react-native";
-import { useFocusEffect } from "expo-router/react-navigation";
 import { FlatList, Pressable } from "react-native-gesture-handler";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -30,44 +28,6 @@ type CarouselCardProps = {
   onLongPressFavorite?: (item: CarouselDisplayVerse) => void;
 };
 
-const CarouselCardShimmer = memo(function CarouselCardShimmer({
-  borderRadius,
-}: {
-  borderRadius: number;
-}) {
-  const opacity = useRef(new Animated.Value(0.45)).current;
-
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 0.85,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.45,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    anim.start();
-    return () => anim.stop();
-  }, [opacity]);
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        StyleSheet.absoluteFill,
-        styles.shimmer,
-        { borderRadius, opacity },
-      ]}
-    />
-  );
-});
-
 const CarouselCard = memo(function CarouselCard({
   item,
   cardWidth,
@@ -76,14 +36,7 @@ const CarouselCard = memo(function CarouselCard({
 }: CarouselCardProps) {
   const cardHeight = Math.round(cardWidth * 1.12);
   const borderRadius = CAROUSEL_CARD_RADIUS_PX;
-  const [imageLoaded, setImageLoaded] = useState(false);
-
-  useEffect(() => {
-    setImageLoaded(false);
-  }, [imageUrl]);
-
   const showImage = Boolean(imageUrl);
-  const showShimmer = showImage && !imageLoaded;
 
   return (
     <Pressable
@@ -107,30 +60,25 @@ const CarouselCard = memo(function CarouselCard({
         },
       ]}
     >
+      <LinearGradient
+        colors={[...item.gradient]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[StyleSheet.absoluteFill, { borderRadius }]}
+      />
+
       {showImage ? (
-        <>
-          <Image
-            source={{ uri: imageUrl! }}
-            style={[StyleSheet.absoluteFill, { borderRadius }]}
-            contentFit="cover"
-            cachePolicy="disk"
-            transition={240}
-            onLoadStart={() => setImageLoaded(false)}
-            onLoad={() => setImageLoaded(true)}
-            onError={() => setImageLoaded(false)}
-            accessibilityIgnoresInvertColors
-          />
-          {showShimmer ? <CarouselCardShimmer borderRadius={borderRadius} /> : null}
-        </>
-      ) : (
-        <LinearGradient
-          colors={[...item.gradient]}
-          locations={[0, 0.55, 1]}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <Image
+          source={{ uri: imageUrl! }}
           style={[StyleSheet.absoluteFill, { borderRadius }]}
+          contentFit="cover"
+          cachePolicy="disk"
+          recyclingKey={imageUrl!}
+          transition={0}
+          accessibilityIgnoresInvertColors
         />
-      )}
+      ) : null}
 
       <LinearGradient
         colors={["rgba(26,22,15,0.08)", "rgba(26,22,15,0.52)", "rgba(26,22,15,0.82)"]}
@@ -155,15 +103,9 @@ const CarouselCard = memo(function CarouselCard({
 
 export const JournalInspirationCarousel = memo(function JournalInspirationCarousel() {
   const { width: windowWidth } = useWindowDimensions();
-  const { displayVerses, reload, removeFavorite } = useJournalCarouselVerses();
+  const { displayVerses, removeFavorite } = useJournalCarouselVerses();
   const { getImageUrl } = useCarouselBackgroundUrls(displayVerses);
   const listRef = useRef<FlatList<CarouselDisplayVerse> | null>(null);
-
-  useFocusEffect(
-    useCallback(() => {
-      void reload();
-    }, [reload]),
-  );
 
   const cardWidths = useMemo(
     () => displayVerses.map((verse) => Math.round(windowWidth * verse.widthRatio)),
@@ -274,9 +216,6 @@ const styles = StyleSheet.create({
           shadowOpacity: 0.14,
           shadowRadius: 10,
         }),
-  },
-  shimmer: {
-    backgroundColor: "#5c4f3a",
   },
   cardContent: {
     flex: 1,

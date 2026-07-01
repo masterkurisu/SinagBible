@@ -364,9 +364,23 @@ export async function loadCarouselFavorites(): Promise<CarouselVerseRecord[]> {
 async function saveCarouselFavorites(records: CarouselVerseRecord[]): Promise<void> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    notifyCarouselFavoritesChanged();
   } catch {
     /* ignore */
   }
+}
+
+const carouselFavoriteListeners = new Set<() => void>();
+
+function notifyCarouselFavoritesChanged(): void {
+  for (const listener of carouselFavoriteListeners) {
+    listener();
+  }
+}
+
+export function subscribeCarouselFavorites(listener: () => void): () => void {
+  carouselFavoriteListeners.add(listener);
+  return () => carouselFavoriteListeners.delete(listener);
 }
 
 function isCarouselVerseRecord(value: unknown): value is CarouselVerseRecord {

@@ -10,10 +10,31 @@ import {
   buildCarouselDisplayVerses,
   loadCarouselFavorites,
   removeCarouselFavorite,
+  subscribeCarouselFavorites,
   toggleCarouselFavorite,
   type CarouselDisplayVerse,
   type CarouselVerseRecord,
 } from "@/lib/journal-carousel-verses";
+
+function favoritesEqual(a: CarouselVerseRecord[], b: CarouselVerseRecord[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i]!;
+    const right = b[i]!;
+    if (left.id !== right.id || left.addedAt !== right.addedAt) return false;
+  }
+  return true;
+}
+
+function settingsEqual(a: JournalCarouselSettings, b: JournalCarouselSettings): boolean {
+  return (
+    a.randomize === b.randomize &&
+    a.randomizeFavorites === b.randomizeFavorites &&
+    a.shuffleDefaultsDaily === b.shuffleDefaultsDaily &&
+    a.verseCount === b.verseCount &&
+    a.rotationInterval === b.rotationInterval
+  );
+}
 
 export function useJournalCarouselVerses() {
   const [favorites, setFavorites] = useState<CarouselVerseRecord[]>([]);
@@ -26,14 +47,20 @@ export function useJournalCarouselVerses() {
       loadCarouselFavorites(),
       loadJournalCarouselSettings(),
     ]);
-    setFavorites(items);
-    setSettings(nextSettings);
+    setFavorites((prev) => (favoritesEqual(prev, items) ? prev : items));
+    setSettings((prev) => (settingsEqual(prev, nextSettings) ? prev : nextSettings));
     setLoaded(true);
     return items;
   }, []);
 
   useEffect(() => {
     void reload();
+  }, [reload]);
+
+  useEffect(() => {
+    return subscribeCarouselFavorites(() => {
+      void reload();
+    });
   }, [reload]);
 
   useEffect(() => {

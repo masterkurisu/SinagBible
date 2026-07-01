@@ -25,6 +25,41 @@ type CarouselVerseRef = {
 };
 
 const pendingPoolFetches = new Map<CarouselImageCategory, Promise<string[]>>();
+const sessionCardUrlByVerseId = new Map<string, string>();
+const sessionResolvedByVersesKey = new Map<string, Record<string, string>>();
+const warmedCategorySets = new Set<string>();
+
+export function buildCarouselVersesKey(verses: readonly CarouselVerseRef[]): string {
+  return verses.map((verse) => `${verse.id}:${verse.imageCategory}`).join("|");
+}
+
+/** Synchronous session cache — avoids URL flash when revisiting the journal tab. */
+export function getCarouselBackgroundUrlSession(
+  verses: readonly CarouselVerseRef[],
+): Record<string, string> | null {
+  if (verses.length === 0) return null;
+
+  const key = buildCarouselVersesKey(verses);
+  const resolved = sessionResolvedByVersesKey.get(key);
+  if (resolved && verses.every((verse) => resolved[verse.id])) {
+    return resolved;
+  }
+
+  const fromCards: Record<string, string> = {};
+  for (const verse of verses) {
+    const url = sessionCardUrlByVerseId.get(verse.id);
+    if (!url) return null;
+    fromCards[verse.id] = url;
+  }
+  return fromCards;
+}
+
+function rememberSessionUrls(versesKey: string, urls: Record<string, string>): void {
+  sessionResolvedByVersesKey.set(versesKey, urls);
+  for (const [verseId, url] of Object.entries(urls)) {
+    sessionCardUrlByVerseId.set(verseId, url);
+  }
+}
 
 function poolStorageKey(category: CarouselImageCategory): string {
   return `${POOL_STORAGE_PREFIX}${category}`;
@@ -78,15 +113,21 @@ async function saveCategoryPool(category: CarouselImageCategory, pool: CategoryP
 }
 
 async function getCardAssignment(verseId: string): Promise<string | null> {
+  const sessionUrl = sessionCardUrlByVerseId.get(verseId);
+  if (sessionUrl) return sessionUrl;
+
   try {
     const url = await AsyncStorage.getItem(cardStorageKey(verseId));
-    return url?.trim() || null;
+    const trimmed = url?.trim() || null;
+    if (trimmed) sessionCardUrlByVerseId.set(verseId, trimmed);
+    return trimmed;
   } catch {
     return null;
   }
 }
 
 async function saveCardAssignment(verseId: string, url: string): Promise<void> {
+  sessionCardUrlByVerseId.set(verseId, url);
   try {
     await AsyncStorage.setItem(cardStorageKey(verseId), url);
   } catch {
@@ -159,9 +200,14 @@ export async function resolveCarouselBackgroundUrls(
 ): Promise<Record<string, string>> {
   if (verses.length === 0) return {};
 
+  const versesKey = buildCarouselVersesKey(verses);
+  const session = getCarouselBackgroundUrlSession(verses);
+  if (session) return session;
+
   const usedUrls = new Set<string>();
   const result: Record<string, string> = {};
   const categories = collectUniqueCategories(verses);
+  const categoriesKey = categories.join("|");
   const fallbackCategories: CarouselImageCategory[] = [
     ...categories,
     "default",
@@ -188,7 +234,12 @@ export async function resolveCarouselBackgroundUrls(
     }
   }
 
-  await warmCarouselImagePool(categories, CAROUSEL_IMAGE_POOL_TARGET);
+  rememberSessionUrls(versesKey, result);
+
+  if (!warmedCategorySets.has(categoriesKey)) {
+    await warmCarouselImagePool(categories, CAROUSEL_IMAGE_POOL_TARGET);
+    warmedCategorySets.add(categoriesKey);
+  }
 
   const prefetchUrls = new Set<string>(Object.values(result));
   for (const category of categories) {

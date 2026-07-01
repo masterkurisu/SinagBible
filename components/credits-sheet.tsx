@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { CarouselPexelsAttribution } from "@/components/carousel-pexels-attribution";
 import { Image } from "expo-image";
 import {
   Animated,
@@ -274,18 +275,7 @@ export function CreditsSheet({
               {/* ── Photography ── */}
               <Text style={styles.sectionHeading}>Photography</Text>
 
-              <Text style={styles.body}>
-                Beautiful photos provided by{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL("https://www.pexels.com")}
-                  accessibilityRole="link"
-                  accessibilityLabel="Pexels website"
-                >
-                  Pexels
-                </Text>
-                .
-              </Text>
+              <CarouselPexelsAttribution />
 
               <View style={styles.divider} />
 
