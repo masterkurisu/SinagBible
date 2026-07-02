@@ -1,5 +1,18 @@
-import { useState } from "react";
-import { StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import {
+  Animated,
+  Easing,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+  type ViewStyle,
+} from "react-native";
+import {
+  M3_EMPHASIZED_ACCELERATE_EASING,
+  M3_EMPHASIZED_DECELERATE_EASING,
+} from "@/src/components/m3/m3-motion";
 import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
@@ -10,7 +23,10 @@ import {
   READER_M3_ON_SURFACE_VARIANT,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
-const M3_OUTLINE_STROKE = "#79747E";
+/** M3 outline stroke — literal used in defaults to avoid Hermes TDZ issues. */
+const OUTLINE_STROKE_COLOR = "#79747E";
+
+export const M3_OUTLINE_STROKE = OUTLINE_STROKE_COLOR;
 
 export type M3OutlinedTextFieldProps = {
   label: string;
@@ -23,8 +39,17 @@ export type M3OutlinedTextFieldProps = {
   multiline?: boolean;
   minHeight?: number;
   maxHeight?: number;
+  /** Pill-shaped field ends (half the field height). */
+  roundedEnds?: boolean;
+  /** Subtle outline jiggle when the field receives focus. */
+  focusJiggle?: boolean;
+  placeholder?: string;
+  inputFontFamily?: string;
   style?: ViewStyle;
-} & Pick<TextInputProps, "accessibilityLabel" | "onFocus" | "onBlur">;
+} & Pick<
+  TextInputProps,
+  "accessibilityLabel" | "onFocus" | "onBlur" | "returnKeyType" | "onSubmitEditing" | "blurOnSubmit"
+>;
 
 /** M3 outlined text field — floating label on the top border. */
 export function M3OutlinedTextField({
@@ -32,35 +57,86 @@ export function M3OutlinedTextField({
   value,
   onChangeText,
   surfaceColor,
-  accentColor = M3_OUTLINE_STROKE,
+  accentColor = OUTLINE_STROKE_COLOR,
   scale = 1,
   multiline = false,
   minHeight = 56,
   maxHeight,
+  roundedEnds = false,
+  focusJiggle = true,
+  placeholder,
+  inputFontFamily = "Inter_400Regular",
   style,
   accessibilityLabel,
   onFocus,
   onBlur,
+  returnKeyType,
+  onSubmitEditing,
+  blurOnSubmit,
 }: M3OutlinedTextFieldProps) {
   const [focused, setFocused] = useState(false);
+  const focusJiggleAnim = useRef(new Animated.Value(0)).current;
   const floated = focused || value.length > 0;
-  const borderColor = focused ? accentColor : M3_OUTLINE_STROKE;
+  const borderColor = focused ? accentColor : OUTLINE_STROKE_COLOR;
   const labelColor = focused ? accentColor : READER_M3_ON_SURFACE_VARIANT;
   const fieldMinHeight = minHeight * scale;
+  const borderRadius = roundedEnds ? fieldMinHeight / 2 : 4 * scale;
+  const placeholderText = placeholder ?? (floated ? undefined : label);
+
+  const playFocusJiggle = useCallback(() => {
+    if (!focusJiggle) return;
+    focusJiggleAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(focusJiggleAnim, {
+        toValue: 1,
+        duration: 52,
+        easing: M3_EMPHASIZED_DECELERATE_EASING,
+        useNativeDriver: true,
+      }),
+      Animated.timing(focusJiggleAnim, {
+        toValue: -0.82,
+        duration: 52,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.timing(focusJiggleAnim, {
+        toValue: 0.38,
+        duration: 46,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.timing(focusJiggleAnim, {
+        toValue: 0,
+        duration: 46,
+        easing: M3_EMPHASIZED_ACCELERATE_EASING,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [focusJiggle, focusJiggleAnim]);
+
+  const jiggleTranslateX = focusJiggleAnim.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: [-2.5 * scale, 0, 2.5 * scale],
+  });
+  const jiggleRotate = focusJiggleAnim.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ["-0.55deg", "0deg", "0.55deg"],
+  });
 
   return (
     <View style={[styles.wrap, style]}>
-      <View
+      <Animated.View
         style={[
           styles.field,
           {
             minHeight: fieldMinHeight,
             maxHeight: maxHeight != null ? maxHeight * scale : undefined,
             borderColor,
-            borderRadius: 4 * scale,
+            borderRadius,
             paddingHorizontal: 16 * scale,
             paddingTop: (floated ? 16 : 12) * scale,
             paddingBottom: 12 * scale,
+            transform: [{ translateX: jiggleTranslateX }, { rotate: jiggleRotate }],
           },
         ]}
       >
@@ -95,12 +171,16 @@ export function M3OutlinedTextField({
           multiline={multiline}
           value={value}
           onChangeText={onChangeText}
-          placeholder={floated ? undefined : label}
+          placeholder={placeholderText}
           placeholderTextColor={READER_M3_ON_SURFACE_VARIANT}
           textAlignVertical={multiline ? "top" : "center"}
           accessibilityLabel={accessibilityLabel ?? label}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          blurOnSubmit={blurOnSubmit}
           onFocus={(e) => {
             setFocused(true);
+            playFocusJiggle();
             onFocus?.(e);
           }}
           onBlur={(e) => {
@@ -112,13 +192,13 @@ export function M3OutlinedTextField({
             maxHeight: multiline && maxHeight != null ? maxHeight * scale - 28 * scale : undefined,
             padding: 0,
             margin: 0,
-            fontFamily: "Inter_400Regular",
+            fontFamily: inputFontFamily,
             fontSize: READER_M3_BODY_FONT_PX * scale,
             lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale,
             color: READER_M3_ON_SURFACE,
           }}
         />
-      </View>
+      </Animated.View>
     </View>
   );
 }

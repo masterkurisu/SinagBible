@@ -107,7 +107,7 @@ export default function NewJournalEntryScreen() {
                 minHeight: 0,
                 paddingHorizontal: 0,
                 paddingTop: 4,
-                paddingBottom: 8,
+                paddingBottom: 0,
               }}
             >
               <JournalNewEntryForm

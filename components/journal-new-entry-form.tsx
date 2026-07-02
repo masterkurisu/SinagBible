@@ -1,7 +1,6 @@
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   Alert,
   Animated,
@@ -9,24 +8,24 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   Keyboard,
   InteractionManager,
   ScrollView,
   useWindowDimensions,
+  type KeyboardEvent,
+  type LayoutChangeEvent,
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
   forwardRef,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type RefObject,
+  useCallback,
 } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -52,7 +51,6 @@ import { RichEditor } from "react-native-pell-rich-editor";
 import {
   ReflectionBoldIcon,
   ReflectionBulletedListIcon,
-  ReflectionFormatStyleIcon,
   ReflectionFullscreenIcon,
   ReflectionImageIcon,
   ReflectionKeyboardHideIcon,
@@ -60,21 +58,36 @@ import {
   ReflectionNumberedListIcon,
 } from "@/components/journal-reflection-toolbar-icons";
 import { isTabletLayout, TABLET_NEW_ENTRY_MAX_WIDTH_PX } from "@/lib/tablet-layout";
-import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboardingLayer";
-import { useJournalEditorOnboarding } from "@/src/features/journal/useJournalEditorOnboarding";
-import type { JournalEditorOnboardingStepId } from "@/src/features/journal/journalEditorOnboardingSteps";
+import { M3OutlinedTextField } from "@/src/components/m3/M3OutlinedTextField";
+import { m3SettingsSheetTitleStyle } from "@/src/components/m3/M3SettingsSheetTitle";
+import {
+  JOURNAL_M3_ELEVATED_CARD_ELEVATION_PX,
+  JOURNAL_M3_ELEVATED_CARD_RADIUS_PX,
+} from "@/src/features/journal/journalCardChrome";
+import {
+  READER_M3_FLOATING_TOOLBAR_CONTAINER,
+  readerM3FloatingToolbarPillStyle,
+} from "@/src/features/reader/readerActionBarChrome";
+import { READER_M3_ON_SURFACE_VARIANT } from "@/src/features/reader/readerSettingsPanelChrome";
 
 const VERSE_PREVIEW_LIMIT = 150;
 const TOOLBAR_BTN_SIZE = 40;
-const TOOLBAR_FAN_GAP = 10;
-const FORMAT_POPOVER_ANCHOR_GAP = 10;
-const FORMAT_ACTION_COUNT = 4;
+const REFLECTION_OVERLAY_BTN_SIZE = 36;
+const FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX = 10;
 
 const FORM_HORIZONTAL_PADDING = 10;
 /** Pulls the reflection editor’s bottom edge up (journal card, reader sheet, fullscreen). */
 const REFLECTION_FIELD_BOTTOM_TRIM_PX = 50;
 /** Phone bottom sheets (journal + reader): save row clearance from the screen edge. */
 const SHEET_SAVE_BOTTOM_PADDING_PX = 30;
+/** Sheet reflection editor minimum height after top fields are measured. */
+const SHEET_REFLECTION_MIN_PX = 160;
+/** Save row: top pad + button + bottom pad (pinned ~30px from sheet foot). */
+const SHEET_SAVE_BLOCK_PX = 14 + 48 + SHEET_SAVE_BOTTOM_PADDING_PX;
+/** Rough top-block height before first layout measure (passage + title, no preview). */
+const SHEET_TOP_FIELDS_ESTIMATE_PX = 132;
+/** Reflection label row + gap above the editor. */
+const SHEET_REFLECTION_CHROME_PX = 30;
 /**
  * Reader new-entry modal only: matches reader sheet `bottom` lift — save row `paddingBottom` trim.
  */
@@ -156,6 +169,8 @@ const SAVE_BUTTON_LABEL_COLOR = "#f5e9d6";
 /** iOS: avoid dismissing the keyboard when scrolling the form or reflection editor. */
 const FORM_SCROLL_KEYBOARD_DISMISS_MODE = Platform.OS === "ios" ? "none" : "on-drag";
 
+type JournalFormActiveField = "passage" | "title" | "reflection" | null;
+
 export type JournalNewEntryInitialParams = {
   book?: string;
   chapter?: string;
@@ -184,6 +199,15 @@ type Props = {
   onAfterSave?: () => void;
   /** Cap scroll area height (e.g. bottom sheet on journal tab). */
   contentScrollMaxHeight?: number;
+  /**
+   * Bottom sheet only: minimum content height (top fields + reflection min + save) so the parent
+   * can grow or shrink the sheet card to fit.
+   */
+  onSheetPreferredHeightChange?: (contentHeightPx: number) => void;
+  /**
+   * Bottom sheet only: parent lifts the card above the keyboard; disables redundant inner avoidance.
+   */
+  sheetKeyboardLiftPx?: number;
   /** Notify parent whether the form currently has unsaved typed content. */
   onDirtyChange?: (dirty: boolean) => void;
   /** Hide the large “New/Edit Entry” heading (e.g. when the stack header already shows the title). */
@@ -217,6 +241,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     editDraft,
     onAfterSave,
     contentScrollMaxHeight,
+    onSheetPreferredHeightChange,
+    sheetKeyboardLiftPx,
     onDirtyChange,
     hideFormScreenTitle = false,
     contentHorizontalPadding,
@@ -320,41 +346,52 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const [passagePreview, setPassagePreview] = useState<string | null>(null);
   const [passagePreviewRef, setPassagePreviewRef] = useState<string | null>(null);
   const [passageSuggestion, setPassageSuggestion] = useState<string | null>(null);
+  const [topFieldsMeasuredH, setTopFieldsMeasuredH] = useState(0);
   const [saveToastMessage, setSaveToastMessage] = useState<string | null>(null);
   const saveToastOpacity = useRef(new Animated.Value(0)).current;
   const saveToastAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const pendingSaveAfterToastRef = useRef<(() => void) | null>(null);
   const [journalKeyboardOpen, setJournalKeyboardOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [activeFormField, setActiveFormField] = useState<JournalFormActiveField>(null);
+  const activeFormFieldRef = useRef<JournalFormActiveField>(null);
 
-  const formatAnchorRef = useRef<View>(null);
-  const formatAnchorFullscreenRef = useRef<View>(null);
-  const passageAnchorRef = useRef<View>(null);
-  const titleAnchorRef = useRef<View>(null);
-  const photoAnchorRef = useRef<View>(null);
-  const fullscreenAnchorRef = useRef<View>(null);
+  const markActiveFormField = (field: JournalFormActiveField) => {
+    activeFormFieldRef.current = field;
+    setActiveFormField(field);
+  };
 
-  const editorOnboardingTargetRefs = useMemo(
-    (): Record<JournalEditorOnboardingStepId, React.RefObject<View | null>> => ({
-      "passage-anchoring": passageAnchorRef,
-      "optional-title": titleAnchorRef,
-      "rich-text-toolbar": formatAnchorRef,
-      "photo-attachment": photoAnchorRef,
-      "fullscreen-mode": fullscreenAnchorRef,
-    }),
-    [],
+  const releaseActiveFormField = (field: Exclude<JournalFormActiveField, null>) => {
+    setTimeout(() => {
+      if (activeFormFieldRef.current === field) markActiveFormField(null);
+    }, 0);
+  };
+
+  const floatingToolbarPillStyle = useMemo(
+    () =>
+      readerM3FloatingToolbarPillStyle(
+        READER_M3_FLOATING_TOOLBAR_CONTAINER,
+        colors.parchmentMid,
+      ),
+    [colors.parchmentMid],
   );
+  const toolbarIconColor = colors.brown800;
 
-  const editorOnboarding = useJournalEditorOnboarding({
-    enabled: !editDraft,
-    isReaderNewEntry: readerNewEntryScrollable === true && editDraft == null,
-    isPhoneSheetForm,
-    targetRefs: editorOnboardingTargetRefs,
-    screenW: windowWidth,
-    screenH: windowHeight,
-  });
-  const popoverAnim = useRef(new Animated.Value(0)).current;
-  const [formatMenuOpen, setFormatMenuOpen] = useState(false);
-  const [popoverPlacement, setPopoverPlacement] = useState<{ top: number; left: number } | null>(null);
+  const versePreviewCardStyle = useMemo(
+    () => ({
+      marginTop: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: j.versePreviewBackground,
+      borderRadius: JOURNAL_M3_ELEVATED_CARD_RADIUS_PX,
+      elevation: JOURNAL_M3_ELEVATED_CARD_ELEVATION_PX,
+      shadowColor: colors.brown800,
+      shadowOffset: { width: 0, height: 1 } as const,
+      shadowOpacity: 0.14,
+      shadowRadius: 3,
+    }),
+    [colors.brown800, j.versePreviewBackground],
+  );
 
   const getActiveReflectionEditor = () =>
     reflectionFullscreenOpen ? fullscreenRichEditorRef.current : richEditorRef.current;
@@ -364,7 +401,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     getActiveReflectionEditor()?.commandDOM("document.execCommand('undo', false, null);");
   };
 
-  const runEditorCommand = (command: string) => {
+  const applyReflectionFormat = (command: string) => {
+    hapticLightImpact();
     const ed = getActiveReflectionEditor();
     ed?.focusContentEditor();
     ed?.commandDOM(`document.execCommand('${command}', false, null);`);
@@ -383,6 +421,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     getActiveReflectionEditor()?.commandDOM(REFLECTION_SCROLL_CARET_INTO_VIEW_DOM);
   };
   const onReflectionHtmlChangedFromEditor = (html: string) => {
+    markActiveFormField("reflection");
     const t = Date.now();
     if (t - reflectionTypingHapticLastRef.current >= 48) {
       reflectionTypingHapticLastRef.current = t;
@@ -411,8 +450,16 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const showSub = Keyboard.addListener(showEvent, () => setJournalKeyboardOpen(true));
-    const hideSub = Keyboard.addListener(hideEvent, () => setJournalKeyboardOpen(false));
+    const onShow = (e: KeyboardEvent) => {
+      setJournalKeyboardOpen(true);
+      setKeyboardHeight(e.endCoordinates.height);
+    };
+    const onHide = () => {
+      setJournalKeyboardOpen(false);
+      setKeyboardHeight(0);
+    };
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
     return () => {
       showSub.remove();
       hideSub.remove();
@@ -467,59 +514,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     Alert.alert(message, "", [{ text: "OK", onPress: onConfirmed }]);
   };
 
-  const closeFormatMenu = () => {
-    setFormatMenuOpen(false);
-    setPopoverPlacement(null);
-  };
-
-  const formatToolbarRowWidth =
-    FORMAT_ACTION_COUNT * TOOLBAR_BTN_SIZE + (FORMAT_ACTION_COUNT - 1) * TOOLBAR_FAN_GAP;
-
-  const openFormatPopover = (anchorRef: RefObject<View | null>) => {
-    anchorRef.current?.measureInWindow((x, y, width, height) => {
-      const winW = Dimensions.get("window").width;
-      const winH = Dimensions.get("window").height;
-      const pad = 14;
-      const fanWidth = formatToolbarRowWidth;
-      let left = x + width - fanWidth;
-      left = Math.max(pad, Math.min(left, winW - fanWidth - pad));
-      const gap = FORMAT_POPOVER_ANCHOR_GAP;
-      const rowH = TOOLBAR_BTN_SIZE;
-      const minTop = insets.top + 8;
-      const bottomPad = Math.max(insets.bottom, 20);
-      const km = Keyboard.metrics();
-      const keyboardTop =
-        typeof km?.screenY === "number" && km.screenY > 0 && km.screenY <= winH ? km.screenY : winH;
-      const maxTop = Math.max(
-        minTop,
-        Math.min(winH - rowH - bottomPad, keyboardTop - rowH - 8),
-      );
-
-      let top: number;
-      if (reflectionFullscreenOpen) {
-        /** Fan opens below the format control (toolbar is flush to the top). */
-        top = y + height + gap;
-        if (top > maxTop) top = maxTop;
-      } else {
-        const topAbove = y - rowH - gap;
-        top = topAbove >= minTop ? topAbove : y + height + gap;
-        if (top > maxTop) top = maxTop;
-      }
-
-      setPopoverPlacement({ top, left });
-      setFormatMenuOpen(true);
-    });
-  };
-
-  const toggleFormatMenu = (anchorRef: RefObject<View | null>) => {
-    hapticLightImpact();
-    if (formatMenuOpen) {
-      closeFormatMenu();
-    } else {
-      openFormatPopover(anchorRef);
-    }
-  };
-
   const dismissJournalKeyboardCore = () => {
     richEditorRef.current?.dismissKeyboard();
     fullscreenRichEditorRef.current?.dismissKeyboard();
@@ -531,29 +525,33 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     dismissJournalKeyboardCore();
   };
 
-  const toggleJournalKeyboard = () => {
-    hapticLightImpact();
-    closeFormatMenu();
-    if (journalKeyboardOpen) {
-      dismissJournalKeyboardCore();
-      return;
-    }
-    getActiveReflectionEditor()?.focusContentEditor();
+  const onReflectionEditorFocus = () => {
+    markActiveFormField("reflection");
+    setJournalKeyboardOpen(true);
   };
 
-  const onReflectionEditorFocus = () => setJournalKeyboardOpen(true);
-
   const onReflectionEditorBlur = () => {
+    releaseActiveFormField("reflection");
     const ed = getActiveReflectionEditor();
     if (ed?.isKeyboardOpen) return;
     setJournalKeyboardOpen(false);
   };
 
+  const showReflectionFloatingToolbar =
+    journalKeyboardOpen && activeFormField === "reflection";
+
+  /** Android bottom sheets: anchor above the keyboard using screen-space inset. */
+  const reflectionToolbarBottomPx =
+    Platform.OS === "android" && keyboardHeight > 0 && isPhoneSheetForm
+      ? sheetKeyboardLiftPx !== undefined
+        ? FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX
+        : keyboardHeight + FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX
+      : FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX;
+
   const openReflectionFullscreen = () => {
     hapticLightImpact();
     richEditorRef.current?.blurContentEditor();
     Keyboard.dismiss();
-    closeFormatMenu();
     setReflectionFsMountKey((k) => k + 1);
     setReflectionFullscreenOpen(true);
   };
@@ -574,71 +572,15 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       const normalized = normalizeReflectionHtml(reflectionHtmlRef.current);
       setReflectionHtml(normalized);
     } finally {
-      closeFormatMenu();
       Keyboard.dismiss();
       fullscreenRichEditorRef.current?.dismissKeyboard();
+      markActiveFormField(null);
       setReflectionFullscreenOpen(false);
       InteractionManager.runAfterInteractions(() => {
         setReflectionInlineRemountKey((k) => k + 1);
       });
     }
   };
-
-  useLayoutEffect(() => {
-    if (!formatMenuOpen || !popoverPlacement) return;
-    popoverAnim.setValue(0);
-    const anim = Animated.spring(popoverAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 120,
-    });
-    anim.start();
-    return () => anim.stop();
-  }, [formatMenuOpen, popoverPlacement]);
-
-  const formatActions = [
-    {
-      key: "bold",
-      label: "Bold",
-      icon: <ReflectionBoldIcon size={16} />,
-      onPress: () => {
-        hapticLightImpact();
-        runEditorCommand("bold");
-        closeFormatMenu();
-      },
-    },
-    {
-      key: "italic",
-      label: "Italic",
-      icon: <ReflectionItalicIcon size={16} />,
-      onPress: () => {
-        hapticLightImpact();
-        runEditorCommand("italic");
-        closeFormatMenu();
-      },
-    },
-    {
-      key: "bulleted-list",
-      label: "Bulleted list",
-      icon: <ReflectionBulletedListIcon size={16} />,
-      onPress: () => {
-        hapticLightImpact();
-        runEditorCommand("insertUnorderedList");
-        closeFormatMenu();
-      },
-    },
-    {
-      key: "numbered-list",
-      label: "Numbered list",
-      icon: <ReflectionNumberedListIcon size={16} />,
-      onPress: () => {
-        hapticLightImpact();
-        runEditorCommand("insertOrderedList");
-        closeFormatMenu();
-      },
-    },
-  ] as const;
 
   const getBookInputCandidate = (raw: string) => {
     const trimmed = raw.trim();
@@ -822,6 +764,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   };
 
   const isEditMode = editDraft != null;
+  /** Bottom sheet / capped-height card (journal FAB sheet, reader sheet, new route). */
+  const sheetFormLayout = contentScrollMaxHeight != null;
   /** Reader new entry (not edit). */
   const readerNewEntryFromReader = readerNewEntryScrollable === true && !isEditMode;
   /**
@@ -837,54 +781,143 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     Platform.OS === "android" && !isTabletForm && !isPhoneSheetForm;
   const mergedFormScrollMode = readerMergedScrollMode || androidPhoneMergedScrollMode;
 
+  const sheetTitleChromePx = hideFormScreenTitle ? 0 : 34;
+  const sheetChromeOverheadPx = sheetTitleChromePx + SHEET_REFLECTION_CHROME_PX + 10;
+
+  const onTopFieldsLayout = useCallback((e: LayoutChangeEvent) => {
+    const next = Math.round(e.nativeEvent.layout.height);
+    setTopFieldsMeasuredH((prev) => (prev === next ? prev : next));
+  }, []);
+
+  const sheetTopFieldsHeightPx =
+    topFieldsMeasuredH > 0 ? topFieldsMeasuredH : SHEET_TOP_FIELDS_ESTIMATE_PX;
+
+  const sheetFieldsAreaHeightPx = useMemo(() => {
+    if (!sheetFormLayout || contentScrollMaxHeight == null) return 0;
+    return contentScrollMaxHeight - SHEET_SAVE_BLOCK_PX;
+  }, [sheetFormLayout, contentScrollMaxHeight]);
+
+  const sheetFieldsMinHeightPx = useMemo(
+    () => sheetTopFieldsHeightPx + SHEET_REFLECTION_MIN_PX + sheetChromeOverheadPx,
+    [sheetTopFieldsHeightPx, sheetChromeOverheadPx],
+  );
+
+  useEffect(() => {
+    if (!sheetFormLayout || !onSheetPreferredHeightChange) return;
+    onSheetPreferredHeightChange(sheetFieldsMinHeightPx + SHEET_SAVE_BLOCK_PX);
+  }, [sheetFormLayout, onSheetPreferredHeightChange, sheetFieldsMinHeightPx]);
+
+  const sheetNeedsScroll = useMemo(() => {
+    if (!sheetFormLayout || contentScrollMaxHeight == null) return false;
+    return sheetFieldsMinHeightPx + SHEET_SAVE_BLOCK_PX > contentScrollMaxHeight + 2;
+  }, [sheetFormLayout, contentScrollMaxHeight, sheetFieldsMinHeightPx]);
+
+  const sheetReflectionEditorHeightPx = useMemo(() => {
+    if (!sheetFormLayout || contentScrollMaxHeight == null) return SHEET_REFLECTION_MIN_PX;
+    const available = sheetFieldsAreaHeightPx - sheetTopFieldsHeightPx - sheetChromeOverheadPx;
+    return Math.max(SHEET_REFLECTION_MIN_PX, available);
+  }, [
+    sheetFormLayout,
+    contentScrollMaxHeight,
+    sheetFieldsAreaHeightPx,
+    sheetChromeOverheadPx,
+    sheetTopFieldsHeightPx,
+  ]);
+
   const reflectionBottomTrimPx = isPhoneSheetForm ? 0 : REFLECTION_FIELD_BOTTOM_TRIM_PX;
   const trim = reflectionBottomTrimPx;
   const splitReflectionMinHeight =
     isTabletForm && isLandscapeForm && !mergedFormScrollMode ? 200 : 0;
 
-  const reflectionShellStyle = mergedFormScrollMode
-    ? { backgroundColor: modalSurfaceColor }
-    : {
-        backgroundColor: modalSurfaceColor,
-        flex: 1,
-        minHeight: splitReflectionMinHeight,
-        marginBottom: trim,
-      };
-  const reflectionParchmentStyle = mergedFormScrollMode
+  const reflectionShellStyle = sheetFormLayout
+    ? sheetNeedsScroll
+      ? {
+          backgroundColor: modalSurfaceColor,
+          height: sheetReflectionEditorHeightPx + SHEET_REFLECTION_CHROME_PX,
+          flexShrink: 0,
+        }
+      : {
+          backgroundColor: modalSurfaceColor,
+          flex: 1,
+          minHeight: sheetReflectionEditorHeightPx + SHEET_REFLECTION_CHROME_PX,
+        }
+    : mergedFormScrollMode
+      ? { backgroundColor: modalSurfaceColor }
+      : {
+          backgroundColor: modalSurfaceColor,
+          flex: 1,
+          minHeight: splitReflectionMinHeight,
+          marginBottom: trim,
+        };
+  const reflectionParchmentStyle = sheetFormLayout
+    ? sheetNeedsScroll
+      ? {
+          marginTop: 5,
+          height: Math.max(SHEET_REFLECTION_MIN_PX, sheetReflectionEditorHeightPx - 36),
+        }
+      : {
+          marginTop: 5,
+          flex: 1,
+          minHeight: Math.max(SHEET_REFLECTION_MIN_PX, sheetReflectionEditorHeightPx - 36),
+        }
+    : mergedFormScrollMode
+      ? {
+          marginTop: 5,
+          minHeight: isPhoneSheetForm
+            ? Math.max(280, Math.round((contentScrollMaxHeight ?? windowHeight) * 0.42))
+            : 240 - trim,
+        }
+      : { marginTop: 5, flex: 1, minHeight: isPhoneSheetForm ? 200 : 0 };
+  const reflectionInnerPadStyle = sheetFormLayout
+    ? sheetNeedsScroll
+      ? {
+          height: Math.max(SHEET_REFLECTION_MIN_PX - 36, sheetReflectionEditorHeightPx - 72),
+          paddingHorizontal: 8,
+          paddingBottom: 19,
+          paddingTop: 36,
+        }
+      : {
+          flex: 1,
+          minHeight: Math.max(SHEET_REFLECTION_MIN_PX - 36, sheetReflectionEditorHeightPx - 72),
+          paddingHorizontal: 8,
+          paddingBottom: 19,
+          paddingTop: 36,
+        }
+    : mergedFormScrollMode
+      ? {
+          minHeight: isPhoneSheetForm
+            ? Math.max(260, Math.round((contentScrollMaxHeight ?? windowHeight) * 0.4))
+            : 220 - trim,
+          paddingHorizontal: 8,
+          paddingBottom: 19,
+        }
+      : { flex: 1, minHeight: 0, paddingHorizontal: 8, paddingBottom: 19 };
+  const reflectionRichEditorLayoutStyle = sheetFormLayout
     ? {
-        marginTop: 5,
-        minHeight: isPhoneSheetForm
-          ? Math.max(280, Math.round((contentScrollMaxHeight ?? windowHeight) * 0.42))
-          : 240 - trim,
-      }
-    : { marginTop: 5, flex: 1, minHeight: isPhoneSheetForm ? 200 : 0 };
-  const reflectionInnerPadStyle = mergedFormScrollMode
-    ? {
-        minHeight: isPhoneSheetForm
-          ? Math.max(260, Math.round((contentScrollMaxHeight ?? windowHeight) * 0.4))
-          : 220 - trim,
-        paddingHorizontal: 8,
-        paddingBottom: 19,
-      }
-    : { flex: 1, minHeight: 0, paddingHorizontal: 8, paddingBottom: 19 };
-  const reflectionRichEditorLayoutStyle = mergedFormScrollMode
-    ? {
-        minHeight: isPhoneSheetForm
-          ? Math.max(240, Math.round((contentScrollMaxHeight ?? windowHeight) * 0.38))
-          : 200 - trim,
+        height: Math.max(SHEET_REFLECTION_MIN_PX - 52, sheetReflectionEditorHeightPx - 88),
         alignSelf: "stretch" as const,
         width: "100%" as const,
         borderRadius: 0,
         backgroundColor: colors.parchmentDark,
       }
-    : {
-        flex: 1,
-        minHeight: isPhoneSheetForm ? 180 : 0,
-        alignSelf: "stretch" as const,
-        width: "100%" as const,
-        borderRadius: 0,
-        backgroundColor: colors.parchmentDark,
-      };
+    : mergedFormScrollMode
+      ? {
+          minHeight: isPhoneSheetForm
+            ? Math.max(240, Math.round((contentScrollMaxHeight ?? windowHeight) * 0.38))
+            : 200 - trim,
+          alignSelf: "stretch" as const,
+          width: "100%" as const,
+          borderRadius: 0,
+          backgroundColor: colors.parchmentDark,
+        }
+      : {
+          flex: 1,
+          minHeight: isPhoneSheetForm ? 180 : 0,
+          alignSelf: "stretch" as const,
+          width: "100%" as const,
+          borderRadius: 0,
+          backgroundColor: colors.parchmentDark,
+        };
 
   const handleSave = async () => {
     hapticLightImpact();
@@ -950,25 +983,100 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     },
   }));
 
+  const reflectionOverlayButtonStyle = {
+    width: REFLECTION_OVERLAY_BTN_SIZE,
+    height: REFLECTION_OVERLAY_BTN_SIZE,
+    borderRadius: REFLECTION_OVERLAY_BTN_SIZE / 2,
+    backgroundColor: colors.parchmentMid,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  };
+
+  const floatingToolbarIconButtonStyle = {
+    width: TOOLBAR_BTN_SIZE,
+    height: TOOLBAR_BTN_SIZE,
+    borderRadius: TOOLBAR_BTN_SIZE / 2,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  };
+
+  const renderReflectionFloatingToolbar = () => (
+    <View style={floatingToolbarPillStyle}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Undo"
+        onPress={undoReflection}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <Ionicons name="arrow-undo" size={20} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Bold"
+        onPress={() => applyReflectionFormat("bold")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionBoldIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Italic"
+        onPress={() => applyReflectionFormat("italic")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionItalicIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Bulleted list"
+        onPress={() => applyReflectionFormat("insertUnorderedList")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionBulletedListIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Numbered list"
+        onPress={() => applyReflectionFormat("insertOrderedList")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionNumberedListIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Attach image"
+        onPress={() => void attachReflectionImage()}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionImageIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Hide keyboard"
+        onPress={dismissJournalKeyboard}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionKeyboardHideIcon size={20} color={toolbarIconColor} />
+      </TouchableOpacity>
+    </View>
+  );
+
   const formLeadingSections = (
     <>
       {!hideFormScreenTitle ? (
-        <View
-          style={{
-            borderBottomWidth: 0,
-            backgroundColor: modalSurfaceColor,
-            alignItems: "center",
-          }}
-        >
+        <View style={{ width: "100%", alignItems: "center", marginBottom: 4 }}>
           <Text
-            style={{
-              fontFamily: "Inter_500Medium",
-              fontSize: 22,
-              lineHeight: 28,
-              textAlign: "center",
-              width: "100%",
-              color: colors.brown800,
-            }}
+            style={[
+              m3SettingsSheetTitleStyle(1, colors.brown800),
+              { textAlign: "center", width: "100%" },
+            ]}
           >
             {editDraft ? "Edit Entry" : "New Entry"}
           </Text>
@@ -976,55 +1084,39 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       ) : null}
 
       <View
-        ref={passageAnchorRef}
         collapsable={false}
-        className="gap-1.5"
         style={{ paddingTop: 0, backgroundColor: modalSurfaceColor }}
       >
-        <Text
-          className="text-xs tracking-widest uppercase"
-          style={{ fontFamily: "Inter_400Regular", color: colors.tan200 }}
-        >
-          Passage (optional)
-        </Text>
-        <TextInput
-          className="rounded-full px-4 py-3"
-          style={{
-            fontFamily: "Lora_400Regular",
-            fontSize: TITLE_FIELD_FONT_SIZE,
-            backgroundColor: colors.parchmentDark,
-            color: colors.brown800,
-          }}
+        <M3OutlinedTextField
+          label="Passage (optional)"
           placeholder="e.g. John 3:16 or Romans 8"
-          placeholderTextColor={colors.tan100}
           value={passage}
           onChangeText={(t) => {
             hapticSelection();
             setPassage(t);
           }}
+          surfaceColor={modalSurfaceColor}
+          accentColor={colors.brown800}
+          roundedEnds
+          minHeight={52}
+          inputFontFamily="Lora_400Regular"
           returnKeyType="done"
           blurOnSubmit
           onSubmitEditing={dismissJournalKeyboard}
+          onFocus={() => markActiveFormField("passage")}
+          onBlur={() => releaseActiveFormField("passage")}
         />
         {passagePreview ? (
-          <View
-            style={{
-              marginTop: 0,
-              backgroundColor: j.versePreviewBackground,
-              borderRadius: 12,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-            }}
-          >
+          <View style={versePreviewCardStyle}>
             {passagePreviewRef ? (
               <Text
                 style={{
                   fontFamily: "Inter_500Medium",
-                  fontSize: 10,
-                  letterSpacing: 0.6,
+                  fontSize: 11,
+                  letterSpacing: 0.5,
                   textTransform: "uppercase",
-                  color: colors.tan300,
-                  marginBottom: 4,
+                  color: READER_M3_ON_SURFACE_VARIANT,
+                  marginBottom: 6,
                 }}
               >
                 {passagePreviewRef}
@@ -1033,8 +1125,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             <Text
               style={{
                 fontFamily: "Lora_400Regular",
-                fontSize: 12,
-                lineHeight: 17,
+                fontSize: 13,
+                lineHeight: 18,
                 color: colors.brown800,
                 fontStyle: "italic",
               }}
@@ -1046,10 +1138,10 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         {passageSuggestion ? (
           <Text
             style={{
-              marginTop: 0,
+              marginTop: 6,
               fontFamily: "Inter_400Regular",
               fontSize: 12,
-              color: colors.tan300,
+              color: READER_M3_ON_SURFACE_VARIANT,
             }}
           >
             {passageSuggestion}
@@ -1057,42 +1149,28 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         ) : null}
       </View>
 
-      <View ref={titleAnchorRef} collapsable={false} className="gap-1.5" style={{ backgroundColor: modalSurfaceColor }}>
-        <Text
-          className="text-xs tracking-widest uppercase"
-          style={{ fontFamily: "Inter_400Regular", color: colors.tan200 }}
-        >
-          Title (optional)
-        </Text>
-        <TextInput
-          className="rounded-full px-4 py-3"
-          style={{
-            fontFamily: "Lora_400Regular",
-            fontSize: TITLE_FIELD_FONT_SIZE,
-            backgroundColor: colors.parchmentDark,
-            color: colors.brown800,
-          }}
+      <View collapsable={false} style={{ backgroundColor: modalSurfaceColor }}>
+        <M3OutlinedTextField
+          label="Title (optional)"
           value={title}
           onChangeText={(t) => {
             hapticSelection();
             setTitle(t);
           }}
+          surfaceColor={modalSurfaceColor}
+          accentColor={colors.brown800}
+          roundedEnds
+          minHeight={52}
+          inputFontFamily="Lora_400Regular"
           returnKeyType="done"
           blurOnSubmit
           onSubmitEditing={dismissJournalKeyboard}
+          onFocus={() => markActiveFormField("title")}
+          onBlur={() => releaseActiveFormField("title")}
         />
       </View>
     </>
   );
-
-  const reflectionToolbarButtonStyle = {
-    width: TOOLBAR_BTN_SIZE,
-    height: TOOLBAR_BTN_SIZE,
-    borderRadius: 999,
-    backgroundColor: j.reflectionToolbarBackground,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  };
 
   const formReflectionSection = (
     <View style={reflectionShellStyle}>
@@ -1105,96 +1183,49 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           </Text>
         </View>
         <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingHorizontal: 4,
-            minHeight: TOOLBAR_BTN_SIZE,
-          }}
+          style={
+            sheetFormLayout
+              ? { flex: 1, minHeight: 0, position: "relative" as const }
+              : { position: "relative" as const }
+          }
         >
-          <View ref={fullscreenAnchorRef} collapsable={false}>
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 10,
+            }}
+          >
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Write reflection fullscreen"
               onPress={openReflectionFullscreen}
               activeOpacity={0.85}
-              style={reflectionToolbarButtonStyle}
+              style={reflectionOverlayButtonStyle}
             >
-              <ReflectionFullscreenIcon size={20} color="#ffffff" />
+              <ReflectionFullscreenIcon size={18} color={toolbarIconColor} />
             </TouchableOpacity>
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={journalKeyboardOpen ? "Hide keyboard" : "Show keyboard"}
-              accessibilityState={{ expanded: journalKeyboardOpen }}
-              onPress={toggleJournalKeyboard}
-              activeOpacity={0.85}
-              style={[reflectionToolbarButtonStyle, { marginRight: TOOLBAR_FAN_GAP }]}
-            >
-              <ReflectionKeyboardHideIcon size={20} color="#ffffff" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Undo"
-              onPress={undoReflection}
-              activeOpacity={0.85}
-              style={[reflectionToolbarButtonStyle, { marginRight: TOOLBAR_FAN_GAP }]}
-            >
-              <Ionicons name="arrow-undo" size={18} color="#ffffff" />
-            </TouchableOpacity>
-            <View ref={formatAnchorRef} collapsable={false}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Formatting options"
-                accessibilityState={{ expanded: formatMenuOpen }}
-                onPress={() => toggleFormatMenu(formatAnchorRef)}
-                activeOpacity={0.85}
-                style={{
-                  ...reflectionToolbarButtonStyle,
-                  backgroundColor: formatMenuOpen
-                    ? j.reflectionFormatMenuOpenBackground
-                    : j.reflectionToolbarBackground,
-                  opacity: formatMenuOpen ? 0.8 : 1,
-                }}
-              >
-                <ReflectionFormatStyleIcon
-                  size={18}
-                  color={formatMenuOpen ? j.reflectionToolbarBackground : "#ffffff"}
-                />
-              </TouchableOpacity>
+          <View
+            className="rounded-2xl overflow-hidden"
+            style={[reflectionParchmentStyle, { backgroundColor: colors.parchmentDark }]}
+          >
+            <View style={[reflectionInnerPadStyle, { paddingTop: 36 }]}>
+              <RichEditor
+                key={`${editDraft?.id ?? "new-entry-reflection"}-${reflectionInlineRemountKey}-${themeId}`}
+                ref={richEditorRef}
+                {...REFLECTION_RICH_EDITOR_PROPS}
+                style={reflectionRichEditorLayoutStyle}
+                editorStyle={reflectionRichEditorEditorStyle}
+                placeholder=""
+                initialContentHTML={reflectionHtml}
+                onChange={onReflectionHtmlChangedFromEditor}
+                onFocus={onReflectionEditorFocus}
+                onBlur={onReflectionEditorBlur}
+              />
             </View>
-            <View ref={photoAnchorRef} collapsable={false}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Attach image"
-                onPress={() => void attachReflectionImage()}
-                activeOpacity={0.85}
-                style={[reflectionToolbarButtonStyle, { marginLeft: TOOLBAR_FAN_GAP }]}
-              >
-                <ReflectionImageIcon size={18} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-        <View
-          className="rounded-2xl overflow-hidden"
-          style={[reflectionParchmentStyle, { backgroundColor: colors.parchmentDark }]}
-        >
-          <View style={reflectionInnerPadStyle}>
-            <RichEditor
-              key={`${editDraft?.id ?? "new-entry-reflection"}-${reflectionInlineRemountKey}-${themeId}`}
-              ref={richEditorRef}
-              {...REFLECTION_RICH_EDITOR_PROPS}
-              style={reflectionRichEditorLayoutStyle}
-              editorStyle={reflectionRichEditorEditorStyle}
-              placeholder=""
-              initialContentHTML={reflectionHtml}
-              onChange={onReflectionHtmlChangedFromEditor}
-              onFocus={onReflectionEditorFocus}
-              onBlur={onReflectionEditorBlur}
-            />
           </View>
         </View>
     </View>
@@ -1207,7 +1238,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     </>
   );
 
-  const saveRowPaddingBottom = isPhoneSheetForm
+  const saveRowPaddingBottom = sheetFormLayout
     ? SHEET_SAVE_BOTTOM_PADDING_PX
     : readerNewEntryFromReader
       ? Math.max(8, Math.max(insets.bottom, 12) - readerCardBottomLiftPx)
@@ -1251,7 +1282,11 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         { backgroundColor: modalSurfaceColor, width: "100%" },
         isTabletForm ? { alignItems: "center" as const } : null,
         contentScrollMaxHeight != null
-          ? { flex: 1, minHeight: 0, maxHeight: contentScrollMaxHeight }
+          ? {
+              flex: 1,
+              minHeight: 0,
+              ...(sheetKeyboardLiftPx !== undefined ? null : { maxHeight: contentScrollMaxHeight }),
+            }
           : { flex: 1 },
       ]}
     >
@@ -1262,6 +1297,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           width: "100%",
           maxWidth: isTabletForm ? TABLET_NEW_ENTRY_MAX_WIDTH_PX : undefined,
           backgroundColor: modalSurfaceColor,
+          position: "relative",
         }}
       >
       {/*
@@ -1269,8 +1305,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         includes save. iOS journal tablet: passage/title scroll + flex reflection + pinned save.
       */}
       <KeyboardAvoidingView
-        style={{ flex: 1, minHeight: 0 }}
-        behavior="padding"
+        style={{ flex: 1, minHeight: 0, position: "relative" }}
+        behavior={sheetFormLayout && sheetKeyboardLiftPx !== undefined ? undefined : "padding"}
         keyboardVerticalOffset={0}
       >
         {mergedFormScrollMode ? (
@@ -1293,20 +1329,57 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               <View style={saveFooterShellStyle}>{saveGradientButton}</View>
             </View>
           </ScrollView>
-        ) : isEditMode ? (
-          <View
-            style={{
-              flex: 1,
-              minHeight: 0,
-              paddingLeft: padLeft,
-              paddingRight: padRight,
-              paddingBottom: 4,
-            }}
-          >
-            <View className="gap-2.5 pb-0" style={{ flex: 1, minHeight: 0 }}>
-              {formFields}
+        ) : sheetFormLayout ? (
+          <>
+            <View
+              style={{
+                flex: 1,
+                minHeight: 0,
+                paddingLeft: padLeft,
+                paddingRight: padRight,
+              }}
+            >
+              {sheetNeedsScroll ? (
+                <ScrollView
+                  style={{ flex: 1, minHeight: 0 }}
+                  contentContainerStyle={{ paddingBottom: 8 }}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode={FORM_SCROLL_KEYBOARD_DISMISS_MODE}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator
+                >
+                  <View
+                    className="gap-2.5 pb-0"
+                    style={{ flexShrink: 0 }}
+                    onLayout={onTopFieldsLayout}
+                  >
+                    {formLeadingSections}
+                  </View>
+                  {formReflectionSection}
+                </ScrollView>
+              ) : (
+                <View style={{ flex: 1, minHeight: 0 }}>
+                  <View
+                    className="gap-2.5 pb-0"
+                    style={{ flexShrink: 0 }}
+                    onLayout={onTopFieldsLayout}
+                  >
+                    {formLeadingSections}
+                  </View>
+                  {formReflectionSection}
+                </View>
+              )}
             </View>
-          </View>
+            <View
+              style={{
+                paddingLeft: padLeft,
+                paddingRight: padRight,
+                ...saveFooterShellStyle,
+              }}
+            >
+              {saveGradientButton}
+            </View>
+          </>
         ) : (
           <View
             style={{
@@ -1334,7 +1407,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             <View style={{ flex: 1, minHeight: 0 }}>{formReflectionSection}</View>
           </View>
         )}
-        {!mergedFormScrollMode ? (
+        {!mergedFormScrollMode && !sheetFormLayout ? (
           <View
             style={{
               paddingLeft: padLeft,
@@ -1346,6 +1419,14 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           </View>
         ) : null}
       </KeyboardAvoidingView>
+      {showReflectionFloatingToolbar && !reflectionFullscreenOpen ? (
+        <View
+          pointerEvents="box-none"
+          style={[styles.floatingToolbarAnchorInline, { bottom: reflectionToolbarBottomPx }]}
+        >
+          {renderReflectionFloatingToolbar()}
+        </View>
+      ) : null}
       </View>
     </View>
 
@@ -1359,7 +1440,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     >
       <View style={{ flex: 1, backgroundColor: colors.parchment }} collapsable={false}>
         <KeyboardAvoidingView
-          style={{ flex: 1, minHeight: 0 }}
+          style={{ flex: 1, minHeight: 0, position: "relative" }}
           behavior="padding"
           keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
         >
@@ -1395,218 +1476,64 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           </View>
           <View
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              paddingHorizontal: 12,
-              paddingBottom: 10,
-            }}
-          >
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={journalKeyboardOpen ? "Hide keyboard" : "Show keyboard"}
-              accessibilityState={{ expanded: journalKeyboardOpen }}
-              onPress={toggleJournalKeyboard}
-              activeOpacity={0.85}
-              style={[reflectionToolbarButtonStyle, { marginRight: TOOLBAR_FAN_GAP }]}
-            >
-              <ReflectionKeyboardHideIcon size={20} color="#ffffff" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Undo"
-              onPress={undoReflection}
-              activeOpacity={0.85}
-              style={[reflectionToolbarButtonStyle, { marginRight: TOOLBAR_FAN_GAP }]}
-            >
-              <Ionicons name="arrow-undo" size={18} color="#ffffff" />
-            </TouchableOpacity>
-            <View ref={formatAnchorFullscreenRef} collapsable={false}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Formatting options"
-                accessibilityState={{ expanded: formatMenuOpen }}
-                onPress={() => toggleFormatMenu(formatAnchorFullscreenRef)}
-                activeOpacity={0.85}
-                style={{
-                  ...reflectionToolbarButtonStyle,
-                  backgroundColor: formatMenuOpen
-                    ? j.reflectionFormatMenuOpenBackground
-                    : j.reflectionToolbarBackground,
-                  opacity: formatMenuOpen ? 0.8 : 1,
-                }}
-              >
-                <ReflectionFormatStyleIcon
-                  size={18}
-                  color={formatMenuOpen ? j.reflectionToolbarBackground : "#ffffff"}
-                />
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Attach image"
-              onPress={() => void attachReflectionImage()}
-              activeOpacity={0.85}
-              style={[reflectionToolbarButtonStyle, { marginLeft: TOOLBAR_FAN_GAP }]}
-            >
-              <ReflectionImageIcon size={18} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
-          <View
-            style={{
               flex: 1,
               minHeight: 0,
               paddingHorizontal: 12,
               paddingBottom: 12 + REFLECTION_FIELD_BOTTOM_TRIM_PX,
             }}
           >
-            <View
-              style={{
-                flex: 1,
-                minHeight: 0,
-                borderRadius: 16,
-                overflow: "hidden",
-                backgroundColor: colors.parchmentDark,
-              }}
-            >
-              <RichEditor
-                key={`${reflectionFsMountKey}-${themeId}`}
-                ref={fullscreenRichEditorRef}
-                {...REFLECTION_RICH_EDITOR_PROPS}
+            <View style={{ flex: 1, minHeight: 0, position: "relative" }}>
+              <View
                 style={{
                   flex: 1,
                   minHeight: 0,
-                  alignSelf: "stretch",
-                  width: "100%",
-                  borderRadius: 0,
+                  borderRadius: 16,
+                  overflow: "hidden",
                   backgroundColor: colors.parchmentDark,
                 }}
-                initialFocus
-                editorStyle={reflectionRichEditorEditorStyle}
-                placeholder=""
-                initialContentHTML={reflectionHtml}
-                onChange={onReflectionHtmlChangedFromEditor}
-                onFocus={onReflectionEditorFocus}
-                onBlur={onReflectionEditorBlur}
-              />
+              >
+                <RichEditor
+                  key={`${reflectionFsMountKey}-${themeId}`}
+                  ref={fullscreenRichEditorRef}
+                  {...REFLECTION_RICH_EDITOR_PROPS}
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    alignSelf: "stretch",
+                    width: "100%",
+                    borderRadius: 0,
+                    backgroundColor: colors.parchmentDark,
+                  }}
+                  initialFocus
+                  editorStyle={reflectionRichEditorEditorStyle}
+                  placeholder=""
+                  initialContentHTML={reflectionHtml}
+                  onChange={onReflectionHtmlChangedFromEditor}
+                  onFocus={onReflectionEditorFocus}
+                  onBlur={onReflectionEditorBlur}
+                />
+              </View>
             </View>
           </View>
         </SafeAreaView>
           </View>
-        </KeyboardAvoidingView>
-        {formatMenuOpen && popoverPlacement !== null ? (
-          <View style={styles.fsFormatOverlay} pointerEvents="box-none">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss formatting options"
-              style={StyleSheet.absoluteFill}
-              onPress={closeFormatMenu}
-            />
-            <Animated.View
-              pointerEvents="box-none"
-              style={[
-                styles.formatFanContainer,
-                {
-                  top: popoverPlacement.top,
-                  left: popoverPlacement.left,
-                  width: formatToolbarRowWidth,
-                },
-              ]}
-            >
-              {formatActions.map((action, index) => {
-                const translateX = popoverAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -index * (TOOLBAR_BTN_SIZE + TOOLBAR_FAN_GAP)],
-                });
-                const scale = popoverAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.84, 1],
-                });
-                return (
-                  <Animated.View
-                    key={action.key}
-                    style={{
-                      position: "absolute",
-                      left: formatToolbarRowWidth - TOOLBAR_BTN_SIZE,
-                      top: 0,
-                      opacity: popoverAnim,
-                      transform: [{ translateX }, { scale }],
-                    }}
-                  >
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel={action.label}
-                      onPress={action.onPress}
-                      activeOpacity={0.85}
-                      style={[styles.formatActionButton, { backgroundColor: j.reflectionToolbarBackground }]}
-                    >
-                      {action.icon}
-                    </TouchableOpacity>
-                  </Animated.View>
-                );
-              })}
-            </Animated.View>
-          </View>
-        ) : null}
-      </View>
-    </Modal>
-
-    <Modal
-      visible={formatMenuOpen && popoverPlacement !== null && !reflectionFullscreenOpen}
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={closeFormatMenu}
-      accessibilityViewIsModal
-    >
-      <View style={styles.formatPopoverRoot} pointerEvents="box-none">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Dismiss formatting options"
-          style={StyleSheet.absoluteFill}
-          onPress={closeFormatMenu}
-        />
-        {popoverPlacement ? (
-          <Animated.View
+        {showReflectionFloatingToolbar ? (
+          <View
             pointerEvents="box-none"
             style={[
-              styles.formatPopoverRowWrap,
+              styles.floatingToolbarAnchorInline,
               {
-                top: popoverPlacement.top,
-                left: popoverPlacement.left,
-                width: formatToolbarRowWidth,
-                opacity: popoverAnim,
-                transform: [
-                  {
-                    scale: popoverAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.96, 1],
-                    }),
-                  },
-                ],
+                bottom:
+                  Platform.OS === "android" && keyboardHeight > 0
+                    ? keyboardHeight + FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX
+                    : FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX,
               },
             ]}
           >
-            <View style={styles.formatPopoverRow}>
-              {formatActions.map((action, index) => (
-                <TouchableOpacity
-                  key={action.key}
-                  accessibilityRole="button"
-                  accessibilityLabel={action.label}
-                  onPress={action.onPress}
-                  activeOpacity={0.85}
-                  style={[
-                    styles.formatActionButton,
-                    { backgroundColor: j.reflectionToolbarBackground },
-                    index < formatActions.length - 1 ? { marginRight: TOOLBAR_FAN_GAP } : null,
-                  ]}
-                >
-                  {action.icon}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </Animated.View>
+            {renderReflectionFloatingToolbar()}
+          </View>
         ) : null}
+        </KeyboardAvoidingView>
       </View>
     </Modal>
 
@@ -1617,60 +1544,20 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         </View>
       </Animated.View>
     ) : null}
-
-    <JournalOnboardingLayer
-      visible={editorOnboarding.showLayer}
-      step={editorOnboarding.currentStep}
-      stepAnchor={editorOnboarding.stepAnchor}
-      useWindowOverlay={readerNewEntryFromReader || isPhoneSheetForm}
-      colors={{
-        tooltipBackground: colors.brown800,
-        tooltipText: "#f5f2ec",
-        arrow: "#FFFFFF",
-      }}
-    />
     </>
   );
 });
 
 const styles = StyleSheet.create({
-  formatPopoverRoot: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  /** In-tree overlay: a second Modal does not reliably stack above this fullscreen Modal. */
-  fsFormatOverlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 1000,
-    elevation: 1000,
-  },
-  formatFanContainer: {
+  floatingToolbarAnchorInline: {
     position: "absolute",
-    height: TOOLBAR_BTN_SIZE,
-    zIndex: 2,
-    elevation: 12,
-  },
-  formatPopoverRowWrap: {
-    position: "absolute",
-    height: TOOLBAR_BTN_SIZE,
-    zIndex: 2,
-    elevation: 8,
-  },
-  formatPopoverRow: {
-    flexDirection: "row",
+    bottom: FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX,
+    left: 0,
+    right: 0,
     alignItems: "center",
-  },
-  formatActionButton: {
-    width: TOOLBAR_BTN_SIZE,
-    height: TOOLBAR_BTN_SIZE,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1a140d",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    elevation: 5,
+    paddingHorizontal: 16,
+    zIndex: 50,
+    elevation: 50,
   },
   saveToastWrap: {
     ...StyleSheet.absoluteFill,

@@ -8,9 +8,11 @@ import {
   Modal,
   Platform,
   Pressable,
+  StatusBar,
   StyleSheet,
   View,
   useWindowDimensions,
+  type KeyboardEvent,
 } from "react-native";
 import type {
   PanGestureHandlerGestureEvent,
@@ -30,16 +32,27 @@ import {
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 
 import { JOURNAL_NEW_ENTRY_FAB_PX } from "@/src/features/journal/journalFabChrome";
+import {
+  M3_EMPHASIZED_ACCELERATE_EASING,
+  M3_EMPHASIZED_DECELERATE_EASING,
+  M3_MOTION_DURATION_MEDIUM2_MS,
+  M3_MOTION_DURATION_SHORT3_MS,
+  M3_MOTION_DURATION_SHORT4_MS,
+} from "@/src/components/m3/m3-motion";
 
 const FAB_SIZE_PX = JOURNAL_NEW_ENTRY_FAB_PX;
 const SHEET_GAP_ABOVE_FAB_PX = 12;
-/** Android Material sheets: fixed clearance below the status bar / top of screen. */
-const MATERIAL_SHEET_TOP_GAP_PX = 50;
+/** Minimum breathing room between the sheet top and the top safe area / screen edge. */
+const SHEET_TOP_SCREEN_GAP_PX = 20;
 const MATERIAL_TOP_RADIUS_PX = 28;
 const MATERIAL_HANDLE_WIDTH_PX = 32;
 const MATERIAL_HANDLE_HEIGHT_PX = 4;
 const DRAG_DISMISS_PX = 96;
 const DRAG_VELOCITY_DISMISS = 520;
+/** Smallest sheet card height before content measurement lands. */
+const SHEET_MIN_HEIGHT_PX = 360;
+/** Rough form body height before the first onLayout (passage + title + reflection min + save). */
+const SHEET_INITIAL_CONTENT_ESTIMATE_PX = 458;
 
 export type JournalNewEntrySheetVariant = "journal" | "reader";
 
@@ -121,14 +134,24 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
   const j = bundle.journal;
 
   const [hasDraft, setHasDraft] = useState(false);
+  const [preferredContentHeightPx, setPreferredContentHeightPx] = useState<number | null>(null);
+  const [keyboardHeightPx, setKeyboardHeightPx] = useState(0);
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
   const sheetOpacity = useRef(new Animated.Value(0)).current;
+  const sheetHeightAnim = useRef(new Animated.Value(SHEET_MIN_HEIGHT_PX)).current;
+  const keyboardOffsetAnim = useRef(new Animated.Value(0)).current;
+  const keyboardMotionDurationRef = useRef(M3_MOTION_DURATION_MEDIUM2_MS);
+  const prevKeyboardLiftRef = useRef(0);
+  const openEntrancePlayedRef = useRef(false);
   const closingRef = useRef(false);
   const dragStartYRef = useRef(0);
 
   const isTablet = isTabletLayout(windowWidth, windowHeight);
   const isAndroidPhone = Platform.OS === "android" && !isTablet;
   const materialBottomSheet = isAndroidPhone;
+  const sheetTopClearancePx =
+    Math.max(insets.top, Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0) +
+    SHEET_TOP_SCREEN_GAP_PX;
 
   const layout = useMemo((): SheetLayout => {
     if (variant === "journal") {
@@ -137,7 +160,7 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
           bottomPx: 0,
           leftPx: 0,
           widthPx: windowWidth,
-          heightPx: windowHeight - MATERIAL_SHEET_TOP_GAP_PX,
+          heightPx: windowHeight - sheetTopClearancePx,
           materialBottomSheet: true,
           borderRadiusPx: MATERIAL_TOP_RADIUS_PX,
           useModalOverlay: true,
@@ -178,7 +201,7 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
         bottomPx: 0,
         leftPx: 0,
         widthPx: windowWidth,
-        heightPx: windowHeight - MATERIAL_SHEET_TOP_GAP_PX,
+        heightPx: windowHeight - sheetTopClearancePx,
         materialBottomSheet: true,
         borderRadiusPx: MATERIAL_TOP_RADIUS_PX,
         useModalOverlay: true,
@@ -215,6 +238,158 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
     readerBottomLiftPx,
     windowHeight,
     windowWidth,
+    sheetTopClearancePx,
+  ]);
+
+  const sheetFormChromePx = materialBottomSheet ? 52 : 42;
+  const sheetMaxHeightPx = layout.heightPx;
+  const sheetHeightPx = useMemo(() => {
+    if (preferredContentHeightPx == null) {
+      const initial = SHEET_INITIAL_CONTENT_ESTIMATE_PX + sheetFormChromePx;
+      return Math.max(SHEET_MIN_HEIGHT_PX, Math.min(sheetMaxHeightPx, initial));
+    }
+    const desired = preferredContentHeightPx + sheetFormChromePx;
+    return Math.max(SHEET_MIN_HEIGHT_PX, Math.min(sheetMaxHeightPx, desired));
+  }, [preferredContentHeightPx, sheetFormChromePx, sheetMaxHeightPx]);
+
+  const onSheetPreferredHeightChange = useCallback((contentHeightPx: number) => {
+    setPreferredContentHeightPx((prev) => (prev === contentHeightPx ? prev : contentHeightPx));
+  }, []);
+
+  const sheetTopGutterPx = sheetTopClearancePx;
+  const keyboardLiftPx = keyboardHeightPx > 0 ? keyboardHeightPx : 0;
+  const sheetBottomPx = layout.bottomPx + keyboardLiftPx;
+  const maxAllowedSheetHeightPx = Math.max(
+    SHEET_MIN_HEIGHT_PX,
+    windowHeight - sheetTopClearancePx - sheetBottomPx,
+  );
+
+  const keyboardAwareSheetHeightPx = useMemo(() => {
+    if (keyboardLiftPx <= 0) return sheetHeightPx;
+    const maxHeightAboveKeyboard = Math.max(
+      SHEET_MIN_HEIGHT_PX,
+      windowHeight - sheetTopGutterPx - keyboardLiftPx - layout.bottomPx,
+    );
+    return Math.max(sheetHeightPx, Math.min(sheetMaxHeightPx, maxHeightAboveKeyboard));
+  }, [
+    keyboardLiftPx,
+    sheetHeightPx,
+    sheetMaxHeightPx,
+    sheetTopGutterPx,
+    windowHeight,
+    layout.bottomPx,
+  ]);
+
+  const resolvedSheetHeightPx = Math.min(keyboardAwareSheetHeightPx, maxAllowedSheetHeightPx);
+
+  const sheetAtMaxCapacity = useMemo(() => {
+    if (preferredContentHeightPx == null) return false;
+    return preferredContentHeightPx + sheetFormChromePx >= sheetMaxHeightPx - 2;
+  }, [preferredContentHeightPx, sheetFormChromePx, sheetMaxHeightPx]);
+
+  /** Pin top clearance when content fills the sheet (e.g. verse preview). */
+  const sheetFillMode = sheetAtMaxCapacity;
+
+  const formContentScrollMaxHeightPx = sheetFillMode
+    ? maxAllowedSheetHeightPx - sheetFormChromePx
+    : resolvedSheetHeightPx - sheetFormChromePx;
+
+  useEffect(() => {
+    if (!open) {
+      setKeyboardHeightPx(0);
+      prevKeyboardLiftRef.current = 0;
+      return;
+    }
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const onShow = (e: KeyboardEvent) => {
+      keyboardMotionDurationRef.current = Math.max(
+        M3_MOTION_DURATION_SHORT4_MS,
+        Math.round(e.duration ?? M3_MOTION_DURATION_MEDIUM2_MS),
+      );
+      setKeyboardHeightPx(Math.round(e.endCoordinates.height));
+    };
+    const onHide = (e?: KeyboardEvent) => {
+      keyboardMotionDurationRef.current = Math.max(
+        M3_MOTION_DURATION_SHORT3_MS,
+        Math.round(e?.duration ?? M3_MOTION_DURATION_SHORT4_MS),
+      );
+      setKeyboardHeightPx(0);
+    };
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const prevLift = prevKeyboardLiftRef.current;
+    const openingKeyboard = prevLift === 0 && keyboardLiftPx > 0;
+    const closingKeyboard = prevLift > 0 && keyboardLiftPx === 0;
+    const adjustingWithKeyboard = keyboardLiftPx > 0 && prevLift > 0 && prevLift !== keyboardLiftPx;
+
+    if (!openingKeyboard && !closingKeyboard && !adjustingWithKeyboard) {
+      if (!sheetFillMode) {
+        sheetHeightAnim.setValue(resolvedSheetHeightPx);
+      }
+      prevKeyboardLiftRef.current = keyboardLiftPx;
+      return;
+    }
+
+    const duration = openingKeyboard
+      ? keyboardMotionDurationRef.current
+      : closingKeyboard
+        ? keyboardMotionDurationRef.current
+        : M3_MOTION_DURATION_SHORT3_MS;
+    const easing =
+      openingKeyboard || adjustingWithKeyboard
+        ? M3_EMPHASIZED_DECELERATE_EASING
+        : M3_EMPHASIZED_ACCELERATE_EASING;
+
+    Animated.timing(keyboardOffsetAnim, {
+      toValue: -keyboardLiftPx,
+      duration,
+      easing,
+      useNativeDriver: true,
+    }).start();
+
+    if (!sheetFillMode) {
+      Animated.timing(sheetHeightAnim, {
+        toValue: resolvedSheetHeightPx,
+        duration,
+        easing,
+        useNativeDriver: false,
+      }).start();
+    }
+
+    prevKeyboardLiftRef.current = keyboardLiftPx;
+  }, [
+    open,
+    keyboardLiftPx,
+    resolvedSheetHeightPx,
+    sheetFillMode,
+    keyboardOffsetAnim,
+    sheetHeightAnim,
+  ]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (keyboardLiftPx > 0) return;
+    keyboardOffsetAnim.setValue(0);
+    if (!sheetFillMode) {
+      sheetHeightAnim.setValue(resolvedSheetHeightPx);
+    }
+  }, [
+    open,
+    keyboardLiftPx,
+    resolvedSheetHeightPx,
+    sheetFillMode,
+    keyboardOffsetAnim,
+    sheetHeightAnim,
   ]);
 
   const animateClose = useCallback(
@@ -223,7 +398,7 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
       closingRef.current = true;
       Keyboard.dismiss();
 
-      const targetY = layout.heightPx + 56;
+      const targetY = keyboardAwareSheetHeightPx + keyboardLiftPx + 56;
       const clampedDragY = Math.max(0, draggedY);
       const vel = Math.max(0, velocityY);
       const duration = Math.max(
@@ -251,12 +426,12 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
         }),
       ]).start(() => {
         closingRef.current = false;
-        sheetTranslateY.setValue(materialBottomSheet ? layout.heightPx : 20);
+        sheetTranslateY.setValue(materialBottomSheet ? sheetMaxHeightPx : 20);
         sheetOpacity.setValue(0);
         onClose();
       });
     },
-    [layout.heightPx, materialBottomSheet, onClose, sheetOpacity, sheetTranslateY],
+    [keyboardAwareSheetHeightPx, keyboardLiftPx, materialBottomSheet, onClose, sheetOpacity, sheetTranslateY],
   );
 
   const springOpen = useCallback(() => {
@@ -299,15 +474,25 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
       closingRef.current = false;
       sheetTranslateY.stopAnimation();
       sheetOpacity.stopAnimation();
+      keyboardOffsetAnim.stopAnimation();
       setHasDraft(false);
+      setPreferredContentHeightPx(null);
+      setKeyboardHeightPx(0);
+      openEntrancePlayedRef.current = false;
       return;
     }
 
+    if (openEntrancePlayedRef.current) return;
+    openEntrancePlayedRef.current = true;
+
     closingRef.current = false;
     sheetOpacity.setValue(0);
+    sheetHeightAnim.setValue(sheetHeightPx);
+    keyboardOffsetAnim.setValue(0);
+    prevKeyboardLiftRef.current = 0;
 
     if (materialBottomSheet) {
-      sheetTranslateY.setValue(layout.heightPx);
+      sheetTranslateY.setValue(sheetHeightPx);
       Animated.parallel([
         Animated.timing(sheetTranslateY, {
           toValue: 0,
@@ -340,7 +525,17 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
         useNativeDriver: true,
       }),
     ]).start();
-  }, [open, layout.heightPx, materialBottomSheet, sheetOpacity, sheetTranslateY]);
+  }, [
+    open,
+    sheetKey,
+    materialBottomSheet,
+    layout.bottomPx,
+    sheetHeightPx,
+    keyboardOffsetAnim,
+    sheetHeightAnim,
+    sheetOpacity,
+    sheetTranslateY,
+  ]);
 
   useEffect(() => {
     if (!open || !layout.useModalOverlay) return;
@@ -475,12 +670,26 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
           left: layout.leftPx,
           width: layout.widthPx,
           bottom: layout.bottomPx,
-          height: layout.heightPx,
-          maxHeight: layout.heightPx,
-          opacity: sheetOpacity,
-          transform: [{ translateY: sheetTranslateY }],
+          ...(sheetFillMode
+            ? { top: sheetTopClearancePx }
+            : { height: sheetHeightAnim, maxHeight: maxAllowedSheetHeightPx }),
         }}
       >
+        <Animated.View
+          pointerEvents="box-none"
+          style={{
+            flex: 1,
+            transform: [{ translateY: keyboardOffsetAnim }],
+          }}
+        >
+        <Animated.View
+          pointerEvents="box-none"
+          style={{
+            flex: 1,
+            opacity: sheetOpacity,
+            transform: [{ translateY: sheetTranslateY }],
+          }}
+        >
         <View style={styles.sheetKeyboardView}>
           <View
             style={[
@@ -516,14 +725,16 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
                 minHeight: 0,
                 paddingHorizontal: 0,
                 paddingTop: 4,
-                paddingBottom: 8,
+                paddingBottom: 0,
               }}
             >
               <JournalNewEntryForm
                 ref={formRef}
                 key={sheetKey}
                 initialParams={initialParams}
-                contentScrollMaxHeight={layout.heightPx - (materialBottomSheet ? 52 : 42)}
+                contentScrollMaxHeight={formContentScrollMaxHeightPx}
+                sheetKeyboardLiftPx={keyboardLiftPx}
+                onSheetPreferredHeightChange={onSheetPreferredHeightChange}
                 contentHorizontalPadding={10}
                 readerNewEntryScrollable={variant === "reader"}
                 readerCardBottomLiftPx={formReaderBottomLiftPx}
@@ -534,6 +745,8 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
             </View>
           </View>
         </View>
+        </Animated.View>
+        </Animated.View>
       </Animated.View>
     </View>
   );

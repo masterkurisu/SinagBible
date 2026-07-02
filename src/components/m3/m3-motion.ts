@@ -14,3 +14,6 @@ export const M3_MOTION_DURATION_SHORT3_MS = 150;
 
 /** M3 short duration token — compact enters. */
 export const M3_MOTION_DURATION_SHORT4_MS = 200;
+
+/** M3 medium duration token — on-screen reposition (keyboard sheet lift). */
+export const M3_MOTION_DURATION_MEDIUM2_MS = 300;
