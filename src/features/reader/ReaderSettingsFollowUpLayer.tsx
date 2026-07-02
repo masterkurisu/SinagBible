@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
-  Alert,
   Animated,
   Easing,
   Platform,
@@ -18,6 +17,7 @@ import { peekReaderLastPosition, saveReaderLastPosition } from "@/lib/reader-las
 import { readerChapterHref } from "@/lib/reader-navigation";
 import { getReaderTranslationLanguageLabel } from "@/lib/reader-translation-language";
 import { useTranslationPicker } from "@/lib/use-translation-picker";
+import { ReaderDeleteMyDataDialog } from "@/src/features/reader/ReaderDeleteMyDataDialog";
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
 import { ReaderModals, ReaderMobileSettingsPanel, type ReaderToolsDropdown } from "@/src/features/reader/ReaderModals";
@@ -69,6 +69,7 @@ export function useReaderSettingsFollowUpState({
   const [commentaryPanelOpen, setCommentaryPanelOpen] = useState(false);
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
   const [moreSettingsSheetOpen, setMoreSettingsSheetOpen] = useState(false);
+  const [deleteMyDataDialogOpen, setDeleteMyDataDialogOpen] = useState(false);
   const [readerDropdown, setReaderDropdown] = useState<ReaderToolsDropdown | null>(null);
   const [dropdownAnchor, setDropdownAnchor] = useState<LayoutRectangle | null>(null);
   const [bookSheetExitAnimationStarted, setBookSheetExitAnimationStarted] = useState(false);
@@ -93,6 +94,11 @@ export function useReaderSettingsFollowUpState({
   const closeMoreSettingsPopup = useCallback(() => {
     clearMobileSettingsFollowUp();
     setMoreSettingsSheetOpen(false);
+  }, [clearMobileSettingsFollowUp]);
+
+  const closeDeleteMyDataDialog = useCallback(() => {
+    clearMobileSettingsFollowUp();
+    setDeleteMyDataDialogOpen(false);
   }, [clearMobileSettingsFollowUp]);
 
   useEffect(() => {
@@ -167,47 +173,27 @@ export function useReaderSettingsFollowUpState({
   }, []);
 
   const openDeleteMyDataConfirmFromMenu = useCallback(
-    (onNavigate: (href: Href) => void) => {
+    (_onNavigate: (href: Href) => void) => {
       closeToolsMenu();
       scheduleAfterMobileReaderMenuClose(() => {
-        Alert.alert(
-          "Delete My Data?",
-          [
-            "This permanently deletes all local data on this device:",
-            "• Journal entries",
-            "• Bookmarks",
-            "• Highlights",
-            "• Reading history",
-            "• Locally stored preferences",
-            "",
-            "This cannot be undone. Sinag Bible mobile does not currently sync to cloud services.",
-          ].join("\n"),
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Delete My Data",
-              style: "destructive",
-              onPress: () => {
-                void (async () => {
-                  try {
-                    await deleteAllUserData();
-                    onNavigate("/" as Href);
-                  } catch {
-                    Alert.alert("Unable to delete data", "Please try again.");
-                  }
-                })();
-              },
-            },
-          ],
-        );
+        setDeleteMyDataDialogOpen(true);
       });
     },
     [closeToolsMenu, scheduleAfterMobileReaderMenuClose],
   );
 
+  const confirmDeleteMyData = useCallback(
+    async (onNavigate: (href: Href) => void) => {
+      await deleteAllUserData();
+      onNavigate("/" as Href);
+    },
+    [],
+  );
+
   const dismissFollowUpChrome = useCallback(() => {
     if (fontSettingsSheetOpen) closeFontSettingsPopup();
     else if (moreSettingsSheetOpen) closeMoreSettingsPopup();
+    else if (deleteMyDataDialogOpen) closeDeleteMyDataDialog();
     else if (readerPrivacyPolicyOpen) setReaderPrivacyPolicyOpen(false);
     else if (readerCreditsOpen) setReaderCreditsOpen(false);
     else if (commentaryPanelOpen) setCommentaryPanelOpen(false);
@@ -215,8 +201,10 @@ export function useReaderSettingsFollowUpState({
   }, [
     closeFontSettingsPopup,
     closeMoreSettingsPopup,
+    closeDeleteMyDataDialog,
     closeReaderDropdown,
     commentaryPanelOpen,
+    deleteMyDataDialogOpen,
     fontSettingsSheetOpen,
     moreSettingsSheetOpen,
     readerCreditsOpen,
@@ -235,6 +223,7 @@ export function useReaderSettingsFollowUpState({
     setCommentaryPanelOpen,
     fontSettingsSheetOpen,
     moreSettingsSheetOpen,
+    deleteMyDataDialogOpen,
     readerDropdown,
     dropdownAnchor,
     bookSheetExitAnimationStarted,
@@ -246,6 +235,7 @@ export function useReaderSettingsFollowUpState({
     closeReaderDropdown,
     closeFontSettingsPopup,
     closeMoreSettingsPopup,
+    closeDeleteMyDataDialog,
     openMobileReaderThemesFromMenu,
     openMobileReaderTranslationFromMenu,
     openMobileReaderCommentaryFromMenu,
@@ -254,6 +244,7 @@ export function useReaderSettingsFollowUpState({
     openPrivacyPolicyFromCredits,
     openTermsFromCredits,
     openDeleteMyDataConfirmFromMenu,
+    confirmDeleteMyData,
     dismissFollowUpChrome,
   };
 }
@@ -478,6 +469,13 @@ export function ReaderSettingsFollowUpLayer({
         onClose={() => followUp.setReaderPrivacyPolicyOpen(false)}
       />
       <TermsOfServiceSheet visible={followUp.readerTermsOpen} onClose={() => followUp.setReaderTermsOpen(false)} />
+      <ReaderDeleteMyDataDialog
+        isOpen={followUp.deleteMyDataDialogOpen}
+        onClose={followUp.closeDeleteMyDataDialog}
+        onConfirmDelete={() => followUp.confirmDeleteMyData(onNavigate)}
+        bundle={bundle}
+        isTabletReaderLayout={isTabletReaderLayout}
+      />
     </>
   );
 }

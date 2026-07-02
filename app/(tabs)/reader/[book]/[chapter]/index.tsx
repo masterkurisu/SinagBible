@@ -11,7 +11,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   StyleSheet,
   Animated,
   Easing,
@@ -123,6 +122,7 @@ import { ReaderFeatureOnboardingLayer } from "@/src/features/reader/ReaderFeatur
 import { useReaderFeatureOnboarding, type ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
 import { useReaderTranslationLoadingPhase } from "@/src/features/reader/ReaderTranslationLoadingOverlay";
+import { ReaderDeleteMyDataDialog } from "@/src/features/reader/ReaderDeleteMyDataDialog";
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
 import { readerSettingsSideSheetWidthPx, READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
@@ -228,6 +228,7 @@ export default function ReaderChapterScreen() {
   const mobileSettingsFollowUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
   const [moreSettingsSheetOpen, setMoreSettingsSheetOpen] = useState(false);
+  const [deleteMyDataDialogOpen, setDeleteMyDataDialogOpen] = useState(false);
   const [readerDropdown, setReaderDropdown] = useState<ReaderToolsDropdown | null>(null);
   const [dropdownAnchor, setDropdownAnchor] = useState<LayoutRectangle | null>(null);
 
@@ -425,6 +426,7 @@ export default function ReaderChapterScreen() {
     setToolsMenuOpen(false);
     setFontSettingsSheetOpen(false);
     setMoreSettingsSheetOpen(false);
+    setDeleteMyDataDialogOpen(false);
     setReaderDropdown(null);
     setDropdownAnchor(null);
   }, [clearMobileSettingsFollowUp]);
@@ -437,6 +439,11 @@ export default function ReaderChapterScreen() {
   const closeMoreSettingsPopup = useCallback(() => {
     clearMobileSettingsFollowUp();
     setMoreSettingsSheetOpen(false);
+  }, [clearMobileSettingsFollowUp]);
+
+  const closeDeleteMyDataDialog = useCallback(() => {
+    clearMobileSettingsFollowUp();
+    setDeleteMyDataDialogOpen(false);
   }, [clearMobileSettingsFollowUp]);
 
   const openFontSettingsSheet = useCallback(() => {
@@ -503,38 +510,14 @@ export default function ReaderChapterScreen() {
   const openDeleteMyDataConfirmFromMenu = useCallback(() => {
     closeToolsMenu();
     scheduleAfterMobileReaderMenuClose(() => {
-      Alert.alert(
-        "Delete My Data?",
-        [
-          "This permanently deletes all local data on this device:",
-          "• Journal entries",
-          "• Bookmarks",
-          "• Highlights",
-          "• Reading history",
-          "• Locally stored preferences",
-          "",
-          "This cannot be undone. Sinag Bible mobile does not currently sync to cloud services.",
-        ].join("\n"),
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete My Data",
-            style: "destructive",
-            onPress: () => {
-              void (async () => {
-                try {
-                  await deleteAllUserData();
-                  router.replace("/");
-                } catch {
-                  Alert.alert("Unable to delete data", "Please try again.");
-                }
-              })();
-            },
-          },
-        ],
-      );
+      setDeleteMyDataDialogOpen(true);
     });
-  }, [closeToolsMenu, scheduleAfterMobileReaderMenuClose, router]);
+  }, [closeToolsMenu, scheduleAfterMobileReaderMenuClose]);
+
+  const confirmDeleteMyData = useCallback(async () => {
+    await deleteAllUserData();
+    router.replace("/");
+  }, [router]);
 
   /** Close credits first so only one RN `Modal` is active; avoids stacking quirks and nested-Text press issues. */
   const openPrivacyPolicyFromCredits = useCallback(() => {
@@ -703,6 +686,7 @@ export default function ReaderChapterScreen() {
       clearMobileSettingsFollowUp();
       setFontSettingsSheetOpen(false);
       setMoreSettingsSheetOpen(false);
+      setDeleteMyDataDialogOpen(false);
       setReaderDropdown(null);
       setDropdownAnchor(null);
       return true;
@@ -720,6 +704,7 @@ export default function ReaderChapterScreen() {
     if (toolsMenuOpen) closeToolsMenu();
     else if (fontSettingsSheetOpen) closeFontSettingsPopup();
     else if (moreSettingsSheetOpen) closeMoreSettingsPopup();
+    else if (deleteMyDataDialogOpen) closeDeleteMyDataDialog();
     else if (readerPrivacyPolicyOpen) setReaderPrivacyPolicyOpen(false);
     else if (readerCreditsOpen) setReaderCreditsOpen(false);
     else if (commentaryPanelOpen) setCommentaryPanelOpen(false);
@@ -731,6 +716,8 @@ export default function ReaderChapterScreen() {
     closeFontSettingsPopup,
     moreSettingsSheetOpen,
     closeMoreSettingsPopup,
+    deleteMyDataDialogOpen,
+    closeDeleteMyDataDialog,
     readerPrivacyPolicyOpen,
     readerCreditsOpen,
     commentaryPanelOpen,
@@ -824,6 +811,7 @@ export default function ReaderChapterScreen() {
     toolsMenuOpen ||
     fontSettingsSheetOpen ||
     moreSettingsSheetOpen ||
+    deleteMyDataDialogOpen ||
     readerDropdown != null ||
     readerPrivacyPolicyOpen ||
     readerCreditsOpen ||
@@ -1029,6 +1017,7 @@ export default function ReaderChapterScreen() {
     toolsMenuOpen ||
     fontSettingsSheetOpen ||
     moreSettingsSheetOpen ||
+    deleteMyDataDialogOpen ||
     readerDropdown != null ||
     readerPrivacyPolicyOpen ||
     readerCreditsOpen ||
@@ -1116,6 +1105,7 @@ export default function ReaderChapterScreen() {
   const tabBarAutoHideForceVisible =
     (fontSettingsSheetOpen ||
       moreSettingsSheetOpen ||
+      deleteMyDataDialogOpen ||
       readerDropdown != null ||
       readerPrivacyPolicyOpen ||
       readerCreditsOpen ||
@@ -1568,6 +1558,7 @@ export default function ReaderChapterScreen() {
           toolsMenuOpen ||
           fontSettingsSheetOpen ||
           moreSettingsSheetOpen ||
+          deleteMyDataDialogOpen ||
           readerDropdown != null ||
           readerPrivacyPolicyOpen ||
           readerCreditsOpen ||
@@ -1741,6 +1732,13 @@ export default function ReaderChapterScreen() {
       />
       <PrivacyPolicySheet visible={readerPrivacyPolicyOpen} onClose={() => setReaderPrivacyPolicyOpen(false)} />
       <TermsOfServiceSheet visible={readerTermsOpen} onClose={() => setReaderTermsOpen(false)} />
+      <ReaderDeleteMyDataDialog
+        isOpen={deleteMyDataDialogOpen}
+        onClose={closeDeleteMyDataDialog}
+        onConfirmDelete={confirmDeleteMyData}
+        bundle={bundle}
+        isTabletReaderLayout={isTabletReaderLayout}
+      />
 
       <View
         ref={selectionBannerAnchorRef}
