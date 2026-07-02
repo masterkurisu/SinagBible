@@ -1,5 +1,5 @@
 /**
- * Mobile Sinag Bible color themes — reader, journal list, search, and tab chrome.
+ * Mobile Sinag Bible color themes — home, reader, journal list, search, and tab chrome.
  * Add a new entry to `MOBILE_APP_THEME_IDS` and `mobileAppThemeCatalog` to ship another palette.
  *
  * `ui` mirrors `packages/ui/src/design-tokens.ts` (`colors`) so screens can swap `import { colors }`
@@ -134,6 +134,28 @@ export type MobileAppThemeBundle = {
     /** Full-screen new entry route (`journal/new`) scrim */
     newEntryRouteScrim: string;
   };
+  home: {
+    pageBackground: string;
+    eyebrowText: string;
+    accent: string;
+    headline: string;
+    tagline: string;
+    bodyText: string;
+    muted: string;
+    ctaPrimaryGradient: readonly [string, string, string];
+    ctaPrimaryText: string;
+    ctaSecondaryBackground: string;
+    ctaSecondaryBorder: string;
+    ctaSecondaryText: string;
+    ctaShadow: string;
+    divider: string;
+    featureIconBackground: string;
+    featureIconStroke: string;
+    quoteCardBackground: string;
+    quoteCardBorder: string;
+    quoteCardShadow: string;
+    quoteText: string;
+  };
 };
 
 const defaultUi: MobileUiColorPalette = {
@@ -158,7 +180,7 @@ const defaultUi: MobileUiColorPalette = {
 };
 
 const defaultThemeBody: Omit<MobileAppThemeBundle, "id"> = {
-  label: "Default",
+  label: "Leather",
   ui: defaultUi,
   reader: {
     sceneSurface: defaultUi.parchmentMid,
@@ -226,6 +248,28 @@ const defaultThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#3a2f1f", "#1f170d"],
     saveReflectionGradientSaving: ["#6a5a42", "#5a4b35"],
     newEntryRouteScrim: "rgba(36, 36, 35, 0.42)",
+  },
+  home: {
+    pageBackground: defaultUi.parchmentMid,
+    eyebrowText: defaultUi.brown500,
+    accent: defaultUi.gold,
+    headline: defaultUi.brown800,
+    tagline: defaultUi.brown500,
+    bodyText: defaultUi.tan300,
+    muted: "#8A7E6D",
+    ctaPrimaryGradient: ["#4A3826", "#2C2416", "#1A160F"],
+    ctaPrimaryText: "#f5e9d6",
+    ctaSecondaryBackground: defaultUi.parchment,
+    ctaSecondaryBorder: "#ffffff",
+    ctaSecondaryText: defaultUi.brown800,
+    ctaShadow: "#242423",
+    divider: defaultUi.borderSolid,
+    featureIconBackground: "#E8E2D8",
+    featureIconStroke: defaultUi.brown500,
+    quoteCardBackground: "#ebe6df",
+    quoteCardBorder: defaultUi.borderSolid,
+    quoteCardShadow: defaultUi.brown800,
+    quoteText: defaultUi.brown800,
   },
 };
 const darkThemeBody: Omit<MobileAppThemeBundle, "id"> = {
@@ -316,6 +360,28 @@ const darkThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#8a6b45", "#4a3826"],
     saveReflectionGradientSaving: ["#5c4a38", "#3d3228"],
     newEntryRouteScrim: "rgba(0, 0, 0, 0.55)",
+  },
+  home: {
+    pageBackground: "#332e28",
+    eyebrowText: "#8a7e6d",
+    accent: "#c9a96e",
+    headline: "#c9bfb0",
+    tagline: "#8a7e6d",
+    bodyText: "#6b5f50",
+    muted: "#7a6e5f",
+    ctaPrimaryGradient: ["#7a5c3a", "#4a3826", "#1f1a14"],
+    ctaPrimaryText: "#f5e9d6",
+    ctaSecondaryBackground: "#2a2420",
+    ctaSecondaryBorder: "#3d3428",
+    ctaSecondaryText: "#c9bfb0",
+    ctaShadow: "#000000",
+    divider: "#3d3428",
+    featureIconBackground: "#3d3830",
+    featureIconStroke: "#c9a96e",
+    quoteCardBackground: "#484038",
+    quoteCardBorder: "#3d3428",
+    quoteCardShadow: "#000000",
+    quoteText: "#c9bfb0",
   },
 };
 
@@ -408,6 +474,28 @@ const nightThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradientSaving: ["#4a3a28", "#2a2018"],
     newEntryRouteScrim: "rgba(0, 0, 0, 0.65)",
   },
+  home: {
+    pageBackground: "#0d0b09",
+    eyebrowText: "#7a6b54",
+    accent: "#b8945a",
+    headline: "#bfb3a0",
+    tagline: "#7a6b54",
+    bodyText: "#574839",
+    muted: "#6b5a45",
+    ctaPrimaryGradient: ["#6b4f30", "#3d2e1a", "#0d0b09"],
+    ctaPrimaryText: "#e0d4c4",
+    ctaSecondaryBackground: "#000000",
+    ctaSecondaryBorder: "#1c1914",
+    ctaSecondaryText: "#bfb3a0",
+    ctaShadow: "#000000",
+    divider: "#1c1914",
+    featureIconBackground: "#141210",
+    featureIconStroke: "#b8945a",
+    quoteCardBackground: "#1c1914",
+    quoteCardBorder: "#2a2520",
+    quoteCardShadow: "#000000",
+    quoteText: "#bfb3a0",
+  },
 };
 const monoThemeBody: Omit<MobileAppThemeBundle, "id"> = {
   label: "Mono",
@@ -497,6 +585,28 @@ const monoThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#222222", "#111111"],
     saveReflectionGradientSaving: ["#555555", "#444444"],
     newEntryRouteScrim: "rgba(0, 0, 0, 0.42)",
+  },
+  home: {
+    pageBackground: "#f8f8f6",
+    eyebrowText: "#555555",
+    accent: "#111111",
+    headline: "#222222",
+    tagline: "#555555",
+    bodyText: "#888888",
+    muted: "#666666",
+    ctaPrimaryGradient: ["#333333", "#222222", "#111111"],
+    ctaPrimaryText: "#ffffff",
+    ctaSecondaryBackground: "#ffffff",
+    ctaSecondaryBorder: "#e0e0e0",
+    ctaSecondaryText: "#222222",
+    ctaShadow: "#111111",
+    divider: "#e0e0e0",
+    featureIconBackground: "#e8e8e6",
+    featureIconStroke: "#555555",
+    quoteCardBackground: "#f0f0ee",
+    quoteCardBorder: "#e0e0e0",
+    quoteCardShadow: "#111111",
+    quoteText: "#222222",
   },
 };
 
@@ -589,6 +699,28 @@ const sageThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradientSaving: ["#6b8a55", "#5a6e52"],
     newEntryRouteScrim: "rgba(30, 42, 30, 0.42)",
   },
+  home: {
+    pageBackground: "#f2f4f0",
+    eyebrowText: "#4a5e42",
+    accent: "#2e7d32",
+    headline: "#2e3d2a",
+    tagline: "#4a5e42",
+    bodyText: "#6b7a5e",
+    muted: "#5a6e52",
+    ctaPrimaryGradient: ["#4a5e42", "#2e3d2a", "#1e2a1e"],
+    ctaPrimaryText: "#f0f4ee",
+    ctaSecondaryBackground: "#f7f9f5",
+    ctaSecondaryBorder: "#ffffff",
+    ctaSecondaryText: "#2e3d2a",
+    ctaShadow: "#1e2a1e",
+    divider: "#c8d4be",
+    featureIconBackground: "#dfe4da",
+    featureIconStroke: "#4a5e42",
+    quoteCardBackground: "#eaede6",
+    quoteCardBorder: "#c8d4be",
+    quoteCardShadow: "#1e2a1e",
+    quoteText: "#2e3d2a",
+  },
 };
 
 const spectrumThemeBody: Omit<MobileAppThemeBundle, "id"> = {
@@ -680,6 +812,28 @@ const spectrumThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#3c4043", "#202124"],
     saveReflectionGradientSaving: ["#669df6", "#4285f4"],
     newEntryRouteScrim: "rgba(32, 33, 36, 0.42)",
+  },
+  home: {
+    pageBackground: "#fafafa",
+    eyebrowText: "#80868b",
+    accent: "#4285f4",
+    headline: "#3c4043",
+    tagline: "#80868b",
+    bodyText: "#9aa0a6",
+    muted: "#5f6368",
+    ctaPrimaryGradient: ["#1a73e8", "#4285f4", "#1967d2"],
+    ctaPrimaryText: "#ffffff",
+    ctaSecondaryBackground: "#ffffff",
+    ctaSecondaryBorder: "#e8eaed",
+    ctaSecondaryText: "#3c4043",
+    ctaShadow: "#202124",
+    divider: "#e8eaed",
+    featureIconBackground: "#e8eaed",
+    featureIconStroke: "#4285f4",
+    quoteCardBackground: "#f1f3f4",
+    quoteCardBorder: "#e8eaed",
+    quoteCardShadow: "#202124",
+    quoteText: "#3c4043",
   },
 };
 

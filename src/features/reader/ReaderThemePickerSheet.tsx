@@ -188,7 +188,7 @@ export function ReaderThemePickerSheet({
               >
                 <M3SettingsSheetTitle
                   title="Theme"
-                  subtitle="Choose a color palette for the reader, journal, and navigation."
+                  subtitle="Choose a color palette for home, reader, journal, and navigation."
                   scale={scale}
                   style={{ marginBottom: 28 * scale }}
                 />

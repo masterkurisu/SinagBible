@@ -4,6 +4,7 @@ import { Link, type Href } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Path } from "react-native-svg";
+import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { useSbTabScreenPadding } from "@/lib/use-sb-bottom-padding";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
 import { hapticLightImpact } from "@/lib/haptics";
@@ -33,44 +34,30 @@ const homeCtaRowStyle: ViewStyle = {
   borderRadius: HOME_CTA.borderRadius,
 };
 
-const homeCtaJournalFillStyle: ViewStyle = {
-  backgroundColor: "#fdfbf7",
-  borderWidth: 1,
-  borderColor: "#ffffff",
-};
-
-const ctaShadow: ViewStyle = {
-  shadowColor: "#242423",
-  shadowOffset: { width: 0, height: 3 },
-  shadowOpacity: 0.3,
-  shadowRadius: 4,
-  elevation: 4,
-};
-
-function FeatureIconDoc() {
+function FeatureIconDoc({ stroke }: { stroke: string }) {
   return (
     <Svg width={20} height={20} viewBox="0 0 24 24" accessibilityElementsHidden>
       <Path
         d="M8 3H14L19 8V21H8C6.9 21 6 20.1 6 19V5C6 3.9 6.9 3 8 3Z"
-        stroke="#5C4F3A"
+        stroke={stroke}
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
       />
-      <Path d="M14 3V8H19" stroke="#5C4F3A" strokeWidth={1.5} />
-      <Path d="M9 12H16" stroke="#5C4F3A" strokeWidth={1.5} />
-      <Path d="M9 16H14" stroke="#5C4F3A" strokeWidth={1.5} />
+      <Path d="M14 3V8H19" stroke={stroke} strokeWidth={1.5} />
+      <Path d="M9 12H16" stroke={stroke} strokeWidth={1.5} />
+      <Path d="M9 16H14" stroke={stroke} strokeWidth={1.5} />
     </Svg>
   );
 }
 
-function FeatureIconHome() {
+function FeatureIconHome({ stroke }: { stroke: string }) {
   return (
     <Svg width={20} height={20} viewBox="0 0 24 24" accessibilityElementsHidden>
       <Path
         d="M3 10.5L12 3L21 10.5"
-        stroke="#5C4F3A"
+        stroke={stroke}
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -78,7 +65,7 @@ function FeatureIconHome() {
       />
       <Path
         d="M6 9.5V20H18V9.5"
-        stroke="#5C4F3A"
+        stroke={stroke}
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -88,23 +75,39 @@ function FeatureIconHome() {
   );
 }
 
-function FeatureIconPrivate() {
+function FeatureIconPrivate({ stroke }: { stroke: string }) {
   return (
     <Svg width={20} height={20} viewBox="0 0 24 24" accessibilityElementsHidden>
-      <Circle cx="12" cy="12" r="9" stroke="#5C4F3A" strokeWidth={1.5} fill="none" />
-      <Path d="M12 10V16" stroke="#5C4F3A" strokeWidth={1.5} strokeLinecap="round" />
-      <Circle cx="12" cy="7.5" r="1" fill="#5C4F3A" />
+      <Circle cx="12" cy="12" r="9" stroke={stroke} strokeWidth={1.5} fill="none" />
+      <Path d="M12 10V16" stroke={stroke} strokeWidth={1.5} strokeLinecap="round" />
+      <Circle cx="12" cy="7.5" r="1" fill={stroke} />
     </Svg>
   );
 }
 
 export default function HomeScreen() {
+  const { bundle } = useMobileAppTheme();
+  const h = bundle.home;
   const insets = useSafeAreaInsets();
   const bottomPad = useSbTabScreenPadding(48);
   // Android native tabs can still overlay content in some SDK/device combos.
   // Add extra Home-only space so the bottom verse card is never clipped.
   const androidHomeBottomCompensation = Platform.OS === "android" ? insets.bottom + 46 : 0;
   const scrollRef = useRef<ScrollView | null>(null);
+
+  const ctaShadow: ViewStyle = {
+    shadowColor: h.ctaShadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  };
+
+  const homeCtaJournalFillStyle: ViewStyle = {
+    backgroundColor: h.ctaSecondaryBackground,
+    borderWidth: 1,
+    borderColor: h.ctaSecondaryBorder,
+  };
 
   useEffect(() => {
     return registerTabScrollRef("index", {
@@ -117,15 +120,16 @@ export default function HomeScreen() {
   return (
     <ScrollView
       ref={scrollRef}
-      className="flex-1 bg-parchment-canvas"
+      className="flex-1"
+      style={{ backgroundColor: h.pageBackground }}
       contentContainerClassName="pb-8"
       contentContainerStyle={{ paddingBottom: bottomPad + androidHomeBottomCompensation }}
     >
       <View className="w-full max-w-[680px] self-center px-5">
         <View style={{ paddingTop: Math.max(20, insets.top) }} className="pb-3">
           <Text
-            className="text-[12px] font-medium uppercase text-brown-500"
-            style={{ fontFamily: "Inter_500Medium", letterSpacing: 3 }}
+            className="text-[12px] font-medium uppercase"
+            style={{ fontFamily: "Inter_500Medium", letterSpacing: 3, color: h.eyebrowText }}
           >
             SINAG BIBLE
           </Text>
@@ -133,10 +137,10 @@ export default function HomeScreen() {
 
         <View className="pb-6 pt-1">
           <View className="mb-[22px] flex-row items-center gap-2.5">
-            <View className="h-px w-8 bg-gold" />
+            <View className="h-px w-8" style={{ backgroundColor: h.accent }} />
             <Text
-              className="text-[11px] uppercase text-gold"
-              style={{ fontFamily: "Inter_400Regular", letterSpacing: 2.6 }}
+              className="text-[11px] uppercase"
+              style={{ fontFamily: "Inter_400Regular", letterSpacing: 2.6, color: h.accent }}
             >
               BIBLE · JOURNAL · REFLECTION
             </Text>
@@ -146,25 +150,23 @@ export default function HomeScreen() {
             className="text-[42px] font-normal leading-[1.15]"
             style={{ fontFamily: "Lora_400Regular" }}
           >
-            <Text className="text-brown-800">Your Bible.</Text>
+            <Text style={{ color: h.headline }}>Your Bible.</Text>
             {"\n"}
-            <Text className="text-gold" style={{ fontStyle: "italic" }}>
-              Your thoughts.
-            </Text>
+            <Text style={{ color: h.accent, fontStyle: "italic" }}>Your thoughts.</Text>
             {"\n"}
-            <Text className="text-brown-800">One place.</Text>
+            <Text style={{ color: h.headline }}>One place.</Text>
           </Text>
 
           <Text
-            className="mt-[14px] text-[15px] italic text-brown-500"
-            style={{ fontFamily: "Lora_400Regular" }}
+            className="mt-[14px] text-[15px] italic"
+            style={{ fontFamily: "Lora_400Regular", color: h.tagline }}
           >
             Just you and the Word.
           </Text>
 
           <Text
-            className="mt-[14px] text-tan-300 leading-[1.7]"
-            style={{ fontFamily: "Inter_400Regular", fontSize: 15 }}
+            className="mt-[14px] leading-[1.7]"
+            style={{ fontFamily: "Inter_400Regular", fontSize: 15, color: h.bodyText }}
           >
             Your personal place to pause with Scripture, reflect on God&apos;s word, and write the
             story of your faith as it grows each day.
@@ -178,19 +180,21 @@ export default function HomeScreen() {
                 style={({ pressed }) => [ctaShadow, homeCtaShellStyle, pressed && { opacity: 0.95 }]}
               >
                 <LinearGradient
-                  colors={["#4A3826", "#2C2416", "#1A160F"]}
+                  colors={[...h.ctaPrimaryGradient]}
                   locations={[0, 0.6, 1]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={homeCtaRowStyle}
                 >
                   <Text
-                    className="text-[16px] tracking-[0.025em] text-cream"
-                    style={{ fontFamily: "Lora_400Regular" }}
+                    className="text-[16px] tracking-[0.025em]"
+                    style={{ fontFamily: "Lora_400Regular", color: h.ctaPrimaryText }}
                   >
                     Read Scripture
                   </Text>
-                  <Text className="text-cream text-base">→</Text>
+                  <Text className="text-base" style={{ color: h.ctaPrimaryText }}>
+                    →
+                  </Text>
                 </LinearGradient>
               </Pressable>
             </Link>
@@ -203,68 +207,88 @@ export default function HomeScreen() {
               >
                 <View style={[homeCtaRowStyle, homeCtaJournalFillStyle]}>
                   <Text
-                    className="text-[16px] tracking-[0.025em] text-brown-800"
-                    style={{ fontFamily: "Lora_400Regular" }}
+                    className="text-[16px] tracking-[0.025em]"
+                    style={{ fontFamily: "Lora_400Regular", color: h.ctaSecondaryText }}
                   >
                     Write a journal
                   </Text>
-                  <Text className="text-brown-800 text-base">→</Text>
+                  <Text className="text-base" style={{ color: h.ctaSecondaryText }}>
+                    →
+                  </Text>
                 </View>
               </Pressable>
             </Link>
           </View>
         </View>
 
-        <View className="mb-6 h-px bg-[#ddd8ce]" />
+        <View className="mb-6 h-px" style={{ backgroundColor: h.divider }} />
 
         <View className="pb-8">
           <View className="gap-5">
             <View className="flex-row items-start gap-3">
-              <View className="h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone">
-                <FeatureIconDoc />
+              <View
+                className="h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                style={{ backgroundColor: h.featureIconBackground }}
+              >
+                <FeatureIconDoc stroke={h.featureIconStroke} />
               </View>
               <View className="flex-1">
                 <Text
-                  className="text-[15px] font-medium text-brown-800"
-                  style={{ fontFamily: "Inter_500Medium" }}
+                  className="text-[15px] font-medium"
+                  style={{ fontFamily: "Inter_500Medium", color: h.headline }}
                 >
                   Inline verse notes
                 </Text>
-                <Text className="mt-[3px] text-[13px] leading-5 text-muted" style={{ fontFamily: "Inter_400Regular" }}>
+                <Text
+                  className="mt-[3px] text-[13px] leading-5"
+                  style={{ fontFamily: "Inter_400Regular", color: h.muted }}
+                >
                   Tap any verse to add a thought directly beneath it.
                 </Text>
               </View>
             </View>
 
             <View className="flex-row items-start gap-3">
-              <View className="h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone">
-                <FeatureIconHome />
+              <View
+                className="h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                style={{ backgroundColor: h.featureIconBackground }}
+              >
+                <FeatureIconHome stroke={h.featureIconStroke} />
               </View>
               <View className="flex-1">
                 <Text
-                  className="text-[15px] font-medium text-brown-800"
-                  style={{ fontFamily: "Inter_500Medium" }}
+                  className="text-[15px] font-medium"
+                  style={{ fontFamily: "Inter_500Medium", color: h.headline }}
                 >
                   Anchored journal entries
                 </Text>
-                <Text className="mt-[3px] text-[13px] leading-5 text-muted" style={{ fontFamily: "Inter_400Regular" }}>
+                <Text
+                  className="mt-[3px] text-[13px] leading-5"
+                  style={{ fontFamily: "Inter_400Regular", color: h.muted }}
+                >
                   Journal reflections tied directly to the passage that moved you.
                 </Text>
               </View>
             </View>
 
             <View className="flex-row items-start gap-3">
-              <View className="h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone">
-                <FeatureIconPrivate />
+              <View
+                className="h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                style={{ backgroundColor: h.featureIconBackground }}
+              >
+                <FeatureIconPrivate stroke={h.featureIconStroke} />
               </View>
               <View className="flex-1">
                 <Text
-                  className="text-[15px] font-medium text-brown-800"
-                  style={{ fontFamily: "Inter_500Medium" }}
+                  className="text-[15px] font-medium"
+                  style={{ fontFamily: "Inter_500Medium", color: h.headline }}
                 >
                   Completely private
                 </Text>
-                <Text className="mt-[3px] text-[13px] leading-5 text-muted" style={{ fontFamily: "Inter_400Regular" }}>
+                <Text
+                  className="mt-[3px] text-[13px] leading-5"
+                  style={{ fontFamily: "Inter_400Regular", color: h.muted }}
+                >
                   Journal, highlights, and notes stay on this device. On the web, accounts sync the journal only.
                 </Text>
               </View>
@@ -273,24 +297,29 @@ export default function HomeScreen() {
         </View>
 
         <View
-          className="relative my-8 rounded-2xl border border-[#ddd8ce]/80 px-5 pb-5 pt-5 bg-quotetone"
+          className="relative my-8 rounded-2xl border px-5 pb-5 pt-5"
           style={{
-            shadowColor: "#2c2416",
+            backgroundColor: h.quoteCardBackground,
+            borderColor: h.quoteCardBorder,
+            shadowColor: h.quoteCardShadow,
             shadowOffset: { width: 0, height: 12 },
             shadowOpacity: 0.06,
             shadowRadius: 40,
             elevation: 3,
           }}
         >
-          <Text className="mb-3 text-[28px] text-gold" style={{ fontFamily: "Lora_400Regular" }}>
+          <Text className="mb-3 text-[28px]" style={{ fontFamily: "Lora_400Regular", color: h.accent }}>
             &ldquo;
           </Text>
-          <Text className="text-[16px] italic leading-[1.6] text-[#2C2416]" style={{ fontFamily: "Lora_400Regular" }}>
+          <Text
+            className="text-[16px] italic leading-[1.6]"
+            style={{ fontFamily: "Lora_400Regular", color: h.quoteText }}
+          >
             Thy word is a lamp unto my feet, and a light unto my path.
           </Text>
           <Text
-            className="mt-[14px] text-[11px] uppercase tracking-[0.2em] text-gold"
-            style={{ fontFamily: "Inter_400Regular" }}
+            className="mt-[14px] text-[11px] uppercase tracking-[0.2em]"
+            style={{ fontFamily: "Inter_400Regular", color: h.accent }}
           >
             PSALM 119:105 · KJV
           </Text>
