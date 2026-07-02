@@ -18,11 +18,13 @@ import {
   subscribeOnboardingState,
 } from "@/lib/onboarding-storage";
 import { MobileAppThemeProvider, useMobileAppTheme } from "@/lib/mobile-app-theme-context";
+import { initAppLogs } from "@/lib/app-logs";
 import { initCrashReporting } from "@/lib/crash-reporting";
 import { applyPlatformOrientationLock } from "@/lib/apply-platform-orientation-lock";
 import { loadHapticsEnabledPreference } from "@/lib/haptics-preference";
 
 SplashScreen.preventAutoHideAsync();
+initAppLogs();
 initCrashReporting();
 void applyPlatformOrientationLock();
 void loadHapticsEnabledPreference();

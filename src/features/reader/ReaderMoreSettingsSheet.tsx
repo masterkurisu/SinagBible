@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -16,7 +17,7 @@ import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { KofiSupportBlock } from "@/components/kofi-support-block";
 import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Switch } from "@/components/M3Switch";
-import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import { shareAppLogs } from "@/lib/app-logs";
 import { hapticLightImpact } from "@/lib/haptics";
 import {
   loadHapticsEnabledPreference,
@@ -38,6 +39,7 @@ import {
   READER_M3_OUTLINE_VARIANT,
   READER_M3_SURFACE_CONTAINER,
 } from "@/src/features/reader/readerSettingsPanelChrome";
+import { M3Snackbar } from "@/src/components/m3/M3Snackbar";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
 
 export type ReaderMoreSettingsSheetProps = {
@@ -64,6 +66,8 @@ export function ReaderMoreSettingsSheet({
   const rippleColor = bundle.chrome.androidRipple;
   const { width: screenW } = useWindowDimensions();
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
+  const [saveLogsBusy, setSaveLogsBusy] = useState(false);
+  const [saveLogsSnackbar, setSaveLogsSnackbar] = useState<string | null>(null);
   const sheetSlideAnim = useRef(new Animated.Value(0)).current;
   const sheetOpacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -117,6 +121,31 @@ export function ReaderMoreSettingsSheet({
     })();
   }, [hapticsEnabled]);
 
+  const handleSaveLogs = useCallback(() => {
+    if (saveLogsBusy) return;
+    hapticLightImpact();
+    setSaveLogsBusy(true);
+    void (async () => {
+      try {
+        const result = await shareAppLogs();
+        if (result === "shared") {
+          setSaveLogsSnackbar("Logs ready to save or share");
+          return;
+        }
+        if (result === "unavailable") {
+          Alert.alert(
+            "Sharing unavailable",
+            "Sharing is not available on this device. Try again on a physical device.",
+          );
+          return;
+        }
+        Alert.alert("Could not save logs", "Something went wrong. Try again.");
+      } finally {
+        setSaveLogsBusy(false);
+      }
+    })();
+  }, [saveLogsBusy]);
+
   const slideFrom = useBottomSheet ? 48 : READER_MENU_SLIDE_FROM_PX;
 
   return (
@@ -134,7 +163,7 @@ export function ReaderMoreSettingsSheet({
             {
               justifyContent: useBottomSheet ? "flex-end" : "flex-start",
               paddingTop: useBottomSheet ? 0 : Math.max(insets.top, 12) + 16,
-              paddingBottom: useBottomSheet ? nativeTabSheetBottomInsetPx(insets.bottom, 0) : 0,
+              paddingBottom: 0,
               paddingHorizontal: useBottomSheet ? 0 : 12,
             },
           ]}
@@ -187,12 +216,37 @@ export function ReaderMoreSettingsSheet({
                 contentContainerStyle={{
                   paddingHorizontal: padH,
                   paddingTop: useBottomSheet ? 4 * scale : 20 * scale,
-                  paddingBottom: 24 * scale,
+                  paddingBottom: 24 * scale + (useBottomSheet ? insets.bottom : 0),
                 }}
               >
                 <M3SettingsSheetTitle title="More" scale={scale} />
 
                 <View style={[styles.listBlock, { marginTop: 4 * scale }]}>
+                  <Pressable
+                    onPress={handleSaveLogs}
+                    disabled={saveLogsBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel="Save logs"
+                    accessibilityState={{ disabled: saveLogsBusy, busy: saveLogsBusy }}
+                    android_ripple={Platform.OS === "android" ? { color: rippleColor } : undefined}
+                    style={({ pressed }) => ({
+                      width: "100%",
+                      minHeight: rowMinHeight,
+                      paddingVertical: 12 * scale,
+                      opacity: saveLogsBusy ? 0.6 : 1,
+                      backgroundColor: pressed ? READER_M3_SURFACE_CONTAINER : "transparent",
+                    })}
+                  >
+                    <View style={styles.listRow}>
+                      <Text style={[rowLabelStyle(scale), styles.listRowLabel]}>Save logs</Text>
+                      <MaterialIcons
+                        name="upload-file"
+                        size={22 * scale}
+                        color={READER_M3_ON_SURFACE_VARIANT}
+                      />
+                    </View>
+                  </Pressable>
+
                   <View
                     style={[
                       styles.listRow,
@@ -254,6 +308,12 @@ export function ReaderMoreSettingsSheet({
             </View>
           </Animated.View>
         </View>
+        <M3Snackbar
+          message={saveLogsSnackbar ?? ""}
+          visible={saveLogsSnackbar != null}
+          onDismiss={() => setSaveLogsSnackbar(null)}
+          bottomInset={insets.bottom + 16}
+        />
       </View>
     </Modal>
   );
