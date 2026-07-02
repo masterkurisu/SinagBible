@@ -3,7 +3,6 @@ import { Platform, View, Text, Pressable, ScrollView, type ViewStyle } from "rea
 import { Link, type Href } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Circle, Path } from "react-native-svg";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { useSbTabScreenPadding } from "@/lib/use-sb-bottom-padding";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
@@ -33,57 +32,6 @@ const homeCtaRowStyle: ViewStyle = {
   justifyContent: "space-between",
   borderRadius: HOME_CTA.borderRadius,
 };
-
-function FeatureIconDoc({ stroke }: { stroke: string }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" accessibilityElementsHidden>
-      <Path
-        d="M8 3H14L19 8V21H8C6.9 21 6 20.1 6 19V5C6 3.9 6.9 3 8 3Z"
-        stroke={stroke}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <Path d="M14 3V8H19" stroke={stroke} strokeWidth={1.5} />
-      <Path d="M9 12H16" stroke={stroke} strokeWidth={1.5} />
-      <Path d="M9 16H14" stroke={stroke} strokeWidth={1.5} />
-    </Svg>
-  );
-}
-
-function FeatureIconHome({ stroke }: { stroke: string }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" accessibilityElementsHidden>
-      <Path
-        d="M3 10.5L12 3L21 10.5"
-        stroke={stroke}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <Path
-        d="M6 9.5V20H18V9.5"
-        stroke={stroke}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </Svg>
-  );
-}
-
-function FeatureIconPrivate({ stroke }: { stroke: string }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" accessibilityElementsHidden>
-      <Circle cx="12" cy="12" r="9" stroke={stroke} strokeWidth={1.5} fill="none" />
-      <Path d="M12 10V16" stroke={stroke} strokeWidth={1.5} strokeLinecap="round" />
-      <Circle cx="12" cy="7.5" r="1" fill={stroke} />
-    </Svg>
-  );
-}
 
 export default function HomeScreen() {
   const { bundle } = useMobileAppTheme();
@@ -135,7 +83,7 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        <View className="pb-6 pt-1">
+        <View className="pt-1">
           <View className="mb-[22px] flex-row items-center gap-2.5">
             <View className="h-px w-8" style={{ backgroundColor: h.accent }} />
             <Text
@@ -172,7 +120,7 @@ export default function HomeScreen() {
             story of your faith as it grows each day.
           </Text>
 
-          <View className="mb-8 mt-7 gap-3">
+          <View className="mt-7 gap-3">
             <Link href={"/reader" as Href} asChild onPress={() => hapticLightImpact()}>
               <Pressable
                 accessibilityRole="button"
@@ -221,83 +169,8 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View className="mb-6 h-px" style={{ backgroundColor: h.divider }} />
-
-        <View className="pb-8">
-          <View className="gap-5">
-            <View className="flex-row items-start gap-3">
-              <View
-                className="h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                style={{ backgroundColor: h.featureIconBackground }}
-              >
-                <FeatureIconDoc stroke={h.featureIconStroke} />
-              </View>
-              <View className="flex-1">
-                <Text
-                  className="text-[15px] font-medium"
-                  style={{ fontFamily: "Inter_500Medium", color: h.headline }}
-                >
-                  Inline verse notes
-                </Text>
-                <Text
-                  className="mt-[3px] text-[13px] leading-5"
-                  style={{ fontFamily: "Inter_400Regular", color: h.muted }}
-                >
-                  Tap any verse to add a thought directly beneath it.
-                </Text>
-              </View>
-            </View>
-
-            <View className="flex-row items-start gap-3">
-              <View
-                className="h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                style={{ backgroundColor: h.featureIconBackground }}
-              >
-                <FeatureIconHome stroke={h.featureIconStroke} />
-              </View>
-              <View className="flex-1">
-                <Text
-                  className="text-[15px] font-medium"
-                  style={{ fontFamily: "Inter_500Medium", color: h.headline }}
-                >
-                  Anchored journal entries
-                </Text>
-                <Text
-                  className="mt-[3px] text-[13px] leading-5"
-                  style={{ fontFamily: "Inter_400Regular", color: h.muted }}
-                >
-                  Journal reflections tied directly to the passage that moved you.
-                </Text>
-              </View>
-            </View>
-
-            <View className="flex-row items-start gap-3">
-              <View
-                className="h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                style={{ backgroundColor: h.featureIconBackground }}
-              >
-                <FeatureIconPrivate stroke={h.featureIconStroke} />
-              </View>
-              <View className="flex-1">
-                <Text
-                  className="text-[15px] font-medium"
-                  style={{ fontFamily: "Inter_500Medium", color: h.headline }}
-                >
-                  Completely private
-                </Text>
-                <Text
-                  className="mt-[3px] text-[13px] leading-5"
-                  style={{ fontFamily: "Inter_400Regular", color: h.muted }}
-                >
-                  Journal, highlights, and notes stay on this device. On the web, accounts sync the journal only.
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
         <View
-          className="relative my-8 rounded-2xl border px-5 pb-5 pt-5"
+          className="relative mt-[30px] rounded-2xl border px-5 pb-5 pt-5"
           style={{
             backgroundColor: h.quoteCardBackground,
             borderColor: h.quoteCardBorder,
