@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +12,7 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { hapticLightImpact } from "@/lib/haptics";
+import { M3Button } from "@/src/components/m3/M3Button";
 import { M3Snackbar } from "@/src/components/m3/M3Snackbar";
 import {
   M3_EMPHASIZED_DECELERATE_EASING,
@@ -55,7 +54,6 @@ export function ReaderDeleteMyDataDialog({
   isTabletReaderLayout = false,
 }: ReaderDeleteMyDataDialogProps) {
   const rc = bundle.reader;
-  const rippleColor = bundle.chrome.androidRipple;
   const { width: screenW } = useWindowDimensions();
   const [deleting, setDeleting] = useState(false);
   const [errorVisible, setErrorVisible] = useState(false);
@@ -191,44 +189,24 @@ export function ReaderDeleteMyDataDialog({
               </ScrollView>
 
               <View style={[styles.actionsRow, { marginTop: 24 * scale, gap: 8 * scale }]}>
-                <Pressable
+                <M3Button
+                  label="Cancel"
+                  variant="text"
                   onPress={handleCancel}
                   disabled={deleting}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel"
-                  android_ripple={Platform.OS === "android" ? { color: rippleColor, borderless: true } : undefined}
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    { minHeight: 40 * scale, opacity: deleting ? 0.5 : pressed ? 0.72 : 1 },
-                  ]}
-                >
-                  <Text style={cancelLabelStyle(scale)}>Cancel</Text>
-                </Pressable>
-
-                <Pressable
+                  bundle={bundle}
+                  scale={scale}
+                />
+                <M3Button
+                  label="Delete my data"
+                  variant="text"
+                  destructive
                   onPress={handleDelete}
                   disabled={deleting}
-                  accessibilityRole="button"
-                  accessibilityLabel="Delete my data"
-                  android_ripple={
-                    Platform.OS === "android"
-                      ? { color: "rgba(179,38,30,0.12)", borderless: true }
-                      : undefined
-                  }
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    {
-                      minHeight: 40 * scale,
-                      opacity: deleting ? 0.85 : pressed ? 0.72 : 1,
-                    },
-                  ]}
-                >
-                  {deleting ? (
-                    <ActivityIndicator size="small" color={READER_M3_ERROR} />
-                  ) : (
-                    <Text style={deleteLabelStyle(scale)}>Delete my data</Text>
-                  )}
-                </Pressable>
+                  loading={deleting}
+                  bundle={bundle}
+                  scale={scale}
+                />
               </View>
             </View>
           </Animated.View>
@@ -251,26 +229,6 @@ function bodyStyle(scale: number, color: string) {
     fontSize: READER_M3_BODY_FONT_PX * scale * 0.875,
     lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.875,
     color,
-  };
-}
-
-function cancelLabelStyle(scale: number) {
-  return {
-    fontFamily: "Inter_500Medium" as const,
-    fontSize: 14 * scale,
-    lineHeight: 20 * scale,
-    letterSpacing: 0.1,
-    color: READER_M3_ON_SURFACE_VARIANT,
-  };
-}
-
-function deleteLabelStyle(scale: number) {
-  return {
-    fontFamily: "Inter_500Medium" as const,
-    fontSize: 14 * scale,
-    lineHeight: 20 * scale,
-    letterSpacing: 0.1,
-    color: READER_M3_ERROR,
   };
 }
 
@@ -312,13 +270,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
-  },
-  actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 20,
-    overflow: "hidden",
   },
 });

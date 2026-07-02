@@ -39,7 +39,6 @@ import {
 import { FullWindowOverlay } from "react-native-screens";
 import { getUsfmBookId } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
-import { mobileAppThemePickerOptions } from "@sinag-bible/tokens";
 import { BookIcon } from "@/components/icons/BookIcon";
 import { StudyNotesResearchIcon } from "@/components/icons/StudyNotesResearchIcon";
 import { ReaderFontSettingsIcon } from "@/components/icons/ReaderFontSettingsIcon";
@@ -47,6 +46,7 @@ import { ReaderThemesPaletteIcon } from "@/components/icons/ReaderThemesPaletteI
 import { DeleteMyDataIcon } from "@/components/icons/DeleteMyDataIcon";
 import { SettingsMoreIcon } from "@/components/icons/SettingsMoreIcon";
 import { ReaderSettingsSideSheet } from "@/src/features/reader/ReaderSettingsSideSheet";
+import { ReaderThemePickerSheet } from "@/src/features/reader/ReaderThemePickerSheet";
 import { M3RichTooltipOverlay } from "@/src/components/m3/M3RichTooltipOverlay";
 import {
   getReaderSettingsTooltip,
@@ -64,50 +64,12 @@ import {
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { nativeTabSheetBottomInsetPx, readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
 import { hapticLightImpact, hapticSoftPop } from "@/lib/haptics";
-import { READER_MENU_SLIDE_FROM_PX } from "./useReaderGestures";
 import { BookPickerSheet } from "@/src/features/reader/BookPickerSheet";
 export type { BookSelectorViewMode, SelectorTestamentTab } from "@/src/features/reader/BookPickerSheet";
 export { ReaderBookSheetWindowOverlay } from "@/src/features/reader/BookPickerSheet";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 
 export type ReaderToolsDropdown = "book" | "translation" | "theme";
-
-function readerThemeSwatchRgb(hex: string): { r: number; g: number; b: number } | null {
-  const normalized = hex.replace("#", "");
-  if (normalized.length !== 6) return null;
-  const n = Number.parseInt(normalized, 16);
-  if (!Number.isFinite(n)) return null;
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
-
-/** WCAG-style relative luminance for sRGB hex (used for on-tile label + selection ring). */
-function readerThemeSwatchLuminance(hex: string): number {
-  const rgb = readerThemeSwatchRgb(hex);
-  if (!rgb) return 0;
-  const lin = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  };
-  const R = lin(rgb.r);
-  const G = lin(rgb.g);
-  const B = lin(rgb.b);
-  return 0.2126 * R + 0.7152 * G + 0.0722 * B;
-}
-
-function readerThemeTileChrome(swatchHex: string): {
-  label: string;
-  idleBorder: string;
-} {
-  const L = readerThemeSwatchLuminance(swatchHex);
-  const lightTile = L > 0.5;
-  return {
-    label: lightTile ? "rgba(24,20,16,0.92)" : "rgba(255,255,255,0.96)",
-    idleBorder: lightTile ? "rgba(0,0,0,0.10)" : "rgba(255,255,255,0.20)",
-  };
-}
-
-/** Parchment gold — not `bundle.ui.gold` (Spectrum et al. use accent colors that are not gold). */
-const READER_THEME_TILE_ACTIVE_BORDER = "#c9a96e";
 
 export { READER_MOBILE_SETTINGS_PANEL_BG } from "@/src/features/reader/readerSettingsPanelChrome";
 const COMMENTARY_STORAGE_KEY = "selectedCommentary";
@@ -604,16 +566,6 @@ bundle,
     translationFanRef,
   } = props;
 
-  const readerThemeGridGap = 10;
-  const readerThemeGridHPad = 32;
-  const readerThemeGridInnerW = Math.max(
-    80,
-    readerDropdownMaxW - readerThemeGridHPad,
-  );
-  const readerThemeGridTileW =
-    Math.min(86, (readerThemeGridInnerW - readerThemeGridGap * 2) / 3);
-  const readerThemeDropdownW =
-    readerThemeGridTileW * 3 + readerThemeGridGap * 2 + readerThemeGridHPad;
   const [selectedCommentary, setSelectedCommentary] = useState(COMMENTARY_DEFAULT_ID);
   const [commentaryOptions, setCommentaryOptions] = useState<CommentaryOption[]>([]);
   const [commentaryListLoading, setCommentaryListLoading] = useState(false);
@@ -876,155 +828,15 @@ bundle,
 
   return (
     <>
-<Modal
-  visible={readerDropdown === "theme"}
-  transparent
-  animationType="none"
-  statusBarTranslucent
-  onRequestClose={closeReaderDropdown}
->
-  <View style={{ flex: 1 }}>
-    <Pressable
-      style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim }]}
-      onPress={() => {
-        hapticLightImpact();
-        closeReaderDropdown();
-      }}
-      accessibilityLabel="Dismiss menu"
-    />
-    {readerDropdown === "theme" && dropdownAnchor != null ? (
-      <Animated.View
-        pointerEvents="box-none"
-        style={{
-          position: "absolute",
-          top: readerDropdownTop,
-          left: insets.left + 5,
-          right: insets.right + 1,
-          opacity: dropOpacityAnim,
-          transform: [
-            {
-              translateY: dropSlideAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [-READER_MENU_SLIDE_FROM_PX, 0],
-              }),
-            },
-          ],
-        }}
-      >
-        <View
-          style={{
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: colors.borderSolid,
-            backgroundColor: rc.popoverSurface,
-            overflow: "hidden",
-            shadowColor: rc.popoverShadow,
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.16,
-            shadowRadius: 14,
-            elevation: 8,
-            width: readerThemeDropdownW,
-            alignSelf: "center",
-          }}
-        >
-            <View
-              style={{
-                backgroundColor: rc.popoverSurface,
-                paddingHorizontal: 10,
-                paddingBottom: 10,
-                paddingTop: 5,
-              }}
-            >
-              <Text
-                className="tracking-widest uppercase mb-2"
-                style={{
-                  alignSelf: "stretch",
-                  textAlign: "center",
-                  fontFamily: "Inter_400Regular",
-                  fontSize: 15.6,
-                  color: settingsMutedTextColor,
-                }}
-              >
-                Theme
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  /** Explicit gaps: `gap` + `flexWrap` is unreliable on some Android RN builds. */
-                }}
-              >
-                {mobileAppThemePickerOptions.map((opt, index) => {
-                  const isActive = opt.id === themeId;
-                  const col = index % 3;
-                  const chrome =
-                    opt.id === "mono"
-                      ? {
-                          label: "rgba(18,18,18,0.92)",
-                          idleBorder: "rgba(0,0,0,0.12)",
-                        }
-                      : readerThemeTileChrome(opt.swatchColor);
-                  return (
-                    <TouchableOpacity
-                      key={opt.id}
-                      onPress={() => {
-                        hapticLightImpact();
-                        setThemeId(opt.id);
-                        closeReaderDropdown();
-                      }}
-                      activeOpacity={0.85}
-                      accessibilityLabel={opt.label}
-                      accessibilityState={{ selected: isActive }}
-                      style={{
-                        width: readerThemeGridTileW,
-                        marginRight: col < 2 ? readerThemeGridGap : 0,
-                        marginBottom: index < 3 ? readerThemeGridGap : 0,
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: "100%",
-                          aspectRatio: 1,
-                          borderRadius: 14,
-                          backgroundColor: opt.swatchColor,
-                          borderWidth: isActive ? 4 : 1,
-                          borderColor: isActive ? READER_THEME_TILE_ACTIVE_BORDER : chrome.idleBorder,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          paddingHorizontal: 6,
-                          shadowColor: "#000000",
-                          shadowOffset: { width: 0, height: 2 },
-                          shadowOpacity: 0.12,
-                          shadowRadius: 3,
-                          elevation: 2,
-                        }}
-                      >
-                        <Text
-                          numberOfLines={2}
-                          adjustsFontSizeToFit
-                          minimumFontScale={0.78}
-                          style={{
-                            fontFamily: "Inter_600SemiBold",
-                            fontSize: 13,
-                            letterSpacing: 0.2,
-                            textAlign: "center",
-                            color: chrome.label,
-                          }}
-                        >
-                          {opt.label}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-        </View>
-      </Animated.View>
-    ) : null}
-  </View>
-</Modal>
-
+<ReaderThemePickerSheet
+  isOpen={readerDropdown === "theme"}
+  onClose={closeReaderDropdown}
+  bundle={bundle}
+  insets={insets}
+  isTabletReaderLayout={isTabletReaderLayout}
+  themeId={themeId}
+  setThemeId={setThemeId}
+/>
 
 <BookPickerSheet
   isOpen={readerDropdown === "book"}
