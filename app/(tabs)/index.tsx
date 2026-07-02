@@ -7,7 +7,7 @@ import { useSbTabScreenPadding } from "@/lib/use-sb-bottom-padding";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
 import { hapticLightImpact } from "@/lib/haptics";
 import { HomeM3HeroSection } from "@/src/features/home/HomeM3HeroSection";
-import { HomeM3VerseCard } from "@/src/features/home/HomeM3VerseCard";
+import { HomeM3DailyVerseCard } from "@/src/features/home/HomeM3DailyVerseCard";
 import {
   HOME_M3_HORIZONTAL_PADDING_PX,
   HOME_M3_VERSE_CARD_TOP_GAP_PX,
@@ -59,11 +59,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={{ marginTop: HOME_M3_VERSE_CARD_TOP_GAP_PX }}>
-          <HomeM3VerseCard
-            bundle={bundle}
-            quote="Thy word is a lamp unto my feet, and a light unto my path."
-            reference="Psalm 119:105 · KJV"
-          />
+          <HomeM3DailyVerseCard bundle={bundle} />
         </View>
       </View>
     </ScrollView>
