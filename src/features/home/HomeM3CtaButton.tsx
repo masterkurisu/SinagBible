@@ -1,5 +1,6 @@
+import { useCallback, useRef } from "react";
+import { Animated, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { Platform, Pressable, Text, View, type ViewStyle } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { READER_M3_ON_SURFACE } from "@/src/features/reader/readerSettingsPanelChrome";
 import {
@@ -32,7 +33,7 @@ function onPrimaryLabelColor(background: string): string {
   return luminance > 0.62 ? READER_M3_ON_SURFACE : "#FFFFFF";
 }
 
-/** M3 expressive hero CTA — 48dp filled or tonal button with leading icon. */
+/** M3 hero CTA — filled or tonal pill with ripple and press scale. */
 export function HomeM3CtaButton({
   label,
   icon,
@@ -46,6 +47,7 @@ export function HomeM3CtaButton({
   const primary = bundle.chrome.tabTint;
   const rippleColor = bundle.chrome.androidRipple;
   const isFilled = variant === "filled";
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const backgroundColor = isFilled ? primary : bundle.chrome.androidIndicator;
   const contentColor = isFilled ? onPrimaryLabelColor(primary) : primary;
@@ -54,9 +56,29 @@ export function HomeM3CtaButton({
   const borderColor = isFilled ? "transparent" : h.divider;
   const borderWidth = isFilled ? 0 : 1;
 
+  const handlePressIn = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      friction: 8,
+      tension: 320,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 6,
+      tension: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim]);
+
   return (
     <Pressable
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       android_ripple={
@@ -69,12 +91,12 @@ export function HomeM3CtaButton({
           alignSelf: "stretch",
           borderRadius: HOME_M3_CTA_RADIUS_PX,
           overflow: "hidden",
-          opacity: pressed ? 0.92 : 1,
+          opacity: Platform.OS === "ios" && pressed ? 0.9 : 1,
         },
         style,
       ]}
     >
-      <View
+      <Animated.View
         style={{
           minHeight: HOME_M3_CTA_HEIGHT_PX,
           borderRadius: HOME_M3_CTA_RADIUS_PX,
@@ -85,6 +107,7 @@ export function HomeM3CtaButton({
           backgroundColor,
           borderColor,
           borderWidth,
+          transform: [{ scale: scaleAnim }],
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
@@ -102,7 +125,7 @@ export function HomeM3CtaButton({
           </Text>
         </View>
         <MaterialIcons name="arrow-forward" size={20} color={iconColor} />
-      </View>
+      </Animated.View>
     </Pressable>
   );
 }

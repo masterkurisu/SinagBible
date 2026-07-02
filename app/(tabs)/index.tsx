@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
-import { Platform, View, ScrollView } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
