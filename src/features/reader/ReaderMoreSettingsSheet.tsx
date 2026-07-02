@@ -14,6 +14,7 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { KofiSupportBlock } from "@/components/kofi-support-block";
+import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Switch } from "@/components/M3Switch";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 import { hapticLightImpact } from "@/lib/haptics";
@@ -35,8 +36,6 @@ import {
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
   READER_M3_OUTLINE_VARIANT,
-  READER_M3_SHEET_TITLE_FONT_PX,
-  READER_M3_SHEET_TITLE_LINE_HEIGHT_PX,
   READER_M3_SURFACE_CONTAINER,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
@@ -191,17 +190,7 @@ export function ReaderMoreSettingsSheet({
                   paddingBottom: 24 * scale,
                 }}
               >
-                <Text
-                  style={{
-                    fontFamily: "Inter_500Medium",
-                    fontSize: READER_M3_SHEET_TITLE_FONT_PX * scale,
-                    lineHeight: READER_M3_SHEET_TITLE_LINE_HEIGHT_PX * scale,
-                    color: READER_M3_ON_SURFACE,
-                    marginBottom: 8 * scale,
-                  }}
-                >
-                  More
-                </Text>
+                <M3SettingsSheetTitle title="More" scale={scale} />
 
                 <View style={[styles.listBlock, { marginTop: 4 * scale }]}>
                   <View

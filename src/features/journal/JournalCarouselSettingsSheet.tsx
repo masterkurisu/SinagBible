@@ -15,6 +15,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Switch } from "@/components/M3Switch";
 import { hapticLightImpact } from "@/lib/haptics";
 import {
@@ -150,7 +151,7 @@ export function JournalCarouselSettingsSheet({
                 },
               ]}
             >
-              <Text style={[styles.title, { color: colors.brown800 }]}>Verse Carousel</Text>
+              <M3SettingsSheetTitle title="Verse Carousel" style={{ marginBottom: 8 }} titleColor={colors.brown800} />
 
               <ScrollView
                 showsVerticalScrollIndicator={false}
@@ -327,12 +328,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 18,
     elevation: 10,
-  },
-  title: {
-    fontFamily: "Lora_400Regular",
-    fontSize: 24,
-    lineHeight: 30,
-    marginBottom: 8,
   },
   scrollContent: {
     paddingBottom: 8,

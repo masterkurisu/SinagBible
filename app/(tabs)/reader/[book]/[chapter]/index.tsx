@@ -1729,6 +1729,9 @@ export default function ReaderChapterScreen() {
         onClose={() => setReaderCreditsOpen(false)}
         onOpenPrivacyPolicy={openPrivacyPolicyFromCredits}
         onOpenTermsOfService={openTermsFromCredits}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
       />
       <PrivacyPolicySheet visible={readerPrivacyPolicyOpen} onClose={() => setReaderPrivacyPolicyOpen(false)} />
       <TermsOfServiceSheet visible={readerTermsOpen} onClose={() => setReaderTermsOpen(false)} />

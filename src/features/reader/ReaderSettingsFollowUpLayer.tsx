@@ -463,6 +463,9 @@ export function ReaderSettingsFollowUpLayer({
         onClose={() => followUp.setReaderCreditsOpen(false)}
         onOpenPrivacyPolicy={followUp.openPrivacyPolicyFromCredits}
         onOpenTermsOfService={followUp.openTermsFromCredits}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
       />
       <PrivacyPolicySheet
         visible={followUp.readerPrivacyPolicyOpen}

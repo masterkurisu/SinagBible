@@ -1,10 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode, type RefObject } from "react";
+import React, { useCallback, useEffect, useRef, type ComponentType, type ReactNode, type RefObject } from "react";
 import {
-  ActivityIndicator,
   Animated,
-  Dimensions,
-  Easing,
-  FlatList,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -21,23 +17,15 @@ import {
   type KeyboardEvent,
   type LayoutRectangle,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import type {
-  PanGestureHandlerGestureEvent,
-  PanGestureHandlerStateChangeEvent,
-} from "react-native-gesture-handler";
 import {
   FlatList as GHFlatList,
   NativeViewGestureHandler,
-  PanGestureHandler,
   ScrollView as GHScrollView,
-  State,
   TouchableOpacity as GestureHandlerTouchableOpacity,
 } from "react-native-gesture-handler";
 import { FullWindowOverlay } from "react-native-screens";
-import { getUsfmBookId } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import { BookIcon } from "@/components/icons/BookIcon";
 import { StudyNotesResearchIcon } from "@/components/icons/StudyNotesResearchIcon";
@@ -47,6 +35,7 @@ import { DeleteMyDataIcon } from "@/components/icons/DeleteMyDataIcon";
 import { SettingsMoreIcon } from "@/components/icons/SettingsMoreIcon";
 import { ReaderSettingsSideSheet } from "@/src/features/reader/ReaderSettingsSideSheet";
 import { ReaderThemePickerSheet } from "@/src/features/reader/ReaderThemePickerSheet";
+import { ReaderStudyNotesSheet } from "@/src/features/reader/ReaderStudyNotesSheet";
 import { M3RichTooltipOverlay } from "@/src/components/m3/M3RichTooltipOverlay";
 import {
   getReaderSettingsTooltip,
@@ -62,7 +51,7 @@ import {
   READER_M3_ON_SURFACE_VARIANT,
   READER_M3_SURFACE_CONTAINER,
 } from "@/src/features/reader/readerSettingsPanelChrome";
-import { nativeTabSheetBottomInsetPx, readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
+import { readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
 import { hapticLightImpact, hapticSoftPop } from "@/lib/haptics";
 import { BookPickerSheet } from "@/src/features/reader/BookPickerSheet";
 export type { BookSelectorViewMode, SelectorTestamentTab } from "@/src/features/reader/BookPickerSheet";
@@ -72,27 +61,6 @@ import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 export type ReaderToolsDropdown = "book" | "translation" | "theme";
 
 export { READER_MOBILE_SETTINGS_PANEL_BG } from "@/src/features/reader/readerSettingsPanelChrome";
-const COMMENTARY_STORAGE_KEY = "selectedCommentary";
-const COMMENTARY_DEFAULT_ID = "tyndale";
-const COMMENTARY_API_BASE_URL = "https://bible.helloao.org/api";
-const COMMENTARY_REQUEST_TIMEOUT_MS = 10000;
-
-async function fetchWithTimeout(
-  input: RequestInfo | URL,
-  init?: RequestInit,
-  timeoutMs: number = COMMENTARY_REQUEST_TIMEOUT_MS,
-): Promise<Response> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error("request timeout")), timeoutMs);
-  });
-  try {
-    const response = await Promise.race([fetch(input, init), timeoutPromise]);
-    return response as Response;
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-}
 
 export type ReaderMobileSettingsPanelProps = {
   insets: { top: number; bottom: number; left: number; right: number };
@@ -486,39 +454,6 @@ export type ReaderModalsProps = {
   translationFanRef: React.RefObject<View | null>;
 };
 
-type CommentaryApiInlineItem = string | { text?: string; content?: CommentaryApiInlineItem[] };
-type CommentaryApiChapterItem =
-  | { type: "heading"; content?: CommentaryApiInlineItem[] }
-  | { type: "verse"; number?: number; content?: CommentaryApiInlineItem[] }
-  | { type: "line_break" }
-  | { type: "hebrew_subtitle"; content?: CommentaryApiInlineItem[] }
-  | { type: string; content?: CommentaryApiInlineItem[]; number?: number };
-
-type CommentaryApiChapterResponse = {
-  chapter?: {
-    content?: CommentaryApiChapterItem[];
-  };
-};
-
-type CommentaryOption = {
-  id: string;
-  name: string;
-};
-
-function flattenCommentaryInline(items: CommentaryApiInlineItem[] | undefined): string {
-  if (!items || items.length === 0) return "";
-  return items
-    .map((item) => {
-      if (typeof item === "string") return item;
-      if (typeof item.text === "string") return item.text;
-      if (Array.isArray(item.content)) return flattenCommentaryInline(item.content);
-      return "";
-    })
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 export function ReaderModals(props: ReaderModalsProps) {
 
   const {
@@ -566,266 +501,6 @@ bundle,
     translationFanRef,
   } = props;
 
-  const [selectedCommentary, setSelectedCommentary] = useState(COMMENTARY_DEFAULT_ID);
-  const [commentaryOptions, setCommentaryOptions] = useState<CommentaryOption[]>([]);
-  const [commentaryListLoading, setCommentaryListLoading] = useState(false);
-  const [commentaryListResolved, setCommentaryListResolved] = useState(false);
-  const [commentaryListError, setCommentaryListError] = useState<string | null>(null);
-  const [commentaryChapterLoading, setCommentaryChapterLoading] = useState(false);
-  const [commentaryError, setCommentaryError] = useState<string | null>(null);
-  const [commentaryEntries, setCommentaryEntries] = useState<CommentaryApiChapterItem[]>([]);
-  const [commentarySelectionReady, setCommentarySelectionReady] = useState(false);
-  const { height: windowHeight } = Dimensions.get("window");
-  const commentarySheetMaxHeightPx = windowHeight * 0.78 + 30;
-  const commentarySheetTranslateY = useRef(new Animated.Value(0)).current;
-  const commentarySheetClosingRef = useRef(false);
-  const commentarySheetDragStartYRef = useRef(0);
-
-  const animateCloseCommentarySheet = useCallback(
-    (velocityY = 0, draggedY = 0) => {
-      if (commentarySheetClosingRef.current) return;
-      commentarySheetClosingRef.current = true;
-      const h = Dimensions.get("window").height;
-      const targetY = h + 56;
-      const vel = Math.max(0, velocityY);
-      const duration = Math.max(170, Math.min(340, Math.round(300 - Math.min(1.85, vel) * 88)));
-      commentarySheetTranslateY.stopAnimation();
-      const clamped = Math.max(0, draggedY);
-      if (clamped > 0) {
-        commentarySheetTranslateY.setValue(clamped);
-      }
-      Animated.timing(commentarySheetTranslateY, {
-        toValue: targetY,
-        duration,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start(() => {
-        commentarySheetClosingRef.current = false;
-        commentarySheetTranslateY.setValue(0);
-        closeCommentaryPanel();
-      });
-    },
-    [commentarySheetTranslateY, closeCommentaryPanel],
-  );
-
-  const onCommentarySheetDismissGestureEvent = useCallback(
-    (e: PanGestureHandlerGestureEvent) => {
-      if (commentarySheetClosingRef.current) return;
-      const ty = e.nativeEvent.translationY;
-      commentarySheetTranslateY.setValue(Math.max(0, commentarySheetDragStartYRef.current + ty));
-    },
-    [commentarySheetTranslateY],
-  );
-
-  const onCommentarySheetDismissGestureStateChange = useCallback(
-    (e: PanGestureHandlerStateChangeEvent) => {
-      const { state, oldState, velocityY, translationY } = e.nativeEvent;
-      if (state === State.ACTIVE && oldState !== State.ACTIVE) {
-        commentarySheetTranslateY.stopAnimation((value: number) => {
-          commentarySheetDragStartYRef.current = value;
-        });
-      }
-      if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
-        if (commentarySheetClosingRef.current) return;
-        const ty = translationY ?? 0;
-        const y = Math.max(0, commentarySheetDragStartYRef.current + ty);
-        const vyPxPerS = Math.abs(velocityY ?? 0);
-        const velForCloseAnim = Math.min(1.85, vyPxPerS / 520);
-        if (y > 90 || vyPxPerS > 520) {
-          animateCloseCommentarySheet(velForCloseAnim, y);
-          return;
-        }
-        Animated.spring(commentarySheetTranslateY, {
-          toValue: 0,
-          velocity: Math.max(0, (velocityY ?? 0) / 1000),
-          friction: 9,
-          tension: 75,
-          useNativeDriver: true,
-        }).start();
-      }
-    },
-    [animateCloseCommentarySheet, commentarySheetTranslateY],
-  );
-
-  useEffect(() => {
-    if (!commentaryPanelOpen) {
-      commentarySheetClosingRef.current = false;
-      commentarySheetTranslateY.stopAnimation();
-      commentarySheetTranslateY.setValue(0);
-    }
-  }, [commentaryPanelOpen, commentarySheetTranslateY]);
-
-  const onCommentaryBackdropPress = useCallback(() => {
-    if (commentarySheetClosingRef.current) return;
-    hapticLightImpact();
-    animateCloseCommentarySheet(0, 0);
-  }, [animateCloseCommentarySheet]);
-
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const stored = await AsyncStorage.getItem(COMMENTARY_STORAGE_KEY);
-        if (!cancelled && stored?.trim()) {
-          setSelectedCommentary(stored.trim());
-        }
-      } catch {
-        // Keep default commentary when storage read fails.
-      } finally {
-        if (!cancelled) setCommentarySelectionReady(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!commentarySelectionReady) return;
-    void AsyncStorage.setItem(COMMENTARY_STORAGE_KEY, selectedCommentary).catch(() => {
-      // Ignore persistence failures; selection still works for this session.
-    });
-  }, [commentarySelectionReady, selectedCommentary]);
-
-  useEffect(() => {
-    if (!commentaryPanelOpen) return;
-    if (commentaryListResolved || commentaryListLoading) return;
-    let cancelled = false;
-    (async () => {
-      setCommentaryListLoading(true);
-      setCommentaryListError(null);
-      try {
-        const res = await fetchWithTimeout(
-          `${COMMENTARY_API_BASE_URL}/available_commentaries.json`,
-          undefined,
-          COMMENTARY_REQUEST_TIMEOUT_MS,
-        );
-        if (!res.ok) throw new Error(`commentary list HTTP ${res.status}`);
-        const contentType = res.headers.get("content-type") ?? "";
-        if (!contentType.toLowerCase().includes("application/json")) {
-          throw new Error("commentary list unexpected content-type");
-        }
-        const raw = (await res.json()) as
-          | { commentaries?: { id?: string; name?: string }[] }
-          | { id?: string; name?: string }[];
-        const list = Array.isArray(raw) ? raw : Array.isArray(raw.commentaries) ? raw.commentaries : [];
-        const normalized = list
-          .filter((c) => typeof c.id === "string" && typeof c.name === "string")
-          .map((c) => ({ id: c.id!.trim(), name: c.name!.trim() }))
-          .filter((c) => c.id.length > 0 && c.name.length > 0);
-        if (!cancelled) setCommentaryOptions(normalized);
-      } catch {
-        if (!cancelled) {
-          setCommentaryListError("Commentary list unavailable right now.");
-          setCommentaryError("Unable to load available commentaries right now.");
-        }
-      } finally {
-        if (!cancelled) {
-          setCommentaryListLoading(false);
-          setCommentaryListResolved(true);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [commentaryPanelOpen, commentaryListResolved, commentaryListLoading]);
-
-  useEffect(() => {
-    if (!commentaryPanelOpen || commentaryListResolved) return;
-    const timer = setTimeout(() => {
-      setCommentaryListLoading(false);
-      setCommentaryListResolved(true);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [commentaryPanelOpen, commentaryListResolved]);
-
-  useEffect(() => {
-    if (!commentaryPanelOpen) return;
-    let cancelled = false;
-    (async () => {
-      setCommentaryChapterLoading(true);
-      setCommentaryError(null);
-      try {
-        const commentaryBookId = getUsfmBookId(chapter.bookSlug);
-        if (!commentaryBookId) {
-          if (!cancelled) {
-            setCommentaryEntries([]);
-            setCommentaryError("Study notes are unavailable for this book.");
-          }
-          return;
-        }
-        const url = `${COMMENTARY_API_BASE_URL}/c/${encodeURIComponent(selectedCommentary)}/${encodeURIComponent(commentaryBookId)}/${chapter.chapterNumber}.json`;
-        const res = await fetchWithTimeout(url, undefined, COMMENTARY_REQUEST_TIMEOUT_MS);
-        if (!res.ok) {
-          if (res.status === 404) {
-            if (!cancelled) setCommentaryEntries([]);
-            return;
-          }
-          throw new Error(`commentary chapter HTTP ${res.status}`);
-        }
-        const contentType = res.headers.get("content-type") ?? "";
-        if (!contentType.toLowerCase().includes("application/json")) {
-          throw new Error("commentary chapter unexpected content-type");
-        }
-        const raw = (await res.json()) as CommentaryApiChapterResponse;
-        const items = Array.isArray(raw.chapter?.content) ? raw.chapter.content : [];
-        if (!cancelled) setCommentaryEntries(items);
-      } catch {
-        if (!cancelled) {
-          setCommentaryEntries([]);
-          setCommentaryError("Unable to load this commentary chapter.");
-        }
-      } finally {
-        if (!cancelled) setCommentaryChapterLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [commentaryPanelOpen, selectedCommentary, chapter.bookSlug, chapter.chapterNumber]);
-  const filteredCommentaryEntries = useMemo(() => {
-    if (selectedVerses.length === 0) return commentaryEntries;
-    const selectedSet = new Set(selectedVerses);
-    const output: CommentaryApiChapterItem[] = [];
-    let pendingHeading: CommentaryApiChapterItem | null = null;
-    let previousWasSelectedVerse = false;
-    for (const entry of commentaryEntries) {
-      if (entry.type === "heading" || entry.type === "hebrew_subtitle") {
-        pendingHeading = entry;
-        previousWasSelectedVerse = false;
-        continue;
-      }
-      if (entry.type === "verse") {
-        const selected = typeof entry.number === "number" && selectedSet.has(entry.number);
-        if (selected) {
-          if (pendingHeading) {
-            output.push(pendingHeading);
-            pendingHeading = null;
-          }
-          output.push(entry);
-        }
-        previousWasSelectedVerse = selected;
-        continue;
-      }
-      if (entry.type === "line_break") {
-        if (previousWasSelectedVerse) output.push(entry);
-        continue;
-      }
-      if (previousWasSelectedVerse) output.push(entry);
-    }
-    return output;
-  }, [commentaryEntries, selectedVerses]);
-  const selectedVerseFeedbackLabel = useMemo(() => {
-    if (selectedVerses.length === 0) return null;
-    const first = selectedVerses[0]!;
-    const last = selectedVerses[selectedVerses.length - 1]!;
-    if (selectedVerses.length === 1) return `Showing study notes for verse ${first}`;
-    if (last - first + 1 === selectedVerses.length) return `Showing study notes for verses ${first}-${last}`;
-    return `Showing study notes for ${selectedVerses.length} selected verses`;
-  }, [selectedVerses]);
-
   return (
     <>
 <ReaderThemePickerSheet
@@ -859,209 +534,16 @@ bundle,
   readerChapterGridCellW={readerChapterGridCellW}
 />
 
-<Modal
-  visible={commentaryPanelOpen}
-  transparent
-  animationType="slide"
-  statusBarTranslucent
-  onRequestClose={closeCommentaryPanel}
->
-  <View style={{ flex: 1, justifyContent: "flex-end" }}>
-    <Pressable
-      style={StyleSheet.absoluteFill}
-      onPress={onCommentaryBackdropPress}
-      accessibilityRole="button"
-      accessibilityLabel="Dismiss study notes"
-    />
-    <Animated.View
-      style={{
-        marginHorizontal: 5,
-        maxHeight: commentarySheetMaxHeightPx,
-        backgroundColor: colors.parchmentMid,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        borderWidth: 1,
-        borderColor: colors.borderSolid,
-        borderBottomWidth: 0,
-        paddingTop: 0,
-        paddingHorizontal: 14,
-        paddingBottom: nativeTabSheetBottomInsetPx(insets.bottom, 12),
-        shadowColor: "#2c2416",
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 8,
-        transform: [{ translateY: commentarySheetTranslateY }],
-      }}
-    >
-      <PanGestureHandler
-        onGestureEvent={onCommentarySheetDismissGestureEvent}
-        onHandlerStateChange={onCommentarySheetDismissGestureStateChange}
-        activeOffsetY={8}
-        failOffsetX={[-32, 32]}
-      >
-        <View
-          style={{
-            width: "100%",
-            alignItems: "center",
-            justifyContent: "center",
-            paddingTop: 6,
-            paddingBottom: 10,
-            minHeight: 44,
-          }}
-          accessibilityLabel="Study notes sheet"
-          accessibilityHint="Swipe down on the handle to close study notes, or tap outside the sheet"
-        >
-          <View
-            pointerEvents="none"
-            style={{
-              width: 40,
-              height: 5,
-              borderRadius: 3,
-              backgroundColor: "rgba(0,0,0,0.22)",
-            }}
-          />
-        </View>
-      </PanGestureHandler>
-      <View style={{ paddingBottom: 10 }}>
-        <Text
-          style={{
-            fontFamily: "Inter_600SemiBold",
-            fontSize: 20,
-            textAlign: "center",
-            color: colors.brown800,
-          }}
-        >
-          Study Notes
-        </Text>
-      </View>
-      {selectedVerseFeedbackLabel ? (
-        <View
-          style={{
-            alignSelf: "flex-start",
-            borderRadius: 999,
-            backgroundColor: colors.parchmentDark,
-            borderWidth: 1,
-            borderColor: colors.borderSolid,
-            paddingHorizontal: 10,
-            paddingVertical: 6,
-            marginBottom: 10,
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: "Inter_500Medium",
-              fontSize: 12,
-              color: colors.brown800,
-            }}
-          >
-            {selectedVerseFeedbackLabel}
-          </Text>
-        </View>
-      ) : null}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 8 }}
-      >
-        {commentaryChapterLoading && filteredCommentaryEntries.length === 0 ? (
-          <View style={{ paddingVertical: 28, alignItems: "center" }}>
-            <ActivityIndicator size="small" color={colors.gold} />
-            <Text
-              style={{
-                marginTop: 10,
-                fontFamily: "Inter_400Regular",
-                fontSize: 13,
-                color: settingsMutedTextColor,
-              }}
-            >
-              Loading commentary...
-            </Text>
-          </View>
-        ) : commentaryError ? (
-          <Text
-            style={{
-              fontFamily: "Inter_400Regular",
-              fontSize: 14,
-              color: settingsMutedTextColor,
-              lineHeight: 20,
-            }}
-          >
-            {commentaryError}
-          </Text>
-        ) : filteredCommentaryEntries.length === 0 ? (
-          <Text
-            style={{
-              fontFamily: "Inter_400Regular",
-              fontSize: 14,
-              color: settingsMutedTextColor,
-              lineHeight: 20,
-            }}
-          >
-            {selectedVerses.length > 0
-              ? "No study notes are available for the selected verse(s) in this chapter."
-              : "No commentary is available for this chapter in the selected study notes."}
-          </Text>
-        ) : (
-          filteredCommentaryEntries.map((entry, index) => {
-            if (entry.type === "line_break") return <View key={`break-${index}`} style={{ height: 10 }} />;
-            const text = flattenCommentaryInline("content" in entry ? entry.content : undefined);
-            if (!text) return null;
-            if (entry.type === "heading" || entry.type === "hebrew_subtitle") {
-              return (
-                <Text
-                  key={`heading-${index}`}
-                  style={{
-                    fontFamily: "Lora_400Regular",
-                    fontSize: 17,
-                    color: colors.brown800,
-                    marginTop: index === 0 ? 0 : 8,
-                    marginBottom: 6,
-                  }}
-                >
-                  {text}
-                </Text>
-              );
-            }
-            if (entry.type === "verse") {
-              return (
-                <Text
-                  key={`verse-${entry.number ?? index}`}
-                  style={{
-                    fontFamily: "Inter_400Regular",
-                    fontSize: 15,
-                    color: colors.brown800,
-                    lineHeight: 24,
-                    marginBottom: 8,
-                  }}
-                >
-                  <Text style={{ fontFamily: "Inter_500Medium", color: colors.gold }}>
-                    {typeof entry.number === "number" ? `${entry.number} ` : ""}
-                  </Text>
-                  {text}
-                </Text>
-              );
-            }
-            return (
-              <Text
-                key={`item-${index}`}
-                style={{
-                  fontFamily: "Inter_400Regular",
-                  fontSize: 15,
-                  color: colors.brown800,
-                  lineHeight: 24,
-                  marginBottom: 8,
-                }}
-              >
-                {text}
-              </Text>
-            );
-          })
-        )}
-      </ScrollView>
-    </Animated.View>
-  </View>
-</Modal>
+<ReaderStudyNotesSheet
+  isOpen={commentaryPanelOpen}
+  onClose={closeCommentaryPanel}
+  bundle={bundle}
+  insets={insets}
+  isTabletReaderLayout={isTabletReaderLayout}
+  chapter={chapter}
+  selectedVerses={selectedVerses}
+  settingsMutedTextColor={settingsMutedTextColor}
+/>
 
 <Modal visible={noteModalVisible} animationType="fade" transparent statusBarTranslucent>
   <KeyboardAvoidingView

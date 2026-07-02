@@ -1,35 +1,24 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { CarouselPexelsAttribution } from "@/components/carousel-pexels-attribution";
+import { ReaderM3BottomSheet } from "@/src/components/m3/ReaderM3BottomSheet";
 import {
-  Animated,
-  Dimensions,
-  Easing,
-  Linking,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { colors } from "@sinag-bible/ui";
-
-/** Body copy (paragraphs, list text). */
-const BODY_FONT = "Inter_400Regular" as const;
-/** Emphasis and links in body. */
-const BODY_BOLD_FONT = "Inter_500Medium" as const;
-/** Modal title, UI labels in this sheet. */
-const UI_FONT = "Inter_600SemiBold" as const;
-const SECTION_HEADING_FONT = "Inter_500Medium" as const;
+  READER_M3_BODY_FONT_PX,
+  READER_M3_BODY_LINE_HEIGHT_PX,
+  READER_M3_ON_SURFACE,
+  READER_M3_ON_SURFACE_VARIANT,
+  READER_M3_OUTLINE_VARIANT,
+} from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type CreditsSheetProps = {
   visible: boolean;
   onClose: () => void;
   onOpenPrivacyPolicy: () => void;
   onOpenTermsOfService: () => void;
+  bundle: MobileAppThemeBundle;
+  insets: { top: number; bottom: number; left: number; right: number };
+  isTabletReaderLayout?: boolean;
 };
 
 export function CreditsSheet({
@@ -37,383 +26,265 @@ export function CreditsSheet({
   onClose,
   onOpenPrivacyPolicy,
   onOpenTermsOfService,
+  bundle,
+  insets,
+  isTabletReaderLayout = false,
 }: CreditsSheetProps) {
-  const insets = useSafeAreaInsets();
-  const { height: windowH } = useWindowDimensions();
-  const cardMaxH = windowH * 0.9;
-  const bottomPad = Math.max(insets.bottom, 12) + 12;
+  const colors = bundle.ui;
+  const primary = bundle.chrome.tabTint;
+  const scale = isTabletReaderLayout ? 1.35 : 1;
 
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const closingRef = useRef(false);
+  const sectionHeadingStyle = useMemo(
+    () => ({
+      fontFamily: "Inter_500Medium" as const,
+      fontSize: 13 * scale,
+      letterSpacing: 0.6,
+      textTransform: "uppercase" as const,
+      color: READER_M3_ON_SURFACE_VARIANT,
+      marginTop: 8 * scale,
+      marginBottom: 4 * scale,
+    }),
+    [scale],
+  );
 
-  useEffect(() => {
-    if (visible) {
-      closingRef.current = false;
-      const h = Dimensions.get("window").height;
-      slideAnim.setValue(h);
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 380,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [visible, slideAnim]);
+  const bodyStyle = useMemo(
+    () => ({
+      fontFamily: "Inter_400Regular" as const,
+      fontSize: READER_M3_BODY_FONT_PX * scale * 0.9375,
+      lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.9375,
+      color: READER_M3_ON_SURFACE,
+    }),
+    [scale],
+  );
 
-  const handleClose = useCallback(() => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-    const h = Dimensions.get("window").height;
-    Animated.timing(slideAnim, {
-      toValue: h,
-      duration: 280,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
-      closingRef.current = false;
-      slideAnim.setValue(0);
-      onClose();
-    });
-  }, [onClose, slideAnim]);
+  const linkStyle = useMemo(
+    () => ({
+      fontFamily: "Inter_500Medium" as const,
+      color: primary,
+      textDecorationLine: "underline" as const,
+    }),
+    [primary],
+  );
+
+  const openUrl = useCallback((url: string) => {
+    void Linking.openURL(url);
+  }, []);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={handleClose}
-      accessibilityViewIsModal
+    <ReaderM3BottomSheet
+      isOpen={visible}
+      onClose={onClose}
+      bundle={bundle}
+      insets={insets}
+      isTabletReaderLayout={isTabletReaderLayout}
+      title="Credits"
+      accessibilityDismissLabel="Dismiss credits"
+      maxHeightRatio={0.9}
     >
-      <View style={styles.root}>
-        <Pressable
-          style={styles.backdrop}
-          onPress={handleClose}
-          accessibilityLabel="Dismiss credits"
-        />
-        <View
-          pointerEvents="box-none"
-          style={[styles.sheetWrap, { paddingBottom: bottomPad, paddingTop: insets.top + 8 }]}
-        >
-          <Animated.View style={[styles.card, { maxHeight: cardMaxH, transform: [{ translateY: slideAnim }] }]}>
-            <View style={styles.header}>
-              <View style={styles.headerEdge} />
-              <Text style={[styles.modalTitle, styles.modalTitleCentered]}>Credits</Text>
-              <View style={[styles.headerEdge, styles.headerEdgeEnd]}>
-                <Pressable
-                  onPress={handleClose}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close credits"
-                >
-                  <Ionicons name="close" size={24} color={colors.brown800} />
-                </Pressable>
-              </View>
-            </View>
+      <View style={styles.content}>
+        <Text style={sectionHeadingStyle}>Bible Translations</Text>
 
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="always"
-            >
-              {/* ── Bible Translations ── */}
-              <Text style={styles.sectionHeading}>Bible Translations</Text>
+        <Text style={bodyStyle}>
+          The New International Version (NIV) is provided via the{" "}
+          <Text
+            style={linkStyle}
+            onPress={() => openUrl("https://www.youversion.com")}
+            accessibilityRole="link"
+            accessibilityLabel="YouVersion website"
+          >
+            YouVersion Platform API
+          </Text>
+          . The Holy Bible, New International Version®, NIV® Copyright © 1973, 1978, 1984, 2011 by Biblica, Inc.®
+          Used by permission. All rights reserved worldwide.
+        </Text>
 
-              <Text style={styles.body}>
-                The New International Version (NIV) is provided via the{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL("https://www.youversion.com")}
-                  accessibilityRole="link"
-                  accessibilityLabel="YouVersion website"
-                >
-                  YouVersion Platform API
-                </Text>
-                . The Holy Bible, New International Version®, NIV® Copyright © 1973, 1978,
-                1984, 2011 by Biblica, Inc.® Used by permission. All rights reserved worldwide.
-              </Text>
+        <Text style={bodyStyle}>
+          The Holy Bible, Berean Standard Bible (BSB) is produced in cooperation with Bible Hub, Discovery Bible,
+          OpenBible.com, and the Berean Bible Translation Committee.
+        </Text>
 
-              <Text style={styles.body}>
-                The Holy Bible, Berean Standard Bible (BSB) is produced in cooperation with Bible Hub,
-                Discovery Bible, OpenBible.com, and the Berean Bible Translation Committee.
-              </Text>
+        <Text style={bodyStyle}>The King James Version (KJV) is in the public domain.</Text>
 
-              <Text style={styles.body}>
-                The King James Version (KJV) is in the public domain.
-              </Text>
+        <Text style={bodyStyle}>
+          The World English Bible (WEB) and World English Bible British Edition (WEBBE) are in the public domain. See{" "}
+          <Text
+            style={linkStyle}
+            onPress={() => openUrl("https://worldenglish.bible")}
+            accessibilityRole="link"
+            accessibilityLabel="World English Bible website"
+          >
+            worldenglish.bible
+          </Text>
+        </Text>
 
-              <Text style={styles.body}>
-                The World English Bible (WEB) and World English Bible British Edition (WEBBE) are in the
-                public domain. See{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL("https://worldenglish.bible")}
-                  accessibilityRole="link"
-                  accessibilityLabel="World English Bible website"
-                >
-                  worldenglish.bible
-                </Text>
-              </Text>
+        <Text style={bodyStyle}>
+          The Open English Bible (OEB) is released under a Creative Commons CC0 1.0 Universal public domain dedication.
+        </Text>
 
-              <Text style={styles.body}>
-                The Open English Bible (OEB) is released under a Creative Commons CC0 1.0 Universal
-                public domain dedication.
-              </Text>
+        <Text style={bodyStyle}>The American Standard Version (ASV) and Darby Bible are in the public domain.</Text>
 
-              <Text style={styles.body}>
-                The American Standard Version (ASV) and Darby Bible are in the public domain.
-              </Text>
+        <Text style={bodyStyle}>The Bible in Basic English (BBE) is in the public domain.</Text>
 
-              <Text style={styles.body}>
-                The Bible in Basic English (BBE) is in the public domain.
-              </Text>
+        <Text style={bodyStyle}>Ang Dating Biblia (ADB 1905) is in the public domain.</Text>
 
-              <Text style={styles.body}>
-                Ang Dating Biblia (ADB 1905) is in the public domain.
-              </Text>
+        <Text style={bodyStyle}>
+          Bible translations are sourced from the{" "}
+          <Text
+            style={linkStyle}
+            onPress={() => openUrl("https://bible.helloao.org")}
+            accessibilityRole="link"
+            accessibilityLabel="Free Use Bible API website"
+          >
+            Free Use Bible API (bible.helloao.org)
+          </Text>
+          , a project by AO Lab. Translations are drawn from{" "}
+          <Text
+            style={linkStyle}
+            onPress={() => openUrl("https://ebible.org")}
+            accessibilityRole="link"
+            accessibilityLabel="eBible.org website"
+          >
+            eBible.org
+          </Text>{" "}
+          and other public domain or openly licensed sources.
+        </Text>
 
-              <Text style={styles.body}>
-                Bible translations are sourced from the{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL("https://bible.helloao.org")}
-                  accessibilityRole="link"
-                  accessibilityLabel="Free Use Bible API website"
-                >
-                  Free Use Bible API (bible.helloao.org)
-                </Text>
-                , a project by AO Lab. Translations are drawn from{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL("https://ebible.org")}
-                  accessibilityRole="link"
-                  accessibilityLabel="eBible.org website"
-                >
-                  eBible.org
-                </Text>{" "}
-                and other public domain or openly licensed sources.
-              </Text>
+        <Text style={bodyStyle}>
+          The Berean Standard Bible (BSB) is dedicated to the public domain in partnership with Bible Hub, Discovery
+          Bible, OpenBible.com, and the Berean Bible Translation Committee.
+        </Text>
 
-              <Text style={styles.body}>
-                The Berean Standard Bible (BSB) is dedicated to the public domain in partnership
-                with Bible Hub, Discovery Bible, OpenBible.com, and the Berean Bible Translation
-                Committee.
-              </Text>
+        <Text style={bodyStyle}>
+          Individual translation licenses are available at{" "}
+          <Text
+            style={linkStyle}
+            onPress={() => openUrl("https://ebible.org/Scriptures")}
+            accessibilityRole="link"
+            accessibilityLabel="eBible.org translation licenses"
+          >
+            ebible.org/Scriptures
+          </Text>
+          .
+        </Text>
 
-              <Text style={styles.body}>
-                Individual translation licenses are available at{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL("https://ebible.org/Scriptures")}
-                  accessibilityRole="link"
-                  accessibilityLabel="eBible.org translation licenses"
-                >
-                  ebible.org/Scriptures
-                </Text>
-                .
-              </Text>
+        <View style={[styles.divider, { backgroundColor: READER_M3_OUTLINE_VARIANT, marginVertical: 12 * scale }]} />
 
-              <View style={styles.divider} />
+        <Text style={sectionHeadingStyle}>Fonts</Text>
 
-              {/* ── Fonts ── */}
-              <Text style={styles.sectionHeading}>Fonts</Text>
+        <Text style={bodyStyle}>
+          Inter by Rasmus Andersson, licensed under the{" "}
+          <Text
+            style={linkStyle}
+            onPress={() => openUrl("https://github.com/rsms/inter/blob/master/LICENSE.txt")}
+            accessibilityRole="link"
+            accessibilityLabel="Inter font SIL Open Font License"
+          >
+            SIL Open Font License 1.1
+          </Text>
+          .
+        </Text>
 
-              <Text style={styles.body}>
-                Inter by Rasmus Andersson, licensed under the{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL("https://github.com/rsms/inter/blob/master/LICENSE.txt")}
-                  accessibilityRole="link"
-                  accessibilityLabel="Inter font SIL Open Font License"
-                >
-                  SIL Open Font License 1.1
-                </Text>
-                .
-              </Text>
+        <View style={[styles.divider, { backgroundColor: READER_M3_OUTLINE_VARIANT, marginVertical: 12 * scale }]} />
 
-              <View style={styles.divider} />
+        <Text style={sectionHeadingStyle}>Vectors &amp; Icons</Text>
 
-              {/* ── Vectors & Icons ── */}
-              <Text style={styles.sectionHeading}>Vectors &amp; Icons</Text>
+        <Text style={bodyStyle}>
+          Vectors and icons by{" "}
+          <Text
+            style={linkStyle}
+            onPress={() => openUrl("https://www.svgrepo.com")}
+            accessibilityRole="link"
+            accessibilityLabel="SVG Repo website"
+          >
+            SVG Repo
+          </Text>
+        </Text>
 
-              <Text style={styles.body}>
-                Vectors and icons by{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL("https://www.svgrepo.com")}
-                  accessibilityRole="link"
-                  accessibilityLabel="SVG Repo website"
-                >
-                  SVG Repo
-                </Text>
-              </Text>
+        <View style={[styles.divider, { backgroundColor: READER_M3_OUTLINE_VARIANT, marginVertical: 12 * scale }]} />
 
-              <View style={styles.divider} />
+        <Text style={sectionHeadingStyle}>Photography</Text>
 
-              {/* ── Photography ── */}
-              <Text style={styles.sectionHeading}>Photography</Text>
+        <CarouselPexelsAttribution />
 
-              <CarouselPexelsAttribution />
+        <View style={[styles.divider, { backgroundColor: READER_M3_OUTLINE_VARIANT, marginVertical: 12 * scale }]} />
 
-              <View style={styles.divider} />
+        <Text style={sectionHeadingStyle}>Open Source</Text>
 
-              {/* ── Open Source ── */}
-              <Text style={styles.sectionHeading}>Open Source</Text>
+        <Text style={bodyStyle}>
+          Built with{" "}
+          <Text
+            style={linkStyle}
+            onPress={() => openUrl("https://expo.dev")}
+            accessibilityRole="link"
+            accessibilityLabel="Expo website"
+          >
+            Expo
+          </Text>{" "}
+          and{" "}
+          <Text
+            style={linkStyle}
+            onPress={() => openUrl("https://reactnative.dev")}
+            accessibilityRole="link"
+            accessibilityLabel="React Native website"
+          >
+            React Native
+          </Text>
+          . This app makes use of open-source software. Licenses for all packages are included in the app bundle.
+        </Text>
 
-              <Text style={styles.body}>
-                Built with{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL("https://expo.dev")}
-                  accessibilityRole="link"
-                  accessibilityLabel="Expo website"
-                >
-                  Expo
-                </Text>{" "}
-                and{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL("https://reactnative.dev")}
-                  accessibilityRole="link"
-                  accessibilityLabel="React Native website"
-                >
-                  React Native
-                </Text>
-                . This app makes use of open-source software. Licenses for all packages are
-                included in the app bundle.
-              </Text>
+        <View style={[styles.divider, { backgroundColor: READER_M3_OUTLINE_VARIANT, marginVertical: 12 * scale }]} />
 
-              <View style={styles.divider} />
+        <Text style={sectionHeadingStyle}>Privacy</Text>
 
-              {/* ── Privacy ── */}
-              <Text style={styles.sectionHeading}>Privacy</Text>
-
-              <View style={styles.privacyLinkRow} accessibilityRole="text">
-                <Text style={styles.body}>Read our </Text>
-                <Pressable
-                  onPress={onOpenTermsOfService}
-                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                  accessibilityRole="link"
-                  accessibilityLabel="Open terms of service"
-                >
-                  <Text style={styles.link}>Terms of Use</Text>
-                </Pressable>
-                <Text style={styles.body}> and </Text>
-                <Pressable
-                  onPress={onOpenPrivacyPolicy}
-                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                  accessibilityRole="link"
-                  accessibilityLabel="Open privacy policy"
-                >
-                  <Text style={styles.link}>Privacy Policy</Text>
-                </Pressable>
-                <Text style={styles.body}>.</Text>
-              </View>
-
-              <Text style={styles.thankYou}>Thank you for using Sinag Bible.</Text>
-            </ScrollView>
-          </Animated.View>
+        <View style={styles.privacyLinkRow} accessibilityRole="text">
+          <Text style={bodyStyle}>Read our </Text>
+          <Pressable
+            onPress={onOpenTermsOfService}
+            hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+            accessibilityRole="link"
+            accessibilityLabel="Open terms of service"
+          >
+            <Text style={linkStyle}>Terms of Use</Text>
+          </Pressable>
+          <Text style={bodyStyle}> and </Text>
+          <Pressable
+            onPress={onOpenPrivacyPolicy}
+            hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+            accessibilityRole="link"
+            accessibilityLabel="Open privacy policy"
+          >
+            <Text style={linkStyle}>Privacy Policy</Text>
+          </Pressable>
+          <Text style={bodyStyle}>.</Text>
         </View>
+
+        <Text
+          style={[
+            bodyStyle,
+            {
+              textAlign: "center",
+              marginTop: 16 * scale,
+              color: colors.brown800,
+            },
+          ]}
+        >
+          Thank you for using Sinag Bible.
+        </Text>
       </View>
-    </Modal>
+    </ReaderM3BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(44,36,22,0.52)",
-  },
-  sheetWrap: {
-    flex: 1,
-    justifyContent: "flex-end",
-    alignItems: "center",
-    paddingHorizontal: 5,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 520,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.borderSolid,
-    backgroundColor: colors.parchment,
-    overflow: "hidden",
-    shadowColor: "#2c2416",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 5,
-    paddingTop: 16,
-    paddingBottom: 10,
-    backgroundColor: colors.parchment,
-  },
-  headerEdge: {
-    width: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerEdgeEnd: {
-    alignItems: "flex-end",
-  },
-  modalTitle: {
-    fontFamily: UI_FONT,
-    fontSize: 20,
-    color: colors.brown800,
-  },
-  modalTitleCentered: {
-    flex: 1,
-    textAlign: "center",
-  },
-  scroll: { flexGrow: 0 },
-  scrollContent: {
-    paddingHorizontal: 5,
-    paddingTop: 8,
-    paddingBottom: 24,
+  content: {
     gap: 12,
-  },
-  sectionHeading: {
-    fontFamily: SECTION_HEADING_FONT,
-    fontSize: 13,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    color: colors.brown600,
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  body: {
-    fontFamily: BODY_FONT,
-    fontSize: 15,
-    lineHeight: 24,
-    color: colors.brown800,
-  },
-  link: {
-    fontFamily: BODY_BOLD_FONT,
-    color: colors.brown800,
-    textDecorationLine: "underline",
   },
   divider: {
     height: 1,
-    backgroundColor: colors.borderSolid,
-    marginVertical: 4,
   },
   privacyLinkRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
-  },
-  thankYou: {
-    fontFamily: BODY_FONT,
-    fontSize: 15,
-    lineHeight: 24,
-    color: colors.brown800,
-    textAlign: "center",
-    marginTop: 8,
   },
 });

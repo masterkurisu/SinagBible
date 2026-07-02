@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Slider } from "@/src/components/m3/M3Slider";
 import {
   ReaderAlignCenterIcon,
@@ -49,8 +50,6 @@ import {
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
   READER_M3_OUTLINE_VARIANT,
-  READER_M3_SHEET_TITLE_FONT_PX,
-  READER_M3_SHEET_TITLE_LINE_HEIGHT_PX,
   READER_M3_SURFACE_CONTAINER,
   READER_M3_SURFACE_CONTAINER_HIGH,
 } from "@/src/features/reader/readerSettingsPanelChrome";
@@ -256,17 +255,11 @@ export function ReaderFontSettingsSheet({
                   paddingBottom: 24 * scale,
                 }}
               >
-                <Text
-                  style={{
-                    fontFamily: "Inter_500Medium",
-                    fontSize: READER_M3_SHEET_TITLE_FONT_PX * scale,
-                    lineHeight: READER_M3_SHEET_TITLE_LINE_HEIGHT_PX * scale,
-                    color: READER_M3_ON_SURFACE,
-                    marginBottom: sectionGap,
-                  }}
-                >
-                  Text appearance
-                </Text>
+                <M3SettingsSheetTitle
+                  title="Text appearance"
+                  scale={scale}
+                  style={{ marginBottom: sectionGap }}
+                />
 
                 {/* Font family */}
                 <View style={{ marginBottom: sectionGap, gap: 6 * scale }}>

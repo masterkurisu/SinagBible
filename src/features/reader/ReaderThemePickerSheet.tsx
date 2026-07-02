@@ -18,6 +18,7 @@ import {
   type MobileAppThemeId,
 } from "@sinag-bible/tokens";
 import { M3Button } from "@/src/components/m3/M3Button";
+import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import {
   M3_EMPHASIZED_DECELERATE_EASING,
   M3_MOTION_DURATION_SHORT4_MS,
@@ -33,8 +34,6 @@ import {
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
   READER_M3_OUTLINE_VARIANT,
-  READER_M3_SHEET_TITLE_FONT_PX,
-  READER_M3_SHEET_TITLE_LINE_HEIGHT_PX,
   READER_M3_SURFACE_CONTAINER,
   READER_M3_SURFACE_CONTAINER_HIGH,
 } from "@/src/features/reader/readerSettingsPanelChrome";
@@ -187,28 +186,12 @@ export function ReaderThemePickerSheet({
                     : 16 * scale,
                 }}
               >
-                <Text
-                  style={{
-                    fontFamily: "Inter_500Medium",
-                    fontSize: READER_M3_SHEET_TITLE_FONT_PX * scale,
-                    lineHeight: READER_M3_SHEET_TITLE_LINE_HEIGHT_PX * scale,
-                    color: READER_M3_ON_SURFACE,
-                    marginBottom: 8 * scale,
-                  }}
-                >
-                  Theme
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: "Inter_400Regular",
-                    fontSize: READER_M3_BODY_FONT_PX * scale * 0.875,
-                    lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.875,
-                    color: READER_M3_ON_SURFACE_VARIANT,
-                    marginBottom: 28 * scale,
-                  }}
-                >
-                  Choose a color palette for the reader, journal, and navigation.
-                </Text>
+                <M3SettingsSheetTitle
+                  title="Theme"
+                  subtitle="Choose a color palette for the reader, journal, and navigation."
+                  scale={scale}
+                  style={{ marginBottom: 28 * scale }}
+                />
 
                 <View style={[styles.grid, { marginBottom: 8 * scale }]}>
                   {mobileAppThemePickerOptions.map((opt, index) => {

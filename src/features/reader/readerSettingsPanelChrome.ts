@@ -76,3 +76,8 @@ export const READER_M3_BODY_LINE_HEIGHT_PX = 24;
 
 /** M3 segmented button row height (48dp). */
 export const READER_M3_SEGMENTED_BUTTON_HEIGHT_PX = 48;
+
+/** Lora heading — settings sheet titles (matches verse carousel settings). */
+export const READER_M3_SETTINGS_SHEET_TITLE_FONT = "Lora_400Regular";
+export const READER_M3_SETTINGS_SHEET_TITLE_FONT_PX = 24;
+export const READER_M3_SETTINGS_SHEET_TITLE_LINE_HEIGHT_PX = 30;
