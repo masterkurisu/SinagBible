@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef, type ReactNode, type RefObject } from "react";
 import {
-  Alert,
-  Animated,
   BackHandler,
-  Easing,
   Keyboard,
   Modal,
   Platform,
@@ -32,13 +29,7 @@ import {
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 
 import { JOURNAL_NEW_ENTRY_FAB_PX } from "@/src/features/journal/journalFabChrome";
-import {
-  M3_EMPHASIZED_ACCELERATE_EASING,
-  M3_EMPHASIZED_DECELERATE_EASING,
-  M3_MOTION_DURATION_MEDIUM2_MS,
-  M3_MOTION_DURATION_SHORT3_MS,
-  M3_MOTION_DURATION_SHORT4_MS,
-} from "@/src/components/m3/m3-motion";
+import { JournalDraftCloseDialog } from "@/src/features/journal/JournalDraftCloseDialog";
 
 const FAB_SIZE_PX = JOURNAL_NEW_ENTRY_FAB_PX;
 const SHEET_GAP_ABOVE_FAB_PX = 12;
@@ -97,10 +88,10 @@ function JournalNewEntrySheetWindowOverlay({
   return (
     <Modal
       visible={visible}
+      onRequestClose={onRequestClose}
       transparent
       animationType="none"
       statusBarTranslucent
-      onRequestClose={onRequestClose}
     >
       {children}
     </Modal>
@@ -134,15 +125,10 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
   const j = bundle.journal;
 
   const [hasDraft, setHasDraft] = useState(false);
+  const [draftCloseDialogOpen, setDraftCloseDialogOpen] = useState(false);
   const [preferredContentHeightPx, setPreferredContentHeightPx] = useState<number | null>(null);
-  const [keyboardHeightPx, setKeyboardHeightPx] = useState(0);
-  const sheetTranslateY = useRef(new Animated.Value(0)).current;
-  const sheetOpacity = useRef(new Animated.Value(0)).current;
-  const sheetHeightAnim = useRef(new Animated.Value(SHEET_MIN_HEIGHT_PX)).current;
-  const keyboardOffsetAnim = useRef(new Animated.Value(0)).current;
-  const keyboardMotionDurationRef = useRef(M3_MOTION_DURATION_MEDIUM2_MS);
-  const prevKeyboardLiftRef = useRef(0);
-  const openEntrancePlayedRef = useRef(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
   const closingRef = useRef(false);
   const dragStartYRef = useRef(0);
 
@@ -253,215 +239,83 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
   }, [preferredContentHeightPx, sheetFormChromePx, sheetMaxHeightPx]);
 
   const onSheetPreferredHeightChange = useCallback((contentHeightPx: number) => {
-    setPreferredContentHeightPx((prev) => (prev === contentHeightPx ? prev : contentHeightPx));
+    setPreferredContentHeightPx((prev) => {
+      if (prev != null && contentHeightPx <= prev + 4) return prev;
+      return contentHeightPx;
+    });
   }, []);
 
-  const sheetTopGutterPx = sheetTopClearancePx;
-  const keyboardLiftPx = keyboardHeightPx > 0 ? keyboardHeightPx : 0;
-  const sheetBottomPx = layout.bottomPx + keyboardLiftPx;
   const maxAllowedSheetHeightPx = Math.max(
     SHEET_MIN_HEIGHT_PX,
-    windowHeight - sheetTopClearancePx - sheetBottomPx,
+    windowHeight - sheetTopClearancePx - layout.bottomPx,
   );
-
-  const keyboardAwareSheetHeightPx = useMemo(() => {
-    if (keyboardLiftPx <= 0) return sheetHeightPx;
-    const maxHeightAboveKeyboard = Math.max(
-      SHEET_MIN_HEIGHT_PX,
-      windowHeight - sheetTopGutterPx - keyboardLiftPx - layout.bottomPx,
-    );
-    return Math.max(sheetHeightPx, Math.min(sheetMaxHeightPx, maxHeightAboveKeyboard));
-  }, [
-    keyboardLiftPx,
-    sheetHeightPx,
-    sheetMaxHeightPx,
-    sheetTopGutterPx,
-    windowHeight,
-    layout.bottomPx,
-  ]);
-
-  const resolvedSheetHeightPx = Math.min(keyboardAwareSheetHeightPx, maxAllowedSheetHeightPx);
+  const resolvedSheetHeightPx = Math.min(sheetHeightPx, maxAllowedSheetHeightPx);
 
   const sheetAtMaxCapacity = useMemo(() => {
     if (preferredContentHeightPx == null) return false;
     return preferredContentHeightPx + sheetFormChromePx >= sheetMaxHeightPx - 2;
   }, [preferredContentHeightPx, sheetFormChromePx, sheetMaxHeightPx]);
 
-  /** Pin top clearance when content fills the sheet (e.g. verse preview). */
-  const sheetFillMode = sheetAtMaxCapacity;
+  /** Keep form height stable while the keyboard is open — layout reflow steals TextInput/WebView focus. */
+  const formContentScrollMaxHeightPx = resolvedSheetHeightPx - sheetFormChromePx;
 
-  const formContentScrollMaxHeightPx = sheetFillMode
-    ? maxAllowedSheetHeightPx - sheetFormChromePx
-    : resolvedSheetHeightPx - sheetFormChromePx;
+  const keyboardBottomInsetPx =
+    sheetAtMaxCapacity && keyboardHeight > 0 ? keyboardHeight : 0;
 
-  useEffect(() => {
-    if (!open) {
-      setKeyboardHeightPx(0);
-      prevKeyboardLiftRef.current = 0;
-      return;
-    }
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const onShow = (e: KeyboardEvent) => {
-      keyboardMotionDurationRef.current = Math.max(
-        M3_MOTION_DURATION_SHORT4_MS,
-        Math.round(e.duration ?? M3_MOTION_DURATION_MEDIUM2_MS),
-      );
-      setKeyboardHeightPx(Math.round(e.endCoordinates.height));
-    };
-    const onHide = (e?: KeyboardEvent) => {
-      keyboardMotionDurationRef.current = Math.max(
-        M3_MOTION_DURATION_SHORT3_MS,
-        Math.round(e?.duration ?? M3_MOTION_DURATION_SHORT4_MS),
-      );
-      setKeyboardHeightPx(0);
-    };
-    const showSub = Keyboard.addListener(showEvent, onShow);
-    const hideSub = Keyboard.addListener(hideEvent, onHide);
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const prevLift = prevKeyboardLiftRef.current;
-    const openingKeyboard = prevLift === 0 && keyboardLiftPx > 0;
-    const closingKeyboard = prevLift > 0 && keyboardLiftPx === 0;
-    const adjustingWithKeyboard = keyboardLiftPx > 0 && prevLift > 0 && prevLift !== keyboardLiftPx;
-
-    if (!openingKeyboard && !closingKeyboard && !adjustingWithKeyboard) {
-      if (!sheetFillMode) {
-        sheetHeightAnim.setValue(resolvedSheetHeightPx);
-      }
-      prevKeyboardLiftRef.current = keyboardLiftPx;
-      return;
-    }
-
-    const duration = openingKeyboard
-      ? keyboardMotionDurationRef.current
-      : closingKeyboard
-        ? keyboardMotionDurationRef.current
-        : M3_MOTION_DURATION_SHORT3_MS;
-    const easing =
-      openingKeyboard || adjustingWithKeyboard
-        ? M3_EMPHASIZED_DECELERATE_EASING
-        : M3_EMPHASIZED_ACCELERATE_EASING;
-
-    Animated.timing(keyboardOffsetAnim, {
-      toValue: -keyboardLiftPx,
-      duration,
-      easing,
-      useNativeDriver: true,
-    }).start();
-
-    if (!sheetFillMode) {
-      Animated.timing(sheetHeightAnim, {
-        toValue: resolvedSheetHeightPx,
-        duration,
-        easing,
-        useNativeDriver: false,
-      }).start();
-    }
-
-    prevKeyboardLiftRef.current = keyboardLiftPx;
+  /**
+   * Lift the sheet with translateY so layout dimensions stay fixed (non-max sheets).
+   * Max-capacity sheets are already top-pinned — shrink via bottom inset instead.
+   */
+  const keyboardLiftPx = useMemo(() => {
+    if (keyboardHeight <= 0 || sheetAtMaxCapacity) return 0;
+    const sheetTopY = windowHeight - layout.bottomPx - resolvedSheetHeightPx;
+    const maxLift = Math.max(0, sheetTopY - sheetTopClearancePx);
+    return Math.min(keyboardHeight, maxLift);
   }, [
-    open,
-    keyboardLiftPx,
+    keyboardHeight,
+    sheetAtMaxCapacity,
+    windowHeight,
+    layout.bottomPx,
     resolvedSheetHeightPx,
-    sheetFillMode,
-    keyboardOffsetAnim,
-    sheetHeightAnim,
+    sheetTopClearancePx,
   ]);
 
-  useEffect(() => {
-    if (!open) return;
-    if (keyboardLiftPx > 0) return;
-    keyboardOffsetAnim.setValue(0);
-    if (!sheetFillMode) {
-      sheetHeightAnim.setValue(resolvedSheetHeightPx);
-    }
-  }, [
-    open,
-    keyboardLiftPx,
-    resolvedSheetHeightPx,
-    sheetFillMode,
-    keyboardOffsetAnim,
-    sheetHeightAnim,
-  ]);
+  const finishClose = useCallback(() => {
+    closingRef.current = false;
+    setDragOffsetY(0);
+    dragStartYRef.current = 0;
+    onClose();
+  }, [onClose]);
 
-  const animateClose = useCallback(
-    (velocityY = 0, draggedY = 0) => {
-      if (closingRef.current) return;
-      closingRef.current = true;
-      Keyboard.dismiss();
-
-      const targetY = keyboardAwareSheetHeightPx + keyboardLiftPx + 56;
-      const clampedDragY = Math.max(0, draggedY);
-      const vel = Math.max(0, velocityY);
-      const duration = Math.max(
-        150,
-        Math.min(320, Math.round(280 - Math.min(1.85, vel) * 90)),
-      );
-
-      if (clampedDragY > 0) {
-        sheetTranslateY.setValue(clampedDragY);
-      }
-
-      Animated.parallel([
-        Animated.timing(sheetTranslateY, {
-          toValue: targetY,
-          duration,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(sheetOpacity, {
-          toValue: 0,
-          duration: Math.max(180, duration + 90),
-          delay: materialBottomSheet ? 0 : 80,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        closingRef.current = false;
-        sheetTranslateY.setValue(materialBottomSheet ? sheetMaxHeightPx : 20);
-        sheetOpacity.setValue(0);
-        onClose();
-      });
-    },
-    [keyboardAwareSheetHeightPx, keyboardLiftPx, materialBottomSheet, onClose, sheetOpacity, sheetTranslateY],
-  );
-
-  const springOpen = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(sheetTranslateY, {
-        toValue: 0,
-        friction: 9,
-        tension: 75,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetOpacity, {
-        toValue: 1,
-        duration: 170,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [sheetOpacity, sheetTranslateY]);
+  const animateClose = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    Keyboard.dismiss();
+    finishClose();
+  }, [finishClose]);
 
   const confirmDraftClose = useCallback(() => {
-    Alert.alert("Save or discard?", "You have unsaved text in this draft.", [
-      { text: "Keep editing", style: "cancel" },
-      { text: "Save", onPress: () => formRef.current?.save() },
-      { text: "Discard", style: "destructive", onPress: () => animateClose(0.45, 0) },
-    ]);
-  }, [animateClose, formRef]);
+    Keyboard.dismiss();
+    setDraftCloseDialogOpen(true);
+  }, []);
+
+  const handleKeepEditingDraft = useCallback(() => {
+    setDraftCloseDialogOpen(false);
+  }, []);
+
+  const handleSaveDraft = useCallback(() => {
+    setDraftCloseDialogOpen(false);
+    formRef.current?.save();
+  }, [formRef]);
+
+  const handleDiscardDraft = useCallback(() => {
+    setDraftCloseDialogOpen(false);
+    animateClose();
+  }, [animateClose]);
 
   const requestClose = useCallback(() => {
     if (!hasDraft) {
-      animateClose(0.45, 0);
+      animateClose();
       return;
     }
     confirmDraftClose();
@@ -472,135 +326,81 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
   useEffect(() => {
     if (!open) {
       closingRef.current = false;
-      sheetTranslateY.stopAnimation();
-      sheetOpacity.stopAnimation();
-      keyboardOffsetAnim.stopAnimation();
       setHasDraft(false);
+      setDraftCloseDialogOpen(false);
       setPreferredContentHeightPx(null);
-      setKeyboardHeightPx(0);
-      openEntrancePlayedRef.current = false;
+      setKeyboardHeight(0);
+      setDragOffsetY(0);
+      dragStartYRef.current = 0;
       return;
     }
-
-    if (openEntrancePlayedRef.current) return;
-    openEntrancePlayedRef.current = true;
-
     closingRef.current = false;
-    sheetOpacity.setValue(0);
-    sheetHeightAnim.setValue(sheetHeightPx);
-    keyboardOffsetAnim.setValue(0);
-    prevKeyboardLiftRef.current = 0;
+  }, [open, sheetKey]);
 
-    if (materialBottomSheet) {
-      sheetTranslateY.setValue(sheetHeightPx);
-      Animated.parallel([
-        Animated.timing(sheetTranslateY, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(sheetOpacity, {
-          toValue: 1,
-          duration: 240,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
-      return;
-    }
-
-    sheetTranslateY.setValue(20);
-    Animated.parallel([
-      Animated.timing(sheetOpacity, {
-        toValue: 1,
-        duration: 240,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.spring(sheetTranslateY, {
-        toValue: 0,
-        friction: 8,
-        tension: 65,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [
-    open,
-    sheetKey,
-    materialBottomSheet,
-    layout.bottomPx,
-    sheetHeightPx,
-    keyboardOffsetAnim,
-    sheetHeightAnim,
-    sheetOpacity,
-    sheetTranslateY,
-  ]);
+  useEffect(() => {
+    if (!open) return;
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const onShow = (e: KeyboardEvent) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    };
+    const onHide = () => {
+      setKeyboardHeight(0);
+    };
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open || !layout.useModalOverlay) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (draftCloseDialogOpen) {
+        setDraftCloseDialogOpen(false);
+        return true;
+      }
       requestClose();
       return true;
     });
     return () => sub.remove();
-  }, [open, layout.useModalOverlay, requestClose]);
+  }, [draftCloseDialogOpen, open, layout.useModalOverlay, requestClose]);
 
-  const onDismissGestureEvent = useCallback(
-    (e: PanGestureHandlerGestureEvent) => {
-      if (closingRef.current) return;
-      const ty = e.nativeEvent.translationY;
-      const dragY = Math.max(0, dragStartYRef.current + ty);
-      sheetTranslateY.setValue(dragY);
-      if (!materialBottomSheet) {
-        sheetOpacity.setValue(Math.max(0.82, 1 - dragY / 900));
-      }
-    },
-    [materialBottomSheet, sheetOpacity, sheetTranslateY],
-  );
+  const onDismissGestureEvent = useCallback((e: PanGestureHandlerGestureEvent) => {
+    if (closingRef.current) return;
+    const ty = e.nativeEvent.translationY;
+    setDragOffsetY(Math.max(0, dragStartYRef.current + ty));
+  }, []);
 
   const onDismissGestureStateChange = useCallback(
     (e: PanGestureHandlerStateChangeEvent) => {
       const { state, oldState, velocityY, translationY } = e.nativeEvent;
       if (state === State.ACTIVE && oldState !== State.ACTIVE) {
-        sheetTranslateY.stopAnimation((value: number) => {
-          dragStartYRef.current = value;
-        });
+        dragStartYRef.current = dragOffsetY;
       }
       if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
         if (!open || closingRef.current) return;
         const ty = translationY ?? 0;
         const dragY = Math.max(0, dragStartYRef.current + ty);
         const vyPxPerS = Math.abs(velocityY ?? 0);
-        const velForCloseAnim = Math.min(1.85, vyPxPerS / DRAG_VELOCITY_DISMISS);
         const shouldClose = dragY > DRAG_DISMISS_PX || vyPxPerS > DRAG_VELOCITY_DISMISS;
         if (shouldClose) {
           if (hasDraft) {
-            springOpen();
+            setDragOffsetY(0);
+            dragStartYRef.current = 0;
             confirmDraftClose();
             return;
           }
-          animateClose(velForCloseAnim, dragY);
+          animateClose();
           return;
         }
-        Animated.parallel([
-          Animated.spring(sheetTranslateY, {
-            toValue: 0,
-            velocity: Math.max(0, (velocityY ?? 0) / 1000),
-            friction: 9,
-            tension: 75,
-            useNativeDriver: true,
-          }),
-          Animated.timing(sheetOpacity, {
-            toValue: 1,
-            duration: 170,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]).start();
+        setDragOffsetY(0);
+        dragStartYRef.current = 0;
       }
     },
-    [animateClose, confirmDraftClose, hasDraft, open, sheetOpacity, sheetTranslateY, springOpen],
+    [animateClose, confirmDraftClose, dragOffsetY, hasDraft, open],
   );
 
   const handleDirtyChange = useCallback(
@@ -652,106 +452,101 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
         layout.useModalOverlay ? undefined : { zIndex: 2 },
       ]}
     >
-      <Animated.View
-        pointerEvents="box-none"
-        style={[StyleSheet.absoluteFill, { opacity: sheetOpacity }]}
-      >
+      <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Dismiss new entry"
           onPress={requestClose}
           style={[StyleSheet.absoluteFill, { backgroundColor: j.newEntryRouteScrim }]}
         />
-      </Animated.View>
-      <Animated.View
+      </View>
+      <View
         pointerEvents="box-none"
         style={{
           position: "absolute",
           left: layout.leftPx,
           width: layout.widthPx,
-          bottom: layout.bottomPx,
-          ...(sheetFillMode
-            ? { top: sheetTopClearancePx }
-            : { height: sheetHeightAnim, maxHeight: maxAllowedSheetHeightPx }),
+          ...(sheetAtMaxCapacity
+            ? {
+                top: sheetTopClearancePx,
+                bottom: layout.bottomPx + keyboardBottomInsetPx,
+              }
+            : {
+                bottom: layout.bottomPx,
+                height: resolvedSheetHeightPx,
+                maxHeight: maxAllowedSheetHeightPx,
+              }),
         }}
       >
-        <Animated.View
+        <View
           pointerEvents="box-none"
           style={{
             flex: 1,
-            transform: [{ translateY: keyboardOffsetAnim }],
+            transform: [{ translateY: dragOffsetY - keyboardLiftPx }],
           }}
         >
-        <Animated.View
-          pointerEvents="box-none"
-          style={{
-            flex: 1,
-            opacity: sheetOpacity,
-            transform: [{ translateY: sheetTranslateY }],
-          }}
-        >
-        <View style={styles.sheetKeyboardView}>
-          <View
-            style={[
-              styles.sheetCard,
-              sheetCardStyle,
-              {
-                backgroundColor: j.newEntrySheetBackground,
-                shadowColor: bundle.reader.popoverShadow,
-              },
-            ]}
-          >
-            <PanGestureHandler
-              onGestureEvent={onDismissGestureEvent}
-              onHandlerStateChange={onDismissGestureStateChange}
-              activeOffsetY={8}
-              failOffsetX={[-32, 32]}
+          <View style={styles.sheetKeyboardView}>
+            <View
+              style={[
+                styles.sheetCard,
+                sheetCardStyle,
+                {
+                  backgroundColor: j.newEntrySheetBackground,
+                  shadowColor: bundle.reader.popoverShadow,
+                },
+              ]}
             >
+              <PanGestureHandler
+                onGestureEvent={onDismissGestureEvent}
+                onHandlerStateChange={onDismissGestureStateChange}
+                activeOffsetY={8}
+                failOffsetX={[-32, 32]}
+              >
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingTop: materialBottomSheet ? 12 : 6,
+                    paddingBottom: materialBottomSheet ? 8 : 4,
+                    backgroundColor: j.newEntryDragAreaBackground,
+                  }}
+                >
+                  <View style={handleStyle} />
+                </View>
+              </PanGestureHandler>
               <View
                 style={{
-                  alignItems: "center",
-                  justifyContent: "center",
-                  paddingTop: materialBottomSheet ? 12 : 6,
-                  paddingBottom: materialBottomSheet ? 8 : 4,
-                  backgroundColor: j.newEntryDragAreaBackground,
+                  flex: 1,
+                  minHeight: 0,
+                  paddingHorizontal: 0,
+                  paddingTop: 4,
+                  paddingBottom: 0,
                 }}
               >
-                <View style={handleStyle} />
+                <JournalNewEntryForm
+                  ref={formRef}
+                  key={sheetKey}
+                  initialParams={initialParams}
+                  contentScrollMaxHeight={formContentScrollMaxHeightPx}
+                  onSheetPreferredHeightChange={onSheetPreferredHeightChange}
+                  sheetKeyboardLiftPx={materialBottomSheet ? keyboardLiftPx : undefined}
+                  contentHorizontalPadding={10}
+                  readerNewEntryScrollable={variant === "reader"}
+                  readerCardBottomLiftPx={formReaderBottomLiftPx}
+                  onDirtyChange={handleDirtyChange}
+                  onSaveToast={onSaveToast}
+                  onAfterSave={onAfterSave}
+                />
               </View>
-            </PanGestureHandler>
-            <View
-              style={{
-                flex: 1,
-                minHeight: 0,
-                paddingHorizontal: 0,
-                paddingTop: 4,
-                paddingBottom: 0,
-              }}
-            >
-              <JournalNewEntryForm
-                ref={formRef}
-                key={sheetKey}
-                initialParams={initialParams}
-                contentScrollMaxHeight={formContentScrollMaxHeightPx}
-                sheetKeyboardLiftPx={keyboardLiftPx}
-                onSheetPreferredHeightChange={onSheetPreferredHeightChange}
-                contentHorizontalPadding={10}
-                readerNewEntryScrollable={variant === "reader"}
-                readerCardBottomLiftPx={formReaderBottomLiftPx}
-                onDirtyChange={handleDirtyChange}
-                onSaveToast={onSaveToast}
-                onAfterSave={onAfterSave}
-              />
             </View>
           </View>
         </View>
-        </Animated.View>
-        </Animated.View>
-      </Animated.View>
+      </View>
     </View>
   );
 
   return (
+    <>
     <JournalNewEntrySheetWindowOverlay
       visible={open}
       onRequestClose={requestClose}
@@ -759,6 +554,15 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
     >
       {content}
     </JournalNewEntrySheetWindowOverlay>
+    <JournalDraftCloseDialog
+      visible={draftCloseDialogOpen}
+      onKeepEditing={handleKeepEditingDraft}
+      onSave={handleSaveDraft}
+      onDiscard={handleDiscardDraft}
+      bundle={bundle}
+      isTabletLayout={isTablet}
+    />
+    </>
   );
 },
 );

@@ -205,7 +205,8 @@ type Props = {
    */
   onSheetPreferredHeightChange?: (contentHeightPx: number) => void;
   /**
-   * Bottom sheet only: parent lifts the card above the keyboard; disables redundant inner avoidance.
+   * Bottom sheet only: parent lifts the card above the keyboard (px translated). When defined, the
+   * form positions the reflection toolbar in sheet-local coordinates instead of screen keyboard inset.
    */
   sheetKeyboardLiftPx?: number;
   /** Notify parent whether the form currently has unsaved typed content. */
@@ -338,6 +339,10 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   reflectionHtmlRef.current = reflectionHtml;
   const richEditorRef = useRef<RichEditor>(null);
   const fullscreenRichEditorRef = useRef<RichEditor>(null);
+  const sheetFormScrollRef = useRef<ScrollView>(null);
+  const toolbarAnchorRef = useRef<View>(null);
+  const fullscreenToolbarAnchorRef = useRef<View>(null);
+  const suppressReflectionBlurRef = useRef(false);
   const [reflectionFullscreenOpen, setReflectionFullscreenOpen] = useState(false);
   const [reflectionFsMountKey, setReflectionFsMountKey] = useState(0);
   /** After closing fullscreen, remount inline WebView so hit-testing works (stacked RN Modal + WebView bug). */
@@ -353,6 +358,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const pendingSaveAfterToastRef = useRef<(() => void) | null>(null);
   const [journalKeyboardOpen, setJournalKeyboardOpen] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [reflectionToolbarBottomPx, setReflectionToolbarBottomPx] = useState(
+    FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX,
+  );
   const [activeFormField, setActiveFormField] = useState<JournalFormActiveField>(null);
   const activeFormFieldRef = useRef<JournalFormActiveField>(null);
 
@@ -467,6 +475,12 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   }, []);
 
   useEffect(() => {
+    if (!isPhoneSheetForm || keyboardHeight <= 0 || activeFormField !== "reflection") return;
+    sheetFormScrollRef.current?.scrollToEnd({ animated: false });
+    scrollReflectionCaretIntoView();
+  }, [keyboardHeight, activeFormField, isPhoneSheetForm]);
+
+  useEffect(() => {
     if (!saveToastMessage) {
       saveToastOpacity.setValue(0);
       return;
@@ -531,29 +545,69 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   };
 
   const onReflectionEditorBlur = () => {
-    releaseActiveFormField("reflection");
+    if (suppressReflectionBlurRef.current || reflectionFullscreenOpen) return;
     const ed = getActiveReflectionEditor();
-    if (ed?.isKeyboardOpen) return;
+    if (ed?.isKeyboardOpen || keyboardHeight > 0) return;
+    releaseActiveFormField("reflection");
     setJournalKeyboardOpen(false);
   };
 
   const showReflectionFloatingToolbar =
-    journalKeyboardOpen && activeFormField === "reflection";
+    activeFormField === "reflection" &&
+    (journalKeyboardOpen || reflectionFullscreenOpen);
 
-  /** Android bottom sheets: anchor above the keyboard using screen-space inset. */
-  const reflectionToolbarBottomPx =
-    Platform.OS === "android" && keyboardHeight > 0 && isPhoneSheetForm
-      ? sheetKeyboardLiftPx !== undefined
-        ? FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX
-        : keyboardHeight + FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX
-      : FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX;
+  const measureReflectionToolbarBottomPx = useCallback(() => {
+    if (keyboardHeight <= 0) {
+      setReflectionToolbarBottomPx(FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX);
+      return;
+    }
+    const anchorRef = reflectionFullscreenOpen ? fullscreenToolbarAnchorRef : toolbarAnchorRef;
+    anchorRef.current?.measureInWindow((_x, y, _w, h) => {
+      const anchorBottomY = y + h;
+      const targetToolbarBottomY = windowHeight - keyboardHeight - FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX;
+      setReflectionToolbarBottomPx(
+        Math.max(FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX, anchorBottomY - targetToolbarBottomY),
+      );
+    });
+  }, [keyboardHeight, reflectionFullscreenOpen, windowHeight]);
+
+  useEffect(() => {
+    if (!showReflectionFloatingToolbar || keyboardHeight <= 0) {
+      setReflectionToolbarBottomPx(FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX);
+      return;
+    }
+    let cancelled = false;
+    const runMeasure = () => {
+      if (!cancelled) measureReflectionToolbarBottomPx();
+    };
+    const raf = requestAnimationFrame(runMeasure);
+    const settleTimer = setTimeout(runMeasure, 48);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      clearTimeout(settleTimer);
+    };
+  }, [
+    showReflectionFloatingToolbar,
+    keyboardHeight,
+    reflectionFullscreenOpen,
+    sheetKeyboardLiftPx,
+    contentScrollMaxHeight,
+    measureReflectionToolbarBottomPx,
+  ]);
 
   const openReflectionFullscreen = () => {
     hapticLightImpact();
+    suppressReflectionBlurRef.current = true;
+    setReflectionFsMountKey((k) => k + 1);
+    markActiveFormField("reflection");
+    setJournalKeyboardOpen(true);
+    setReflectionFullscreenOpen(true);
     richEditorRef.current?.blurContentEditor();
     Keyboard.dismiss();
-    setReflectionFsMountKey((k) => k + 1);
-    setReflectionFullscreenOpen(true);
+    setTimeout(() => {
+      suppressReflectionBlurRef.current = false;
+    }, 120);
   };
 
   const closeReflectionFullscreen = async () => {
@@ -786,7 +840,10 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const onTopFieldsLayout = useCallback((e: LayoutChangeEvent) => {
     const next = Math.round(e.nativeEvent.layout.height);
-    setTopFieldsMeasuredH((prev) => (prev === next ? prev : next));
+    setTopFieldsMeasuredH((prev) => {
+      if (prev > 0 && Math.abs(prev - next) < 12) return prev;
+      return next;
+    });
   }, []);
 
   const sheetTopFieldsHeightPx =
@@ -804,8 +861,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   useEffect(() => {
     if (!sheetFormLayout || !onSheetPreferredHeightChange) return;
-    onSheetPreferredHeightChange(sheetFieldsMinHeightPx + SHEET_SAVE_BLOCK_PX);
-  }, [sheetFormLayout, onSheetPreferredHeightChange, sheetFieldsMinHeightPx]);
+    const next = sheetFieldsMinHeightPx + SHEET_SAVE_BLOCK_PX;
+    onSheetPreferredHeightChange(next);
+  }, [sheetFormLayout, onSheetPreferredHeightChange, sheetFieldsMinHeightPx, passagePreview]);
 
   const sheetNeedsScroll = useMemo(() => {
     if (!sheetFormLayout || contentScrollMaxHeight == null) return false;
@@ -1173,7 +1231,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   );
 
   const formReflectionSection = (
-    <View style={reflectionShellStyle}>
+    <View style={[reflectionShellStyle, { marginTop: 5 }]}>
         <View style={{ marginBottom: 6 }}>
           <Text
             className="text-xs tracking-widest uppercase"
@@ -1282,15 +1340,18 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         { backgroundColor: modalSurfaceColor, width: "100%" },
         isTabletForm ? { alignItems: "center" as const } : null,
         contentScrollMaxHeight != null
-          ? {
-              flex: 1,
-              minHeight: 0,
-              ...(sheetKeyboardLiftPx !== undefined ? null : { maxHeight: contentScrollMaxHeight }),
-            }
+          ? { flex: 1, minHeight: 0, maxHeight: contentScrollMaxHeight }
           : { flex: 1 },
       ]}
     >
       <View
+        ref={toolbarAnchorRef}
+        collapsable={false}
+        onLayout={() => {
+          if (showReflectionFloatingToolbar && keyboardHeight > 0) {
+            requestAnimationFrame(measureReflectionToolbarBottomPx);
+          }
+        }}
         style={{
           flex: 1,
           minHeight: 0,
@@ -1306,7 +1367,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       */}
       <KeyboardAvoidingView
         style={{ flex: 1, minHeight: 0, position: "relative" }}
-        behavior={sheetFormLayout && sheetKeyboardLiftPx !== undefined ? undefined : "padding"}
+        behavior={sheetFormLayout && Platform.OS === "android" ? undefined : "padding"}
         keyboardVerticalOffset={0}
       >
         {mergedFormScrollMode ? (
@@ -1341,6 +1402,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             >
               {sheetNeedsScroll ? (
                 <ScrollView
+                  ref={sheetFormScrollRef}
                   style={{ flex: 1, minHeight: 0 }}
                   contentContainerStyle={{ paddingBottom: 8 }}
                   keyboardShouldPersistTaps="handled"
@@ -1444,7 +1506,11 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           behavior="padding"
           keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
         >
-          <View style={{ flex: 1, minHeight: 0 }}>
+          <View
+            ref={fullscreenToolbarAnchorRef}
+            collapsable={false}
+            style={{ flex: 1, minHeight: 0, position: "relative" }}
+          >
         <SafeAreaView
           style={{ flex: 1, minHeight: 0, backgroundColor: colors.parchment }}
           edges={["top", "left", "right", "bottom"]}
@@ -1516,23 +1582,15 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             </View>
           </View>
         </SafeAreaView>
-          </View>
         {showReflectionFloatingToolbar ? (
           <View
             pointerEvents="box-none"
-            style={[
-              styles.floatingToolbarAnchorInline,
-              {
-                bottom:
-                  Platform.OS === "android" && keyboardHeight > 0
-                    ? keyboardHeight + FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX
-                    : FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX,
-              },
-            ]}
+            style={[styles.floatingToolbarAnchorInline, { bottom: reflectionToolbarBottomPx }]}
           >
             {renderReflectionFloatingToolbar()}
           </View>
         ) : null}
+          </View>
         </KeyboardAvoidingView>
       </View>
     </Modal>

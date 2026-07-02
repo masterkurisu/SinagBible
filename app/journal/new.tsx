@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
-import { Alert, Pressable, View, useWindowDimensions } from "react-native";
+import { Pressable, View, useWindowDimensions } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { JournalNewEntryForm, type JournalNewEntryInitialParams } from "@/components/journal-new-entry-form";
 import { JOURNAL_NEW_ENTRY_FORM_TOP_OFFSET_PX } from "@/lib/native-tab-chrome";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
+import { JournalDraftCloseDialog } from "@/src/features/journal/JournalDraftCloseDialog";
 
 const NEW_ENTRY_STACK_SCREEN_OPTIONS = {
   headerShown: false,
@@ -20,19 +21,18 @@ export default function NewJournalEntryScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<JournalNewEntryInitialParams>();
   const [hasDraftInput, setHasDraftInput] = useState(false);
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
   const { bundle } = useMobileAppTheme();
   const colors = bundle.ui;
   const j = bundle.journal;
+  const isTablet = isTabletLayout(windowWidth, windowHeight);
 
   const requestClose = useCallback(() => {
     if (!hasDraftInput) {
       router.back();
       return;
     }
-    Alert.alert("Discard this entry?", "You have unsaved text in this draft.", [
-      { text: "Keep editing", style: "cancel" },
-      { text: "Discard", style: "destructive", onPress: () => router.back() },
-    ]);
+    setDiscardDialogOpen(true);
   }, [hasDraftInput, router]);
 
   const bottomGutter = Math.max(insets.bottom + 12, 16);
@@ -120,6 +120,17 @@ export default function NewJournalEntryScreen() {
           </View>
         </View>
       </View>
+      <JournalDraftCloseDialog
+        visible={discardDialogOpen}
+        title="Discard this entry?"
+        onKeepEditing={() => setDiscardDialogOpen(false)}
+        onDiscard={() => {
+          setDiscardDialogOpen(false);
+          router.back();
+        }}
+        bundle={bundle}
+        isTabletLayout={isTablet}
+      />
     </>
   );
 }

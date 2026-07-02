@@ -1,18 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import {
-  Animated,
-  Easing,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type TextInputProps,
-  type ViewStyle,
-} from "react-native";
-import {
-  M3_EMPHASIZED_ACCELERATE_EASING,
-  M3_EMPHASIZED_DECELERATE_EASING,
-} from "@/src/components/m3/m3-motion";
+import { useState } from "react";
+import { StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from "react-native";
 import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
@@ -41,8 +28,6 @@ export type M3OutlinedTextFieldProps = {
   maxHeight?: number;
   /** Pill-shaped field ends (half the field height). */
   roundedEnds?: boolean;
-  /** Subtle outline jiggle when the field receives focus. */
-  focusJiggle?: boolean;
   placeholder?: string;
   inputFontFamily?: string;
   style?: ViewStyle;
@@ -63,7 +48,6 @@ export function M3OutlinedTextField({
   minHeight = 56,
   maxHeight,
   roundedEnds = false,
-  focusJiggle = true,
   placeholder,
   inputFontFamily = "Inter_400Regular",
   style,
@@ -75,7 +59,6 @@ export function M3OutlinedTextField({
   blurOnSubmit,
 }: M3OutlinedTextFieldProps) {
   const [focused, setFocused] = useState(false);
-  const focusJiggleAnim = useRef(new Animated.Value(0)).current;
   const floated = focused || value.length > 0;
   const borderColor = focused ? accentColor : OUTLINE_STROKE_COLOR;
   const labelColor = focused ? accentColor : READER_M3_ON_SURFACE_VARIANT;
@@ -83,49 +66,9 @@ export function M3OutlinedTextField({
   const borderRadius = roundedEnds ? fieldMinHeight / 2 : 4 * scale;
   const placeholderText = placeholder ?? (floated ? undefined : label);
 
-  const playFocusJiggle = useCallback(() => {
-    if (!focusJiggle) return;
-    focusJiggleAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(focusJiggleAnim, {
-        toValue: 1,
-        duration: 52,
-        easing: M3_EMPHASIZED_DECELERATE_EASING,
-        useNativeDriver: true,
-      }),
-      Animated.timing(focusJiggleAnim, {
-        toValue: -0.82,
-        duration: 52,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-      Animated.timing(focusJiggleAnim, {
-        toValue: 0.38,
-        duration: 46,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-      Animated.timing(focusJiggleAnim, {
-        toValue: 0,
-        duration: 46,
-        easing: M3_EMPHASIZED_ACCELERATE_EASING,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [focusJiggle, focusJiggleAnim]);
-
-  const jiggleTranslateX = focusJiggleAnim.interpolate({
-    inputRange: [-1, 0, 1],
-    outputRange: [-2.5 * scale, 0, 2.5 * scale],
-  });
-  const jiggleRotate = focusJiggleAnim.interpolate({
-    inputRange: [-1, 0, 1],
-    outputRange: ["-0.55deg", "0deg", "0.55deg"],
-  });
-
   return (
     <View style={[styles.wrap, style]}>
-      <Animated.View
+      <View
         style={[
           styles.field,
           {
@@ -136,7 +79,6 @@ export function M3OutlinedTextField({
             paddingHorizontal: 16 * scale,
             paddingTop: (floated ? 16 : 12) * scale,
             paddingBottom: 12 * scale,
-            transform: [{ translateX: jiggleTranslateX }, { rotate: jiggleRotate }],
           },
         ]}
       >
@@ -180,7 +122,6 @@ export function M3OutlinedTextField({
           blurOnSubmit={blurOnSubmit}
           onFocus={(e) => {
             setFocused(true);
-            playFocusJiggle();
             onFocus?.(e);
           }}
           onBlur={(e) => {
@@ -198,7 +139,7 @@ export function M3OutlinedTextField({
             color: READER_M3_ON_SURFACE,
           }}
         />
-      </Animated.View>
+      </View>
     </View>
   );
 }
