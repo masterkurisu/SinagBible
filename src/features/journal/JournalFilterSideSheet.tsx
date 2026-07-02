@@ -7,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
@@ -15,6 +14,7 @@ import {
   READER_SETTINGS_MENU_SPRING_CLOSE,
   READER_SETTINGS_MENU_SPRING_OPEN,
 } from "@/lib/reader-settings-menu-motion";
+import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import {
   JournalFilterSortPanel,
   type JournalFilterKind,
@@ -127,16 +127,11 @@ export function JournalFilterSideSheet({
             },
           ]}
         >
-          <Text
-            style={{
-              fontFamily: "Inter_600SemiBold",
-              fontSize: 20,
-              color: bundle.ui.brown800,
-              marginBottom: 16,
-            }}
-          >
-            Filter & sort
-          </Text>
+          <M3SettingsSheetTitle
+            title="Filter & sort"
+            titleColor={bundle.ui.brown800}
+            style={{ marginBottom: 16 }}
+          />
           <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"

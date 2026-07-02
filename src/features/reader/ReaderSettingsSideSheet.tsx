@@ -7,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -23,6 +22,7 @@ import {
 } from "@/lib/reader-settings-menu-motion";
 import { readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
 import { ReaderM3RailDestination } from "@/src/features/reader/ReaderM3RailDestination";
+import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3RichTooltipOverlay } from "@/src/components/m3/M3RichTooltipOverlay";
 import { getReaderSettingsTooltip } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import { useSettingsRowTooltip } from "@/src/features/reader/useSettingsRowTooltip";
@@ -221,7 +221,7 @@ export function ReaderSettingsSideSheet({
               {headerTools}
             </View>
           ) : (
-            <Text style={styles.title}>Settings</Text>
+            <M3SettingsSheetTitle title="Settings" style={{ marginBottom: 16, paddingHorizontal: 4 }} />
           )}
 
           <ScrollView
@@ -307,13 +307,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 16,
     overflow: "hidden",
-  },
-  title: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 20,
-    color: "#2c2416",
-    marginBottom: 16,
-    paddingHorizontal: 4,
   },
   headerToolsRow: {
     justifyContent: "center",
