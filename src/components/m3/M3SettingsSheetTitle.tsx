@@ -12,6 +12,7 @@ import {
 export type M3SettingsSheetTitleProps = {
   title: string;
   subtitle?: string;
+  subtitleBold?: boolean;
   scale?: number;
   style?: ViewStyle;
   titleColor?: string;
@@ -22,6 +23,7 @@ export type M3SettingsSheetTitleProps = {
 export function M3SettingsSheetTitle({
   title,
   subtitle,
+  subtitleBold = false,
   scale = 1,
   style,
   titleColor = READER_M3_ON_SURFACE,
@@ -30,7 +32,9 @@ export function M3SettingsSheetTitle({
   return (
     <View style={[styles.wrap, style]}>
       <Text style={titleStyle(scale, titleColor)}>{title}</Text>
-      {subtitle ? <Text style={subtitleStyle(scale, subtitleColor)}>{subtitle}</Text> : null}
+      {subtitle ? (
+        <Text style={subtitleStyle(scale, subtitleColor, subtitleBold)}>{subtitle}</Text>
+      ) : null}
     </View>
   );
 }
@@ -48,10 +52,10 @@ function titleStyle(scale: number, color: string): TextStyle {
   };
 }
 
-function subtitleStyle(scale: number, color: string): TextStyle {
+function subtitleStyle(scale: number, color: string, bold: boolean): TextStyle {
   return {
     marginTop: 6 * scale,
-    fontFamily: "Inter_400Regular",
+    fontFamily: bold ? "Inter_600SemiBold" : "Inter_400Regular",
     fontSize: READER_M3_BODY_FONT_PX * scale * 0.875,
     lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.875,
     color,

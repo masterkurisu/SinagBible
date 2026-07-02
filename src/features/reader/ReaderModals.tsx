@@ -1,20 +1,15 @@
 import React, { useCallback, useEffect, useRef, type ComponentType, type ReactNode, type RefObject } from "react";
 import {
   Animated,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
   PanResponder,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
-  type KeyboardEvent,
   type LayoutRectangle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -36,6 +31,7 @@ import { SettingsMoreIcon } from "@/components/icons/SettingsMoreIcon";
 import { ReaderSettingsSideSheet } from "@/src/features/reader/ReaderSettingsSideSheet";
 import { ReaderThemePickerSheet } from "@/src/features/reader/ReaderThemePickerSheet";
 import { ReaderStudyNotesSheet } from "@/src/features/reader/ReaderStudyNotesSheet";
+import { ReaderVerseNoteDialog } from "@/src/features/reader/ReaderVerseNoteDialog";
 import { M3RichTooltipOverlay } from "@/src/components/m3/M3RichTooltipOverlay";
 import {
   getReaderSettingsTooltip,
@@ -545,85 +541,23 @@ bundle,
   settingsMutedTextColor={settingsMutedTextColor}
 />
 
-<Modal visible={noteModalVisible} animationType="fade" transparent statusBarTranslucent>
-  <KeyboardAvoidingView
-    behavior={Platform.OS === "ios" ? "padding" : undefined}
-    style={{ flex: 1 }}
-  >
-    <View style={{ flex: 1, justifyContent: "center" }}>
-      <Pressable
-        style={[StyleSheet.absoluteFill, { backgroundColor: rc.denseModalScrim }]}
-        onPress={() => {
-          setNoteModalVisible(false);
-          setNoteTargetVerse(null);
-          setNoteDraft("");
-        }}
-      />
-      <View
-        style={{
-          marginHorizontal: 24,
-          backgroundColor: colors.parchmentMid,
-          borderRadius: 20,
-          padding: 20,
-          borderWidth: 1,
-          borderColor: colors.borderSolid,
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: "Lora_400Regular",
-            fontSize: 18,
-            color: colors.brown800,
-            marginBottom: 12,
-          }}
-        >
-          Verse note
-          {noteTargetVerse != null ? ` · ${noteTargetVerse}` : ""}
-        </Text>
-        <TextInput
-          multiline
-          value={noteDraft}
-          onChangeText={setNoteDraft}
-          placeholder="Write a note…"
-          placeholderTextColor={colors.tan200}
-          style={{
-            minHeight: 120,
-            borderWidth: 1,
-            borderColor: colors.borderSolid,
-            borderRadius: 12,
-            padding: 12,
-            textAlignVertical: "top",
-            fontFamily: "Inter_400Regular",
-            fontSize: 16,
-            color: colors.brown800,
-            backgroundColor: colors.parchment,
-          }}
-        />
-        <View className="flex-row justify-end gap-3 mt-4">
-          <TouchableOpacity
-            className="px-4 py-2 rounded-full"
-            onPress={() => {
-              setNoteModalVisible(false);
-              setNoteTargetVerse(null);
-              setNoteDraft("");
-            }}
-            accessibilityLabel="Cancel note"
-          >
-            <Text style={{ fontFamily: "Inter_500Medium", color: colors.tan300 }}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="px-5 py-2 rounded-full"
-            style={{ backgroundColor: colors.parchmentDark }}
-            onPress={saveNoteFromModal}
-            accessibilityLabel="Save note"
-          >
-            <Text style={{ fontFamily: "Inter_500Medium", color: colors.brown800 }}>Save</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  </KeyboardAvoidingView>
-</Modal>
+<ReaderVerseNoteDialog
+  isOpen={noteModalVisible}
+  onClose={() => {
+    setNoteModalVisible(false);
+    setNoteTargetVerse(null);
+    setNoteDraft("");
+  }}
+  onSave={saveNoteFromModal}
+  noteDraft={noteDraft}
+  onChangeNoteDraft={setNoteDraft}
+  verseReference={
+    noteTargetVerse != null ? `${chapter.bookName} ${chapter.chapterNumber}:${noteTargetVerse}` : undefined
+  }
+  bundle={bundle}
+  insets={insets}
+  isTabletReaderLayout={isTabletReaderLayout}
+/>
 
     </>
   );
