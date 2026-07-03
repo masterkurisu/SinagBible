@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -53,10 +53,16 @@ export function M3Snackbar({
   const translateY = useRef(new Animated.Value(12)).current;
   const animRef = useRef<Animated.CompositeAnimation | null>(null);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasVisibleRef = useRef(false);
+  const onDismissRef = useRef(onDismiss);
+  const onActionRef = useRef(onAction);
+
+  onDismissRef.current = onDismiss;
+  onActionRef.current = onAction;
 
   const barMaxWidth = Math.min(screenW - 32, SNACKBAR_MAX_WIDTH_PX);
 
-  const runExit = (finishedCallback?: () => void) => {
+  const runExit = useCallback((finishedCallback?: () => void) => {
     animRef.current = Animated.parallel([
       Animated.timing(opacity, {
         toValue: 0,
@@ -74,18 +80,18 @@ export function M3Snackbar({
     animRef.current.start(({ finished }) => {
       if (finished) finishedCallback?.();
     });
-  };
+  }, [opacity, translateY]);
 
-  const handleActionPress = () => {
+  const handleActionPress = useCallback(() => {
     if (dismissTimerRef.current) {
       clearTimeout(dismissTimerRef.current);
       dismissTimerRef.current = null;
     }
     runExit(() => {
-      onAction?.();
-      onDismiss?.();
+      onActionRef.current?.();
+      onDismissRef.current?.();
     });
-  };
+  }, [runExit]);
 
   useEffect(() => {
     animRef.current?.stop();
@@ -95,11 +101,17 @@ export function M3Snackbar({
     }
 
     if (!visible) {
+      wasVisibleRef.current = false;
       opacity.setValue(0);
       translateY.setValue(12);
       return;
     }
 
+    if (wasVisibleRef.current) {
+      return;
+    }
+
+    wasVisibleRef.current = true;
     opacity.setValue(0);
     translateY.setValue(12);
     animRef.current = Animated.parallel([
@@ -119,7 +131,7 @@ export function M3Snackbar({
     animRef.current.start();
 
     dismissTimerRef.current = setTimeout(() => {
-      runExit(() => onDismiss?.());
+      runExit(() => onDismissRef.current?.());
     }, durationMs);
 
     return () => {
@@ -129,7 +141,7 @@ export function M3Snackbar({
         dismissTimerRef.current = null;
       }
     };
-  }, [visible, message, durationMs, onDismiss, opacity, translateY]);
+  }, [visible, durationMs, opacity, translateY, runExit]);
 
   if (!visible) return null;
 

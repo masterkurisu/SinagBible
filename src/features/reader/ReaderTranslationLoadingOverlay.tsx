@@ -7,7 +7,7 @@ import {
 } from "@/components/m3-contained-loading-indicator";
 import { READER_M3_ON_SURFACE } from "@/src/features/reader/readerSettingsPanelChrome";
 
-const DONE_VISIBLE_MS = 520;
+export const READER_CHAPTER_TRANSITION_DONE_VISIBLE_MS = 520;
 
 export type ReaderTranslationLoadingPhase = "idle" | "loading" | "done";
 
@@ -57,7 +57,7 @@ export function useReaderChapterTransitionPhase(
 
   useEffect(() => {
     if (phase !== "done") return;
-    const timer = setTimeout(() => setPhase("idle"), DONE_VISIBLE_MS);
+    const timer = setTimeout(() => setPhase("idle"), READER_CHAPTER_TRANSITION_DONE_VISIBLE_MS);
     return () => clearTimeout(timer);
   }, [phase]);
 

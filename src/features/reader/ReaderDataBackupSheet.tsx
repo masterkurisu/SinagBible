@@ -13,7 +13,13 @@ import {
   saveUserDataToDevice,
   shareUserData,
 } from "@/lib/user-data-backup";
-import { runReaderDataImportWithAnimation, yieldForReaderDataImportPaint } from "@/lib/reader-data-import-sync";
+import {
+  beginReaderDataImportPicking,
+  endReaderDataImportPicking,
+  runReaderDataImportWithAnimation,
+  waitForReaderDataImportUiSettled,
+  yieldForReaderDataImportPaint,
+} from "@/lib/reader-data-import-sync";
 import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
@@ -164,6 +170,10 @@ export function ReaderDataBackupSheet({
   const [busy, setBusy] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
 
+  const dismissSnackbar = useCallback(() => {
+    setSnackbar(null);
+  }, []);
+
   useEffect(() => {
     if (!isOpen) {
       setStep("menu");
@@ -236,16 +246,22 @@ export function ReaderDataBackupSheet({
         onClose();
         await yieldForReaderDataImportPaint();
 
+        beginReaderDataImportPicking();
+        await yieldForReaderDataImportPaint();
+
         const pickResult = await pickImportBackupFile();
         if (pickResult.status === "cancelled") {
+          endReaderDataImportPicking();
           return;
         }
 
         await runReaderDataImportWithAnimation(async () => {
           await applyImportBackupFromUri(pickResult.uri);
         });
+        await waitForReaderDataImportUiSettled();
         setSnackbar("Your data was imported");
       } catch (error) {
+        endReaderDataImportPicking();
         if (error instanceof ImportBackupInvalidError) {
           Alert.alert("Invalid backup file", "Choose a JSON file exported from Sinag Bible.");
           return;
@@ -387,11 +403,11 @@ export function ReaderDataBackupSheet({
       <M3Snackbar
         message={snackbar ?? ""}
         visible={snackbar != null}
-        onDismiss={() => setSnackbar(null)}
+        onDismiss={dismissSnackbar}
         bottomInset={insets.bottom + 16}
         icon="check-circle"
         actionLabel="Dismiss"
-        onAction={() => setSnackbar(null)}
+        onAction={dismissSnackbar}
       />
     </>
   );

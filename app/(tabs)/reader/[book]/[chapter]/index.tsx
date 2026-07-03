@@ -126,6 +126,8 @@ import {
   subscribeReaderDataImportAbort,
   subscribeReaderDataImportBegin,
   subscribeReaderDataImportEnd,
+  subscribeReaderDataImportPickingBegin,
+  subscribeReaderDataImportPickingEnd,
 } from "@/lib/reader-data-import-sync";
 import { ReaderDataBackupSheet } from "@/src/features/reader/ReaderDataBackupSheet";
 import { ReaderDeleteMyDataDialog } from "@/src/features/reader/ReaderDeleteMyDataDialog";
@@ -232,6 +234,7 @@ export default function ReaderChapterScreen() {
   const [readerCreditsOpen, setReaderCreditsOpen] = useState(false);
   const [dataBackupSheetOpen, setDataBackupSheetOpen] = useState(false);
   const [readerDataImportReloading, setReaderDataImportReloading] = useState(false);
+  const [readerDataImportPicking, setReaderDataImportPicking] = useState(false);
   const [commentaryPanelOpen, setCommentaryPanelOpen] = useState(false);
   const mobileSettingsFollowUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
@@ -262,6 +265,7 @@ export default function ReaderChapterScreen() {
   /** True after translation switch desync — not used for same-translation chapter navigation. */
   const readerVersesHadDesyncRef = useRef(false);
   const readerDataImportReloadingRef = useRef(false);
+  const readerDataImportPickingRef = useRef(false);
   const readerDataImportSkipDoneRef = useRef(false);
   const readerChapterScrollKeyRef = useRef("");
 
@@ -776,7 +780,28 @@ export default function ReaderChapterScreen() {
     skipDoneRef: readerDataImportSkipDoneRef,
   });
 
+  const importOverlayActive =
+    readerDataImportPicking ||
+    readerDataImportReloading ||
+    readerDataImportReloadingRef.current;
+
+  const importOverlayPhase = importOverlayActive
+    ? chapterTransitionPhase === "idle"
+      ? "loading"
+      : chapterTransitionPhase
+    : "idle";
+
   useEffect(() => {
+    const unsubPickingBegin = subscribeReaderDataImportPickingBegin(() => {
+      readerDataImportPickingRef.current = true;
+      unstable_batchedUpdates(() => {
+        setReaderDataImportPicking(true);
+      });
+    });
+    const unsubPickingEnd = subscribeReaderDataImportPickingEnd(() => {
+      readerDataImportPickingRef.current = false;
+      setReaderDataImportPicking(false);
+    });
     const unsubBegin = subscribeReaderDataImportBegin(() => {
       readerDataImportReloadingRef.current = true;
       unstable_batchedUpdates(() => {
@@ -795,6 +820,8 @@ export default function ReaderChapterScreen() {
       readerVersesOpacityAnim.setValue(1);
     });
     return () => {
+      unsubPickingBegin();
+      unsubPickingEnd();
       unsubBegin();
       unsubEnd();
       unsubAbort();
@@ -1630,8 +1657,13 @@ export default function ReaderChapterScreen() {
         onOpenJournal={handleOpenJournalFromSelection}
         onOpenStudyNotes={handleOpenStudyNotesFromSelection}
         onSelectionActivityChange={handleSelectionActivityChange}
-        translationLoadingPhase={chapterTransitionPhase}
-        translationLoadingShowLabel={!readerDataImportReloading && !readerDataImportReloadingRef.current}
+        translationLoadingPhase={importOverlayPhase}
+        translationLoadingShowLabel={
+          !readerDataImportPicking &&
+          !readerDataImportPickingRef.current &&
+          !readerDataImportReloading &&
+          !readerDataImportReloadingRef.current
+        }
         translationLoadingAccentColor={colors.gold}
       />
 

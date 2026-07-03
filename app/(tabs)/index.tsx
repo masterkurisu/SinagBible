@@ -1,10 +1,9 @@
-import { useEffect, useRef, useCallback } from "react";
-import { Platform, ScrollView, View } from "react-native";
+import { useCallback } from "react";
+import { Platform, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { useSbTabScreenPadding } from "@/lib/use-sb-bottom-padding";
-import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
 import { hapticLightImpact } from "@/lib/haptics";
 import { HomeM3HeroSection } from "@/src/features/home/HomeM3HeroSection";
 import { HomeM3DailyVerseCard } from "@/src/features/home/HomeM3DailyVerseCard";
@@ -20,7 +19,6 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const bottomPad = useSbTabScreenPadding(48);
   const androidHomeBottomCompensation = Platform.OS === "android" ? insets.bottom + 46 : 0;
-  const scrollRef = useRef<ScrollView | null>(null);
 
   const navigateWithHaptic = useCallback(
     (href: Href) => {
@@ -30,21 +28,13 @@ export default function HomeScreen() {
     [router],
   );
 
-  useEffect(() => {
-    return registerTabScrollRef("index", {
-      scrollToOffset: ({ offset, animated = true }) => {
-        scrollRef.current?.scrollTo({ y: offset, animated });
-      },
-    });
-  }, []);
-
   return (
-    <ScrollView
-      ref={scrollRef}
+    <View
       className="flex-1"
-      style={{ backgroundColor: h.pageBackground }}
-      contentContainerClassName="pb-8"
-      contentContainerStyle={{ paddingBottom: bottomPad + androidHomeBottomCompensation }}
+      style={{
+        backgroundColor: h.pageBackground,
+        paddingBottom: bottomPad + androidHomeBottomCompensation,
+      }}
     >
       <View
         className="w-full max-w-[680px] self-center"
@@ -62,6 +52,6 @@ export default function HomeScreen() {
           <HomeM3DailyVerseCard bundle={bundle} />
         </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
