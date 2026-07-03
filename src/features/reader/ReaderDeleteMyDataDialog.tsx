@@ -19,6 +19,8 @@ import {
   M3_MOTION_DURATION_SHORT4_MS,
 } from "@/src/components/m3/m3-motion";
 import {
+  DELETE_MY_DATA_BACKUP_REMINDER_BODY,
+  DELETE_MY_DATA_BACKUP_REMINDER_TITLE,
   DELETE_MY_DATA_DIALOG_TITLE,
   DELETE_MY_DATA_ERROR_MESSAGE,
   DELETE_MY_DATA_FOOTNOTE,
@@ -33,28 +35,35 @@ import {
   READER_M3_ERROR_CONTAINER,
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
+  READER_M3_ON_SECONDARY_CONTAINER,
+  READER_M3_SECONDARY_CONTAINER,
   READER_M3_SHEET_TITLE_FONT_PX,
   READER_M3_SHEET_TITLE_LINE_HEIGHT_PX,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
+type DeleteDialogStep = "backup-reminder" | "confirm";
+
 export type ReaderDeleteMyDataDialogProps = {
   isOpen: boolean;
   onClose: () => void;
+  onOpenBackup: () => void;
   onConfirmDelete: () => Promise<void>;
   bundle: MobileAppThemeBundle;
   isTabletReaderLayout?: boolean;
 };
 
-/** M3 basic dialog — destructive confirmation for local data deletion. */
+/** M3 basic dialog — backup reminder, then destructive confirmation for local data deletion. */
 export function ReaderDeleteMyDataDialog({
   isOpen,
   onClose,
+  onOpenBackup,
   onConfirmDelete,
   bundle,
   isTabletReaderLayout = false,
 }: ReaderDeleteMyDataDialogProps) {
   const rc = bundle.reader;
   const { width: screenW } = useWindowDimensions();
+  const [step, setStep] = useState<DeleteDialogStep>("backup-reminder");
   const [deleting, setDeleting] = useState(false);
   const [errorVisible, setErrorVisible] = useState(false);
   const scaleAnim = useRef(new Animated.Value(0.92)).current;
@@ -66,6 +75,7 @@ export function ReaderDeleteMyDataDialog({
 
   useEffect(() => {
     if (!isOpen) {
+      setStep("backup-reminder");
       setDeleting(false);
       setErrorVisible(false);
       scaleAnim.setValue(0.92);
@@ -90,11 +100,23 @@ export function ReaderDeleteMyDataDialog({
     ]).start();
   }, [isOpen, opacityAnim, scaleAnim]);
 
-  const handleCancel = useCallback(() => {
+  const handleDismiss = useCallback(() => {
     if (deleting) return;
     hapticLightImpact();
     onClose();
   }, [deleting, onClose]);
+
+  const handleOpenBackup = useCallback(() => {
+    if (deleting) return;
+    hapticLightImpact();
+    onOpenBackup();
+  }, [deleting, onOpenBackup]);
+
+  const handleProceedToDelete = useCallback(() => {
+    if (deleting) return;
+    hapticLightImpact();
+    setStep("confirm");
+  }, [deleting]);
 
   const handleDelete = useCallback(() => {
     if (deleting) return;
@@ -112,13 +134,19 @@ export function ReaderDeleteMyDataDialog({
     })();
   }, [deleting, onClose, onConfirmDelete]);
 
+  const dismissSnackbar = useCallback(() => {
+    setErrorVisible(false);
+  }, []);
+
   return (
-    <Modal visible={isOpen} transparent animationType="none" statusBarTranslucent onRequestClose={handleCancel}>
+    <Modal visible={isOpen} transparent animationType="none" statusBarTranslucent onRequestClose={handleDismiss}>
       <View style={styles.root}>
         <Pressable
           style={[StyleSheet.absoluteFill, { backgroundColor: rc.denseModalScrim }]}
-          onPress={handleCancel}
-          accessibilityLabel="Dismiss delete my data dialog"
+          onPress={handleDismiss}
+          accessibilityLabel={
+            step === "backup-reminder" ? "Dismiss backup reminder" : "Dismiss delete my data dialog"
+          }
         />
         <View pointerEvents="box-none" style={styles.centerAnchor}>
           <Animated.View
@@ -139,75 +167,52 @@ export function ReaderDeleteMyDataDialog({
                 },
               ]}
             >
-              <ScrollView
-                bounces={false}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
-                <View
-                  style={[
-                    styles.iconBadge,
-                    {
-                      width: 40 * scale,
-                      height: 40 * scale,
-                      borderRadius: 20 * scale,
-                      marginBottom: 16 * scale,
-                    },
-                  ]}
-                >
-                  <MaterialIcons name="delete-outline" size={22 * scale} color={READER_M3_ERROR} />
+              {step === "backup-reminder" ? (
+                <BackupReminderBody scale={scale} />
+              ) : (
+                <DeleteConfirmBody scale={scale} />
+              )}
+
+              {step === "backup-reminder" ? (
+                <View style={[styles.actionsRow, { marginTop: 24 * scale, gap: 8 * scale }]}>
+                  <M3Button
+                    label="No, I want to delete"
+                    variant="text"
+                    destructive
+                    onPress={handleProceedToDelete}
+                    bundle={bundle}
+                    scale={scale}
+                  />
+                  <M3Button
+                    label="Back up"
+                    variant="filled"
+                    onPress={handleOpenBackup}
+                    bundle={bundle}
+                    scale={scale}
+                  />
                 </View>
-
-                <Text
-                  style={{
-                    fontFamily: "Inter_500Medium",
-                    fontSize: READER_M3_SHEET_TITLE_FONT_PX * scale,
-                    lineHeight: READER_M3_SHEET_TITLE_LINE_HEIGHT_PX * scale,
-                    color: READER_M3_ON_SURFACE,
-                    marginBottom: 12 * scale,
-                  }}
-                >
-                  {DELETE_MY_DATA_DIALOG_TITLE}
-                </Text>
-
-                <Text style={bodyStyle(scale, READER_M3_ON_SURFACE_VARIANT)}>{DELETE_MY_DATA_INTRO}</Text>
-
-                <View style={{ marginTop: 8 * scale, marginBottom: 12 * scale, gap: 4 * scale }}>
-                  {DELETE_MY_DATA_ITEMS.map((item) => (
-                    <View key={item} style={styles.bulletRow}>
-                      <Text style={[bodyStyle(scale, READER_M3_ON_SURFACE_VARIANT), styles.bulletDot]}>
-                        •
-                      </Text>
-                      <Text style={[bodyStyle(scale, READER_M3_ON_SURFACE_VARIANT), styles.bulletText]}>
-                        {item}
-                      </Text>
-                    </View>
-                  ))}
+              ) : (
+                <View style={[styles.actionsRow, { marginTop: 24 * scale, gap: 8 * scale }]}>
+                  <M3Button
+                    label="Cancel"
+                    variant="text"
+                    onPress={handleDismiss}
+                    disabled={deleting}
+                    bundle={bundle}
+                    scale={scale}
+                  />
+                  <M3Button
+                    label="Delete my data"
+                    variant="text"
+                    destructive
+                    onPress={handleDelete}
+                    disabled={deleting}
+                    loading={deleting}
+                    bundle={bundle}
+                    scale={scale}
+                  />
                 </View>
-
-                <Text style={bodyStyle(scale, READER_M3_ON_SURFACE_VARIANT)}>{DELETE_MY_DATA_FOOTNOTE}</Text>
-              </ScrollView>
-
-              <View style={[styles.actionsRow, { marginTop: 24 * scale, gap: 8 * scale }]}>
-                <M3Button
-                  label="Cancel"
-                  variant="text"
-                  onPress={handleCancel}
-                  disabled={deleting}
-                  bundle={bundle}
-                  scale={scale}
-                />
-                <M3Button
-                  label="Delete my data"
-                  variant="text"
-                  destructive
-                  onPress={handleDelete}
-                  disabled={deleting}
-                  loading={deleting}
-                  bundle={bundle}
-                  scale={scale}
-                />
-              </View>
+              )}
             </View>
           </Animated.View>
         </View>
@@ -215,11 +220,91 @@ export function ReaderDeleteMyDataDialog({
         <M3Snackbar
           message={DELETE_MY_DATA_ERROR_MESSAGE}
           visible={errorVisible}
-          onDismiss={() => setErrorVisible(false)}
+          onDismiss={dismissSnackbar}
           bottomInset={32}
         />
       </View>
     </Modal>
+  );
+}
+
+function BackupReminderBody({ scale }: { scale: number }) {
+  return (
+    <>
+      <View
+        style={[
+          styles.iconBadge,
+          {
+            width: 40 * scale,
+            height: 40 * scale,
+            borderRadius: 20 * scale,
+            marginBottom: 16 * scale,
+            backgroundColor: READER_M3_SECONDARY_CONTAINER,
+          },
+        ]}
+      >
+        <MaterialIcons name="backup" size={22 * scale} color={READER_M3_ON_SECONDARY_CONTAINER} />
+      </View>
+
+      <Text
+        style={{
+          fontFamily: "Inter_500Medium",
+          fontSize: READER_M3_SHEET_TITLE_FONT_PX * scale,
+          lineHeight: READER_M3_SHEET_TITLE_LINE_HEIGHT_PX * scale,
+          color: READER_M3_ON_SURFACE,
+          marginBottom: 12 * scale,
+        }}
+      >
+        {DELETE_MY_DATA_BACKUP_REMINDER_TITLE}
+      </Text>
+
+      <Text style={bodyStyle(scale, READER_M3_ON_SURFACE_VARIANT)}>{DELETE_MY_DATA_BACKUP_REMINDER_BODY}</Text>
+    </>
+  );
+}
+
+function DeleteConfirmBody({ scale }: { scale: number }) {
+  return (
+    <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View
+        style={[
+          styles.iconBadge,
+          {
+            width: 40 * scale,
+            height: 40 * scale,
+            borderRadius: 20 * scale,
+            marginBottom: 16 * scale,
+          },
+        ]}
+      >
+        <MaterialIcons name="delete-outline" size={22 * scale} color={READER_M3_ERROR} />
+      </View>
+
+      <Text
+        style={{
+          fontFamily: "Inter_500Medium",
+          fontSize: READER_M3_SHEET_TITLE_FONT_PX * scale,
+          lineHeight: READER_M3_SHEET_TITLE_LINE_HEIGHT_PX * scale,
+          color: READER_M3_ON_SURFACE,
+          marginBottom: 12 * scale,
+        }}
+      >
+        {DELETE_MY_DATA_DIALOG_TITLE}
+      </Text>
+
+      <Text style={bodyStyle(scale, READER_M3_ON_SURFACE_VARIANT)}>{DELETE_MY_DATA_INTRO}</Text>
+
+      <View style={{ marginTop: 8 * scale, marginBottom: 12 * scale, gap: 4 * scale }}>
+        {DELETE_MY_DATA_ITEMS.map((item) => (
+          <View key={item} style={styles.bulletRow}>
+            <Text style={[bodyStyle(scale, READER_M3_ON_SURFACE_VARIANT), styles.bulletDot]}>•</Text>
+            <Text style={[bodyStyle(scale, READER_M3_ON_SURFACE_VARIANT), styles.bulletText]}>{item}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Text style={bodyStyle(scale, READER_M3_ON_SURFACE_VARIANT)}>{DELETE_MY_DATA_FOOTNOTE}</Text>
+    </ScrollView>
   );
 }
 

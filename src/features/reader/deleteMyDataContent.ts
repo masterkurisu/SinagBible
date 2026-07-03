@@ -1,4 +1,9 @@
 /** Copy shared by the Delete My Data confirmation dialog. */
+export const DELETE_MY_DATA_BACKUP_REMINDER_TITLE = "Back up your data first?";
+
+export const DELETE_MY_DATA_BACKUP_REMINDER_BODY =
+  "Deleting removes your journal entries, favorite verses, highlights, and notes from this device. Export a backup now if you may want them later.";
+
 export const DELETE_MY_DATA_DIALOG_TITLE = "Delete my data?";
 
 export const DELETE_MY_DATA_INTRO =

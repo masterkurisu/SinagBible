@@ -505,6 +505,13 @@ export default function ReaderChapterScreen() {
     }, 0);
   }, [closeMoreSettingsPopup]);
 
+  const openDataBackupFromDeleteReminder = useCallback(() => {
+    closeDeleteMyDataDialog();
+    setTimeout(() => {
+      setDataBackupSheetOpen(true);
+    }, 0);
+  }, [closeDeleteMyDataDialog]);
+
   const openMobileReaderThemesFromMenu = useCallback(() => {
     closeToolsMenu();
     scheduleAfterMobileReaderMenuClose(() => {
@@ -1836,6 +1843,7 @@ export default function ReaderChapterScreen() {
       <ReaderDeleteMyDataDialog
         isOpen={deleteMyDataDialogOpen}
         onClose={closeDeleteMyDataDialog}
+        onOpenBackup={openDataBackupFromDeleteReminder}
         onConfirmDelete={confirmDeleteMyData}
         bundle={bundle}
         isTabletReaderLayout={isTabletReaderLayout}

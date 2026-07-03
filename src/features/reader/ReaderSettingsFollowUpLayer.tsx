@@ -171,6 +171,13 @@ export function useReaderSettingsFollowUpState({
     }, 0);
   }, [closeMoreSettingsPopup]);
 
+  const openDataBackupFromDeleteReminder = useCallback(() => {
+    closeDeleteMyDataDialog();
+    setTimeout(() => {
+      setDataBackupSheetOpen(true);
+    }, 0);
+  }, [closeDeleteMyDataDialog]);
+
   const openPrivacyPolicyFromCredits = useCallback(() => {
     setReaderCreditsOpen(false);
     setTimeout(() => setReaderPrivacyPolicyOpen(true), 0);
@@ -255,6 +262,7 @@ export function useReaderSettingsFollowUpState({
     openMobileReaderMoreFromMenu,
     openCreditsFromMoreSheet,
     openDataBackupFromMoreSheet,
+    openDataBackupFromDeleteReminder,
     openPrivacyPolicyFromCredits,
     openTermsFromCredits,
     openDeleteMyDataConfirmFromMenu,
@@ -497,6 +505,7 @@ export function ReaderSettingsFollowUpLayer({
       <ReaderDeleteMyDataDialog
         isOpen={followUp.deleteMyDataDialogOpen}
         onClose={followUp.closeDeleteMyDataDialog}
+        onOpenBackup={followUp.openDataBackupFromDeleteReminder}
         onConfirmDelete={() => followUp.confirmDeleteMyData(onNavigate)}
         bundle={bundle}
         isTabletReaderLayout={isTabletReaderLayout}
