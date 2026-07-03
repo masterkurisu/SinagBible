@@ -7,6 +7,7 @@ import {
   documentDirectory,
   EncodingType,
   makeDirectoryAsync,
+  readAsStringAsync,
   readDirectoryAsync,
   writeAsStringAsync,
 } from "expo-file-system/legacy";
@@ -152,4 +153,48 @@ export async function deleteAllJournalImages(): Promise<void> {
   const root = journalImagesRootDir();
   if (!root) return;
   await deleteAsync(root, { idempotent: true }).catch(() => {});
+}
+
+const EXPORT_IMG_SRC_RE =
+  /<img\b([^>]*)\bsrc=(["'])([^"']+)\2([^>]*)>/gi;
+
+function mimeFromImagePath(path: string): string {
+  const lower = path.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+/** Embeds on-disk journal images as data URLs so backups are portable across devices. */
+export async function inlineContentImagesForExport(content: string): Promise<string> {
+  if (!/<img\b/i.test(content)) return content;
+
+  const chunks: string[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const re = new RegExp(EXPORT_IMG_SRC_RE.source, EXPORT_IMG_SRC_RE.flags);
+
+  while ((match = re.exec(content)) !== null) {
+    chunks.push(content.slice(lastIndex, match.index));
+    const src = match[3]?.trim() ?? "";
+    let replacement = match[0];
+
+    if (src && !src.startsWith("data:image/")) {
+      const fileUri = src.startsWith("file://") ? src : `file://${src}`;
+      try {
+        const base64 = await readAsStringAsync(fileUri, { encoding: EncodingType.Base64 });
+        const dataUrl = `data:${mimeFromImagePath(src)};base64,${base64}`;
+        replacement = `<img${match[1] ?? ""}src="${escapeXmlAttr(dataUrl)}"${match[4] ?? ""}>`;
+      } catch {
+        /* keep original src when the file is missing */
+      }
+    }
+
+    chunks.push(replacement);
+    lastIndex = match.index + match[0].length;
+  }
+
+  chunks.push(content.slice(lastIndex));
+  return chunks.join("");
 }

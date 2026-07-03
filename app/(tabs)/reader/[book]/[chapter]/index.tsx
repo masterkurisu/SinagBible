@@ -121,7 +121,13 @@ import {
 import { ReaderFeatureOnboardingLayer } from "@/src/features/reader/ReaderFeatureOnboardingLayer";
 import { useReaderFeatureOnboarding, type ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
-import { useReaderTranslationLoadingPhase } from "@/src/features/reader/ReaderTranslationLoadingOverlay";
+import { useReaderChapterTransitionPhase } from "@/src/features/reader/ReaderTranslationLoadingOverlay";
+import {
+  subscribeReaderDataImportAbort,
+  subscribeReaderDataImportBegin,
+  subscribeReaderDataImportEnd,
+} from "@/lib/reader-data-import-sync";
+import { ReaderDataBackupSheet } from "@/src/features/reader/ReaderDataBackupSheet";
 import { ReaderDeleteMyDataDialog } from "@/src/features/reader/ReaderDeleteMyDataDialog";
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
@@ -224,6 +230,8 @@ export default function ReaderChapterScreen() {
   const [readerPrivacyPolicyOpen, setReaderPrivacyPolicyOpen] = useState(false);
   const [readerTermsOpen, setReaderTermsOpen] = useState(false);
   const [readerCreditsOpen, setReaderCreditsOpen] = useState(false);
+  const [dataBackupSheetOpen, setDataBackupSheetOpen] = useState(false);
+  const [readerDataImportReloading, setReaderDataImportReloading] = useState(false);
   const [commentaryPanelOpen, setCommentaryPanelOpen] = useState(false);
   const mobileSettingsFollowUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
@@ -253,6 +261,8 @@ export default function ReaderChapterScreen() {
   const readerVersesOpacityAnim = useRef(new Animated.Value(1)).current;
   /** True after translation switch desync — not used for same-translation chapter navigation. */
   const readerVersesHadDesyncRef = useRef(false);
+  const readerDataImportReloadingRef = useRef(false);
+  const readerDataImportSkipDoneRef = useRef(false);
   const readerChapterScrollKeyRef = useRef("");
 
   const [newEntrySheetOpen, setNewEntrySheetOpen] = useState(false);
@@ -484,6 +494,13 @@ export default function ReaderChapterScreen() {
     }, 0);
   }, [closeMoreSettingsPopup]);
 
+  const openDataBackupFromMoreSheet = useCallback(() => {
+    closeMoreSettingsPopup();
+    setTimeout(() => {
+      setDataBackupSheetOpen(true);
+    }, 0);
+  }, [closeMoreSettingsPopup]);
+
   const openMobileReaderThemesFromMenu = useCallback(() => {
     closeToolsMenu();
     scheduleAfterMobileReaderMenuClose(() => {
@@ -704,6 +721,7 @@ export default function ReaderChapterScreen() {
     if (toolsMenuOpen) closeToolsMenu();
     else if (fontSettingsSheetOpen) closeFontSettingsPopup();
     else if (moreSettingsSheetOpen) closeMoreSettingsPopup();
+    else if (dataBackupSheetOpen) setDataBackupSheetOpen(false);
     else if (deleteMyDataDialogOpen) closeDeleteMyDataDialog();
     else if (readerPrivacyPolicyOpen) setReaderPrivacyPolicyOpen(false);
     else if (readerCreditsOpen) setReaderCreditsOpen(false);
@@ -716,6 +734,7 @@ export default function ReaderChapterScreen() {
     closeFontSettingsPopup,
     moreSettingsSheetOpen,
     closeMoreSettingsPopup,
+    dataBackupSheetOpen,
     deleteMyDataDialogOpen,
     closeDeleteMyDataDialog,
     readerPrivacyPolicyOpen,
@@ -751,17 +770,46 @@ export default function ReaderChapterScreen() {
     resolvedTranslationId && requestedTranslationId !== resolvedTranslationId,
   );
 
-  const translationLoadingPhase = useReaderTranslationLoadingPhase(isTranslationSwitching);
+  const isChapterContentTransitioning = isTranslationSwitching || readerDataImportReloading;
+
+  const chapterTransitionPhase = useReaderChapterTransitionPhase(isChapterContentTransitioning, {
+    skipDoneRef: readerDataImportSkipDoneRef,
+  });
 
   useEffect(() => {
-    if (isTranslationSwitching) {
+    const unsubBegin = subscribeReaderDataImportBegin(() => {
+      readerDataImportReloadingRef.current = true;
+      unstable_batchedUpdates(() => {
+        setReaderDataImportReloading(true);
+      });
+    });
+    const unsubEnd = subscribeReaderDataImportEnd(() => {
+      readerDataImportReloadingRef.current = false;
+      setReaderDataImportReloading(false);
+    });
+    const unsubAbort = subscribeReaderDataImportAbort(() => {
+      readerDataImportSkipDoneRef.current = true;
+      readerDataImportReloadingRef.current = false;
+      setReaderDataImportReloading(false);
+      readerVersesOpacityAnim.stopAnimation();
+      readerVersesOpacityAnim.setValue(1);
+    });
+    return () => {
+      unsubBegin();
+      unsubEnd();
+      unsubAbort();
+    };
+  }, [readerVersesOpacityAnim]);
+
+  useEffect(() => {
+    if (isChapterContentTransitioning) {
       readerVersesHadDesyncRef.current = true;
       readerVersesOpacityAnim.stopAnimation();
       readerVersesOpacityAnim.setValue(0);
       return;
     }
 
-    if (translationLoadingPhase !== "idle") {
+    if (chapterTransitionPhase !== "idle") {
       readerVersesOpacityAnim.stopAnimation();
       readerVersesOpacityAnim.setValue(0);
       return;
@@ -784,7 +832,12 @@ export default function ReaderChapterScreen() {
     } else {
       readerVersesOpacityAnim.setValue(1);
     }
-  }, [isReaderContentCurrent, isTranslationSwitching, translationLoadingPhase, readerVersesOpacityAnim]);
+  }, [
+    isReaderContentCurrent,
+    isChapterContentTransitioning,
+    chapterTransitionPhase,
+    readerVersesOpacityAnim,
+  ]);
 
   const chapterNav = useMemo(() => {
     if (!chapter || !books) {
@@ -811,6 +864,7 @@ export default function ReaderChapterScreen() {
     toolsMenuOpen ||
     fontSettingsSheetOpen ||
     moreSettingsSheetOpen ||
+    dataBackupSheetOpen ||
     deleteMyDataDialogOpen ||
     readerDropdown != null ||
     readerPrivacyPolicyOpen ||
@@ -1017,6 +1071,7 @@ export default function ReaderChapterScreen() {
     toolsMenuOpen ||
     fontSettingsSheetOpen ||
     moreSettingsSheetOpen ||
+    dataBackupSheetOpen ||
     deleteMyDataDialogOpen ||
     readerDropdown != null ||
     readerPrivacyPolicyOpen ||
@@ -1105,6 +1160,7 @@ export default function ReaderChapterScreen() {
   const tabBarAutoHideForceVisible =
     (fontSettingsSheetOpen ||
       moreSettingsSheetOpen ||
+      dataBackupSheetOpen ||
       deleteMyDataDialogOpen ||
       readerDropdown != null ||
       readerPrivacyPolicyOpen ||
@@ -1558,6 +1614,7 @@ export default function ReaderChapterScreen() {
           toolsMenuOpen ||
           fontSettingsSheetOpen ||
           moreSettingsSheetOpen ||
+          dataBackupSheetOpen ||
           deleteMyDataDialogOpen ||
           readerDropdown != null ||
           readerPrivacyPolicyOpen ||
@@ -1573,7 +1630,8 @@ export default function ReaderChapterScreen() {
         onOpenJournal={handleOpenJournalFromSelection}
         onOpenStudyNotes={handleOpenStudyNotesFromSelection}
         onSelectionActivityChange={handleSelectionActivityChange}
-        translationLoadingPhase={translationLoadingPhase}
+        translationLoadingPhase={chapterTransitionPhase}
+        translationLoadingShowLabel={!readerDataImportReloading && !readerDataImportReloadingRef.current}
         translationLoadingAccentColor={colors.gold}
       />
 
@@ -1719,10 +1777,18 @@ export default function ReaderChapterScreen() {
         isOpen={moreSettingsSheetOpen}
         onClose={closeMoreSettingsPopup}
         onSelectCredits={openCreditsFromMoreSheet}
+        onSelectImportExport={openDataBackupFromMoreSheet}
         bundle={bundle}
         insets={insets}
         isTabletReaderLayout={isTabletReaderLayout}
         settingsMutedTextColor={settingsMutedTextColor}
+      />
+      <ReaderDataBackupSheet
+        isOpen={dataBackupSheetOpen}
+        onClose={() => setDataBackupSheetOpen(false)}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
       />
       <CreditsSheet
         visible={readerCreditsOpen}

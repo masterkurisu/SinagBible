@@ -572,6 +572,22 @@ export async function updateLocalEntry(
   return updated;
 }
 
+/**
+ * Replaces all journal entries (used by data import). Clears on-disk images first,
+ * then externalizes any embedded data URLs in the incoming payload.
+ */
+export async function replaceAllLocalEntries(entries: LocalJournalEntry[]): Promise<void> {
+  await deleteAllJournalImages();
+  const valid = entries.filter(
+    (entry) => typeof entry.id === "string" && entry.id.startsWith("local-"),
+  );
+  const prepared = await Promise.all(
+    valid.map(async (entry) => prepareEntryForStorage(entry)),
+  );
+  await writeEntries(prepared);
+  setLastLoadedEntriesCache(prepared);
+}
+
 export async function deleteLocalEntry(id: string): Promise<void> {
   if (!id.startsWith("local-")) return;
   if (id === DEFAULT_SAMPLE_ENTRY_ID) {

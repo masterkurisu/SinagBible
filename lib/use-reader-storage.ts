@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { BibleChapter } from "@sinag-bible/types";
 import type { HighlightColor } from "@sinag-bible/types";
 import { saveReaderLastPosition } from "@/lib/reader-last-position";
+import { registerReaderDataImportReload } from "@/lib/reader-data-import-sync";
 
 const HIGHLIGHTS_STORAGE_KEY_PREFIX = "sb:reader:highlights:";
 const NOTES_STORAGE_KEY_PREFIX = "sb:reader:notes:";
@@ -177,6 +178,21 @@ export function useReaderStorage(
     };
   }, [chapter?.bookSlug, chapter?.chapterNumber, translationId]);
 
+  useEffect(() => {
+    if (!chapter || !translationId) {
+      return () => {};
+    }
+    const slug = chapter.bookSlug;
+    const num = chapter.chapterNumber;
+    const tid = translationId;
+
+    return registerReaderDataImportReload(async () => {
+      const snapshot = await loadChapterStorage(slug, num, tid);
+      setHighlights(snapshot.highlights);
+      setNotes(snapshot.notes);
+    });
+  }, [chapter?.bookSlug, chapter?.chapterNumber, translationId]);
+
   const removeHighlightsFromVerses = useCallback(
     (verseNumbers: number[]) => {
       if (!chapter || !translationId || verseNumbers.length === 0) return;
@@ -236,4 +252,119 @@ export function useReaderStorage(
     applyHighlightToVerses,
     persistNoteForVerse,
   };
+}
+
+export type ReaderChapterAnnotationExport = {
+  bookSlug: string;
+  chapter: number;
+  translationId: string;
+  highlights: Record<number, HighlightColor>;
+  notes: Record<number, string>;
+};
+
+function parseChapterStorageKey(
+  key: string,
+  prefix: string,
+): { bookSlug: string; chapter: number; translationId: string } | null {
+  if (!key.startsWith(prefix)) return null;
+  const rest = key.slice(prefix.length);
+  const lastColon = rest.lastIndexOf(":");
+  if (lastColon <= 0) return null;
+  const secondLastColon = rest.lastIndexOf(":", lastColon - 1);
+  if (secondLastColon <= 0) return null;
+  const bookSlug = rest.slice(0, secondLastColon);
+  const chapter = parseInt(rest.slice(secondLastColon + 1, lastColon), 10);
+  const translationId = rest.slice(lastColon + 1);
+  if (!bookSlug || !Number.isFinite(chapter) || !translationId) return null;
+  return { bookSlug, chapter, translationId };
+}
+
+function chapterExportKey(bookSlug: string, chapter: number, translationId: string): string {
+  return `${bookSlug}:${chapter}:${translationId}`;
+}
+
+/** Clears in-memory reader annotation cache (e.g. after a full data import). */
+export function clearReaderChapterStorageCache(): void {
+  chapterStorageCache.clear();
+  chapterStorageLoadPromises.clear();
+}
+
+/** Loads every persisted highlight and note chapter from AsyncStorage. */
+export async function exportAllReaderChapterAnnotations(): Promise<ReaderChapterAnnotationExport[]> {
+  const allKeys = await AsyncStorage.getAllKeys();
+  const chapters = new Map<string, ReaderChapterAnnotationExport>();
+
+  for (const key of allKeys) {
+    let parsed: { bookSlug: string; chapter: number; translationId: string } | null = null;
+    let kind: "highlights" | "notes" | null = null;
+
+    if (key.startsWith(HIGHLIGHTS_STORAGE_KEY_PREFIX)) {
+      parsed = parseChapterStorageKey(key, HIGHLIGHTS_STORAGE_KEY_PREFIX);
+      kind = "highlights";
+    } else if (key.startsWith(NOTES_STORAGE_KEY_PREFIX)) {
+      parsed = parseChapterStorageKey(key, NOTES_STORAGE_KEY_PREFIX);
+      kind = "notes";
+    }
+
+    if (!parsed || !kind) continue;
+
+    const mapKey = chapterExportKey(parsed.bookSlug, parsed.chapter, parsed.translationId);
+    const existing = chapters.get(mapKey) ?? {
+      bookSlug: parsed.bookSlug,
+      chapter: parsed.chapter,
+      translationId: parsed.translationId,
+      highlights: {},
+      notes: {},
+    };
+
+    const raw = await AsyncStorage.getItem(key);
+    if (kind === "highlights") {
+      existing.highlights = parseHighlights(raw);
+    } else {
+      existing.notes = parseNotes(raw);
+    }
+    chapters.set(mapKey, existing);
+  }
+
+  return Array.from(chapters.values()).filter(
+    (chapter) =>
+      Object.keys(chapter.highlights).length > 0 || Object.keys(chapter.notes).length > 0,
+  );
+}
+
+/** Replaces all reader highlights and notes with the provided export payload. */
+export async function importAllReaderChapterAnnotations(
+  chapters: ReaderChapterAnnotationExport[],
+): Promise<void> {
+  const allKeys = await AsyncStorage.getAllKeys();
+  const keysToRemove = allKeys.filter(
+    (key) =>
+      key.startsWith(HIGHLIGHTS_STORAGE_KEY_PREFIX) || key.startsWith(NOTES_STORAGE_KEY_PREFIX),
+  );
+  if (keysToRemove.length > 0) {
+    await AsyncStorage.multiRemove(keysToRemove);
+  }
+
+  const writes: [string, string][] = [];
+  for (const chapter of chapters) {
+    const { bookSlug, chapter: chapterNum, translationId, highlights, notes } = chapter;
+    if (Object.keys(highlights).length > 0) {
+      writes.push([
+        getHighlightsStorageKey(bookSlug, chapterNum, translationId),
+        JSON.stringify(highlights),
+      ]);
+    }
+    if (Object.keys(notes).length > 0) {
+      writes.push([
+        getNotesStorageKey(bookSlug, chapterNum, translationId),
+        JSON.stringify(notes),
+      ]);
+    }
+  }
+
+  if (writes.length > 0) {
+    await AsyncStorage.multiSet(writes);
+  }
+
+  clearReaderChapterStorageCache();
 }

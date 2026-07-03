@@ -554,6 +554,10 @@ export type ReaderSelectionLayerProps = {
   onOpenStudyNotes: () => void;
   onSelectionActivityChange?: (activity: ReaderSelectionActivity) => void;
   translationLoadingPhase?: ReaderTranslationLoadingPhase;
+  translationLoadingLabel?: string;
+  translationLoadingDoneLabel?: string;
+  /** When false, loading phase shows spinner only (used for backup import reload). */
+  translationLoadingShowLabel?: boolean;
   translationLoadingAccentColor?: string;
 };
 
@@ -609,6 +613,9 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   onOpenStudyNotes,
   onSelectionActivityChange,
   translationLoadingPhase = "idle",
+  translationLoadingLabel,
+  translationLoadingDoneLabel,
+  translationLoadingShowLabel = true,
   translationLoadingAccentColor,
 }: ReaderSelectionLayerProps) {
   const actionBarOnboardingStudyNotesRef = useRef<View | null>(null);
@@ -962,6 +969,9 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           phase={translationLoadingPhase}
           accentColor={translationLoadingAccentColor ?? "#6750A4"}
           surfaceColor={rc.sceneSurface}
+          loadingLabel={translationLoadingLabel}
+          doneLabel={translationLoadingDoneLabel}
+          showLoadingLabel={translationLoadingShowLabel}
         />
       </View>
 

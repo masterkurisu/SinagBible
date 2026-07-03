@@ -67,6 +67,8 @@ export function ReaderM3BottomSheet({
   const padH = 24 * scale;
   const bottomPad =
     contentPaddingBottom ?? (useBottomSheet ? Math.max(insets.bottom, 16) * scale : 16 * scale);
+  const handleBlockHeight = useBottomSheet ? 12 + 4 + READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX : 0;
+  const scrollAreaMaxHeight = Math.max(120, sheetMaxH - handleBlockHeight);
 
   useEffect(() => {
     if (!isOpen) {
@@ -131,6 +133,7 @@ export function ReaderM3BottomSheet({
             style={{
               width: sheetMaxW,
               maxHeight: sheetMaxH,
+              flexShrink: 1,
               opacity: sheetOpacityAnim,
               transform: [
                 {
@@ -152,6 +155,7 @@ export function ReaderM3BottomSheet({
                   borderBottomLeftRadius: useBottomSheet ? 0 : 28,
                   borderBottomRightRadius: useBottomSheet ? 0 : 28,
                   shadowColor: rc.popoverShadow,
+                  maxHeight: sheetMaxH,
                 },
               ]}
             >
@@ -173,6 +177,8 @@ export function ReaderM3BottomSheet({
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
                   bounces={false}
+                  nestedScrollEnabled
+                  style={{ maxHeight: scrollAreaMaxHeight, flexShrink: 1 }}
                   contentContainerStyle={{
                     paddingHorizontal: padH,
                     paddingTop: useBottomSheet ? 4 * scale : 20 * scale,
@@ -187,8 +193,6 @@ export function ReaderM3BottomSheet({
                     paddingHorizontal: padH,
                     paddingTop: useBottomSheet ? 4 * scale : 20 * scale,
                     paddingBottom: bottomPad,
-                    flex: 1,
-                    minHeight: 0,
                   }}
                 >
                   {body}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Animated,
@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { CreditsIcon } from "@/components/icons/CreditsIcon";
 import { KofiSupportBlock } from "@/components/kofi-support-block";
 import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Switch } from "@/components/M3Switch";
@@ -34,10 +35,14 @@ import {
   READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
   READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
   READER_M3_BOTTOM_SHEET_RADIUS_PX,
+  READER_M3_LIST_ITEM_HEIGHT_PX,
+  READER_M3_LIST_TRAILING_ICON_PX,
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
   READER_M3_OUTLINE_VARIANT,
-  READER_M3_SURFACE_CONTAINER,
+  READER_M3_SURFACE_CONTAINER_HIGH,
+  READER_M3_SWITCH_TRACK_HEIGHT_PX,
+  READER_M3_SWITCH_TRACK_WIDTH_PX,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { M3Snackbar } from "@/src/components/m3/M3Snackbar";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
@@ -46,16 +51,96 @@ export type ReaderMoreSettingsSheetProps = {
   isOpen: boolean;
   onClose: () => void;
   onSelectCredits: () => void;
+  onSelectImportExport: () => void;
   bundle: MobileAppThemeBundle;
   insets: { top: number; bottom: number; left: number; right: number };
   isTabletReaderLayout: boolean;
   settingsMutedTextColor: string;
 };
 
+function MoreSettingsTrailingSlot({ scale, children }: { scale: number; children: ReactNode }) {
+  return (
+    <View
+      style={{
+        width: READER_M3_SWITCH_TRACK_WIDTH_PX * scale,
+        height: READER_M3_SWITCH_TRACK_HEIGHT_PX * scale,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+function MoreSettingsDivider({ scale }: { scale: number }) {
+  return (
+    <View
+      style={{
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: READER_M3_OUTLINE_VARIANT,
+        marginLeft: 16 * scale,
+      }}
+    />
+  );
+}
+
+type MoreSettingsRowProps = {
+  label: string;
+  scale: number;
+  accessibilityLabel: string;
+  trailing: ReactNode;
+  onPress?: () => void;
+  disabled?: boolean;
+  busy?: boolean;
+  rippleColor?: string;
+};
+
+function MoreSettingsRow({
+  label,
+  scale,
+  accessibilityLabel,
+  trailing,
+  onPress,
+  disabled = false,
+  busy = false,
+  rippleColor,
+}: MoreSettingsRowProps) {
+  const rowHeight = READER_M3_LIST_ITEM_HEIGHT_PX * scale;
+  const rowContent = (
+    <View style={[styles.listRow, { minHeight: rowHeight, paddingHorizontal: 16 * scale }]}>
+      <Text style={[rowLabelStyle(scale), styles.listRowLabel]}>{label}</Text>
+      <MoreSettingsTrailingSlot scale={scale}>{trailing}</MoreSettingsTrailingSlot>
+    </View>
+  );
+
+  if (!onPress) {
+    return rowContent;
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled, busy }}
+      android_ripple={Platform.OS === "android" && rippleColor ? { color: rippleColor } : undefined}
+      style={({ pressed }) => ({
+        opacity: disabled ? 0.6 : 1,
+        backgroundColor: pressed ? READER_M3_SURFACE_CONTAINER_HIGH : "transparent",
+      })}
+    >
+      {rowContent}
+    </Pressable>
+  );
+}
+
 export function ReaderMoreSettingsSheet({
   isOpen,
   onClose,
   onSelectCredits,
+  onSelectImportExport,
   bundle,
   insets,
   isTabletReaderLayout,
@@ -76,7 +161,7 @@ export function ReaderMoreSettingsSheet({
   const sheetMaxW = useBottomSheet ? screenW : Math.min(420, screenW - 48);
   const sheetMaxH = Dimensions.get("window").height * (isTabletReaderLayout ? 0.72 : 0.82);
   const padH = 24 * scale;
-  const rowMinHeight = 56 * scale;
+  const trailingIconSize = READER_M3_LIST_TRAILING_ICON_PX * scale;
   const switchScale = scale;
 
   useEffect(() => {
@@ -145,6 +230,16 @@ export function ReaderMoreSettingsSheet({
       }
     })();
   }, [saveLogsBusy]);
+
+  const handleImportExport = useCallback(() => {
+    hapticLightImpact();
+    onSelectImportExport();
+  }, [onSelectImportExport]);
+
+  const handleCredits = useCallback(() => {
+    hapticLightImpact();
+    onSelectCredits();
+  }, [onSelectCredits]);
 
   const slideFrom = useBottomSheet ? 48 : READER_MENU_SLIDE_FROM_PX;
 
@@ -221,88 +316,94 @@ export function ReaderMoreSettingsSheet({
               >
                 <M3SettingsSheetTitle title="More" scale={scale} />
 
-                <View style={[styles.listBlock, { marginTop: 4 * scale }]}>
-                  <Pressable
+                <View
+                  style={[
+                    styles.listBlock,
+                    {
+                      marginTop: 12 * scale,
+                      borderRadius: 12 * scale,
+                      borderWidth: StyleSheet.hairlineWidth,
+                      borderColor: READER_M3_OUTLINE_VARIANT,
+                      overflow: "hidden",
+                    },
+                  ]}
+                >
+                  <MoreSettingsRow
+                    label="Save logs"
+                    scale={scale}
+                    accessibilityLabel="Save logs"
                     onPress={handleSaveLogs}
                     disabled={saveLogsBusy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Save logs"
-                    accessibilityState={{ disabled: saveLogsBusy, busy: saveLogsBusy }}
-                    android_ripple={Platform.OS === "android" ? { color: rippleColor } : undefined}
-                    style={({ pressed }) => ({
-                      width: "100%",
-                      minHeight: rowMinHeight,
-                      paddingVertical: 12 * scale,
-                      opacity: saveLogsBusy ? 0.6 : 1,
-                      backgroundColor: pressed ? READER_M3_SURFACE_CONTAINER : "transparent",
-                    })}
-                  >
-                    <View style={styles.listRow}>
-                      <Text style={[rowLabelStyle(scale), styles.listRowLabel]}>Save logs</Text>
+                    busy={saveLogsBusy}
+                    rippleColor={rippleColor}
+                    trailing={
                       <MaterialIcons
-                        name="upload-file"
-                        size={22 * scale}
+                        name="ios-share"
+                        size={trailingIconSize}
                         color={READER_M3_ON_SURFACE_VARIANT}
                       />
-                    </View>
-                  </Pressable>
+                    }
+                  />
 
-                  <View
-                    style={[
-                      styles.listRow,
-                      {
-                        minHeight: rowMinHeight,
-                        paddingVertical: 8 * scale,
-                      },
-                    ]}
-                  >
-                    <Text style={[rowLabelStyle(scale), styles.listRowLabel]}>Haptic feedback</Text>
-                    <M3Switch
-                      value={hapticsEnabled}
-                      onValueChange={toggleHaptics}
-                      accessibilityLabel="Haptic feedback"
-                      scale={switchScale}
-                      trackColorOn={colors.brown800}
-                      trackColorOff={READER_M3_SURFACE_CONTAINER}
-                      trackBorderOff={READER_M3_ON_SURFACE_VARIANT}
-                      handleColorOn="#FFFFFF"
-                      handleColorOff={READER_M3_ON_SURFACE_VARIANT}
-                    />
-                  </View>
+                  <MoreSettingsDivider scale={scale} />
 
-                  <Pressable
-                    onPress={() => {
-                      hapticLightImpact();
-                      onSelectCredits();
-                    }}
-                    accessibilityRole="button"
+                  <MoreSettingsRow
+                    label="Haptic feedback"
+                    scale={scale}
+                    accessibilityLabel="Haptic feedback"
+                    trailing={
+                      <M3Switch
+                        value={hapticsEnabled}
+                        onValueChange={toggleHaptics}
+                        accessibilityLabel="Haptic feedback"
+                        scale={switchScale}
+                        trackColorOn={colors.brown800}
+                        trackColorOff={READER_M3_SURFACE_CONTAINER_HIGH}
+                        trackBorderOff={READER_M3_ON_SURFACE_VARIANT}
+                        handleColorOn="#FFFFFF"
+                        handleColorOff={READER_M3_ON_SURFACE_VARIANT}
+                      />
+                    }
+                  />
+
+                  <MoreSettingsDivider scale={scale} />
+
+                  <MoreSettingsRow
+                    label="Credits"
+                    scale={scale}
                     accessibilityLabel="Credits"
-                    android_ripple={Platform.OS === "android" ? { color: rippleColor } : undefined}
-                    style={({ pressed }) => ({
-                      width: "100%",
-                      minHeight: rowMinHeight,
-                      paddingVertical: 12 * scale,
-                      backgroundColor: pressed ? READER_M3_SURFACE_CONTAINER : "transparent",
-                    })}
-                  >
-                    <View style={styles.listRow}>
-                      <Text style={[rowLabelStyle(scale), styles.listRowLabel]}>Credits</Text>
+                    onPress={handleCredits}
+                    rippleColor={rippleColor}
+                    trailing={
+                      <CreditsIcon size={trailingIconSize} color={READER_M3_ON_SURFACE_VARIANT} />
+                    }
+                  />
+
+                  <MoreSettingsDivider scale={scale} />
+
+                  <MoreSettingsRow
+                    label="Import / Export"
+                    scale={scale}
+                    accessibilityLabel="Import or export your data"
+                    onPress={handleImportExport}
+                    rippleColor={rippleColor}
+                    trailing={
                       <MaterialIcons
-                        name="chevron-right"
-                        size={24 * scale}
+                        name="import-export"
+                        size={trailingIconSize}
                         color={READER_M3_ON_SURFACE_VARIANT}
                       />
-                    </View>
-                  </Pressable>
+                    }
+                  />
                 </View>
 
                 <View style={{ marginTop: 20 * scale }}>
-                <KofiSupportBlock
-                  bodyColor={READER_M3_ON_SURFACE_VARIANT}
-                  bodyFontSize={READER_M3_BODY_FONT_PX * scale * 0.875}
-                  bodyLineHeight={READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.875}
-                  buttonWidth={168 * scale}
-                />
+                  <KofiSupportBlock
+                    bodyColor={READER_M3_ON_SURFACE_VARIANT}
+                    bodyFontSize={READER_M3_BODY_FONT_PX * scale * 0.875}
+                    bodyLineHeight={READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.875}
+                    buttonWidth={168 * scale}
+                  />
                 </View>
               </ScrollView>
             </View>
@@ -321,7 +422,7 @@ export function ReaderMoreSettingsSheet({
 
 function rowLabelStyle(scale: number) {
   return {
-    fontFamily: "Inter_400Regular" as const,
+    fontFamily: "Inter_500Medium" as const,
     fontSize: READER_M3_BODY_FONT_PX * scale,
     lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale,
     color: READER_M3_ON_SURFACE,
@@ -356,6 +457,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
+    gap: 16,
   },
   listRowLabel: {
     flex: 1,

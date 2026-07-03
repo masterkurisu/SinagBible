@@ -370,6 +370,12 @@ async function saveCarouselFavorites(records: CarouselVerseRecord[]): Promise<vo
   }
 }
 
+/** Replaces all user-saved carousel favorite verses (used by data import). */
+export async function replaceCarouselFavorites(records: CarouselVerseRecord[]): Promise<void> {
+  const valid = records.filter(isCarouselVerseRecord).slice(0, JOURNAL_CAROUSEL_MAX_FAVORITES);
+  await saveCarouselFavorites(valid);
+}
+
 const carouselFavoriteListeners = new Set<() => void>();
 
 function notifyCarouselFavoritesChanged(): void {

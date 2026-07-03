@@ -31,6 +31,8 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="sinagbible"/>
+        <data android:scheme="sinagbible-dev"/>
+        <data android:scheme="exp+sinag-bible"/>
       </intent-filter>
     </activity>
   </application>

@@ -17,6 +17,7 @@ import { peekReaderLastPosition, saveReaderLastPosition } from "@/lib/reader-las
 import { readerChapterHref } from "@/lib/reader-navigation";
 import { getReaderTranslationLanguageLabel } from "@/lib/reader-translation-language";
 import { useTranslationPicker } from "@/lib/use-translation-picker";
+import { ReaderDataBackupSheet } from "@/src/features/reader/ReaderDataBackupSheet";
 import { ReaderDeleteMyDataDialog } from "@/src/features/reader/ReaderDeleteMyDataDialog";
 import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSettingsSheet";
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
@@ -66,6 +67,7 @@ export function useReaderSettingsFollowUpState({
   const [readerPrivacyPolicyOpen, setReaderPrivacyPolicyOpen] = useState(false);
   const [readerTermsOpen, setReaderTermsOpen] = useState(false);
   const [readerCreditsOpen, setReaderCreditsOpen] = useState(false);
+  const [dataBackupSheetOpen, setDataBackupSheetOpen] = useState(false);
   const [commentaryPanelOpen, setCommentaryPanelOpen] = useState(false);
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
   const [moreSettingsSheetOpen, setMoreSettingsSheetOpen] = useState(false);
@@ -162,6 +164,13 @@ export function useReaderSettingsFollowUpState({
     }, 0);
   }, [closeMoreSettingsPopup]);
 
+  const openDataBackupFromMoreSheet = useCallback(() => {
+    closeMoreSettingsPopup();
+    setTimeout(() => {
+      setDataBackupSheetOpen(true);
+    }, 0);
+  }, [closeMoreSettingsPopup]);
+
   const openPrivacyPolicyFromCredits = useCallback(() => {
     setReaderCreditsOpen(false);
     setTimeout(() => setReaderPrivacyPolicyOpen(true), 0);
@@ -193,6 +202,7 @@ export function useReaderSettingsFollowUpState({
   const dismissFollowUpChrome = useCallback(() => {
     if (fontSettingsSheetOpen) closeFontSettingsPopup();
     else if (moreSettingsSheetOpen) closeMoreSettingsPopup();
+    else if (dataBackupSheetOpen) setDataBackupSheetOpen(false);
     else if (deleteMyDataDialogOpen) closeDeleteMyDataDialog();
     else if (readerPrivacyPolicyOpen) setReaderPrivacyPolicyOpen(false);
     else if (readerCreditsOpen) setReaderCreditsOpen(false);
@@ -207,6 +217,7 @@ export function useReaderSettingsFollowUpState({
     deleteMyDataDialogOpen,
     fontSettingsSheetOpen,
     moreSettingsSheetOpen,
+    dataBackupSheetOpen,
     readerCreditsOpen,
     readerDropdown,
     readerPrivacyPolicyOpen,
@@ -219,6 +230,8 @@ export function useReaderSettingsFollowUpState({
     setReaderTermsOpen,
     readerCreditsOpen,
     setReaderCreditsOpen,
+    dataBackupSheetOpen,
+    setDataBackupSheetOpen,
     commentaryPanelOpen,
     setCommentaryPanelOpen,
     fontSettingsSheetOpen,
@@ -241,6 +254,7 @@ export function useReaderSettingsFollowUpState({
     openMobileReaderCommentaryFromMenu,
     openMobileReaderMoreFromMenu,
     openCreditsFromMoreSheet,
+    openDataBackupFromMoreSheet,
     openPrivacyPolicyFromCredits,
     openTermsFromCredits,
     openDeleteMyDataConfirmFromMenu,
@@ -453,10 +467,18 @@ export function ReaderSettingsFollowUpLayer({
         isOpen={followUp.moreSettingsSheetOpen}
         onClose={followUp.closeMoreSettingsPopup}
         onSelectCredits={followUp.openCreditsFromMoreSheet}
+        onSelectImportExport={followUp.openDataBackupFromMoreSheet}
         bundle={bundle}
         insets={insets}
         isTabletReaderLayout={isTabletReaderLayout}
         settingsMutedTextColor={settingsMutedTextColor}
+      />
+      <ReaderDataBackupSheet
+        isOpen={followUp.dataBackupSheetOpen}
+        onClose={() => followUp.setDataBackupSheetOpen(false)}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
       />
       <CreditsSheet
         visible={followUp.readerCreditsOpen}

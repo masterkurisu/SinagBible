@@ -45,6 +45,8 @@ export const READER_M3_ON_ERROR_CONTAINER = "#410E0B";
 /** M3 snackbar — inverse surface (light theme). */
 export const READER_M3_INVERSE_SURFACE = "#322F35";
 export const READER_M3_INVERSE_ON_SURFACE = "#F5EFF7";
+/** M3 snackbar action label on inverse surface. */
+export const READER_M3_INVERSE_PRIMARY = "#D0BCFF";
 
 /** M3 modal bottom sheet — top corner radius (28dp). */
 export const READER_M3_BOTTOM_SHEET_RADIUS_PX = 28;
@@ -73,6 +75,16 @@ export const READER_M3_LABEL_LETTER_SPACING = 0.5;
 /** M3 body large — dropdown values (16sp). */
 export const READER_M3_BODY_FONT_PX = 16;
 export const READER_M3_BODY_LINE_HEIGHT_PX = 24;
+
+/** M3 one-line list item height (56dp). */
+export const READER_M3_LIST_ITEM_HEIGHT_PX = 56;
+
+/** M3 switch track — trailing slot width/height for list rows. */
+export const READER_M3_SWITCH_TRACK_WIDTH_PX = 52;
+export const READER_M3_SWITCH_TRACK_HEIGHT_PX = 32;
+
+/** M3 standard trailing icon size in list rows (24dp). */
+export const READER_M3_LIST_TRAILING_ICON_PX = 24;
 
 /** M3 segmented button row height (48dp). */
 export const READER_M3_SEGMENTED_BUTTON_HEIGHT_PX = 48;

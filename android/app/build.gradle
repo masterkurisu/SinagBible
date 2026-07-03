@@ -89,9 +89,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.sinagbible.app'
+    namespace 'com.sinagbible.app.dev'
     defaultConfig {
-        applicationId 'com.sinagbible.app'
+        applicationId 'com.sinagbible.app.dev'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

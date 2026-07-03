@@ -79,6 +79,13 @@
       ],
       "expo-asset",
       "expo-splash-screen",
+      [
+        "expo-file-system",
+        {
+          "enableFileSharing": true,
+          "supportsOpeningDocumentsInPlace": true
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "experiments": {

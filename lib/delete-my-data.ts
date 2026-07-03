@@ -3,6 +3,7 @@ import { clearBibleApiMemoryCaches } from "@/lib/bible-api-service";
 import { clearLocalEntriesMemoryCache, deleteAllJournalImages } from "@/lib/journal-local";
 import { ONBOARDING_DONE_STORAGE_KEY, publishOnboardingState } from "@/lib/onboarding-storage";
 import { clearReaderLastPositionMemoryCache } from "@/lib/reader-last-position";
+import { clearReaderChapterStorageCache } from "@/lib/use-reader-storage";
 
 /**
  * Hard-delete local app data for account/data deletion compliance.
@@ -13,6 +14,7 @@ export async function deleteAllUserData(): Promise<void> {
   await deleteAllJournalImages();
   clearLocalEntriesMemoryCache();
   clearReaderLastPositionMemoryCache();
+  clearReaderChapterStorageCache();
   clearBibleApiMemoryCaches();
   await AsyncStorage.removeItem(ONBOARDING_DONE_STORAGE_KEY);
   publishOnboardingState(false);

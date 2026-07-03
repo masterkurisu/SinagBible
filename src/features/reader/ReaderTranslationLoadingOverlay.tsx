@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import {
@@ -15,20 +15,45 @@ type ReaderTranslationLoadingOverlayProps = {
   phase: ReaderTranslationLoadingPhase;
   accentColor: string;
   surfaceColor: string;
+  loadingLabel?: string;
+  doneLabel?: string;
+  /** When false, the loading phase shows only the spinner (no caption). */
+  showLoadingLabel?: boolean;
 };
 
-/** Loading overlay only while the active translation is changing — not on chapter navigation. */
-export function useReaderTranslationLoadingPhase(isTranslationSwitching: boolean) {
+type ReaderChapterTransitionPhaseOptions = {
+  /** When true on transition end, skip the success "Done!" phase and return to idle. */
+  skipDoneRef?: RefObject<boolean>;
+};
+
+/** Loading overlay while chapter content is transitioning (translation switch or data import). */
+export function useReaderChapterTransitionPhase(
+  isTransitioning: boolean,
+  options?: ReaderChapterTransitionPhaseOptions,
+) {
   const [phase, setPhase] = useState<ReaderTranslationLoadingPhase>("idle");
+  const skipDoneRef = options?.skipDoneRef;
 
   useEffect(() => {
-    if (isTranslationSwitching) {
+    if (isTransitioning) {
+      if (skipDoneRef) {
+        skipDoneRef.current = false;
+      }
       setPhase("loading");
       return;
     }
 
-    setPhase((current) => (current === "loading" ? "done" : current));
-  }, [isTranslationSwitching]);
+    setPhase((current) => {
+      if (current !== "loading") {
+        return current;
+      }
+      if (skipDoneRef?.current) {
+        skipDoneRef.current = false;
+        return "idle";
+      }
+      return "done";
+    });
+  }, [isTransitioning, skipDoneRef]);
 
   useEffect(() => {
     if (phase !== "done") return;
@@ -39,10 +64,16 @@ export function useReaderTranslationLoadingPhase(isTranslationSwitching: boolean
   return phase;
 }
 
+/** @deprecated Use {@link useReaderChapterTransitionPhase}. */
+export const useReaderTranslationLoadingPhase = useReaderChapterTransitionPhase;
+
 export function ReaderTranslationLoadingOverlay({
   phase,
   accentColor,
   surfaceColor,
+  loadingLabel = "Loading new translation",
+  doneLabel = "Done!",
+  showLoadingLabel = true,
 }: ReaderTranslationLoadingOverlayProps) {
   const opacity = useSharedValue(0);
 
@@ -59,7 +90,8 @@ export function ReaderTranslationLoadingOverlay({
 
   if (phase === "idle") return null;
 
-  const label = phase === "done" ? "Done!" : "Loading new translation";
+  const label = phase === "done" ? doneLabel : loadingLabel;
+  const showLabel = phase === "done" || showLoadingLabel;
 
   return (
     <Animated.View
@@ -74,7 +106,7 @@ export function ReaderTranslationLoadingOverlay({
             <Text style={[styles.doneText, { color: accentColor }]}>✓</Text>
           </View>
         )}
-        <Text style={styles.label}>{label}</Text>
+        {showLabel && label ? <Text style={styles.label}>{label}</Text> : null}
       </View>
     </Animated.View>
   );

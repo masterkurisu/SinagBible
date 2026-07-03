@@ -1,4 +1,4 @@
-package com.sinagbible.app
+package com.sinagbible.app.dev
 
 import android.os.Build
 import android.os.Bundle
