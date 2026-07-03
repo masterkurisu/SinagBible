@@ -46,25 +46,22 @@ const CarouselCard = memo(function CarouselCard({
   const cardHeight = Math.round(cardWidth * 1.12);
   const borderRadius = CAROUSEL_CARD_RADIUS_PX;
   const showImage = Boolean(imageUrl);
+  const cardStyle = useMemo(
+    () => [styles.cardShell, { width: cardWidth, height: cardHeight, borderRadius }],
+    [borderRadius, cardHeight, cardWidth],
+  );
+  const hairlineStyle = useMemo(
+    () => [styles.cardHairline, { borderRadius }],
+    [borderRadius],
+  );
 
   return (
-    <Pressable
-      onLongPress={() => onLongPress(item)}
-      delayLongPress={420}
-      accessibilityHint="Long press for share and image options"
-      style={[
-        styles.cardShell,
-        {
-          width: cardWidth,
-          height: cardHeight,
-          borderRadius,
-        },
-      ]}
-    >
-      <View
-        ref={captureRef}
-        collapsable={false}
-        style={[StyleSheet.absoluteFill, { borderRadius, overflow: "hidden" }]}
+    <View ref={captureRef} collapsable={false} style={cardStyle}>
+      <Pressable
+        onLongPress={() => onLongPress(item)}
+        delayLongPress={420}
+        accessibilityHint="Long press for share and image options"
+        style={StyleSheet.absoluteFill}
       >
         <LinearGradient
           colors={[...item.gradient]}
@@ -103,8 +100,10 @@ const CarouselCard = memo(function CarouselCard({
           </Text>
           <Text style={styles.cardReference}>{item.reference}</Text>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+
+      <View pointerEvents="none" style={hairlineStyle} />
+    </View>
   );
 });
 
@@ -293,14 +292,12 @@ const styles = StyleSheet.create({
   },
   cardShell: {
     overflow: "hidden",
-    ...(Platform.OS === "android"
-      ? { elevation: 2 }
-      : {
-          shadowColor: "#2c2416",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.14,
-          shadowRadius: 10,
-        }),
+    borderCurve: "continuous",
+  },
+  cardHairline: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255, 255, 255, 0.20)",
   },
   cardContent: {
     flex: 1,
