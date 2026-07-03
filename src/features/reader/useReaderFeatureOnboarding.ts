@@ -32,6 +32,11 @@ import {
   readerPageTurnIconSpotlight,
 } from "@/src/features/reader/readerOnboardingSpotlightTargets";
 
+import {
+  READER_CLEAR_SELECTION_MARKED_HINT,
+  READER_LONG_PRESS_MARK_HINT,
+} from "@/src/features/reader/readerVerseMarksCopy";
+
 export type ReaderOnboardingStep =
   | "book-selector"
   | "settings"
@@ -56,12 +61,12 @@ export const READER_ONBOARDING_MESSAGES: Record<ReaderOnboardingStep, string> = 
   "font-settings": "Adjust size, spacing, and choose a font that's easy on your eyes.",
   "page-turns": "Turn pages with these arrows, or swipe left and right.",
   "tap-select-verse": "Single tap a verse to select it.",
-  "long-press-highlight": "Long press a verse to highlight it.",
+  "long-press-highlight": READER_LONG_PRESS_MARK_HINT,
   "clear-selection": "Tap anywhere to clear your selection.",
 };
 
 export const READER_ONBOARDING_SUBTITLES: Partial<Record<ReaderOnboardingStep, string>> = {
-  "clear-selection": "Or tap the highlighted verse again.",
+  "clear-selection": READER_CLEAR_SELECTION_MARKED_HINT,
 };
 
 type UseReaderFeatureOnboardingArgs = {

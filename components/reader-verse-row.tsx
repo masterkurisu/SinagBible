@@ -1,21 +1,23 @@
-import { memo } from "react";
-import { StyleSheet, View, Text, Pressable } from "react-native";
-import type { BibleVerseInlineItem, HighlightColor } from "@sinag-bible/types";
+import { memo, useCallback, useEffect, useState } from "react";
+import {
+  StyleSheet,
+  View,
+  Text,
+  Pressable,
+  type NativeSyntheticEvent,
+  type TextLayoutEventData,
+  type TextLayoutLine,
+} from "react-native";
+import type { BibleVerseInlineItem, VerseAnnotation } from "@sinag-bible/types";
 import { isMobileAppDarkThemeId } from "@sinag-bible/tokens";
-import { highlightColors } from "@sinag-bible/ui";
+import { highlightColors, resolveAnnotationColorHex } from "@sinag-bible/ui";
+import { resolveUnderlineStyle } from "@/src/features/reader/verseAnnotationUnderlineMetrics";
+import { VerseAnnotationUnderlineOverlay } from "@/src/features/reader/VerseAnnotationUnderlineOverlay";
 
 /** Deep red on parchment / light reader backgrounds */
 const WORDS_OF_JESUS_COLOR = "#C41E1E";
 /** Softer pastel red for dark and night themes (better contrast on near-black surfaces) */
 const WORDS_OF_JESUS_COLOR_DARK_THEME = "#E8A0A0";
-
-const HIGHLIGHT_BG: Record<HighlightColor, string> = {
-  yellow: highlightColors.yellow,
-  blue: highlightColors.blue,
-  pink: highlightColors.pink,
-  green: highlightColors.green,
-  purple: highlightColors.purple,
-};
 
 const styles = StyleSheet.create({
   versePressable: {
@@ -32,6 +34,10 @@ const styles = StyleSheet.create({
   },
   verseBody: {
     flex: 1,
+  },
+  verseBodyWrap: {
+    flex: 1,
+    position: "relative",
   },
   noteContainer: {
     marginTop: 6,
@@ -59,7 +65,7 @@ export type ReaderVerseRowProps = {
   /** When set and non-empty, verse body uses structured inline spans (e.g. words of Jesus). */
   verseInlineContent?: BibleVerseInlineItem[];
   isSelected: boolean;
-  highlight: HighlightColor | undefined;
+  annotation: VerseAnnotation | undefined;
   noteText: string | undefined;
   themeId: string;
   selectionBackground: string;
@@ -139,7 +145,7 @@ function ReaderVerseRowInner({
   verseText,
   verseInlineContent,
   isSelected,
-  highlight: hl,
+  annotation,
   noteText,
   themeId,
   selectionBackground,
@@ -157,11 +163,22 @@ function ReaderVerseRowInner({
   onYvpFootnotePress,
 }: ReaderVerseRowProps) {
   const useInlineBody = Boolean(verseInlineContent && verseInlineContent.length > 0);
-  const rowBg = isSelected ? selectionBackground : hl ? HIGHLIGHT_BG[hl] : "transparent";
+  const isHighlight = !isSelected && annotation?.style === "highlight";
+  const isUnderline = !isSelected && annotation?.style === "underline";
+  const highlightBg =
+    isHighlight && annotation
+      ? highlightColors[annotation.colorId as keyof typeof highlightColors]
+      : undefined;
+  const underlineColor =
+    isUnderline && annotation ? resolveAnnotationColorHex(annotation.colorId) : undefined;
+  const underlineStyle = isUnderline && annotation
+    ? resolveUnderlineStyle(annotation.underlineStyle)
+    : undefined;
+  const rowBg = isSelected ? selectionBackground : highlightBg ?? "transparent";
   /** Highlight fills are shared pastel swatches; dark/night use light body ink, so use selection ink on highlight for contrast. */
   const isDarkTheme = isMobileAppDarkThemeId(themeId);
   const inkOnHighlight =
-    !isSelected && hl && isDarkTheme ? selectionText : null;
+    isHighlight && isDarkTheme ? selectionText : null;
   const textCol = isSelected ? selectionText : inkOnHighlight ?? bodyTextColor;
   const numCol = isSelected ? selectionText : inkOnHighlight ?? verseNumberColor;
   const wordsOfJesusDefaultColor = isDarkTheme
@@ -170,6 +187,28 @@ function ReaderVerseRowInner({
   /** Nested `<Text>` overrides parent color; match selection/highlight ink so red is not left on tinted rows. */
   const wordsOfJesusInk =
     isSelected || inkOnHighlight != null ? textCol : wordsOfJesusDefaultColor;
+
+  const [underlineLines, setUnderlineLines] = useState<readonly TextLayoutLine[]>([]);
+
+  useEffect(() => {
+    if (!isUnderline) setUnderlineLines([]);
+  }, [isUnderline]);
+
+  const handleVerseBodyTextLayout = useCallback(
+    (event: NativeSyntheticEvent<TextLayoutEventData>) => {
+      if (!isUnderline) return;
+      setUnderlineLines(event.nativeEvent.lines);
+    },
+    [isUnderline],
+  );
+
+  const verseBodyTextStyle = {
+    fontFamily: readerVerseBodyFontFamily,
+    fontSize: readerVerseFontSize,
+    lineHeight: readerVerseLineHeight,
+    color: textCol,
+    textAlign: verseTextAlign,
+  } as const;
 
   return (
     <View>
@@ -190,27 +229,30 @@ function ReaderVerseRowInner({
         >
           {verseNum}
         </Text>
-        <Text
-          style={[
-            styles.verseBody,
-            {
-              fontFamily: readerVerseBodyFontFamily,
-              fontSize: readerVerseFontSize,
-              lineHeight: readerVerseLineHeight,
-              color: textCol,
-              textAlign: verseTextAlign,
-            },
-          ]}
-        >
-          {useInlineBody && verseInlineContent
-            ? renderVerseBodyInline(
-                verseInlineContent,
-                wordsOfJesusInk,
-                yvpFootnotes,
-                onYvpFootnotePress,
-              )
-            : verseText}
-        </Text>
+        <View style={styles.verseBodyWrap}>
+          <Text
+            style={[styles.verseBody, verseBodyTextStyle]}
+            onTextLayout={isUnderline ? handleVerseBodyTextLayout : undefined}
+          >
+            {useInlineBody && verseInlineContent
+              ? renderVerseBodyInline(
+                  verseInlineContent,
+                  wordsOfJesusInk,
+                  yvpFootnotes,
+                  onYvpFootnotePress,
+                )
+              : verseText}
+          </Text>
+          {underlineColor ? (
+            <VerseAnnotationUnderlineOverlay
+              lines={underlineLines}
+              color={underlineColor}
+              colorId={annotation?.colorId}
+              underlineStyle={underlineStyle}
+              fontSize={readerVerseFontSize}
+            />
+          ) : null}
+        </View>
       </Pressable>
       {noteText ? (
         <View style={[styles.noteContainer, { backgroundColor: noteBelowVerseBackground }]}>
@@ -228,7 +270,11 @@ export const ReaderVerseRow = memo(ReaderVerseRowInner, (prev, next) => {
   if (prev.verseText !== next.verseText) return false;
   if (prev.verseInlineContent !== next.verseInlineContent) return false;
   if (prev.isSelected !== next.isSelected) return false;
-  if (prev.highlight !== next.highlight) return false;
+  const prevAnn = prev.annotation;
+  const nextAnn = next.annotation;
+  if (prevAnn?.style !== nextAnn?.style) return false;
+  if (prevAnn?.colorId !== nextAnn?.colorId) return false;
+  if (prevAnn?.underlineStyle !== nextAnn?.underlineStyle) return false;
   if (prev.noteText !== next.noteText) return false;
   if (prev.themeId !== next.themeId) return false;
   if (prev.selectionBackground !== next.selectionBackground) return false;

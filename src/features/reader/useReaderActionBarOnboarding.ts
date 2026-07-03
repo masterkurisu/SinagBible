@@ -23,7 +23,7 @@ const SELECTION_SETTLE_MS = 320;
 
 type UseReaderActionBarOnboardingArgs = {
   hasVerseSelection: boolean;
-  actionBarMode: "default" | "highlight";
+  annotationSheetOpen: boolean;
   readerOverlayOpen: boolean;
   readerFeatureOnboardingActive: boolean;
   buttonRefs: Record<ReaderActionBarOnboardingStepId, RefObject<View | null>>;
@@ -53,7 +53,7 @@ function fallbackActionBarButtonTarget(
 
 export function useReaderActionBarOnboarding({
   hasVerseSelection,
-  actionBarMode,
+  annotationSheetOpen,
   readerOverlayOpen,
   readerFeatureOnboardingActive,
   buttonRefs,
@@ -107,9 +107,9 @@ export function useReaderActionBarOnboarding({
   );
 
   useEffect(() => {
-    if (!active || !hasVerseSelection || actionBarMode !== "default") return;
+    if (!active || !hasVerseSelection || annotationSheetOpen) return;
     void measureCurrentStep(stepIndex);
-  }, [active, actionBarMode, hasVerseSelection, measureCurrentStep, stepIndex]);
+  }, [active, annotationSheetOpen, hasVerseSelection, measureCurrentStep, stepIndex]);
 
   useEffect(() => {
     if (!hasVerseSelection) {
@@ -118,7 +118,7 @@ export function useReaderActionBarOnboarding({
     }
 
     const canStart =
-      actionBarMode === "default" && !readerOverlayOpen && !readerFeatureOnboardingActive;
+      !annotationSheetOpen && !readerOverlayOpen && !readerFeatureOnboardingActive;
 
     if (!canStart) {
       if (readerFeatureOnboardingActive || readerOverlayOpen) {
@@ -161,7 +161,7 @@ export function useReaderActionBarOnboarding({
       clearTimeout(startTimeout);
     };
   }, [
-    actionBarMode,
+    annotationSheetOpen,
     finishTour,
     hasVerseSelection,
     readerFeatureOnboardingActive,
@@ -175,7 +175,7 @@ export function useReaderActionBarOnboarding({
   const showLayer =
     active &&
     hasVerseSelection &&
-    actionBarMode === "default" &&
+    !annotationSheetOpen &&
     !readerOverlayOpen &&
     currentStep != null &&
     buttonAnchor != null;

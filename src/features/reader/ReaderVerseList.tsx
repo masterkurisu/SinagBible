@@ -4,7 +4,6 @@ import type { FlashListRef, ListRenderItemInfo } from "@shopify/flash-list";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
 import {
   READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX,
-  READER_ACTION_BAR_SELECTION_CLEARANCE_HIGHLIGHT_PX,
 } from "@/src/features/reader/readerActionBarOnboardingSteps";
 import {
   READER_FLASH_LIST_DRAW_DISTANCE_PX,
@@ -181,7 +180,6 @@ type ReaderVerseListProps = {
   listHeader: ReactNode;
   readerChapterFlashListFooter: () => React.ReactElement | null;
   hasVerseSelection: boolean;
-  actionBarMode: "default" | "highlight";
   actionBarBottomPx: number;
   androidListPaddingBottomHidden?: number;
   onListContentSizeChange?: (width: number, height: number) => void;
@@ -208,7 +206,6 @@ export function ReaderVerseList({
   listHeader,
   readerChapterFlashListFooter,
   hasVerseSelection,
-  actionBarMode,
   actionBarBottomPx,
   androidListPaddingBottomHidden,
   onListContentSizeChange,
@@ -218,10 +215,7 @@ export function ReaderVerseList({
   const readerVerseFlashGetItemType = useCallback((item: ReaderVerseFlashItem) => item.kind, []);
 
   const selectionPaddingBottom =
-    actionBarBottomPx +
-    (actionBarMode === "highlight"
-      ? READER_ACTION_BAR_SELECTION_CLEARANCE_HIGHLIGHT_PX
-      : READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX);
+    actionBarBottomPx + READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX;
 
   const flashListContentContainerStyle = useMemo(() => {
     if (hasVerseSelection) {

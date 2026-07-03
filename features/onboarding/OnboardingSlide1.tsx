@@ -120,7 +120,7 @@ export function OnboardingSlide1({ onNext }: OnboardingSlide1Props) {
           }}
         >
           <Text style={[styles.body, { color: ui.tan300 }]}>
-            A quiet space to read Scripture, highlight verses, and write what’s on your heart.
+            A quiet space to read Scripture, mark verses, and write what’s on your heart.
           </Text>
         </Animated.View>
       </>

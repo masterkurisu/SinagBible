@@ -5,13 +5,11 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   type Animated as AnimatedType,
 } from "react-native";
 import type { ListRenderItemInfo } from "@shopify/flash-list";
-import type { HighlightColor } from "@sinag-bible/types";
-import { highlightColorOptions } from "@sinag-bible/ui";
+import type { VerseAnnotation } from "@sinag-bible/types";
 import {
   ReaderCopyIcon,
   ReaderFavoriteIcon,
@@ -24,6 +22,7 @@ import type { JournalNewEntryInitialParams } from "@/components/journal-new-entr
 import { hapticLightImpact, hapticSelection } from "@/lib/haptics";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ReaderTranslationLoadingOverlay,
   type ReaderTranslationLoadingPhase,
@@ -40,13 +39,12 @@ import {
 } from "@/src/features/reader/ReaderVerseList";
 import type { ReaderVerseFlashItem } from "@/src/features/reader/useReaderGestures";
 import { useReaderSelection } from "@/src/features/reader/useReaderSelection";
+import { ReaderAnnotationSheet } from "@/src/features/reader/ReaderAnnotationSheet";
 import { ReaderActionBarOnboardingLayer } from "@/src/features/reader/ReaderActionBarOnboardingLayer";
 import type { ReaderActionBarOnboardingStepId } from "@/src/features/reader/readerActionBarOnboardingSteps";
 import {
   READER_ACTION_BAR_ICON_BOX_PX,
   READER_ACTION_BAR_ICON_SIZE_PX,
-  READER_ACTION_BAR_PILL_PAD_H_HIGHLIGHT_PX,
-  READER_ACTION_BAR_PILL_PAD_V_HIGHLIGHT_PX,
 } from "@/src/features/reader/readerActionBarOnboardingSteps";
 import { useReaderActionBarOnboarding } from "@/src/features/reader/useReaderActionBarOnboarding";
 import {
@@ -54,7 +52,6 @@ import {
   ReaderActionBarJournalButton,
 } from "@/src/features/reader/ReaderActionBarButtons";
 import {
-  READER_M3_FLOATING_TOOLBAR_CONTAINER,
   readerM3FloatingToolbarPillStyle,
 } from "@/src/features/reader/readerActionBarChrome";
 import type { ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
@@ -123,17 +120,10 @@ type ReaderThemeBundle = {
 };
 
 type ReaderSelectionActionBarProps = {
-  actionBarMode: "default" | "highlight";
   actionBarBottom: number | AnimatedType.AnimatedInterpolation<number>;
   colors: ReaderThemeColors;
   rc: ReaderThemeBundle;
-  highlights: Record<number, HighlightColor | undefined>;
-  selectedVerses: number[];
-  pickedHighlightColor: HighlightColor;
-  setActionBarMode: (mode: "default" | "highlight") => void;
-  setPickedHighlightColor: (color: HighlightColor) => void;
-  removeHighlightsFromSelection: () => void;
-  applyPickedHighlightToSelection: () => void;
+  openAnnotationSheet: () => void;
   openStudyNotesFromSelection: () => void;
   copySelectedVerses: () => void;
   openNoteForSelection: () => void;
@@ -144,17 +134,10 @@ type ReaderSelectionActionBarProps = {
 };
 
 const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
-  actionBarMode,
   actionBarBottom,
   colors,
   rc,
-  highlights,
-  selectedVerses,
-  pickedHighlightColor,
-  setActionBarMode,
-  setPickedHighlightColor,
-  removeHighlightsFromSelection,
-  applyPickedHighlightToSelection,
+  openAnnotationSheet,
   openStudyNotesFromSelection,
   copySelectedVerses,
   openNoteForSelection,
@@ -189,214 +172,128 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
           paddingHorizontal: 16,
         }}
       >
-        <View
-          style={
-            actionBarMode === "highlight"
-              ? [
-                  toolbarPillStyle,
-                  {
-                    paddingHorizontal: READER_ACTION_BAR_PILL_PAD_H_HIGHLIGHT_PX,
-                    paddingVertical: READER_ACTION_BAR_PILL_PAD_V_HIGHLIGHT_PX,
-                  },
-                ]
-              : toolbarPillStyle
-          }
-        >
-          {actionBarMode === "highlight" ? (
-            <>
-              <TouchableOpacity
-                onPress={() => setActionBarMode("default")}
-                accessibilityLabel="Back from highlight"
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  borderWidth: 1,
-                  borderColor: colors.borderSolid,
-                  borderRadius: 999,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                }}
-                activeOpacity={0.75}
-              >
-                <Text style={{ fontFamily: "Inter_400Regular", color: colors.tan300 }}>←</Text>
-                <Text style={{ fontFamily: "Inter_500Medium", color: colors.brown800 }}>Back</Text>
-              </TouchableOpacity>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                {highlightColorOptions.map((opt) => {
-                  const picked = pickedHighlightColor === opt.id;
-                  return (
-                    <TouchableOpacity
-                      key={opt.id}
-                      onPress={() => setPickedHighlightColor(opt.id)}
-                      accessibilityLabel={`Use ${opt.id} highlight`}
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 14,
-                        backgroundColor: opt.swatch,
-                        borderWidth: picked ? 3 : 1,
-                        borderColor: picked ? opt.ring : "rgba(0,0,0,0.06)",
-                      }}
-                    />
-                  );
-                })}
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
-                <TouchableOpacity
-                  onPress={removeHighlightsFromSelection}
-                  accessibilityLabel="Remove highlight"
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                  <Text style={{ fontFamily: "Inter_400Regular", color: colors.tan300 }}>Remove</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={applyPickedHighlightToSelection}
-                  accessibilityLabel="Apply highlight"
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: "Inter_500Medium",
-                      color: colors.brown800,
-                      fontWeight: "600",
-                    }}
-                  >
-                    Apply
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <>
-              <ReaderActionBarIconButton
-                onPress={openStudyNotesFromSelection}
-                accessibilityLabel="Open study notes for selection"
-                buttonRef={actionBarButtonRefs["study-notes"]}
-              >
-                <View
-                  style={{
-                    width: READER_ACTION_BAR_ICON_BOX_PX,
-                    height: READER_ACTION_BAR_ICON_BOX_PX,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    transform: [{ scale: ACTION_BAR_ICON_SCALE.studyNotes }],
-                  }}
-                >
-                  <StudyNotesBookmarkIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
-                </View>
-              </ReaderActionBarIconButton>
-              <ReaderActionBarIconButton
-                onPress={() => {
-                  const first = selectedVerses[0];
-                  const existing = first != null ? highlights[first] : undefined;
-                  if (existing) setPickedHighlightColor(existing);
-                  setActionBarMode("highlight");
-                }}
-                accessibilityLabel="Highlight"
-                buttonRef={actionBarButtonRefs.highlight}
-              >
-                <View
-                  style={{
-                    width: READER_ACTION_BAR_ICON_BOX_PX,
-                    height: READER_ACTION_BAR_ICON_BOX_PX,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    transform: [{ scale: ACTION_BAR_ICON_SCALE.highlight }],
-                  }}
-                >
-                  <ReaderHighlightIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
-                </View>
-              </ReaderActionBarIconButton>
-              <ReaderActionBarIconButton
-                onPress={() => {
-                  void copySelectedVerses();
-                }}
-                accessibilityLabel="Copy"
-                buttonRef={actionBarButtonRefs.copy}
-              >
-                <View
-                  style={{
-                    width: READER_ACTION_BAR_ICON_BOX_PX,
-                    height: READER_ACTION_BAR_ICON_BOX_PX,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    transform: [{ scale: ACTION_BAR_ICON_SCALE.copy }],
-                  }}
-                >
-                  <ReaderCopyIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
-                </View>
-              </ReaderActionBarIconButton>
-              <ReaderActionBarIconButton
-                onPress={openNoteForSelection}
-                accessibilityLabel="Note"
-                buttonRef={actionBarButtonRefs.note}
-              >
-                <View
-                  style={{
-                    width: READER_ACTION_BAR_ICON_BOX_PX,
-                    height: READER_ACTION_BAR_ICON_BOX_PX,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    transform: [{ scale: ACTION_BAR_ICON_SCALE.note }],
-                  }}
-                >
-                  <ReaderNoteIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
-                </View>
-              </ReaderActionBarIconButton>
-              <ReaderActionBarIconButton
-                onPress={toggleFavoriteFromSelection}
-                accessibilityLabel={
-                  selectionIsFavorited
-                    ? "Remove from journal carousel"
-                    : "Add to journal carousel"
+        <View style={toolbarPillStyle}>
+          <ReaderActionBarIconButton
+            onPress={openStudyNotesFromSelection}
+            accessibilityLabel="Open study notes for selection"
+            buttonRef={actionBarButtonRefs["study-notes"]}
+          >
+            <View
+              style={{
+                width: READER_ACTION_BAR_ICON_BOX_PX,
+                height: READER_ACTION_BAR_ICON_BOX_PX,
+                alignItems: "center",
+                justifyContent: "center",
+                transform: [{ scale: ACTION_BAR_ICON_SCALE.studyNotes }],
+              }}
+            >
+              <StudyNotesBookmarkIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
+            </View>
+          </ReaderActionBarIconButton>
+          <ReaderActionBarIconButton
+            onPress={openAnnotationSheet}
+            accessibilityLabel="Highlight or underline"
+            buttonRef={actionBarButtonRefs.highlight}
+          >
+            <View
+              style={{
+                width: READER_ACTION_BAR_ICON_BOX_PX,
+                height: READER_ACTION_BAR_ICON_BOX_PX,
+                alignItems: "center",
+                justifyContent: "center",
+                transform: [{ scale: ACTION_BAR_ICON_SCALE.highlight }],
+              }}
+            >
+              <ReaderHighlightIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
+            </View>
+          </ReaderActionBarIconButton>
+          <ReaderActionBarIconButton
+            onPress={() => {
+              void copySelectedVerses();
+            }}
+            accessibilityLabel="Copy"
+            buttonRef={actionBarButtonRefs.copy}
+          >
+            <View
+              style={{
+                width: READER_ACTION_BAR_ICON_BOX_PX,
+                height: READER_ACTION_BAR_ICON_BOX_PX,
+                alignItems: "center",
+                justifyContent: "center",
+                transform: [{ scale: ACTION_BAR_ICON_SCALE.copy }],
+              }}
+            >
+              <ReaderCopyIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
+            </View>
+          </ReaderActionBarIconButton>
+          <ReaderActionBarIconButton
+            onPress={openNoteForSelection}
+            accessibilityLabel="Note"
+            buttonRef={actionBarButtonRefs.note}
+          >
+            <View
+              style={{
+                width: READER_ACTION_BAR_ICON_BOX_PX,
+                height: READER_ACTION_BAR_ICON_BOX_PX,
+                alignItems: "center",
+                justifyContent: "center",
+                transform: [{ scale: ACTION_BAR_ICON_SCALE.note }],
+              }}
+            >
+              <ReaderNoteIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
+            </View>
+          </ReaderActionBarIconButton>
+          <ReaderActionBarIconButton
+            onPress={toggleFavoriteFromSelection}
+            accessibilityLabel={
+              selectionIsFavorited
+                ? "Remove from journal carousel"
+                : "Add to journal carousel"
+            }
+            buttonRef={actionBarButtonRefs.favorite}
+          >
+            <View
+              style={{
+                width: READER_ACTION_BAR_ICON_BOX_PX,
+                height: READER_ACTION_BAR_ICON_BOX_PX,
+                alignItems: "center",
+                justifyContent: "center",
+                transform: [{ scale: ACTION_BAR_ICON_SCALE.favorite }],
+              }}
+            >
+              <ReaderFavoriteIcon
+                color={selectionIsFavorited ? "#c45c5c" : iconMuted}
+                filled={selectionIsFavorited}
+                size={READER_ACTION_BAR_ICON_SIZE_PX}
+              />
+            </View>
+          </ReaderActionBarIconButton>
+          <ReaderActionBarJournalButton
+            onPress={openJournalFromSelection}
+            accessibilityLabel="New journal entry from selection"
+            containerColor={
+              Platform.OS === "android" ? journalChrome.fabContainer : colors.brown800
+            }
+            rippleColor={journalChrome.fabRipple}
+            buttonRef={actionBarButtonRefs.journal}
+          >
+            <View
+              style={{
+                width: READER_ACTION_BAR_ICON_BOX_PX,
+                height: READER_ACTION_BAR_ICON_BOX_PX,
+                alignItems: "center",
+                justifyContent: "center",
+                transform: [{ scale: ACTION_BAR_ICON_SCALE.journal }],
+              }}
+            >
+              <ReaderJournalIcon
+                color={
+                  Platform.OS === "android" ? journalChrome.fabOnContainer : rc.selectionText
                 }
-                buttonRef={actionBarButtonRefs.favorite}
-              >
-                <View
-                  style={{
-                    width: READER_ACTION_BAR_ICON_BOX_PX,
-                    height: READER_ACTION_BAR_ICON_BOX_PX,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    transform: [{ scale: ACTION_BAR_ICON_SCALE.favorite }],
-                  }}
-                >
-                  <ReaderFavoriteIcon
-                    color={selectionIsFavorited ? "#c45c5c" : iconMuted}
-                    filled={selectionIsFavorited}
-                    size={READER_ACTION_BAR_ICON_SIZE_PX}
-                  />
-                </View>
-              </ReaderActionBarIconButton>
-              <ReaderActionBarJournalButton
-                onPress={openJournalFromSelection}
-                accessibilityLabel="New journal entry from selection"
-                containerColor={
-                  Platform.OS === "android" ? journalChrome.fabContainer : colors.brown800
-                }
-                rippleColor={journalChrome.fabRipple}
-                buttonRef={actionBarButtonRefs.journal}
-              >
-                <View
-                  style={{
-                    width: READER_ACTION_BAR_ICON_BOX_PX,
-                    height: READER_ACTION_BAR_ICON_BOX_PX,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    transform: [{ scale: ACTION_BAR_ICON_SCALE.journal }],
-                  }}
-                >
-                  <ReaderJournalIcon
-                    color={
-                      Platform.OS === "android" ? journalChrome.fabOnContainer : rc.selectionText
-                    }
-                    size={READER_ACTION_BAR_ICON_SIZE_PX}
-                  />
-                </View>
-              </ReaderActionBarJournalButton>
-            </>
-          )}
+                size={READER_ACTION_BAR_ICON_SIZE_PX}
+              />
+            </View>
+          </ReaderActionBarJournalButton>
         </View>
       </Animated.View>
     </View>
@@ -405,7 +302,7 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
 
 type ReaderVerseInteractionData = {
   selectedVerseNumbers: Set<number>;
-  highlights: Record<number, HighlightColor | undefined>;
+  annotations: Record<number, VerseAnnotation | undefined>;
   notes: Record<number, string | undefined>;
 };
 
@@ -458,7 +355,7 @@ const MemoizedReaderVerseFlashRow = memo(
           verseText={item.verseText}
           verseInlineContent={item.verseInlineContent}
           isSelected={interactionData.selectedVerseNumbers.has(verseNum)}
-          highlight={interactionData.highlights[verseNum]}
+          annotation={interactionData.annotations[verseNum]}
           noteText={interactionData.notes[verseNum]?.trim()}
           themeId={vd.themeId}
           selectionBackground={vd.selectionBackground}
@@ -492,7 +389,7 @@ const MemoizedReaderVerseFlashRow = memo(
     const prevSelected = prevProps.interactionData.selectedVerseNumbers.has(verseNum);
     const nextSelected = nextProps.interactionData.selectedVerseNumbers.has(verseNum);
     if (prevSelected !== nextSelected) return false;
-    if (prevProps.interactionData.highlights[verseNum] !== nextProps.interactionData.highlights[verseNum]) {
+    if (prevProps.interactionData.annotations[verseNum] !== nextProps.interactionData.annotations[verseNum]) {
       return false;
     }
     const prevNote = prevProps.interactionData.notes[verseNum]?.trim();
@@ -510,16 +407,17 @@ export type ReaderSelectionLayerProps = {
     bookSlug: string;
   };
   resolvedTranslationId: string;
-  highlights: Record<number, HighlightColor | undefined>;
+  annotations: Record<number, VerseAnnotation | undefined>;
   notes: Record<number, string | undefined>;
-  removeHighlightsFromVerses: (verses: number[]) => void;
-  applyHighlightToVerses: (verses: number[], color: HighlightColor) => void;
+  removeAnnotationsFromVerses: (verses: number[]) => void;
+  applyAnnotationToVerses: (verses: number[], annotation: VerseAnnotation) => void;
   persistNoteForVerse: (verse: number, text: string) => void;
   bookSlug: string | undefined;
   chapterNumber: number;
   requestedTranslationId: string;
   toolsMenuOpen: boolean;
   closeToolsMenu: () => void;
+  isTabletReaderLayout?: boolean;
   themeId: string;
   colors: ReaderThemeColors;
   rc: ReaderThemeBundle;
@@ -571,16 +469,17 @@ export type ReaderSelectionLayerProps = {
 export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   chapter,
   resolvedTranslationId,
-  highlights,
+  annotations,
   notes,
-  removeHighlightsFromVerses,
-  applyHighlightToVerses,
+  removeAnnotationsFromVerses,
+  applyAnnotationToVerses,
   persistNoteForVerse,
   bookSlug,
   chapterNumber,
   requestedTranslationId,
   toolsMenuOpen,
   closeToolsMenu,
+  isTabletReaderLayout = false,
   themeId,
   colors,
   rc,
@@ -654,10 +553,11 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     setNoteTargetVerse,
     noteDraft,
     setNoteDraft,
-    actionBarMode,
-    setActionBarMode,
-    pickedHighlightColor,
-    setPickedHighlightColor,
+    annotationSheetOpen,
+    openAnnotationSheet,
+    closeAnnotationSheet,
+    annotationSheetInitial,
+    selectionHasExistingAnnotation,
     copyToastVisible,
     clearVerseSelection,
     toggleVerseSelection,
@@ -665,17 +565,17 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     handleVerseLongPress,
     selectedVerses,
     copySelectedVerses,
-    removeHighlightsFromSelection,
-    applyPickedHighlightToSelection,
+    removeAnnotationsFromSelection,
+    applyAnnotationToSelection,
     openNoteForSelection,
     saveNoteFromModal,
   } = useReaderSelection({
     chapter,
     resolvedTranslationId,
-    highlights,
+    annotations,
     notes,
-    removeHighlightsFromVerses,
-    applyHighlightToVerses,
+    removeAnnotationsFromVerses,
+    applyAnnotationToVerses,
     persistNoteForVerse,
     bookSlug,
     chapterNumber,
@@ -683,6 +583,9 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     toolsMenuOpen,
     closeToolsMenu,
   });
+
+  const { bundle } = useMobileAppTheme();
+  const insets = useSafeAreaInsets();
 
   const { favorites, toggleFavorite } = useJournalCarouselVerses();
   const [favoriteToastVisible, setFavoriteToastVisible] = useState(false);
@@ -866,10 +769,10 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   const interactionData = useMemo(
     (): ReaderVerseInteractionData => ({
       selectedVerseNumbers,
-      highlights,
+      annotations,
       notes,
     }),
-    [selectedVerseNumbers, highlights, notes],
+    [selectedVerseNumbers, annotations, notes],
   );
 
   const flashListExtraData = useMemo(
@@ -918,7 +821,8 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   }, []);
 
   const hasVerseSelection = selectedVerses.length > 0;
-  const readerOverlayOpen = readerOverlayOpenFromParent || noteModalVisible;
+  const readerOverlayOpen =
+    readerOverlayOpenFromParent || noteModalVisible || annotationSheetOpen;
 
   const actionBarBottom = useMemo(() => {
     if (
@@ -933,7 +837,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
 
   const readerActionBarOnboarding = useReaderActionBarOnboarding({
     hasVerseSelection,
-    actionBarMode,
+    annotationSheetOpen,
     readerOverlayOpen,
     readerFeatureOnboardingActive,
     buttonRefs: actionBarButtonRefs,
@@ -971,7 +875,6 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           listHeader={listHeader}
           readerChapterFlashListFooter={readerChapterFlashListFooter}
           hasVerseSelection={hasVerseSelection}
-          actionBarMode={actionBarMode}
           actionBarBottomPx={actionBarBottomPx}
           androidListPaddingBottomHidden={androidListPaddingBottomHidden}
           readerVersesOpacityAnim={readerVersesOpacityAnim}
@@ -1076,17 +979,10 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
 
       {hasVerseSelection ? (
         <ReaderSelectionActionBar
-          actionBarMode={actionBarMode}
           actionBarBottom={actionBarBottom}
           colors={colors}
           rc={rc}
-          highlights={highlights}
-          selectedVerses={selectedVerses}
-          pickedHighlightColor={pickedHighlightColor}
-          setActionBarMode={setActionBarMode}
-          setPickedHighlightColor={setPickedHighlightColor}
-          removeHighlightsFromSelection={removeHighlightsFromSelection}
-          applyPickedHighlightToSelection={applyPickedHighlightToSelection}
+          openAnnotationSheet={openAnnotationSheet}
           openStudyNotesFromSelection={openStudyNotesFromSelection}
           copySelectedVerses={copySelectedVerses}
           openNoteForSelection={openNoteForSelection}
@@ -1096,6 +992,24 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           actionBarButtonRefs={actionBarButtonRefs}
         />
       ) : null}
+
+      <ReaderAnnotationSheet
+        isOpen={annotationSheetOpen}
+        onClose={closeAnnotationSheet}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
+        selectedVerses={selectedVerses}
+        selectionSubtitle={
+          selectedVerses.length === 1
+            ? `${chapter.bookName} ${chapter.chapterNumber}:${selectedVerses[0]}`
+            : `${selectedVerses.length} verses selected`
+        }
+        initialAnnotation={annotationSheetInitial}
+        existingAnnotation={selectionHasExistingAnnotation ? annotationSheetInitial : undefined}
+        onApply={applyAnnotationToSelection}
+        onRemove={removeAnnotationsFromSelection}
+      />
 
       {hasVerseSelection ? (
         <View

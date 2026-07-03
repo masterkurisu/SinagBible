@@ -47,3 +47,32 @@ export const highlightColorOptions = [
   { id: "green" as const, swatch: highlightColors.green, ring: "#92caa4" },
   { id: "purple" as const, swatch: highlightColors.purple, ring: "#b4a0e8" },
 ] as const;
+
+/** Dark ink swatches for underline marks. */
+export const underlineDarkColors = {
+  brown800: colors.brown800,
+  brown600: colors.brown600,
+  navy: "#1e3a5f",
+  red: "#C41E1E",
+  black: colors.brown900,
+} as const;
+
+export const underlineDarkColorOptions = [
+  { id: "brown800" as const, swatch: underlineDarkColors.brown800, ring: "#6b5540" },
+  { id: "brown600" as const, swatch: underlineDarkColors.brown600, ring: "#8a7355" },
+  { id: "navy" as const, swatch: underlineDarkColors.navy, ring: "#4a6a8f" },
+  { id: "red" as const, swatch: underlineDarkColors.red, ring: "#e07070" },
+  { id: "black" as const, swatch: underlineDarkColors.black, ring: "#5c4f3a" },
+] as const;
+
+export type HighlightColorOption = (typeof highlightColorOptions)[number];
+export type UnderlineDarkColorOption = (typeof underlineDarkColorOptions)[number];
+
+/** Resolve any annotation color id to a display hex. */
+export function resolveAnnotationColorHex(colorId: string): string | undefined {
+  const pastel = highlightColors[colorId as keyof typeof highlightColors];
+  if (pastel) return pastel;
+  const dark = underlineDarkColors[colorId as keyof typeof underlineDarkColors];
+  if (dark) return dark;
+  return undefined;
+}

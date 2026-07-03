@@ -223,10 +223,10 @@ export default function ReaderChapterScreen() {
   } = useReaderChapter(bookSlug ?? "", chapterNumber, requestedTranslationId);
 
   const {
-    highlights,
+    annotations,
     notes,
-    removeHighlightsFromVerses,
-    applyHighlightToVerses,
+    removeAnnotationsFromVerses,
+    applyAnnotationToVerses,
     persistNoteForVerse,
   } = useReaderStorage(chapter ?? undefined, resolvedTranslationId);
 
@@ -1630,16 +1630,17 @@ export default function ReaderChapterScreen() {
       <ReaderSelectionLayer
         chapter={chapter}
         resolvedTranslationId={resolvedTranslationId}
-        highlights={highlights}
+        annotations={annotations}
         notes={notes}
-        removeHighlightsFromVerses={removeHighlightsFromVerses}
-        applyHighlightToVerses={applyHighlightToVerses}
+        removeAnnotationsFromVerses={removeAnnotationsFromVerses}
+        applyAnnotationToVerses={applyAnnotationToVerses}
         persistNoteForVerse={persistNoteForVerse}
         bookSlug={bookSlug}
         chapterNumber={chapterNumber}
         requestedTranslationId={requestedTranslationId}
         toolsMenuOpen={toolsMenuOpen}
         closeToolsMenu={closeToolsMenu}
+        isTabletReaderLayout={isTabletReaderLayout}
         themeId={themeId}
         colors={colors}
         rc={rc}

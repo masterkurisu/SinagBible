@@ -22,6 +22,12 @@ import {
 } from "@/lib/reader-data-import-sync";
 import { getReaderSheetChrome, useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
+  READER_BACKUP_IMPORT_CONFIRM_BODY,
+  READER_BACKUP_IMPORT_PICKER_SUBTITLE,
+  READER_BACKUP_IMPORT_ROW_DESCRIPTION,
+  READER_BACKUP_MENU_SUBTITLE,
+} from "@/src/features/reader/readerVerseMarksCopy";
+import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
   READER_M3_ERROR,
@@ -307,7 +313,7 @@ export function ReaderDataBackupSheet({
       <BackupMenuDivider scale={scale} />
       <BackupActionRow
         label="Import backup"
-        description="Replace journal, favorites, highlights, and notes"
+        description={READER_BACKUP_IMPORT_ROW_DESCRIPTION}
         icon="upload-file"
         scale={scale}
         rippleColor={rippleColor}
@@ -352,8 +358,7 @@ export function ReaderDataBackupSheet({
           color: sheetChrome.onSurfaceVariant,
         }}
       >
-        Importing will replace your journal entries, favorite verses, highlights, and notes with the
-        contents of the backup file. This cannot be undone.
+        {READER_BACKUP_IMPORT_CONFIRM_BODY}
       </Text>
       <View style={[styles.confirmActions, { marginTop: 28 * scale, gap: 12 * scale }]}>
         <M3Button
@@ -389,8 +394,8 @@ export function ReaderDataBackupSheet({
         title="Import / Export"
         subtitle={
           step === "menu"
-            ? "Back up or restore your journal, favorite verses, highlights, and notes."
-            : "Choose a backup file to restore your journal, favorites, highlights, and notes."
+            ? READER_BACKUP_MENU_SUBTITLE
+            : READER_BACKUP_IMPORT_PICKER_SUBTITLE
         }
         accessibilityDismissLabel="Dismiss import and export"
         scrollable

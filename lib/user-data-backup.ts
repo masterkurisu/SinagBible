@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { HighlightColor, LocalJournalEntry } from "@sinag-bible/types";
+import type { HighlightColor, LocalJournalEntry, VerseAnnotation } from "@sinag-bible/types";
+import { isHighlightColor, parseStoredVerseAnnotation } from "@sinag-bible/types";
 import * as DocumentPicker from "expo-document-picker";
 import {
   cacheDirectory,
@@ -25,22 +26,28 @@ import {
   type CarouselVerseRecord,
 } from "@/lib/journal-carousel-verses";
 import {
+  annotationsFromLegacyHighlights,
   exportAllReaderChapterAnnotations,
   importAllReaderChapterAnnotations,
   type ReaderChapterAnnotationExport,
 } from "@/lib/use-reader-storage";
 
 export const USER_DATA_BACKUP_FORMAT = "sinag-bible-user-data" as const;
-export const USER_DATA_BACKUP_SCHEMA_VERSION = 1 as const;
+export const USER_DATA_BACKUP_SCHEMA_VERSION = 2 as const;
+/** Legacy backup schema — still accepted on import. */
+export const USER_DATA_BACKUP_SCHEMA_VERSION_V1 = 1 as const;
 
-export type UserDataBackupV1 = {
+export type UserDataBackup = {
   format: typeof USER_DATA_BACKUP_FORMAT;
-  schemaVersion: typeof USER_DATA_BACKUP_SCHEMA_VERSION;
+  schemaVersion: typeof USER_DATA_BACKUP_SCHEMA_VERSION | typeof USER_DATA_BACKUP_SCHEMA_VERSION_V1;
   exportedAt: string;
   journalEntries: LocalJournalEntry[];
   favoriteVerses: CarouselVerseRecord[];
   readerChapters: ReaderChapterAnnotationExport[];
 };
+
+/** @deprecated Use UserDataBackup */
+export type UserDataBackupV1 = UserDataBackup;
 
 export type UserDataBackupResult = "shared" | "unavailable" | "failed";
 export type UserDataSaveResult = "saved" | "cancelled" | "failed";
@@ -48,10 +55,28 @@ export type UserDataImportResult = "imported" | "cancelled" | "invalid" | "faile
 
 const BACKUP_SAVE_DIRECTORY_URI_KEY = "sb:backup-save-directory-uri";
 
-const HIGHLIGHT_COLORS: HighlightColor[] = ["yellow", "blue", "pink", "green", "purple"];
+function parseLegacyHighlightsRecord(value: unknown): Record<number, HighlightColor> {
+  if (!value || typeof value !== "object") return {};
+  const next: Record<number, HighlightColor> = {};
+  for (const [key, color] of Object.entries(value as Record<string, unknown>)) {
+    const verse = parseInt(key, 10);
+    if (Number.isFinite(verse) && isHighlightColor(color)) {
+      next[verse] = color;
+    }
+  }
+  return next;
+}
 
-function isHighlightColor(value: unknown): value is HighlightColor {
-  return typeof value === "string" && HIGHLIGHT_COLORS.includes(value as HighlightColor);
+function parseAnnotationsRecord(value: unknown): Record<number, VerseAnnotation> {
+  if (!value || typeof value !== "object") return {};
+  const next: Record<number, VerseAnnotation> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    const verse = parseInt(key, 10);
+    if (!Number.isFinite(verse)) continue;
+    const annotation = parseStoredVerseAnnotation(raw);
+    if (annotation) next[verse] = annotation;
+  }
+  return next;
 }
 
 function isLocalJournalEntry(value: unknown): value is LocalJournalEntry {
@@ -82,16 +107,35 @@ function isCarouselVerseRecord(value: unknown): value is CarouselVerseRecord {
   );
 }
 
-function parseHighlightsRecord(value: unknown): Record<number, HighlightColor> {
-  if (!value || typeof value !== "object") return {};
-  const next: Record<number, HighlightColor> = {};
-  for (const [key, color] of Object.entries(value as Record<string, unknown>)) {
-    const verse = parseInt(key, 10);
-    if (Number.isFinite(verse) && isHighlightColor(color)) {
-      next[verse] = color;
-    }
+function normalizeReaderChapterExport(value: unknown): ReaderChapterAnnotationExport | null {
+  if (!value || typeof value !== "object") return null;
+  const chapter = value as Partial<ReaderChapterAnnotationExport> & {
+    highlights?: unknown;
+    annotations?: unknown;
+  };
+  if (
+    typeof chapter.bookSlug !== "string" ||
+    typeof chapter.chapter !== "number" ||
+    typeof chapter.translationId !== "string"
+  ) {
+    return null;
   }
-  return next;
+
+  const notes = parseNotesRecord(chapter.notes);
+  const annotations =
+    chapter.annotations != null
+      ? parseAnnotationsRecord(chapter.annotations)
+      : chapter.highlights != null
+        ? annotationsFromLegacyHighlights(parseLegacyHighlightsRecord(chapter.highlights))
+        : {};
+
+  return {
+    bookSlug: chapter.bookSlug,
+    chapter: chapter.chapter,
+    translationId: chapter.translationId,
+    annotations,
+    notes,
+  };
 }
 
 function parseNotesRecord(value: unknown): Record<number, string> {
@@ -106,19 +150,7 @@ function parseNotesRecord(value: unknown): Record<number, string> {
   return next;
 }
 
-function isReaderChapterExport(value: unknown): value is ReaderChapterAnnotationExport {
-  if (!value || typeof value !== "object") return false;
-  const chapter = value as ReaderChapterAnnotationExport;
-  return (
-    typeof chapter.bookSlug === "string" &&
-    typeof chapter.chapter === "number" &&
-    typeof chapter.translationId === "string" &&
-    chapter.highlights != null &&
-    chapter.notes != null
-  );
-}
-
-function parseUserDataBackup(raw: string): UserDataBackupV1 | null {
+function parseUserDataBackup(raw: string): UserDataBackup | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -127,10 +159,15 @@ function parseUserDataBackup(raw: string): UserDataBackupV1 | null {
   }
 
   if (!parsed || typeof parsed !== "object") return null;
-  const backup = parsed as Partial<UserDataBackupV1>;
+  const backup = parsed as Partial<UserDataBackup>;
 
   if (backup.format !== USER_DATA_BACKUP_FORMAT) return null;
-  if (backup.schemaVersion !== USER_DATA_BACKUP_SCHEMA_VERSION) return null;
+  if (
+    backup.schemaVersion !== USER_DATA_BACKUP_SCHEMA_VERSION &&
+    backup.schemaVersion !== USER_DATA_BACKUP_SCHEMA_VERSION_V1
+  ) {
+    return null;
+  }
   if (!Array.isArray(backup.journalEntries)) return null;
   if (!Array.isArray(backup.favoriteVerses)) return null;
   if (!Array.isArray(backup.readerChapters)) return null;
@@ -138,17 +175,11 @@ function parseUserDataBackup(raw: string): UserDataBackupV1 | null {
   const journalEntries = backup.journalEntries.filter(isLocalJournalEntry);
   const favoriteVerses = backup.favoriteVerses.filter(isCarouselVerseRecord);
   const readerChapters = backup.readerChapters
-    .filter(isReaderChapterExport)
-    .map((chapter) => ({
-      bookSlug: chapter.bookSlug,
-      chapter: chapter.chapter,
-      translationId: chapter.translationId,
-      highlights: parseHighlightsRecord(chapter.highlights),
-      notes: parseNotesRecord(chapter.notes),
-    }))
+    .map((chapter) => normalizeReaderChapterExport(chapter))
+    .filter((chapter): chapter is ReaderChapterAnnotationExport => chapter != null)
     .filter(
       (chapter) =>
-        Object.keys(chapter.highlights).length > 0 || Object.keys(chapter.notes).length > 0,
+        Object.keys(chapter.annotations).length > 0 || Object.keys(chapter.notes).length > 0,
     );
 
   return {
@@ -161,7 +192,7 @@ function parseUserDataBackup(raw: string): UserDataBackupV1 | null {
   };
 }
 
-async function buildUserDataBackup(): Promise<UserDataBackupV1> {
+async function buildUserDataBackup(): Promise<UserDataBackup> {
   const [journalEntries, favoriteVerses, readerChapters] = await Promise.all([
     getLocalEntries(),
     loadCarouselFavorites(),
@@ -196,7 +227,7 @@ function backupBaseName(filename: string): string {
   return filename.replace(/\.json$/i, "");
 }
 
-async function buildBackupJson(): Promise<{ json: string; backup: UserDataBackupV1; filename: string }> {
+async function buildBackupJson(): Promise<{ json: string; backup: UserDataBackup; filename: string }> {
   const backup = await buildUserDataBackup();
   return {
     backup,
@@ -417,11 +448,23 @@ export async function applyImportBackupFromUri(uri: string): Promise<void> {
       throw new ImportBackupInvalidError();
     }
 
+    let sourceSchemaVersion: number | undefined;
+    try {
+      const parsed = JSON.parse(raw) as { schemaVersion?: unknown };
+      if (typeof parsed.schemaVersion === "number") {
+        sourceSchemaVersion = parsed.schemaVersion;
+      }
+    } catch {
+      /* ignore — parseUserDataBackup already validated */
+    }
+
     await applyUserDataBackup(backup);
     logAppEvent("user-data-backup:imported", {
       journalCount: backup.journalEntries.length,
       favoriteCount: backup.favoriteVerses.length,
       readerChapterCount: backup.readerChapters.length,
+      sourceSchemaVersion,
+      migratedFromV1: sourceSchemaVersion === USER_DATA_BACKUP_SCHEMA_VERSION_V1,
     });
   } catch (error) {
     if (error instanceof ImportBackupInvalidError) {

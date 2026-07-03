@@ -1,8 +1,9 @@
+import { READER_DELETE_DATA_BACKUP_REMINDER_BODY } from "@/src/features/reader/readerVerseMarksCopy";
+
 /** Copy shared by the Delete My Data confirmation dialog. */
 export const DELETE_MY_DATA_BACKUP_REMINDER_TITLE = "Back up your data first?";
 
-export const DELETE_MY_DATA_BACKUP_REMINDER_BODY =
-  "Deleting removes your journal entries, favorite verses, highlights, and notes from this device. Export a backup now if you may want them later.";
+export const DELETE_MY_DATA_BACKUP_REMINDER_BODY = READER_DELETE_DATA_BACKUP_REMINDER_BODY;
 
 export const DELETE_MY_DATA_DIALOG_TITLE = "Delete my data?";
 
@@ -12,7 +13,7 @@ export const DELETE_MY_DATA_INTRO =
 export const DELETE_MY_DATA_ITEMS = [
   "Journal entries",
   "Bookmarks",
-  "Highlights",
+  "Highlights & underlines",
   "Reading history",
   "Locally stored preferences",
 ] as const;

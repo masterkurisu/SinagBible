@@ -2,16 +2,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { formatSelectedReference } from "@sinag-bible/core";
-import type { HighlightColor } from "@sinag-bible/types";
+import {
+  DEFAULT_VERSE_ANNOTATION,
+  type VerseAnnotation,
+} from "@sinag-bible/types";
 import { hapticLightImpact, hapticMediumImpact, hapticSelection } from "@/lib/haptics";
+import {
+  loadReaderAnnotationPrefs,
+  persistReaderAnnotationPrefs,
+} from "@/lib/reader-annotation-prefs";
 
 export function useReaderSelection({
   chapter,
   resolvedTranslationId,
-  highlights,
+  annotations,
   notes,
-  removeHighlightsFromVerses,
-  applyHighlightToVerses,
+  removeAnnotationsFromVerses,
+  applyAnnotationToVerses,
   persistNoteForVerse,
   bookSlug,
   chapterNumber,
@@ -21,10 +28,10 @@ export function useReaderSelection({
 }: {
   chapter: { bookName: string; chapterNumber: number; verses: readonly string[]; bookSlug: string } | null;
   resolvedTranslationId: string | undefined;
-  highlights: Record<number, HighlightColor | undefined>;
+  annotations: Record<number, VerseAnnotation | undefined>;
   notes: Record<number, string | undefined>;
-  removeHighlightsFromVerses: (verses: number[]) => void;
-  applyHighlightToVerses: (verses: number[], color: HighlightColor) => void;
+  removeAnnotationsFromVerses: (verses: number[]) => void;
+  applyAnnotationToVerses: (verses: number[], annotation: VerseAnnotation) => void;
   persistNoteForVerse: (verse: number, text: string) => void;
   bookSlug: string | undefined;
   chapterNumber: number;
@@ -36,10 +43,14 @@ export function useReaderSelection({
   const [noteModalVisible, setNoteModalVisible] = useState(false);
   const [noteTargetVerse, setNoteTargetVerse] = useState<number | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
-  const [actionBarMode, setActionBarMode] = useState<"default" | "highlight">("default");
+  const [annotationSheetOpen, setAnnotationSheetOpen] = useState(false);
+  const [lastUsedAnnotation, setLastUsedAnnotation] = useState<VerseAnnotation>(DEFAULT_VERSE_ANNOTATION);
   const suppressNextVerseTapRef = useRef<number | null>(null);
-  const [pickedHighlightColor, setPickedHighlightColor] = useState<HighlightColor>("yellow");
   const [copyToastVisible, setCopyToastVisible] = useState(false);
+
+  useEffect(() => {
+    void loadReaderAnnotationPrefs().then(setLastUsedAnnotation);
+  }, []);
 
   const clearVerseSelection = useCallback(() => {
     setSelectedVerseNumbers(new Set());
@@ -73,14 +84,15 @@ export function useReaderSelection({
   const handleVerseLongPress = useCallback(
     (verseNumber: number) => {
       hapticMediumImpact();
-      if (highlights[verseNumber]) {
-        removeHighlightsFromVerses([verseNumber]);
+      if (annotations[verseNumber]) {
+        removeAnnotationsFromVerses([verseNumber]);
       } else {
-        applyHighlightToVerses([verseNumber], pickedHighlightColor);
+        applyAnnotationToVerses([verseNumber], lastUsedAnnotation);
+        persistReaderAnnotationPrefs(lastUsedAnnotation);
       }
       suppressNextVerseTapRef.current = verseNumber;
     },
-    [applyHighlightToVerses, highlights, pickedHighlightColor, removeHighlightsFromVerses],
+    [annotations, applyAnnotationToVerses, lastUsedAnnotation, removeAnnotationsFromVerses],
   );
 
   useEffect(() => {
@@ -88,7 +100,7 @@ export function useReaderSelection({
     setNoteModalVisible(false);
     setNoteTargetVerse(null);
     setNoteDraft("");
-    setActionBarMode("default");
+    setAnnotationSheetOpen(false);
   }, [
     chapter?.bookSlug ?? bookSlug,
     chapter?.chapterNumber ?? chapterNumber,
@@ -126,24 +138,46 @@ export function useReaderSelection({
     }
   }, [chapter, resolvedTranslationId, selectedVerses, clearVerseSelection]);
 
-  const removeHighlightsFromSelection = useCallback(() => {
+  const openAnnotationSheet = useCallback(() => {
     if (selectedVerses.length === 0) return;
-    removeHighlightsFromVerses(selectedVerses);
-    setActionBarMode("default");
-    clearVerseSelection();
-  }, [removeHighlightsFromVerses, selectedVerses, clearVerseSelection]);
+    setAnnotationSheetOpen(true);
+  }, [selectedVerses.length]);
 
-  const applyPickedHighlightToSelection = useCallback(() => {
+  const closeAnnotationSheet = useCallback(() => {
+    setAnnotationSheetOpen(false);
+  }, []);
+
+  const removeAnnotationsFromSelection = useCallback(() => {
     if (selectedVerses.length === 0) return;
-    applyHighlightToVerses(selectedVerses, pickedHighlightColor);
-    setActionBarMode("default");
+    removeAnnotationsFromVerses(selectedVerses);
+    setAnnotationSheetOpen(false);
     clearVerseSelection();
-  }, [
-    applyHighlightToVerses,
-    pickedHighlightColor,
-    selectedVerses,
-    clearVerseSelection,
-  ]);
+  }, [removeAnnotationsFromVerses, selectedVerses, clearVerseSelection]);
+
+  const applyAnnotationToSelection = useCallback(
+    (annotation: VerseAnnotation) => {
+      if (selectedVerses.length === 0) return;
+      applyAnnotationToVerses(selectedVerses, annotation);
+      setLastUsedAnnotation(annotation);
+      persistReaderAnnotationPrefs(annotation);
+      setAnnotationSheetOpen(false);
+      clearVerseSelection();
+    },
+    [applyAnnotationToVerses, selectedVerses, clearVerseSelection],
+  );
+
+  const annotationSheetInitial = useMemo((): VerseAnnotation => {
+    const first = selectedVerses[0];
+    if (first != null && annotations[first]) {
+      return annotations[first]!;
+    }
+    return lastUsedAnnotation;
+  }, [annotations, lastUsedAnnotation, selectedVerses]);
+
+  const selectionHasExistingAnnotation = useMemo(
+    () => selectedVerses.some((verse) => annotations[verse] != null),
+    [annotations, selectedVerses],
+  );
 
   const openNoteForSelection = useCallback(() => {
     if (selectedVerses.length === 0) return;
@@ -172,11 +206,13 @@ export function useReaderSelection({
     setNoteTargetVerse,
     noteDraft,
     setNoteDraft,
-    actionBarMode,
-    setActionBarMode,
+    annotationSheetOpen,
+    openAnnotationSheet,
+    closeAnnotationSheet,
+    lastUsedAnnotation,
+    annotationSheetInitial,
+    selectionHasExistingAnnotation,
     suppressNextVerseTapRef,
-    pickedHighlightColor,
-    setPickedHighlightColor,
     copyToastVisible,
     setCopyToastVisible,
     clearVerseSelection,
@@ -185,8 +221,8 @@ export function useReaderSelection({
     handleVerseLongPress,
     selectedVerses,
     copySelectedVerses,
-    removeHighlightsFromSelection,
-    applyPickedHighlightToSelection,
+    removeAnnotationsFromSelection,
+    applyAnnotationToSelection,
     openNoteForSelection,
     saveNoteFromModal,
   };

@@ -20,7 +20,7 @@ const FEATURE_LINES = [
   "1,000+ Bible translations",
   "Multiple languages",
   "Red letter editions",
-  "5 highlight colors",
+  "Highlights & underlines",
   "Per-verse notes",
   "Study notes",
   "Offline reading",

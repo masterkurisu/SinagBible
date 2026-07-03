@@ -2,15 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import { InteractionManager } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { BibleChapter } from "@sinag-bible/types";
-import type { HighlightColor } from "@sinag-bible/types";
+import {
+  isHighlightColor,
+  parseStoredVerseAnnotation,
+  type HighlightColor,
+  type VerseAnnotation,
+} from "@sinag-bible/types";
 import { saveReaderLastPosition } from "@/lib/reader-last-position";
 import { registerReaderDataImportReload } from "@/lib/reader-data-import-sync";
 
-const HIGHLIGHTS_STORAGE_KEY_PREFIX = "sb:reader:highlights:";
+const ANNOTATIONS_STORAGE_KEY_PREFIX = "sb:reader:highlights:";
 const NOTES_STORAGE_KEY_PREFIX = "sb:reader:notes:";
 
-function getHighlightsStorageKey(bookSlug: string, chapter: number, tr: string) {
-  return `${HIGHLIGHTS_STORAGE_KEY_PREFIX}${bookSlug}:${chapter}:${tr}`;
+function getAnnotationsStorageKey(bookSlug: string, chapter: number, tr: string) {
+  return `${ANNOTATIONS_STORAGE_KEY_PREFIX}${bookSlug}:${chapter}:${tr}`;
 }
 
 function getNotesStorageKey(bookSlug: string, chapter: number, tr: string) {
@@ -22,26 +27,28 @@ function chapterStorageCacheKey(bookSlug: string, chapter: number, tr: string): 
 }
 
 type ChapterStorageSnapshot = {
-  highlights: Record<number, HighlightColor>;
+  annotations: Record<number, VerseAnnotation>;
   notes: Record<number, string>;
 };
 
 const EMPTY_CHAPTER_STORAGE: ChapterStorageSnapshot = {
-  highlights: {},
+  annotations: {},
   notes: {},
 };
 
 const chapterStorageCache = new Map<string, ChapterStorageSnapshot>();
 const chapterStorageLoadPromises = new Map<string, Promise<ChapterStorageSnapshot>>();
 
-function parseHighlights(raw: string | null | undefined): Record<number, HighlightColor> {
+function parseAnnotations(raw: string | null | undefined): Record<number, VerseAnnotation> {
   if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw) as Record<string, HighlightColor>;
-    const next: Record<number, HighlightColor> = {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const next: Record<number, VerseAnnotation> = {};
     for (const [k, v] of Object.entries(parsed)) {
       const n = parseInt(k, 10);
-      if (Number.isFinite(n) && v) next[n] = v;
+      if (!Number.isFinite(n)) continue;
+      const annotation = parseStoredVerseAnnotation(v);
+      if (annotation) next[n] = annotation;
     }
     return next;
   } catch {
@@ -70,7 +77,7 @@ function patchChapterStorageCache(
 ): ChapterStorageSnapshot {
   const prev = chapterStorageCache.get(cacheKey) ?? EMPTY_CHAPTER_STORAGE;
   const next = {
-    highlights: patch.highlights ?? prev.highlights,
+    annotations: patch.annotations ?? prev.annotations,
     notes: patch.notes ?? prev.notes,
   };
   chapterStorageCache.set(cacheKey, next);
@@ -89,14 +96,14 @@ function loadChapterStorage(bookSlug: string, chapter: number, translationId: st
     return inflight;
   }
 
-  const hk = getHighlightsStorageKey(bookSlug, chapter, translationId);
+  const ak = getAnnotationsStorageKey(bookSlug, chapter, translationId);
   const nk = getNotesStorageKey(bookSlug, chapter, translationId);
 
-  const promise = AsyncStorage.multiGet([hk, nk])
+  const promise = AsyncStorage.multiGet([ak, nk])
     .then((pairs) => {
       const valuesByKey = new Map(pairs);
       const snapshot: ChapterStorageSnapshot = {
-        highlights: parseHighlights(valuesByKey.get(hk)),
+        annotations: parseAnnotations(valuesByKey.get(ak)),
         notes: parseNotes(valuesByKey.get(nk)),
       };
       chapterStorageCache.set(cacheKey, snapshot);
@@ -120,10 +127,22 @@ function persistStorageSafely(key: string, value: string): void {
   });
 }
 
+/** Convert legacy v1 backup highlights into annotations. */
+export function annotationsFromLegacyHighlights(
+  highlights: Record<number, HighlightColor>,
+): Record<number, VerseAnnotation> {
+  const next: Record<number, VerseAnnotation> = {};
+  for (const [verseKey, color] of Object.entries(highlights)) {
+    const verse = parseInt(verseKey, 10);
+    if (!Number.isFinite(verse) || !isHighlightColor(color)) continue;
+    next[verse] = { style: "highlight", colorId: color };
+  }
+  return next;
+}
+
 /**
- * Per-chapter reader persistence: highlights, verse notes (AsyncStorage), and last-read
- * position via {@link saveReaderLastPosition}. Font/spacing UI prefs stay in the screen
- * until a future `useReaderUI` extraction.
+ * Per-chapter reader persistence: verse annotations, verse notes (AsyncStorage), and last-read
+ * position via {@link saveReaderLastPosition}.
  */
 export function useReaderStorage(
   chapter: BibleChapter | undefined,
@@ -135,8 +154,8 @@ export function useReaderStorage(
       : null;
   const cachedSnapshot = cacheKey ? chapterStorageCache.get(cacheKey) : undefined;
 
-  const [highlights, setHighlights] = useState<Record<number, HighlightColor>>(
-    () => cachedSnapshot?.highlights ?? {},
+  const [annotations, setAnnotations] = useState<Record<number, VerseAnnotation>>(
+    () => cachedSnapshot?.annotations ?? {},
   );
   const [notes, setNotes] = useState<Record<number, string>>(() => cachedSnapshot?.notes ?? {});
 
@@ -158,7 +177,7 @@ export function useReaderStorage(
 
     if (chapterStorageCache.has(key)) {
       const snapshot = chapterStorageCache.get(key)!;
-      setHighlights(snapshot.highlights);
+      setAnnotations(snapshot.annotations);
       setNotes(snapshot.notes);
       return;
     }
@@ -167,7 +186,7 @@ export function useReaderStorage(
     const task = InteractionManager.runAfterInteractions(() => {
       void loadChapterStorage(slug, num, tid).then((snapshot) => {
         if (cancelled) return;
-        setHighlights(snapshot.highlights);
+        setAnnotations(snapshot.annotations);
         setNotes(snapshot.notes);
       });
     });
@@ -188,21 +207,21 @@ export function useReaderStorage(
 
     return registerReaderDataImportReload(async () => {
       const snapshot = await loadChapterStorage(slug, num, tid);
-      setHighlights(snapshot.highlights);
+      setAnnotations(snapshot.annotations);
       setNotes(snapshot.notes);
     });
   }, [chapter?.bookSlug, chapter?.chapterNumber, translationId]);
 
-  const removeHighlightsFromVerses = useCallback(
+  const removeAnnotationsFromVerses = useCallback(
     (verseNumbers: number[]) => {
       if (!chapter || !translationId || verseNumbers.length === 0) return;
-      setHighlights((curr) => {
+      setAnnotations((curr) => {
         const next = { ...curr };
         for (const v of verseNumbers) delete next[v];
-        const key = getHighlightsStorageKey(chapter.bookSlug, chapter.chapterNumber, translationId);
+        const key = getAnnotationsStorageKey(chapter.bookSlug, chapter.chapterNumber, translationId);
         persistStorageSafely(key, JSON.stringify(next));
         patchChapterStorageCache(chapterStorageCacheKey(chapter.bookSlug, chapter.chapterNumber, translationId), {
-          highlights: next,
+          annotations: next,
         });
         return next;
       });
@@ -210,16 +229,16 @@ export function useReaderStorage(
     [chapter, translationId],
   );
 
-  const applyHighlightToVerses = useCallback(
-    (verseNumbers: number[], color: HighlightColor) => {
+  const applyAnnotationToVerses = useCallback(
+    (verseNumbers: number[], annotation: VerseAnnotation) => {
       if (!chapter || !translationId || verseNumbers.length === 0) return;
-      setHighlights((curr) => {
+      setAnnotations((curr) => {
         const next = { ...curr };
-        for (const v of verseNumbers) next[v] = color;
-        const key = getHighlightsStorageKey(chapter.bookSlug, chapter.chapterNumber, translationId);
+        for (const v of verseNumbers) next[v] = annotation;
+        const key = getAnnotationsStorageKey(chapter.bookSlug, chapter.chapterNumber, translationId);
         persistStorageSafely(key, JSON.stringify(next));
         patchChapterStorageCache(chapterStorageCacheKey(chapter.bookSlug, chapter.chapterNumber, translationId), {
-          highlights: next,
+          annotations: next,
         });
         return next;
       });
@@ -246,10 +265,10 @@ export function useReaderStorage(
   );
 
   return {
-    highlights,
+    annotations,
     notes,
-    removeHighlightsFromVerses,
-    applyHighlightToVerses,
+    removeAnnotationsFromVerses,
+    applyAnnotationToVerses,
     persistNoteForVerse,
   };
 }
@@ -258,8 +277,10 @@ export type ReaderChapterAnnotationExport = {
   bookSlug: string;
   chapter: number;
   translationId: string;
-  highlights: Record<number, HighlightColor>;
+  annotations: Record<number, VerseAnnotation>;
   notes: Record<number, string>;
+  /** v1 backup field — import only. */
+  highlights?: Record<number, HighlightColor>;
 };
 
 function parseChapterStorageKey(
@@ -289,18 +310,18 @@ export function clearReaderChapterStorageCache(): void {
   chapterStorageLoadPromises.clear();
 }
 
-/** Loads every persisted highlight and note chapter from AsyncStorage. */
+/** Loads every persisted annotation and note chapter from AsyncStorage. */
 export async function exportAllReaderChapterAnnotations(): Promise<ReaderChapterAnnotationExport[]> {
   const allKeys = await AsyncStorage.getAllKeys();
   const chapters = new Map<string, ReaderChapterAnnotationExport>();
 
   for (const key of allKeys) {
     let parsed: { bookSlug: string; chapter: number; translationId: string } | null = null;
-    let kind: "highlights" | "notes" | null = null;
+    let kind: "annotations" | "notes" | null = null;
 
-    if (key.startsWith(HIGHLIGHTS_STORAGE_KEY_PREFIX)) {
-      parsed = parseChapterStorageKey(key, HIGHLIGHTS_STORAGE_KEY_PREFIX);
-      kind = "highlights";
+    if (key.startsWith(ANNOTATIONS_STORAGE_KEY_PREFIX)) {
+      parsed = parseChapterStorageKey(key, ANNOTATIONS_STORAGE_KEY_PREFIX);
+      kind = "annotations";
     } else if (key.startsWith(NOTES_STORAGE_KEY_PREFIX)) {
       parsed = parseChapterStorageKey(key, NOTES_STORAGE_KEY_PREFIX);
       kind = "notes";
@@ -313,13 +334,13 @@ export async function exportAllReaderChapterAnnotations(): Promise<ReaderChapter
       bookSlug: parsed.bookSlug,
       chapter: parsed.chapter,
       translationId: parsed.translationId,
-      highlights: {},
+      annotations: {},
       notes: {},
     };
 
     const raw = await AsyncStorage.getItem(key);
-    if (kind === "highlights") {
-      existing.highlights = parseHighlights(raw);
+    if (kind === "annotations") {
+      existing.annotations = parseAnnotations(raw);
     } else {
       existing.notes = parseNotes(raw);
     }
@@ -328,18 +349,18 @@ export async function exportAllReaderChapterAnnotations(): Promise<ReaderChapter
 
   return Array.from(chapters.values()).filter(
     (chapter) =>
-      Object.keys(chapter.highlights).length > 0 || Object.keys(chapter.notes).length > 0,
+      Object.keys(chapter.annotations).length > 0 || Object.keys(chapter.notes).length > 0,
   );
 }
 
-/** Replaces all reader highlights and notes with the provided export payload. */
+/** Replaces all reader annotations and notes with the provided export payload. */
 export async function importAllReaderChapterAnnotations(
   chapters: ReaderChapterAnnotationExport[],
 ): Promise<void> {
   const allKeys = await AsyncStorage.getAllKeys();
   const keysToRemove = allKeys.filter(
     (key) =>
-      key.startsWith(HIGHLIGHTS_STORAGE_KEY_PREFIX) || key.startsWith(NOTES_STORAGE_KEY_PREFIX),
+      key.startsWith(ANNOTATIONS_STORAGE_KEY_PREFIX) || key.startsWith(NOTES_STORAGE_KEY_PREFIX),
   );
   if (keysToRemove.length > 0) {
     await AsyncStorage.multiRemove(keysToRemove);
@@ -347,11 +368,17 @@ export async function importAllReaderChapterAnnotations(
 
   const writes: [string, string][] = [];
   for (const chapter of chapters) {
-    const { bookSlug, chapter: chapterNum, translationId, highlights, notes } = chapter;
-    if (Object.keys(highlights).length > 0) {
+    const { bookSlug, chapter: chapterNum, translationId, notes } = chapter;
+    const annotations =
+      Object.keys(chapter.annotations).length > 0
+        ? chapter.annotations
+        : chapter.highlights
+          ? annotationsFromLegacyHighlights(chapter.highlights)
+          : {};
+    if (Object.keys(annotations).length > 0) {
       writes.push([
-        getHighlightsStorageKey(bookSlug, chapterNum, translationId),
-        JSON.stringify(highlights),
+        getAnnotationsStorageKey(bookSlug, chapterNum, translationId),
+        JSON.stringify(annotations),
       ]);
     }
     if (Object.keys(notes).length > 0) {

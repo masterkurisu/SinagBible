@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { READER_DELETE_DATA_SETTINGS_DESCRIPTION } from "@/src/features/reader/readerVerseMarksCopy";
 
 export type ReaderSettingsTooltipId =
   | "translation"
@@ -51,8 +52,7 @@ export const READER_SETTINGS_TOOLTIPS: ReaderSettingsTooltipContent[] = [
   {
     id: "delete-my-data",
     title: "Delete My Data",
-    description:
-      "Permanently clear your highlights, notes, and journal from this device.",
+    description: READER_DELETE_DATA_SETTINGS_DESCRIPTION,
   },
 ];
 
