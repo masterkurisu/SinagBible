@@ -2,10 +2,7 @@ import { useRef, useState } from "react";
 import { View, PanResponder, type LayoutChangeEvent } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { hapticSelection } from "@/lib/haptics";
-import {
-  READER_M3_OUTLINE_VARIANT,
-  READER_M3_SURFACE_CONTAINER_HIGH,
-} from "@/src/features/reader/readerSettingsPanelChrome";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 
 type M3SliderProps = {
   value: number;
@@ -45,9 +42,10 @@ export function M3Slider({
   const rowHeight = thumb + hitPaddingV;
 
   const primary = bundle.chrome.tabTint;
-  const inactiveTrack = READER_M3_OUTLINE_VARIANT;
+  const sheetChrome = getReaderSheetChrome(bundle);
+  const inactiveTrack = sheetChrome.outlineVariant;
   const thumbColor = bundle.ui.parchment;
-  const thumbBorder = READER_M3_SURFACE_CONTAINER_HIGH;
+  const thumbBorder = sheetChrome.surfaceContainerHigh;
 
   const pan = useRef(
     PanResponder.create({

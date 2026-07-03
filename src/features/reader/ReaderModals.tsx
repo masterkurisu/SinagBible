@@ -39,13 +39,11 @@ import {
 } from "@/src/features/reader/readerSettingsOnboardingSteps";
 import { useSettingsRowTooltip } from "@/src/features/reader/useSettingsRowTooltip";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
+import { useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
   READER_M3_ERROR,
   READER_M3_ERROR_CONTAINER,
   READER_M3_ON_ERROR_CONTAINER,
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_SURFACE_CONTAINER,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
 import { hapticLightImpact, hapticSoftPop } from "@/lib/haptics";
@@ -337,6 +335,7 @@ function SettingsTabletRow({
   tooltipDescription,
   onShowTooltip,
 }: SettingsTabletRowProps) {
+  const sheetChrome = useReaderSheetChrome();
   const rowRef = useRef<View | null>(null);
   const hasTooltip = tooltipTitle != null && onShowTooltip != null;
 
@@ -374,14 +373,14 @@ function SettingsTabletRow({
       <View
         ref={rowRef}
         collapsable={false}
-        style={[READER_MOBILE_SETTINGS_MENU_ROW, { backgroundColor: READER_M3_SURFACE_CONTAINER }]}
+        style={[READER_MOBILE_SETTINGS_MENU_ROW, { backgroundColor: sheetChrome.surfaceContainer }]}
       >
-        <Icon size={iconSize} color={READER_M3_ON_SURFACE_VARIANT} />
+        <Icon size={iconSize} color={sheetChrome.onSurfaceVariant} />
         <Text
           style={{
             fontFamily: "Inter_400Regular",
             fontSize: SETTINGS_MENU_LABEL_SIZE,
-            color: READER_M3_ON_SURFACE,
+            color: sheetChrome.onSurface,
             textAlign: "left",
             flex: 1,
           }}

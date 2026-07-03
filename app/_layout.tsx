@@ -45,7 +45,8 @@ function runChapterRemoteReconcile(): void {
 
 function ThemedStatusBar() {
   const { themeId } = useMobileAppTheme();
-  const useLightStatusIcons = themeId === "dark" || themeId === "night";
+  const useLightStatusIcons =
+    themeId === "dark" || themeId === "night" || themeId === "noir";
   return <StatusBar style={useLightStatusIcons ? "light" : "dark"} />;
 }
 

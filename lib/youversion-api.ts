@@ -14,6 +14,20 @@ import { yvpPassageToBibleChapter } from "@/lib/yvp-chapter-payload";
 
 const YVP_API_BASE_URL = "https://api.youversion.com/v1";
 const YVP_API_TIMEOUT_MS = 12_000;
+const YVP_FETCH_MAX_RETRIES = 4;
+const YVP_FETCH_RETRY_BASE_MS = 1_000;
+
+class YvpHttpError extends Error {
+  readonly status: number;
+  readonly retryAfterMs?: number;
+
+  constructor(status: number, pathname: string, retryAfterMs?: number) {
+    super(`youversion-api: HTTP ${status} — ${pathname}`);
+    this.name = "YvpHttpError";
+    this.status = status;
+    this.retryAfterMs = retryAfterMs;
+  }
+}
 export const YVP_TRANSLATION_ID_PREFIX = "yvp:";
 
 /** A scripture passage returned by `GET /bibles/{id}/passages/{passage_id}`. */
@@ -146,6 +160,18 @@ function buildChapterPassageId(bookUsfm: string, chapter: number): string {
   return `${bookUsfm}.${chapter}`;
 }
 
+function parseRetryAfterMs(res: Response): number | undefined {
+  const header = res.headers.get("Retry-After");
+  if (!header) return undefined;
+  const seconds = Number.parseInt(header, 10);
+  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1_000;
+  return undefined;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function yvpFetch<T>(path: string, searchParams?: Record<string, string>): Promise<T> {
   const url = new URL(`${YVP_API_BASE_URL}${path}`);
   if (searchParams) {
@@ -154,27 +180,36 @@ async function yvpFetch<T>(path: string, searchParams?: Record<string, string>):
     }
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), YVP_API_TIMEOUT_MS);
-  try {
-    const res = await fetch(url.toString(), {
-      signal: controller.signal,
-      headers: {
-        "X-YVP-App-Key": getYvpAppKey(),
-      },
-    });
-    if (!res.ok) {
-      throw new Error(`youversion-api: HTTP ${res.status} — ${url.pathname}`);
+  for (let attempt = 0; attempt <= YVP_FETCH_MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), YVP_API_TIMEOUT_MS);
+    try {
+      const res = await fetch(url.toString(), {
+        signal: controller.signal,
+        headers: {
+          "X-YVP-App-Key": getYvpAppKey(),
+        },
+      });
+      if (!res.ok) {
+        throw new YvpHttpError(res.status, url.pathname, parseRetryAfterMs(res));
+      }
+      return (await res.json()) as T;
+    } catch (error) {
+      if (error instanceof YvpHttpError && error.status === 429 && attempt < YVP_FETCH_MAX_RETRIES) {
+        const delayMs = error.retryAfterMs ?? YVP_FETCH_RETRY_BASE_MS * 2 ** attempt;
+        await sleep(delayMs);
+        continue;
+      }
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`youversion-api: request timed out after ${YVP_API_TIMEOUT_MS}ms — ${path}`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return (await res.json()) as T;
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`youversion-api: request timed out after ${YVP_API_TIMEOUT_MS}ms — ${path}`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  throw new Error(`youversion-api: exhausted retries — ${path}`);
 }
 
 async function ensureYvpTranslationMeta(bibleId: number): Promise<void> {

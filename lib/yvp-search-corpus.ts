@@ -11,6 +11,13 @@ type TranslationData = KJVData;
 
 const yvpSearchContextCache = new Map<number, Promise<SearchTranslationContext>>();
 const yvpSearchContextBuilds = new Map<number, Promise<SearchTranslationContext>>();
+/** Keep low — YouVersion rate-limits bulk passage fetches (HTTP 429). */
+const YVP_SEARCH_CORPUS_CONCURRENCY = 2;
+const YVP_SEARCH_CORPUS_REQUEST_DELAY_MS = 200;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function runPool<T>(
   items: T[],
@@ -45,12 +52,18 @@ async function buildYvpSearchTranslationContext(bibleId: number): Promise<Search
     }
   }
 
-  await runPool(tasks, 10, async ({ bookIndex, chapterNumber, bookSlug }) => {
-    const chapter = await fetchYvpChapter(bibleId, bookSlug, chapterNumber);
-    books[bookIndex]!.chapters[chapterNumber - 1] = chapter.verses;
-    const localizedName = chapter.bookName?.trim();
-    if (localizedName) {
-      books[bookIndex]!.name = localizedName;
+  await runPool(tasks, YVP_SEARCH_CORPUS_CONCURRENCY, async ({ bookIndex, chapterNumber, bookSlug }) => {
+    try {
+      const chapter = await fetchYvpChapter(bibleId, bookSlug, chapterNumber);
+      books[bookIndex]!.chapters[chapterNumber - 1] = chapter.verses;
+      const localizedName = chapter.bookName?.trim();
+      if (localizedName) {
+        books[bookIndex]!.name = localizedName;
+      }
+    } catch {
+      /* skip chapters that fail (rate limit, network) — search uses the rest */
+    } finally {
+      await sleep(YVP_SEARCH_CORPUS_REQUEST_DELAY_MS);
     }
   });
 

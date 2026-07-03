@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Animated,
@@ -20,6 +20,7 @@ import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Switch } from "@/components/M3Switch";
 import { shareAppLogs } from "@/lib/app-logs";
 import { hapticLightImpact } from "@/lib/haptics";
+import { getReaderSheetChrome, useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
   loadHapticsEnabledPreference,
   setHapticsEnabled,
@@ -37,10 +38,6 @@ import {
   READER_M3_BOTTOM_SHEET_RADIUS_PX,
   READER_M3_LIST_ITEM_HEIGHT_PX,
   READER_M3_LIST_TRAILING_ICON_PX,
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_OUTLINE_VARIANT,
-  READER_M3_SURFACE_CONTAINER_HIGH,
   READER_M3_SWITCH_TRACK_HEIGHT_PX,
   READER_M3_SWITCH_TRACK_WIDTH_PX,
 } from "@/src/features/reader/readerSettingsPanelChrome";
@@ -74,11 +71,12 @@ function MoreSettingsTrailingSlot({ scale, children }: { scale: number; children
 }
 
 function MoreSettingsDivider({ scale }: { scale: number }) {
+  const sheetChrome = useReaderSheetChrome();
   return (
     <View
       style={{
         height: StyleSheet.hairlineWidth,
-        backgroundColor: READER_M3_OUTLINE_VARIANT,
+        backgroundColor: sheetChrome.outlineVariant,
         marginLeft: 16 * scale,
       }}
     />
@@ -106,10 +104,11 @@ function MoreSettingsRow({
   busy = false,
   rippleColor,
 }: MoreSettingsRowProps) {
+  const sheetChrome = useReaderSheetChrome();
   const rowHeight = READER_M3_LIST_ITEM_HEIGHT_PX * scale;
   const rowContent = (
     <View style={[styles.listRow, { minHeight: rowHeight, paddingHorizontal: 16 * scale }]}>
-      <Text style={[rowLabelStyle(scale), styles.listRowLabel]}>{label}</Text>
+      <Text style={[rowLabelStyle(scale, sheetChrome.onSurface), styles.listRowLabel]}>{label}</Text>
       <MoreSettingsTrailingSlot scale={scale}>{trailing}</MoreSettingsTrailingSlot>
     </View>
   );
@@ -128,7 +127,7 @@ function MoreSettingsRow({
       android_ripple={Platform.OS === "android" && rippleColor ? { color: rippleColor } : undefined}
       style={({ pressed }) => ({
         opacity: disabled ? 0.6 : 1,
-        backgroundColor: pressed ? READER_M3_SURFACE_CONTAINER_HIGH : "transparent",
+        backgroundColor: pressed ? sheetChrome.surfaceContainerHigh : "transparent",
       })}
     >
       {rowContent}
@@ -148,6 +147,7 @@ export function ReaderMoreSettingsSheet({
 }: ReaderMoreSettingsSheetProps) {
   const colors = bundle.ui;
   const rc = bundle.reader;
+  const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
   const rippleColor = bundle.chrome.androidRipple;
   const { width: screenW } = useWindowDimensions();
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
@@ -298,7 +298,7 @@ export function ReaderMoreSettingsSheet({
                       width: READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
                       height: READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
                       borderRadius: 2,
-                      backgroundColor: READER_M3_OUTLINE_VARIANT,
+                      backgroundColor: sheetChrome.outlineVariant,
                     }}
                   />
                 </View>
@@ -323,7 +323,7 @@ export function ReaderMoreSettingsSheet({
                       marginTop: 12 * scale,
                       borderRadius: 12 * scale,
                       borderWidth: StyleSheet.hairlineWidth,
-                      borderColor: READER_M3_OUTLINE_VARIANT,
+                      borderColor: sheetChrome.outlineVariant,
                       overflow: "hidden",
                     },
                   ]}
@@ -340,7 +340,7 @@ export function ReaderMoreSettingsSheet({
                       <MaterialIcons
                         name="ios-share"
                         size={trailingIconSize}
-                        color={READER_M3_ON_SURFACE_VARIANT}
+                        color={sheetChrome.onSurfaceVariant}
                       />
                     }
                   />
@@ -358,10 +358,10 @@ export function ReaderMoreSettingsSheet({
                         accessibilityLabel="Haptic feedback"
                         scale={switchScale}
                         trackColorOn={colors.brown800}
-                        trackColorOff={READER_M3_SURFACE_CONTAINER_HIGH}
-                        trackBorderOff={READER_M3_ON_SURFACE_VARIANT}
+                        trackColorOff={sheetChrome.surfaceContainerHigh}
+                        trackBorderOff={sheetChrome.onSurfaceVariant}
                         handleColorOn="#FFFFFF"
-                        handleColorOff={READER_M3_ON_SURFACE_VARIANT}
+                        handleColorOff={sheetChrome.onSurfaceVariant}
                       />
                     }
                   />
@@ -375,7 +375,7 @@ export function ReaderMoreSettingsSheet({
                     onPress={handleCredits}
                     rippleColor={rippleColor}
                     trailing={
-                      <CreditsIcon size={trailingIconSize} color={READER_M3_ON_SURFACE_VARIANT} />
+                      <CreditsIcon size={trailingIconSize} color={sheetChrome.onSurfaceVariant} />
                     }
                   />
 
@@ -391,7 +391,7 @@ export function ReaderMoreSettingsSheet({
                       <MaterialIcons
                         name="import-export"
                         size={trailingIconSize}
-                        color={READER_M3_ON_SURFACE_VARIANT}
+                        color={sheetChrome.onSurfaceVariant}
                       />
                     }
                   />
@@ -399,7 +399,7 @@ export function ReaderMoreSettingsSheet({
 
                 <View style={{ marginTop: 20 * scale }}>
                   <KofiSupportBlock
-                    bodyColor={READER_M3_ON_SURFACE_VARIANT}
+                    bodyColor={sheetChrome.onSurfaceVariant}
                     bodyFontSize={READER_M3_BODY_FONT_PX * scale * 0.875}
                     bodyLineHeight={READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.875}
                     buttonWidth={168 * scale}
@@ -420,12 +420,12 @@ export function ReaderMoreSettingsSheet({
   );
 }
 
-function rowLabelStyle(scale: number) {
+function rowLabelStyle(scale: number, color: string) {
   return {
     fontFamily: "Inter_500Medium" as const,
     fontSize: READER_M3_BODY_FONT_PX * scale,
     lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale,
-    color: READER_M3_ON_SURFACE,
+    color,
   };
 }
 

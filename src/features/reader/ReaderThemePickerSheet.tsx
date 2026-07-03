@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Animated,
   Dimensions,
@@ -24,6 +24,7 @@ import {
   M3_MOTION_DURATION_SHORT4_MS,
 } from "@/src/components/m3/m3-motion";
 import { hapticLightImpact } from "@/lib/haptics";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import { readerThemeTileOnSwatchLabel } from "@/src/features/reader/readerThemeTileChrome";
 import {
   READER_M3_BODY_FONT_PX,
@@ -31,11 +32,6 @@ import {
   READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
   READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
   READER_M3_BOTTOM_SHEET_RADIUS_PX,
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_OUTLINE_VARIANT,
-  READER_M3_SURFACE_CONTAINER,
-  READER_M3_SURFACE_CONTAINER_HIGH,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
 
@@ -59,6 +55,7 @@ export function ReaderThemePickerSheet({
   setThemeId,
 }: ReaderThemePickerSheetProps) {
   const rc = bundle.reader;
+  const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
   const rippleColor = bundle.chrome.androidRipple;
   const primary = bundle.chrome.tabTint;
   const { width: screenW } = useWindowDimensions();
@@ -168,7 +165,7 @@ export function ReaderThemePickerSheet({
                       width: READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
                       height: READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
                       borderRadius: 2,
-                      backgroundColor: READER_M3_OUTLINE_VARIANT,
+                      backgroundColor: sheetChrome.outlineVariant,
                     }}
                   />
                 </View>
@@ -227,11 +224,11 @@ export function ReaderThemePickerSheet({
                             height: ringSize,
                             borderRadius: ringSize / 2,
                             borderWidth: selected ? 2.5 : 1,
-                            borderColor: selected ? primary : READER_M3_OUTLINE_VARIANT,
+                            borderColor: selected ? primary : sheetChrome.outlineVariant,
                             backgroundColor: pressed
-                              ? READER_M3_SURFACE_CONTAINER
+                              ? sheetChrome.surfaceContainer
                               : selected
-                                ? READER_M3_SURFACE_CONTAINER_HIGH
+                                ? sheetChrome.surfaceContainerHigh
                                 : "transparent",
                             overflow: "hidden",
                           })}
@@ -285,7 +282,7 @@ export function ReaderThemePickerSheet({
                             fontFamily: selected ? "Inter_600SemiBold" : "Inter_500Medium",
                             fontSize: READER_M3_BODY_FONT_PX * scale * 0.8125,
                             lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.8125,
-                            color: selected ? READER_M3_ON_SURFACE : READER_M3_ON_SURFACE_VARIANT,
+                            color: selected ? sheetChrome.onSurface : sheetChrome.onSurfaceVariant,
                             textAlign: "center",
                             maxWidth: cellW,
                           }}

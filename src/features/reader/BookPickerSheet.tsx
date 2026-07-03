@@ -36,14 +36,12 @@ import { MenuOptionsIcon } from "@/components/icons/MenuOptionsIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { getSelectChapterHeadingForLanguage } from "@/lib/reader-chapter-label";
 import { hapticLightImpact } from "@/lib/haptics";
+import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
+import { getReaderSheetChrome, useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 import { ActionBarOnboardingOverlay } from "@/src/features/reader/ActionBarOnboardingOverlay";
 import {
   READER_M3_APP_BAR_ICON_BUTTON_PX,
-  READER_M3_ICON_BUTTON_RIPPLE,
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_SURFACE_CONTAINER,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useBookPickerOnboarding } from "@/src/features/reader/useBookPickerOnboarding";
 import { FullWindowOverlay } from "react-native-screens";
@@ -69,6 +67,7 @@ function BookPickerFilterButton({
   selectedIconColor,
   spinNonce = 0,
 }: BookPickerFilterButtonProps) {
+  const sheetChrome = useReaderSheetChrome();
   const openAnim = useRef(new Animated.Value(open ? 1 : 0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
@@ -166,7 +165,7 @@ function BookPickerFilterButton({
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        android_ripple={{ color: READER_M3_ICON_BUTTON_RIPPLE, borderless: true, radius: 24 }}
+        android_ripple={{ color: sheetChrome.iconRipple, borderless: true, radius: 24 }}
         style={{
           width: READER_M3_APP_BAR_ICON_BUTTON_PX,
           height: READER_M3_APP_BAR_ICON_BUTTON_PX,
@@ -183,7 +182,7 @@ function BookPickerFilterButton({
           pointerEvents="none"
           style={[StyleSheet.absoluteFill, {
             borderRadius: READER_M3_APP_BAR_ICON_BUTTON_PX / 2,
-            backgroundColor: READER_M3_SURFACE_CONTAINER,
+            backgroundColor: sheetChrome.surfaceContainer,
             opacity: selectedBgOpacity,
           }]}
         />
@@ -281,6 +280,8 @@ export function BookPickerSheet({
   readerChapterCols = 5,
   readerChapterGridCellW = 56,
 }: BookPickerSheetProps) {
+  const { bundle } = useMobileAppTheme();
+  const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
   const [step, setStep] = useState<"books" | "chapters">("books");
   const [pickerBook, setPickerBook] = useState<BibleBookNavItem | null>(null);
   const [bookSelectorViewMode, setBookSelectorViewMode] = useState<BookSelectorViewMode>("testament");
@@ -632,8 +633,8 @@ export function BookPickerSheet({
         elevation: 10,
       };
 
-  const sheetTitleColor = isAndroidSheet ? READER_M3_ON_SURFACE : colors.brown800;
-  const sheetMutedColor = isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : colors.gold;
+  const sheetTitleColor = isAndroidSheet ? sheetChrome.onSurface : colors.brown800;
+  const sheetMutedColor = isAndroidSheet ? sheetChrome.onSurfaceVariant : colors.gold;
 
   if (!isOpen) return null;
 
@@ -747,7 +748,7 @@ export function BookPickerSheet({
                   open={bookViewMenuOpen}
                   onPress={() => setBookViewMenuOpen((o) => !o)}
                   isAndroidSheet={isAndroidSheet}
-                  defaultIconColor={isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : colors.gold}
+                  defaultIconColor={isAndroidSheet ? sheetChrome.onSurfaceVariant : colors.gold}
                   selectedIconColor={colors.gold}
                   spinNonce={filterFeedbackNonce}
                 />
@@ -872,7 +873,7 @@ export function BookPickerSheet({
                                       backgroundColor: isAndroidSheet
                                         ? isCurrentBook
                                           ? `${colors.gold}33`
-                                          : READER_M3_SURFACE_CONTAINER
+                                          : sheetChrome.surfaceContainer
                                         : colors.parchment,
                                       alignItems: "center",
                                       justifyContent: "center",
@@ -884,7 +885,7 @@ export function BookPickerSheet({
                                       style={{
                                         fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular",
                                         fontSize: isAndroidSheet ? 14 : 16,
-                                        color: isAndroidSheet ? READER_M3_ON_SURFACE : colors.brown800,
+                                        color: isAndroidSheet ? sheetChrome.onSurface : colors.brown800,
                                         textAlign: "center",
                                       }}
                                     >
@@ -927,7 +928,7 @@ export function BookPickerSheet({
                         borderRadius: isAndroidSheet ? 12 : 20,
                         overflow: "hidden",
                         backgroundColor:
-                          isAndroidSheet && isCurrentBook ? READER_M3_SURFACE_CONTAINER : "transparent",
+                          isAndroidSheet && isCurrentBook ? sheetChrome.surfaceContainer : "transparent",
                       }}
                       activeOpacity={0.75}
                       accessibilityLabel={`Choose chapter for ${b.name}`}
@@ -975,7 +976,7 @@ export function BookPickerSheet({
                             style={{
                               fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular",
                               fontSize: isAndroidSheet ? 16 : 18,
-                              color: isAndroidSheet ? READER_M3_ON_SURFACE : colors.brown800,
+                              color: isAndroidSheet ? sheetChrome.onSurface : colors.brown800,
                               flexShrink: 1,
                             }}
                           >
@@ -1032,7 +1033,7 @@ export function BookPickerSheet({
                           borderRadius: isAndroidSheet ? 12 : 20,
                           overflow: "hidden",
                           backgroundColor:
-                            isAndroidSheet && isCurrentBook ? READER_M3_SURFACE_CONTAINER : "transparent",
+                            isAndroidSheet && isCurrentBook ? sheetChrome.surfaceContainer : "transparent",
                         }}
                         activeOpacity={0.75}
                         accessibilityLabel={`Choose chapter for ${b.name}`}
@@ -1104,7 +1105,7 @@ export function BookPickerSheet({
                                   style={{
                                     fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular",
                                     fontSize: isAndroidSheet ? 16 : 18,
-                                    color: isAndroidSheet ? READER_M3_ON_SURFACE : colors.brown800,
+                                    color: isAndroidSheet ? sheetChrome.onSurface : colors.brown800,
                                     flexShrink: 1,
                                   }}
                                 >
@@ -1261,7 +1262,7 @@ export function BookPickerSheet({
                     backgroundColor: isAndroidSheet
                       ? isCurrent
                         ? `${colors.gold}33`
-                        : READER_M3_SURFACE_CONTAINER
+                        : sheetChrome.surfaceContainer
                       : colors.parchment,
                     borderWidth: isAndroidSheet ? 0 : 1,
                     borderColor: isCurrent ? colors.brown800 : colors.borderSolid,
@@ -1279,7 +1280,7 @@ export function BookPickerSheet({
                           ? colors.gold
                           : colors.gold
                         : isAndroidSheet
-                          ? READER_M3_ON_SURFACE
+                          ? sheetChrome.onSurface
                           : colors.brown800,
                     }}
                   >
@@ -1372,7 +1373,7 @@ export function BookPickerSheet({
                         minHeight: 48,
                         paddingVertical: 12,
                         paddingHorizontal: 16,
-                        backgroundColor: active ? READER_M3_SURFACE_CONTAINER : "transparent",
+                        backgroundColor: active ? sheetChrome.surfaceContainer : "transparent",
                       }
                     : {
                         flexDirection: "row",
@@ -1392,7 +1393,7 @@ export function BookPickerSheet({
                     fontSize: 16,
                     letterSpacing: isAndroidSheet ? 0 : 0.4,
                     color: isAndroidSheet
-                      ? READER_M3_ON_SURFACE
+                      ? sheetChrome.onSurface
                       : active
                         ? "#f5e9d6"
                         : colors.gold,

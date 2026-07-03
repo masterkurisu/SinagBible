@@ -23,6 +23,7 @@ import { StudyNotesBookmarkIcon } from "@/components/icons/StudyNotesBookmarkIco
 import type { JournalNewEntryInitialParams } from "@/components/journal-new-entry-form";
 import { hapticLightImpact, hapticSelection } from "@/lib/haptics";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
+import { useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
   ReaderTranslationLoadingOverlay,
   type ReaderTranslationLoadingPhase,
@@ -51,7 +52,6 @@ import { useReaderActionBarOnboarding } from "@/src/features/reader/useReaderAct
 import {
   ReaderActionBarIconButton,
   ReaderActionBarJournalButton,
-  READER_M3_ON_SURFACE_VARIANT,
 } from "@/src/features/reader/ReaderActionBarButtons";
 import {
   READER_M3_FLOATING_TOOLBAR_CONTAINER,
@@ -164,15 +164,16 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
   actionBarButtonRefs,
 }: ReaderSelectionActionBarProps) {
   const { bundle } = useMobileAppTheme();
+  const sheetChrome = useReaderSheetChrome();
   const journalChrome = bundle.journal;
-  const iconMuted = readerActionBarIconColor(rc, READER_M3_ON_SURFACE_VARIANT);
+  const iconMuted = readerActionBarIconColor(rc, sheetChrome.onSurfaceVariant);
   const toolbarPillStyle = useMemo(
     () =>
       readerM3FloatingToolbarPillStyle(
-        READER_M3_FLOATING_TOOLBAR_CONTAINER,
+        sheetChrome.surfaceContainerHigh,
         colors.parchmentMid,
       ),
-    [colors.parchmentMid],
+    [colors.parchmentMid, sheetChrome.surfaceContainerHigh],
   );
 
   return (

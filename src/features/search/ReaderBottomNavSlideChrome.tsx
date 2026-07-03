@@ -2,6 +2,7 @@ import { Animated, Platform, StyleSheet, View } from "react-native";
 import { usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import { mixHexColors } from "@/lib/mix-hex-color";
 import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
 import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
@@ -9,7 +10,6 @@ import {
   androidBottomNavChromeHideSlidePx,
   androidBottomNavChromeSlideTranslateY,
 } from "@/src/features/search/tabBarSearchFabChrome";
-import { READER_MOBILE_SETTINGS_PANEL_BG } from "@/src/features/reader/readerSettingsPanelChrome";
 
 /** True when the active reader tab is showing a chapter (not the redirect index). */
 function isReaderChapterRoute(pathname: string | null): boolean {
@@ -45,6 +45,7 @@ export function ReaderBottomNavSlideChrome({
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { bundle } = useMobileAppTheme();
+  const sheetChrome = getReaderSheetChrome(bundle);
 
   const onReaderChapter =
     Platform.OS === "android" &&
@@ -56,7 +57,7 @@ export function ReaderBottomNavSlideChrome({
   const slideChromeHeight = androidBottomNavChromeHideSlidePx(insets.bottom);
   const tabBarSurface = mixHexColors(
     bundle.reader.sceneSurface,
-    READER_MOBILE_SETTINGS_PANEL_BG,
+    sheetChrome.settingsPanelBackground,
     settingsTabBarTint,
   );
   const slideTranslateY = androidBottomNavChromeSlideTranslateY(

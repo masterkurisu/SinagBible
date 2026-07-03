@@ -22,6 +22,7 @@ import {
   ReaderAlignRightIcon,
 } from "@/components/icons/ReaderFontSheetAlignIcons";
 import { hapticLightImpact } from "@/lib/haptics";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
   READER_VERSE_BODY_FONT_OPTIONS,
   readerVerseBodyFontFamily,
@@ -38,19 +39,14 @@ import {
   readerM3SegmentedIconColor,
 } from "@/src/features/reader/ReaderM3SegmentedIconButton";
 import {
-  READER_M3_BODY_FONT_PX,
-  READER_M3_BODY_LINE_HEIGHT_PX,
-  READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
-  READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
-  READER_M3_BOTTOM_SHEET_RADIUS_PX,
   READER_M3_LABEL_FONT_PX,
   READER_M3_LABEL_LETTER_SPACING,
   READER_M3_LABEL_LINE_HEIGHT_PX,
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_OUTLINE_VARIANT,
-  READER_M3_SURFACE_CONTAINER,
-  READER_M3_SURFACE_CONTAINER_HIGH,
+  READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
+  READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
+  READER_M3_BOTTOM_SHEET_RADIUS_PX,
+  READER_M3_BODY_FONT_PX,
+  READER_M3_BODY_LINE_HEIGHT_PX,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
 
@@ -111,6 +107,7 @@ export function ReaderFontSettingsSheet({
 }: ReaderFontSettingsSheetProps) {
   const rc = bundle.reader;
   const colors = bundle.ui;
+  const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
   const rippleColor = bundle.chrome.androidRipple;
   const { width: screenW } = useWindowDimensions();
 
@@ -149,10 +146,10 @@ export function ReaderFontSettingsSheet({
         value: align,
         accessibilityLabel: label,
         renderIcon: (selected: boolean) => (
-          <Icon size={alignIconSize} color={readerM3SegmentedIconColor(selected)} />
+          <Icon size={alignIconSize} color={readerM3SegmentedIconColor(selected, bundle)} />
         ),
       })),
-    [alignIconSize],
+    [alignIconSize, bundle],
   );
 
   useEffect(() => {
@@ -238,7 +235,7 @@ export function ReaderFontSettingsSheet({
                       width: READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
                       height: READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
                       borderRadius: 2,
-                      backgroundColor: READER_M3_OUTLINE_VARIANT,
+                      backgroundColor: sheetChrome.outlineVariant,
                     }}
                   />
                 </View>
@@ -262,7 +259,7 @@ export function ReaderFontSettingsSheet({
 
                 {/* Font family */}
                 <View style={{ marginBottom: sectionGap, gap: 6 * scale }}>
-                  <Text style={labelStyle(scale, READER_M3_ON_SURFACE_VARIANT)}>Font</Text>
+                  <Text style={labelStyle(scale, sheetChrome.onSurfaceVariant)}>Font</Text>
                   <Pressable
                     onPress={() => {
                       hapticLightImpact();
@@ -276,10 +273,10 @@ export function ReaderFontSettingsSheet({
                       minHeight: 48 * scale,
                       borderRadius: 12 * scale,
                       borderWidth: 1,
-                      borderColor: readerFontPickerOpen ? colors.brown800 : READER_M3_OUTLINE_VARIANT,
+                      borderColor: readerFontPickerOpen ? colors.brown800 : sheetChrome.outlineVariant,
                       backgroundColor: readerFontPickerOpen
-                        ? READER_M3_SURFACE_CONTAINER
-                        : READER_M3_SURFACE_CONTAINER_HIGH,
+                        ? sheetChrome.surfaceContainer
+                        : sheetChrome.surfaceContainerHigh,
                       paddingHorizontal: 20 * scale,
                       flexDirection: "row",
                       alignItems: "center",
@@ -293,7 +290,7 @@ export function ReaderFontSettingsSheet({
                         fontFamily: readerVerseBodyFontFamily(readerVerseBodyFontId),
                         fontSize: READER_M3_BODY_FONT_PX * scale,
                         lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale,
-                        color: READER_M3_ON_SURFACE,
+                        color: sheetChrome.onSurface,
                       }}
                     >
                       {selectedFontLabel}
@@ -301,7 +298,7 @@ export function ReaderFontSettingsSheet({
                     <MaterialIcons
                       name={readerFontPickerOpen ? "expand-less" : "expand-more"}
                       size={24 * scale}
-                      color={READER_M3_ON_SURFACE_VARIANT}
+                      color={sheetChrome.onSurfaceVariant}
                     />
                   </Pressable>
 
@@ -310,7 +307,7 @@ export function ReaderFontSettingsSheet({
                       style={{
                         borderRadius: 12 * scale,
                         borderWidth: 1,
-                        borderColor: READER_M3_OUTLINE_VARIANT,
+                        borderColor: sheetChrome.outlineVariant,
                         backgroundColor: sheetSurface,
                         maxHeight: 220 * scale,
                         overflow: "hidden",
@@ -344,9 +341,9 @@ export function ReaderFontSettingsSheet({
                                 borderRadius: 8 * scale,
                                 overflow: "hidden",
                                 backgroundColor: pressed
-                                  ? READER_M3_SURFACE_CONTAINER
+                                  ? sheetChrome.surfaceContainer
                                   : selected
-                                    ? READER_M3_SURFACE_CONTAINER_HIGH
+                                    ? sheetChrome.surfaceContainerHigh
                                     : "transparent",
                               })}
                             >
@@ -368,7 +365,7 @@ export function ReaderFontSettingsSheet({
                                     fontFamily: fontReady ? readerVerseBodyFontFamily(opt.id) : undefined,
                                     fontSize: READER_M3_BODY_FONT_PX * scale,
                                     lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale,
-                                    color: READER_M3_ON_SURFACE,
+                                    color: sheetChrome.onSurface,
                                   }}
                                 >
                                   {opt.label}
@@ -402,8 +399,8 @@ export function ReaderFontSettingsSheet({
                 {/* Font size */}
                 <View style={{ marginBottom: sectionGap, gap: 8 * scale }}>
                   <View style={styles.labelRow}>
-                    <Text style={labelStyle(scale, READER_M3_ON_SURFACE_VARIANT)}>Font size</Text>
-                    <Text style={valueStyle(scale)}>{formatScalePercent(fontSizeScale)}</Text>
+                    <Text style={labelStyle(scale, sheetChrome.onSurfaceVariant)}>Font size</Text>
+                    <Text style={valueStyle(scale, sheetChrome.onSurface)}>{formatScalePercent(fontSizeScale)}</Text>
                   </View>
                   <M3Slider
                     value={fontSizeScale}
@@ -419,8 +416,8 @@ export function ReaderFontSettingsSheet({
                 {/* Line spacing */}
                 <View style={{ marginBottom: sectionGap, gap: 8 * scale }}>
                   <View style={styles.labelRow}>
-                    <Text style={labelStyle(scale, READER_M3_ON_SURFACE_VARIANT)}>Line spacing</Text>
-                    <Text style={valueStyle(scale)}>{formatScalePercent(lineSpacingScale)}</Text>
+                    <Text style={labelStyle(scale, sheetChrome.onSurfaceVariant)}>Line spacing</Text>
+                    <Text style={valueStyle(scale, sheetChrome.onSurface)}>{formatScalePercent(lineSpacingScale)}</Text>
                   </View>
                   <M3Slider
                     value={lineSpacingScale}
@@ -435,7 +432,7 @@ export function ReaderFontSettingsSheet({
 
                 {/* Alignment */}
                 <View style={{ gap: 8 * scale }}>
-                  <Text style={labelStyle(scale, READER_M3_ON_SURFACE_VARIANT)}>Alignment</Text>
+                  <Text style={labelStyle(scale, sheetChrome.onSurfaceVariant)}>Alignment</Text>
                   <ReaderM3SegmentedIconButton
                     options={segmentedOptions}
                     value={verseTextAlign}
@@ -466,12 +463,12 @@ function labelStyle(scale: number, color: string) {
   };
 }
 
-function valueStyle(scale: number) {
+function valueStyle(scale: number, color: string) {
   return {
     fontFamily: "Inter_500Medium" as const,
     fontSize: READER_M3_LABEL_FONT_PX * scale,
     lineHeight: READER_M3_LABEL_LINE_HEIGHT_PX * scale,
-    color: READER_M3_ON_SURFACE,
+    color,
   };
 }
 

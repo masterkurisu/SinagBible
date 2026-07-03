@@ -42,6 +42,7 @@ import {
 } from "@/lib/use-translation-picker";
 import { getTranslationLanguageFilterOptions } from "@/lib/translation-language-sections";
 import { hapticLightImpact } from "@/lib/haptics";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import { MAX_PINNED_TRANSLATIONS } from "@/lib/default-pinned-translations";
 import type { ToggleFavoriteTranslationResult } from "@/lib/use-favorite-translations";
 import { prefetchTranslationChaptersForReader } from "@/lib/reader-chapter-load";
@@ -53,11 +54,6 @@ import {
 import { startTranslationDownload } from "@/lib/translation-download";
 import { TranslationOfflineStatus } from "@/src/features/reader/TranslationOfflineStatus";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
-import {
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_SURFACE_CONTAINER,
-} from "@/src/features/reader/readerSettingsPanelChrome";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
 import { M3Snackbar } from "@/src/components/m3/M3Snackbar";
 
@@ -104,7 +100,7 @@ function TranslationPinButton({ isPinned, onPress, ui }: TranslationPinButtonPro
       <Ionicons
         name={isPinned ? "star" : "star-outline"}
         size={isAndroidM3 ? 22 : 20}
-        color={isPinned ? ui.gold : isAndroidM3 ? READER_M3_ON_SURFACE_VARIANT : ui.goldMuted}
+        color={isPinned ? ui.gold : isAndroidM3 ? ui.brown500 : ui.goldMuted}
       />
     </TouchableOpacity>
   );
@@ -144,6 +140,7 @@ export function TranslationPickerSheet({
 }: TranslationPickerSheetProps) {
   const colors = bundle.ui;
   const rc = bundle.reader;
+  const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
 
   const resolvedTranslationApiId: string = isTranslationId(resolvedTranslationId)
     ? getExternalApiId(resolvedTranslationId)
@@ -408,7 +405,7 @@ export function TranslationPickerSheet({
                   justifyContent: "space-between",
                   paddingHorizontal: 24,
                   paddingVertical: 12,
-                  backgroundColor: selected ? READER_M3_SURFACE_CONTAINER : "transparent",
+                  backgroundColor: selected ? sheetChrome.surfaceContainer : "transparent",
                 }
               : {
                   minHeight: 44,
@@ -426,7 +423,7 @@ export function TranslationPickerSheet({
             style={{
               fontFamily: isAndroidM3 ? "Inter_400Regular" : "Inter_400Regular",
               fontSize: 16,
-              color: isAndroidM3 ? READER_M3_ON_SURFACE : ui.brown800,
+              color: isAndroidM3 ? sheetChrome.onSurface : ui.brown800,
             }}
           >
             {item}
@@ -640,7 +637,7 @@ export function TranslationPickerSheet({
           minHeight: 56,
           borderRadius: 12,
           backgroundColor: isSelected
-            ? READER_M3_SURFACE_CONTAINER
+            ? sheetChrome.surfaceContainer
             : isFirstPinned
               ? `${ui.gold}18`
               : "transparent",
@@ -692,14 +689,14 @@ export function TranslationPickerSheet({
       };
 
   const sheetContentBg = isAndroidSheet ? rc.sceneSurface : ui.parchment;
-  const sheetTitleColor = isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800;
-  const sheetMutedColor = isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : ui.tan300;
+  const sheetTitleColor = isAndroidSheet ? sheetChrome.onSurface : ui.brown800;
+  const sheetMutedColor = isAndroidSheet ? sheetChrome.onSurfaceVariant : ui.tan300;
   const searchFieldStyle = isAndroidSheet
     ? {
         flex: 1,
         height: 48,
         borderRadius: 24,
-        backgroundColor: READER_M3_SURFACE_CONTAINER,
+        backgroundColor: sheetChrome.surfaceContainer,
         paddingHorizontal: 16,
         justifyContent: "center" as const,
       }
@@ -751,7 +748,7 @@ export function TranslationPickerSheet({
             style={{
               fontFamily: "Lora_400Regular_Italic",
               fontSize: isAndroidSheet ? 13 : 12,
-              color: isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : ui.brown800,
+              color: isAndroidSheet ? sheetChrome.onSurfaceVariant : ui.brown800,
               width: 48,
             }}
           >
@@ -772,7 +769,7 @@ export function TranslationPickerSheet({
               style={{
                 fontFamily: isAndroidSheet ? "Inter_400Regular" : "Inter_400Regular",
                 fontSize: isAndroidSheet ? 16 : 14,
-                color: isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800,
+                color: isAndroidSheet ? sheetChrome.onSurface : ui.brown800,
               }}
               numberOfLines={1}
             >
@@ -875,7 +872,7 @@ export function TranslationPickerSheet({
               style={{
                 fontFamily: "Inter_400Regular",
                 fontSize: isAndroidSheet ? 16 : 14,
-                color: isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800,
+                color: isAndroidSheet ? sheetChrome.onSurface : ui.brown800,
               }}
             />
           </View>
@@ -893,7 +890,7 @@ export function TranslationPickerSheet({
             accessibilityRole="button"
             accessibilityLabel="Filter by language"
           >
-            <FilterListIcon size={isAndroidSheet ? 24 : 16} color={isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800} />
+            <FilterListIcon size={isAndroidSheet ? 24 : 16} color={isAndroidSheet ? sheetChrome.onSurface : ui.brown800} />
           </TouchableOpacity>
         </View>
 
@@ -908,7 +905,7 @@ export function TranslationPickerSheet({
                       gap: 6,
                       height: 32,
                       borderRadius: 8,
-                      backgroundColor: READER_M3_SURFACE_CONTAINER,
+                      backgroundColor: sheetChrome.surfaceContainer,
                       paddingLeft: 12,
                       paddingRight: 4,
                     }
@@ -930,7 +927,7 @@ export function TranslationPickerSheet({
                 style={{
                   fontFamily: "Inter_500Medium",
                   fontSize: isAndroidSheet ? 14 : 13,
-                  color: isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800,
+                  color: isAndroidSheet ? sheetChrome.onSurface : ui.brown800,
                 }}
               >
                 {langFilter}
@@ -958,7 +955,7 @@ export function TranslationPickerSheet({
                 <Ionicons
                   name="close"
                   size={isAndroidSheet ? 18 : 16}
-                  color={isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : ui.tan300}
+                  color={isAndroidSheet ? sheetChrome.onSurfaceVariant : ui.tan300}
                 />
               </TouchableOpacity>
             </View>
@@ -1156,7 +1153,7 @@ export function TranslationPickerSheet({
               style={{
                 fontFamily: isAndroidSheet ? "Inter_500Medium" : "Inter_600SemiBold",
                 fontSize: isAndroidSheet ? 22 : 18,
-                color: isAndroidSheet ? READER_M3_ON_SURFACE : bundle.ui.brown800,
+                color: isAndroidSheet ? sheetChrome.onSurface : bundle.ui.brown800,
               }}
             >
               Language
@@ -1190,7 +1187,7 @@ export function TranslationPickerSheet({
               ? {
                   height: 48,
                   borderRadius: 24,
-                  backgroundColor: READER_M3_SURFACE_CONTAINER,
+                  backgroundColor: sheetChrome.surfaceContainer,
                   paddingHorizontal: 16,
                   justifyContent: "center",
                   marginBottom: 8,
@@ -1212,11 +1209,11 @@ export function TranslationPickerSheet({
             value={langSearch}
             onChangeText={setLangSearch}
             placeholder="Search language"
-            placeholderTextColor={isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : bundle.ui.tan300}
+            placeholderTextColor={isAndroidSheet ? sheetChrome.onSurfaceVariant : bundle.ui.tan300}
             style={{
               fontFamily: "Inter_400Regular",
               fontSize: isAndroidSheet ? 16 : 14,
-              color: isAndroidSheet ? READER_M3_ON_SURFACE : bundle.ui.brown800,
+              color: isAndroidSheet ? sheetChrome.onSurface : bundle.ui.brown800,
             }}
           />
         </View>

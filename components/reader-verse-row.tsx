@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { StyleSheet, View, Text, Pressable } from "react-native";
 import type { BibleVerseInlineItem, HighlightColor } from "@sinag-bible/types";
+import { isMobileAppDarkThemeId } from "@sinag-bible/tokens";
 import { highlightColors } from "@sinag-bible/ui";
 
 /** Deep red on parchment / light reader backgrounds */
@@ -158,14 +159,14 @@ function ReaderVerseRowInner({
   const useInlineBody = Boolean(verseInlineContent && verseInlineContent.length > 0);
   const rowBg = isSelected ? selectionBackground : hl ? HIGHLIGHT_BG[hl] : "transparent";
   /** Highlight fills are shared pastel swatches; dark/night use light body ink, so use selection ink on highlight for contrast. */
+  const isDarkTheme = isMobileAppDarkThemeId(themeId);
   const inkOnHighlight =
-    !isSelected && hl && (themeId === "dark" || themeId === "night") ? selectionText : null;
+    !isSelected && hl && isDarkTheme ? selectionText : null;
   const textCol = isSelected ? selectionText : inkOnHighlight ?? bodyTextColor;
   const numCol = isSelected ? selectionText : inkOnHighlight ?? verseNumberColor;
-  const wordsOfJesusDefaultColor =
-    themeId === "dark" || themeId === "night"
-      ? WORDS_OF_JESUS_COLOR_DARK_THEME
-      : WORDS_OF_JESUS_COLOR;
+  const wordsOfJesusDefaultColor = isDarkTheme
+    ? WORDS_OF_JESUS_COLOR_DARK_THEME
+    : WORDS_OF_JESUS_COLOR;
   /** Nested `<Text>` overrides parent color; match selection/highlight ink so red is not left on tinted rows. */
   const wordsOfJesusInk =
     isSelected || inkOnHighlight != null ? textCol : wordsOfJesusDefaultColor;

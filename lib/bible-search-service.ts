@@ -8,10 +8,7 @@ import {
 } from "@sinag-bible/core/bible-translations";
 import type { TranslationSearchOutcome } from "@sinag-bible/types";
 import { parseYvpBibleId, isYvpTranslationId } from "@/lib/youversion-api";
-import {
-  getYvpSearchTranslationContext,
-  warmYvpSearchTranslationContext,
-} from "@/lib/yvp-search-corpus";
+import { getYvpSearchTranslationContext } from "@/lib/yvp-search-corpus";
 
 const FALLBACK_TRANSLATION: TranslationId = "KJV";
 
@@ -54,10 +51,8 @@ export function warmReaderTranslationSearchCache(translationId: string): void {
   }
 
   if (isYvpTranslationId(trimmed)) {
-    const bibleId = parseYvpBibleId(trimmed);
-    if (bibleId != null) {
-      warmYvpSearchTranslationContext(bibleId);
-    }
+    // YVP search builds a full chapter corpus on demand (~1 000+ API calls).
+    // Warming on search open triggers rate limits (HTTP 429).
     return;
   }
 

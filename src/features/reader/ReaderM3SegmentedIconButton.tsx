@@ -1,11 +1,8 @@
 import { type ReactNode } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
-  READER_M3_ON_SECONDARY_CONTAINER,
-  READER_M3_ON_SURFACE,
-  READER_M3_OUTLINE_VARIANT,
-  READER_M3_SECONDARY_CONTAINER,
   READER_M3_SEGMENTED_BUTTON_HEIGHT_PX,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
@@ -34,6 +31,7 @@ export function ReaderM3SegmentedIconButton<T extends string>({
   scale = 1,
 }: ReaderM3SegmentedIconButtonProps<T>) {
   const rippleColor = bundle.chrome.androidRipple;
+  const sheetChrome = getReaderSheetChrome(bundle);
   const height = READER_M3_SEGMENTED_BUTTON_HEIGHT_PX * scale;
   const radius = 20 * scale;
 
@@ -44,7 +42,7 @@ export function ReaderM3SegmentedIconButton<T extends string>({
         {
           height,
           borderRadius: radius,
-          borderColor: READER_M3_OUTLINE_VARIANT,
+          borderColor: sheetChrome.outlineVariant,
         },
       ]}
     >
@@ -63,7 +61,7 @@ export function ReaderM3SegmentedIconButton<T extends string>({
             style={[
               styles.segment,
               {
-                backgroundColor: selected ? READER_M3_SECONDARY_CONTAINER : "transparent",
+                backgroundColor: selected ? sheetChrome.secondaryContainer : "transparent",
                 borderTopLeftRadius: isFirst ? radius - 1 : 0,
                 borderBottomLeftRadius: isFirst ? radius - 1 : 0,
                 borderTopRightRadius: isLast ? radius - 1 : 0,
@@ -80,8 +78,12 @@ export function ReaderM3SegmentedIconButton<T extends string>({
 }
 
 /** Icon tint helper for segmented alignment buttons. */
-export function readerM3SegmentedIconColor(selected: boolean): string {
-  return selected ? READER_M3_ON_SECONDARY_CONTAINER : READER_M3_ON_SURFACE;
+export function readerM3SegmentedIconColor(
+  selected: boolean,
+  bundle: MobileAppThemeBundle,
+): string {
+  const sheetChrome = getReaderSheetChrome(bundle);
+  return selected ? sheetChrome.onSecondaryContainer : sheetChrome.onSurface;
 }
 
 const styles = StyleSheet.create({

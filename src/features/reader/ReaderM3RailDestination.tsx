@@ -9,15 +9,12 @@ import {
   type LayoutRectangle,
 } from "react-native";
 import { hapticLightImpact, hapticSoftPop } from "@/lib/haptics";
+import { useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import {
   READER_M3_ERROR,
   READER_M3_ERROR_CONTAINER,
-  READER_M3_ICON_BUTTON_RIPPLE,
   READER_M3_ON_ERROR_CONTAINER,
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_SURFACE_CONTAINER,
   READER_SETTINGS_NAV_RAIL_ITEM_HEIGHT_PX,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
@@ -51,16 +48,18 @@ export function ReaderM3RailDestination({
   Icon,
   iconSize = RAIL_ICON_SIZE,
   destructive = false,
-  rippleColor = READER_M3_ICON_BUTTON_RIPPLE,
+  rippleColor,
   contentPaddingLeft,
   tooltipTitle,
   tooltipDescription,
   onShowTooltip,
 }: ReaderM3RailDestinationProps) {
+  const sheetChrome = useReaderSheetChrome();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const rowMeasureRef = useRef<View | null>(null);
-  const iconColor = destructive ? READER_M3_ERROR : READER_M3_ON_SURFACE_VARIANT;
-  const labelColor = destructive ? READER_M3_ON_ERROR_CONTAINER : READER_M3_ON_SURFACE;
+  const iconColor = destructive ? READER_M3_ERROR : sheetChrome.onSurfaceVariant;
+  const labelColor = destructive ? READER_M3_ON_ERROR_CONTAINER : sheetChrome.onSurface;
+  const resolvedRipple = rippleColor ?? sheetChrome.iconRipple;
   const destructiveRipple = "rgba(179,38,30,0.12)";
 
   const handlePress = useCallback(() => {
@@ -118,7 +117,7 @@ export function ReaderM3RailDestination({
       accessibilityHint={hasTooltip ? "Press and hold for more information" : undefined}
       android_ripple={
         useM3Press
-          ? { color: destructive ? destructiveRipple : rippleColor }
+          ? { color: destructive ? destructiveRipple : resolvedRipple }
           : undefined
       }
       style={({ pressed }) => [
@@ -126,7 +125,9 @@ export function ReaderM3RailDestination({
         destructive && styles.railItemDestructive,
         !useM3Press &&
           pressed &&
-          (destructive ? styles.railItemDestructivePressed : styles.railItemPressed),
+          (destructive
+            ? styles.railItemDestructivePressed
+            : { backgroundColor: sheetChrome.surfaceContainer }),
       ]}
     >
       <Animated.View
@@ -153,9 +154,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     marginHorizontal: 12,
     overflow: "hidden",
-  },
-  railItemPressed: {
-    backgroundColor: READER_M3_SURFACE_CONTAINER,
   },
   railItemDestructive: {
     backgroundColor: READER_M3_ERROR_CONTAINER,

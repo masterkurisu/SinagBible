@@ -3,12 +3,10 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "r
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { CarouselPexelsAttribution } from "@/components/carousel-pexels-attribution";
 import { ReaderM3BottomSheet } from "@/src/components/m3/ReaderM3BottomSheet";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_OUTLINE_VARIANT,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type CreditsSheetProps = {
@@ -32,6 +30,7 @@ export function CreditsSheet({
 }: CreditsSheetProps) {
   const colors = bundle.ui;
   const primary = bundle.chrome.tabTint;
+  const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
   const scale = isTabletReaderLayout ? 1.35 : 1;
 
   const sectionHeadingStyle = useMemo(
@@ -40,11 +39,11 @@ export function CreditsSheet({
       fontSize: 13 * scale,
       letterSpacing: 0.6,
       textTransform: "uppercase" as const,
-      color: READER_M3_ON_SURFACE_VARIANT,
+      color: sheetChrome.onSurfaceVariant,
       marginTop: 8 * scale,
       marginBottom: 4 * scale,
     }),
-    [scale],
+    [scale, sheetChrome.onSurfaceVariant],
   );
 
   const bodyStyle = useMemo(
@@ -52,9 +51,9 @@ export function CreditsSheet({
       fontFamily: "Inter_400Regular" as const,
       fontSize: READER_M3_BODY_FONT_PX * scale * 0.9375,
       lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.9375,
-      color: READER_M3_ON_SURFACE,
+      color: sheetChrome.onSurface,
     }),
-    [scale],
+    [scale, sheetChrome.onSurface],
   );
 
   const linkStyle = useMemo(
@@ -167,7 +166,7 @@ export function CreditsSheet({
           .
         </Text>
 
-        <View style={[styles.divider, { backgroundColor: READER_M3_OUTLINE_VARIANT, marginVertical: 12 * scale }]} />
+        <View style={[styles.divider, { backgroundColor: sheetChrome.outlineVariant, marginVertical: 12 * scale }]} />
 
         <Text style={sectionHeadingStyle}>Fonts</Text>
 
@@ -184,7 +183,7 @@ export function CreditsSheet({
           .
         </Text>
 
-        <View style={[styles.divider, { backgroundColor: READER_M3_OUTLINE_VARIANT, marginVertical: 12 * scale }]} />
+        <View style={[styles.divider, { backgroundColor: sheetChrome.outlineVariant, marginVertical: 12 * scale }]} />
 
         <Text style={sectionHeadingStyle}>Vectors &amp; Icons</Text>
 
@@ -200,13 +199,13 @@ export function CreditsSheet({
           </Text>
         </Text>
 
-        <View style={[styles.divider, { backgroundColor: READER_M3_OUTLINE_VARIANT, marginVertical: 12 * scale }]} />
+        <View style={[styles.divider, { backgroundColor: sheetChrome.outlineVariant, marginVertical: 12 * scale }]} />
 
         <Text style={sectionHeadingStyle}>Photography</Text>
 
         <CarouselPexelsAttribution />
 
-        <View style={[styles.divider, { backgroundColor: READER_M3_OUTLINE_VARIANT, marginVertical: 12 * scale }]} />
+        <View style={[styles.divider, { backgroundColor: sheetChrome.outlineVariant, marginVertical: 12 * scale }]} />
 
         <Text style={sectionHeadingStyle}>Open Source</Text>
 
@@ -232,7 +231,7 @@ export function CreditsSheet({
           . This app makes use of open-source software. Licenses for all packages are included in the app bundle.
         </Text>
 
-        <View style={[styles.divider, { backgroundColor: READER_M3_OUTLINE_VARIANT, marginVertical: 12 * scale }]} />
+        <View style={[styles.divider, { backgroundColor: sheetChrome.outlineVariant, marginVertical: 12 * scale }]} />
 
         <Text style={sectionHeadingStyle}>Privacy</Text>
 

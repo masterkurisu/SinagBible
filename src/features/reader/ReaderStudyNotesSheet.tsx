@@ -5,11 +5,7 @@ import { getUsfmBookId } from "@sinag-bible/core";
 import type { BibleChapter } from "@sinag-bible/types";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { ReaderM3BottomSheet } from "@/src/components/m3/ReaderM3BottomSheet";
-import {
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_SURFACE_CONTAINER,
-} from "@/src/features/reader/readerSettingsPanelChrome";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 
 const COMMENTARY_STORAGE_KEY = "selectedCommentary";
 const COMMENTARY_DEFAULT_ID = "tyndale";
@@ -84,6 +80,7 @@ export function ReaderStudyNotesSheet({
 }: ReaderStudyNotesSheetProps) {
   const colors = bundle.ui;
   const primary = bundle.chrome.tabTint;
+  const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
   const scale = isTabletReaderLayout ? 1.35 : 1;
 
   const [selectedCommentary, setSelectedCommentary] = useState(COMMENTARY_DEFAULT_ID);
@@ -276,7 +273,7 @@ export function ReaderStudyNotesSheet({
           style={{
             alignSelf: "flex-start",
             borderRadius: 999,
-            backgroundColor: READER_M3_SURFACE_CONTAINER,
+            backgroundColor: sheetChrome.surfaceContainer,
             paddingHorizontal: 12 * scale,
             paddingVertical: 6 * scale,
             marginBottom: 12 * scale,
@@ -286,7 +283,7 @@ export function ReaderStudyNotesSheet({
             style={{
               fontFamily: "Inter_500Medium",
               fontSize: 12 * scale,
-              color: READER_M3_ON_SURFACE_VARIANT,
+              color: sheetChrome.onSurfaceVariant,
             }}
           >
             {selectedVerseFeedbackLabel}
@@ -344,7 +341,7 @@ export function ReaderStudyNotesSheet({
                 style={{
                   fontFamily: "Lora_400Regular",
                   fontSize: 17 * scale,
-                  color: READER_M3_ON_SURFACE,
+                  color: sheetChrome.onSurface,
                   marginTop: index === 0 ? 0 : 8 * scale,
                   marginBottom: 6 * scale,
                 }}
@@ -360,7 +357,7 @@ export function ReaderStudyNotesSheet({
                 style={{
                   fontFamily: "Inter_400Regular",
                   fontSize: 15 * scale,
-                  color: READER_M3_ON_SURFACE,
+                  color: sheetChrome.onSurface,
                   lineHeight: 24 * scale,
                   marginBottom: 8 * scale,
                 }}

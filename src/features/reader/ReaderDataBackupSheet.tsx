@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
@@ -20,17 +20,13 @@ import {
   waitForReaderDataImportUiSettled,
   yieldForReaderDataImportPaint,
 } from "@/lib/reader-data-import-sync";
+import { getReaderSheetChrome, useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
   READER_M3_ERROR,
   READER_M3_ERROR_CONTAINER,
   READER_M3_LIST_TRAILING_ICON_PX,
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_M3_OUTLINE_VARIANT,
-  READER_M3_SECONDARY_CONTAINER,
-  READER_M3_SURFACE_CONTAINER_HIGH,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type ReaderDataBackupSheetProps = {
@@ -67,12 +63,13 @@ function BackupActionRow({
   disabled = false,
   destructive = false,
 }: BackupActionRowProps) {
+  const sheetChrome = useReaderSheetChrome();
   const iconSize = READER_M3_LIST_TRAILING_ICON_PX * scale;
   const rowMinHeight = BACKUP_ACTION_ROW_MIN_HEIGHT_PX * scale;
   const rowPadV = 14 * scale;
-  const labelColor = destructive ? READER_M3_ERROR : READER_M3_ON_SURFACE;
-  const iconColor = destructive ? READER_M3_ERROR : READER_M3_ON_SURFACE_VARIANT;
-  const iconBadgeBg = destructive ? READER_M3_ERROR_CONTAINER : READER_M3_SECONDARY_CONTAINER;
+  const labelColor = destructive ? READER_M3_ERROR : sheetChrome.onSurface;
+  const iconColor = destructive ? READER_M3_ERROR : sheetChrome.onSurfaceVariant;
+  const iconBadgeBg = destructive ? READER_M3_ERROR_CONTAINER : sheetChrome.secondaryContainer;
 
   return (
     <Pressable
@@ -88,7 +85,7 @@ function BackupActionRow({
       android_ripple={Platform.OS === "android" ? { color: rippleColor } : undefined}
       style={({ pressed }) => ({
         opacity: disabled ? 0.6 : 1,
-        backgroundColor: pressed ? READER_M3_SURFACE_CONTAINER_HIGH : "transparent",
+        backgroundColor: pressed ? sheetChrome.surfaceContainerHigh : "transparent",
       })}
     >
       <View
@@ -132,24 +129,25 @@ function BackupActionRow({
               fontFamily: "Inter_400Regular",
               fontSize: READER_M3_BODY_FONT_PX * scale * 0.875,
               lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.9375,
-              color: READER_M3_ON_SURFACE_VARIANT,
+              color: sheetChrome.onSurfaceVariant,
             }}
           >
             {description}
           </Text>
         </View>
-        <MaterialIcons name="chevron-right" size={iconSize} color={READER_M3_ON_SURFACE_VARIANT} />
+        <MaterialIcons name="chevron-right" size={iconSize} color={sheetChrome.onSurfaceVariant} />
       </View>
     </Pressable>
   );
 }
 
 function BackupMenuDivider({ scale }: { scale: number }) {
+  const sheetChrome = useReaderSheetChrome();
   return (
     <View
       style={{
         height: StyleSheet.hairlineWidth,
-        backgroundColor: READER_M3_OUTLINE_VARIANT,
+        backgroundColor: sheetChrome.outlineVariant,
         marginLeft: 72 * scale,
       }}
     />
@@ -163,6 +161,7 @@ export function ReaderDataBackupSheet({
   insets,
   isTabletReaderLayout = false,
 }: ReaderDataBackupSheetProps) {
+  const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
   const rippleColor = bundle.chrome.androidRipple;
   const scale = isTabletReaderLayout ? 1.35 : 1;
   const useBottomSheet = !isTabletReaderLayout;
@@ -281,7 +280,7 @@ export function ReaderDataBackupSheet({
           marginTop: 8 * scale,
           borderRadius: 12 * scale,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: READER_M3_OUTLINE_VARIANT,
+          borderColor: sheetChrome.outlineVariant,
           overflow: "hidden",
         },
       ]}
@@ -339,7 +338,7 @@ export function ReaderDataBackupSheet({
           fontFamily: "Inter_500Medium",
           fontSize: READER_M3_BODY_FONT_PX * scale,
           lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale,
-          color: READER_M3_ON_SURFACE,
+          color: sheetChrome.onSurface,
           marginBottom: 12 * scale,
         }}
       >
@@ -350,7 +349,7 @@ export function ReaderDataBackupSheet({
           fontFamily: "Inter_400Regular",
           fontSize: READER_M3_BODY_FONT_PX * scale * 0.875,
           lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.9375,
-          color: READER_M3_ON_SURFACE_VARIANT,
+          color: sheetChrome.onSurfaceVariant,
         }}
       >
         Importing will replace your journal entries, favorite verses, highlights, and notes with the

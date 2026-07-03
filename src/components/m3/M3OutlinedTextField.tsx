@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from "react-native";
+import { useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
   READER_M3_LABEL_FONT_PX,
   READER_M3_LABEL_LETTER_SPACING,
   READER_M3_LABEL_LINE_HEIGHT_PX,
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 /** M3 outline stroke — literal used in defaults to avoid Hermes TDZ issues. */
@@ -58,10 +57,11 @@ export function M3OutlinedTextField({
   onSubmitEditing,
   blurOnSubmit,
 }: M3OutlinedTextFieldProps) {
+  const sheetChrome = useReaderSheetChrome();
   const [focused, setFocused] = useState(false);
   const floated = focused || value.length > 0;
   const borderColor = focused ? accentColor : OUTLINE_STROKE_COLOR;
-  const labelColor = focused ? accentColor : READER_M3_ON_SURFACE_VARIANT;
+  const labelColor = focused ? accentColor : sheetChrome.onSurfaceVariant;
   const fieldMinHeight = minHeight * scale;
   const borderRadius = roundedEnds ? fieldMinHeight / 2 : 4 * scale;
   const placeholderText = placeholder ?? (floated ? undefined : label);
@@ -114,7 +114,7 @@ export function M3OutlinedTextField({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholderText}
-          placeholderTextColor={READER_M3_ON_SURFACE_VARIANT}
+          placeholderTextColor={sheetChrome.onSurfaceVariant}
           textAlignVertical={multiline ? "top" : "center"}
           accessibilityLabel={accessibilityLabel ?? label}
           returnKeyType={returnKeyType}
@@ -136,7 +136,7 @@ export function M3OutlinedTextField({
             fontFamily: inputFontFamily,
             fontSize: READER_M3_BODY_FONT_PX * scale,
             lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale,
-            color: READER_M3_ON_SURFACE,
+            color: sheetChrome.onSurface,
           }}
         />
       </View>
