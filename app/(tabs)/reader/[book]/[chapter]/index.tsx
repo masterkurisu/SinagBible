@@ -64,7 +64,10 @@ import { ReaderFontSettingsIcon } from "@/components/icons/ReaderFontSettingsIco
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
-import { nativeTabFabOffsetPx, readerAndroidListBottomPaddingPx, readerAndroidTabBarClearancePx } from "@/lib/native-tab-chrome";
+import {
+  readerActionBarBottomPx,
+  readerAndroidListBottomPaddingPx,
+} from "@/lib/native-tab-chrome";
 import { READER_SCROLL_JS_BRIDGE_DELTA_PX, READER_TAB_BAR_SCROLL_JS_BRIDGE_DELTA_PX } from "@/lib/device-capability";
 import { useReaderTabBarScrollHidden, useRegisterReaderSettingsSlideProgress } from "@/lib/reader-tab-bar-visibility-context";
 import {
@@ -1162,13 +1165,10 @@ export default function ReaderChapterScreen() {
       ? readerAndroidAppBarBottomPx + 10
       : readerMobileSettingsToolsTopPx + 44 + 10;
 
-  const actionBarBottomPx =
-    nativeTabFabOffsetPx(insets.bottom) +
-    (Platform.OS === "android" ? 52 : 0) +
-    (Platform.OS === "ios" && !isTabletReaderLayout ? 30 : 0);
+  const actionBarBottomPx = readerActionBarBottomPx(insets.bottom, false);
 
   const actionBarBottomPxHidden =
-    Platform.OS === "android" ? readerAndroidTabBarClearancePx(insets.bottom, true) : actionBarBottomPx;
+    Platform.OS === "android" ? readerActionBarBottomPx(insets.bottom, true) : actionBarBottomPx;
 
   const androidListPaddingBottomHidden =
     Platform.OS === "android"

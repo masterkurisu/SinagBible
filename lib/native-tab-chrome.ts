@@ -63,6 +63,20 @@ export function nativeTabSheetBottomInsetPx(safeAreaBottom: number, gapPx: numbe
   return NATIVE_TAB_BAR_CORE_PX + safeAreaBottom + gapPx;
 }
 
+/** Reader selection action bar: gap from its bottom edge to the top of the bottom nav bar. */
+export const READER_ACTION_BAR_ABOVE_TAB_BAR_GAP_PX = 40;
+
+/** Bottom offset for the reader verse-selection action bar (tab content coordinates). */
+export function readerActionBarBottomPx(
+  safeAreaBottom: number,
+  tabBarHidden = false,
+): number {
+  if (Platform.OS === "android" && tabBarHidden) {
+    return Math.max(safeAreaBottom, 8) + READER_ACTION_BAR_ABOVE_TAB_BAR_GAP_PX;
+  }
+  return READER_ACTION_BAR_ABOVE_TAB_BAR_GAP_PX;
+}
+
 /** Reader settings panel: pin Delete My Data this many px above the native tab bar. */
 export const READER_SETTINGS_DELETE_ABOVE_TAB_BAR_PX = 30;
 
