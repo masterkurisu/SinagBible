@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -8,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -17,7 +19,7 @@ import Animated, {
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Switch } from "@/components/M3Switch";
-import { hapticLightImpact } from "@/lib/haptics";
+import { hapticLightImpact, hapticWarning } from "@/lib/haptics";
 import {
   CAROUSEL_ROTATION_INTERVAL_OPTIONS,
   JOURNAL_CAROUSEL_MAX_VERSE_COUNT,
@@ -26,6 +28,14 @@ import {
   patchJournalCarouselSettings,
   type JournalCarouselSettings,
 } from "@/lib/journal-carousel-settings";
+import {
+  formatCarouselPassageLabel,
+  JOURNAL_CAROUSEL_MAX_FAVORITES,
+  loadCarouselFavorites,
+  removeCarouselFavorite,
+  subscribeCarouselFavorites,
+  type CarouselVerseRecord,
+} from "@/lib/journal-carousel-verses";
 import { READER_M3_SURFACE_CONTAINER } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type JournalCarouselSettingsSheetProps = {
@@ -71,6 +81,7 @@ export function JournalCarouselSettingsSheet({
   const j = bundle.journal;
   const { width: screenW } = useWindowDimensions();
   const [settings, setSettings] = useState<JournalCarouselSettings | null>(null);
+  const [favorites, setFavorites] = useState<CarouselVerseRecord[]>([]);
   const scale = useSharedValue(0.94);
   const opacity = useSharedValue(0);
 
@@ -79,6 +90,10 @@ export function JournalCarouselSettingsSheet({
   useEffect(() => {
     if (!isOpen) return;
     void loadJournalCarouselSettings().then(setSettings);
+    void loadCarouselFavorites().then(setFavorites);
+    return subscribeCarouselFavorites(() => {
+      void loadCarouselFavorites().then(setFavorites);
+    });
   }, [isOpen]);
 
   useEffect(() => {
@@ -124,6 +139,34 @@ export function JournalCarouselSettingsSheet({
     },
     [patch, settings],
   );
+
+  const sortedFavorites = useMemo(
+    () =>
+      [...favorites].sort(
+        (a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime(),
+      ),
+    [favorites],
+  );
+
+  const confirmRemoveFavorite = useCallback((record: CarouselVerseRecord) => {
+    const label = formatCarouselPassageLabel(record);
+    hapticWarning();
+    Alert.alert(
+      "Remove from carousel?",
+      `${label} will be removed from your journal carousel favorites.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            hapticLightImpact();
+            void removeCarouselFavorite(record.id).then(setFavorites);
+          },
+        },
+      ],
+    );
+  }, []);
 
   if (!settings) return null;
 
@@ -300,6 +343,62 @@ export function JournalCarouselSettingsSheet({
                   </View>
                   <Text style={[styles.intervalValue, { color: j.filterOpenerText }]}>{intervalLabel}</Text>
                 </Pressable>
+
+                <View style={[styles.sectionDivider, { backgroundColor: j.panelBorder }]} />
+
+                <View>
+                  <Text style={[styles.sectionTitle, { color: colors.brown800 }]}>Saved verses</Text>
+                  <Text style={[styles.sectionDescription, { color: j.subtitleQuote }]}>
+                    {sortedFavorites.length} of {JOURNAL_CAROUSEL_MAX_FAVORITES} saved from the reader.
+                  </Text>
+                  {sortedFavorites.length === 0 ? (
+                    <Text style={[styles.emptyFavorites, { color: j.subtitleQuote }]}>
+                      No saved verses yet. Select a verse in the reader and tap the heart to save it
+                      here.
+                    </Text>
+                  ) : (
+                    <View style={styles.favoritesList}>
+                      {sortedFavorites.map((record) => {
+                        const label = formatCarouselPassageLabel(record);
+                        return (
+                          <View
+                            key={record.id}
+                            style={[
+                              styles.favoriteRow,
+                              {
+                                borderColor: j.panelBorder,
+                                backgroundColor: j.filterOpenerBackground,
+                              },
+                            ]}
+                          >
+                            <View style={styles.favoriteRowText}>
+                              <Text
+                                style={[styles.favoriteReference, { color: colors.brown800 }]}
+                                numberOfLines={1}
+                              >
+                                {label}
+                              </Text>
+                              <Text
+                                style={[styles.favoriteSnippet, { color: j.subtitleQuote }]}
+                                numberOfLines={2}
+                              >
+                                {record.text}
+                              </Text>
+                            </View>
+                            <Pressable
+                              onPress={() => confirmRemoveFavorite(record)}
+                              style={styles.favoriteRemoveButton}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Remove ${label} from carousel`}
+                            >
+                              <MaterialIcons name="bookmark-remove" size={22} color="#B3261E" />
+                            </Pressable>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
               </ScrollView>
             </View>
           </Animated.View>
@@ -398,5 +497,56 @@ const styles = StyleSheet.create({
   intervalValue: {
     fontFamily: "Inter_500Medium",
     fontSize: 13,
+  },
+  sectionTitle: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  sectionDescription: {
+    marginTop: 2,
+    marginBottom: 10,
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  emptyFavorites: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  favoritesList: {
+    gap: 8,
+  },
+  favoriteRow: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingLeft: 14,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  favoriteRowText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  favoriteReference: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  favoriteSnippet: {
+    marginTop: 2,
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  favoriteRemoveButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 4,
   },
 });

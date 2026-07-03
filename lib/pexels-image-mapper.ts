@@ -51,15 +51,60 @@ const OT_NARRATIVE_SLUGS = new Set([
   "jonah",
 ]);
 
-const KEYWORD_BY_CATEGORY: Record<CarouselImageCategory, string> = {
-  "psalms-proverbs": "mountains nature",
-  gospels: "sunrise golden light",
-  revelation: "dramatic storm clouds sky",
-  epistles: "calm lake peaceful",
-  "ot-narrative": "desert landscape",
-  "daily-verse": "golden light dawn",
-  default: "nature landscape",
+/** Multiple keywords per category — picked per verse for wider color variety. */
+const KEYWORDS_BY_CATEGORY: Record<CarouselImageCategory, readonly string[]> = {
+  "psalms-proverbs": [
+    "misty mountain landscape",
+    "forest river reflection",
+    "alpine meadow clouds",
+    "pine forest fog",
+  ],
+  gospels: [
+    "calm ocean horizon",
+    "green rolling hills",
+    "peaceful lake mist",
+    "coastal cliffs water",
+  ],
+  revelation: [
+    "dramatic storm clouds",
+    "lightning sky dark",
+    "volcanic landscape",
+    "thunderclouds mountain",
+  ],
+  epistles: [
+    "serene lake mountains",
+    "quiet river valley",
+    "meadow wildflowers",
+    "foggy morning field",
+  ],
+  "ot-narrative": [
+    "desert sand dunes",
+    "canyon rock formations",
+    "arid landscape",
+    "rocky desert valley",
+  ],
+  "daily-verse": [
+    "soft morning mist",
+    "gentle sunrise over water",
+    "misty valley dawn",
+    "peaceful dawn clouds",
+  ],
+  default: [
+    "nature landscape green",
+    "mountain lake reflection",
+    "forest path morning",
+    "ocean waves coastline",
+  ],
 };
+
+function hashSeed(seed: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
 
 export function getCarouselImageCategoryForBookSlug(bookSlug: string): CarouselImageCategory {
   const slug = bookSlug.trim().toLowerCase();
@@ -71,6 +116,23 @@ export function getCarouselImageCategoryForBookSlug(bookSlug: string): CarouselI
   return "default";
 }
 
+export function getPexelsSearchKeywords(category: CarouselImageCategory): readonly string[] {
+  return KEYWORDS_BY_CATEGORY[category];
+}
+
+/** Stable keyword per verse — same card keeps the same search theme across sessions. */
+export function getPexelsSearchKeywordForVerse(
+  category: CarouselImageCategory,
+  verseId: string,
+): string {
+  const keywords = KEYWORDS_BY_CATEGORY[category];
+  return keywords[hashSeed(verseId) % keywords.length]!;
+}
+
 export function getPexelsSearchKeyword(category: CarouselImageCategory): string {
-  return KEYWORD_BY_CATEGORY[category];
+  return KEYWORDS_BY_CATEGORY[category][0]!;
+}
+
+export function keywordPoolStorageSlug(keyword: string): string {
+  return keyword.toLowerCase().replace(/\s+/g, "-");
 }

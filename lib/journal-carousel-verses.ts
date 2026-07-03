@@ -50,20 +50,42 @@ export type CarouselDisplayVerse = {
 /** Stable id prefix for the pinned daily-verse carousel card. */
 export const DAILY_VERSE_CAROUSEL_ID_PREFIX = "daily-verse:";
 
-/** Warm gold gradient for the daily verse hero card. */
-const DAILY_VERSE_GRADIENT: readonly [string, string, string] = [
-  "#6b5540",
-  "#5c4f3a",
-  "#3d3428",
-];
-
 const CAROUSEL_GRADIENTS: readonly (readonly [string, string, string])[] = [
+  // Warm earth
   ["#3d3428", "#2c2416", "#1a160f"],
   ["#5c4f3a", "#4a3826", "#3d3428"],
-  ["#6b5540", "#5c4f3a", "#4a3826"],
-  ["#4a3826", "#3d3428", "#2c2416"],
-  ["#5c4f3a", "#6b5540", "#4a3826"],
+  // Forest & moss
+  ["#2a3d2e", "#1f3024", "#141f18"],
+  ["#3a4a35", "#2d3a28", "#1e261c"],
+  // Slate & mist
+  ["#3a4248", "#2c3338", "#1e2328"],
+  ["#4a5058", "#3a4048", "#2a3038"],
+  // Deep teal / ocean
+  ["#1e3a3f", "#152c30", "#0d1e22"],
+  ["#2a4548", "#1e3538", "#142528"],
+  // Burgundy dusk
+  ["#4a2a32", "#3a2228", "#2a181e"],
+  ["#3d2838", "#302030", "#241828"],
+  // Navy twilight
+  ["#282e42", "#1e2438", "#141a2e"],
+  ["#2a3450", "#222c40", "#1a2230"],
+  // Soft lavender-gray
+  ["#3a3848", "#302e3e", "#262434"],
 ];
+
+function carouselHashSeed(seed: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function carouselGradientForVerse(id: string, index: number): readonly [string, string, string] {
+  const paletteIndex = (carouselHashSeed(id) + index) % CAROUSEL_GRADIENTS.length;
+  return CAROUSEL_GRADIENTS[paletteIndex]!;
+}
 
 const WIDTH_RATIOS = [0.58, 0.72, 0.64] as const;
 
@@ -124,7 +146,7 @@ export function carouselRecordToDisplay(
     reference: record.reference,
     text: record.text,
     widthRatio: WIDTH_RATIOS[index % WIDTH_RATIOS.length]!,
-    gradient: CAROUSEL_GRADIENTS[index % CAROUSEL_GRADIENTS.length]!,
+    gradient: carouselGradientForVerse(record.id, index),
     imageCategory: options?.isDailyVerse
       ? "daily-verse"
       : getCarouselImageCategoryForBookSlug(record.bookSlug),
@@ -136,12 +158,13 @@ export function carouselRecordToDisplay(
 
 export function getDailyVerseCarouselDisplay(date: Date = new Date()): CarouselDisplayVerse {
   const daily = getDailyVerse(date);
+  const dayKey = dailyVerseDayKey(date);
   return {
-    id: `${DAILY_VERSE_CAROUSEL_ID_PREFIX}${dailyVerseDayKey(date)}`,
+    id: `${DAILY_VERSE_CAROUSEL_ID_PREFIX}${dayKey}`,
     reference: formatDailyVerseReference(daily.reference),
     text: daily.text,
     widthRatio: WIDTH_RATIOS[0]!,
-    gradient: DAILY_VERSE_GRADIENT,
+    gradient: carouselGradientForVerse(dayKey, 0),
     imageCategory: "daily-verse",
     isUserFavorite: false,
     isDailyVerse: true,
@@ -165,7 +188,7 @@ function restyleCarouselVerses(verses: CarouselDisplayVerse[]): CarouselDisplayV
   return verses.map((verse, index) => ({
     ...verse,
     widthRatio: WIDTH_RATIOS[(index + 1) % WIDTH_RATIOS.length]!,
-    gradient: CAROUSEL_GRADIENTS[(index + 1) % CAROUSEL_GRADIENTS.length]!,
+    gradient: carouselGradientForVerse(verse.id, index + 1),
   }));
 }
 

@@ -2,19 +2,21 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { searchPexelsImages } from "@/lib/pexels-api";
 import {
-  getPexelsSearchKeyword,
+  getPexelsSearchKeywordForVerse,
+  getPexelsSearchKeywords,
+  keywordPoolStorageSlug,
   type CarouselImageCategory,
 } from "@/lib/pexels-image-mapper";
 
-/** Minimum unique image URLs kept cached across category pools. */
+/** Minimum unique image URLs kept cached across keyword pools. */
 export const CAROUSEL_IMAGE_POOL_TARGET = 30;
 
 const POOL_FETCH_PER_PAGE = 20;
-const CARD_STORAGE_PREFIX = "sb:pexels:card:";
-const POOL_STORAGE_PREFIX = "sb:pexels:pool:";
+const CARD_STORAGE_PREFIX = "sb:pexels:card:v2:";
+const POOL_STORAGE_PREFIX = "sb:pexels:pool:v2:";
 const LEGACY_CATEGORY_PREFIX = "sb:pexels:url:";
 
-type CategoryPool = {
+type KeywordPool = {
   urls: string[];
   nextPage: number;
 };
@@ -24,10 +26,10 @@ type CarouselVerseRef = {
   imageCategory: CarouselImageCategory;
 };
 
-const pendingPoolFetches = new Map<CarouselImageCategory, Promise<string[]>>();
+const pendingPoolFetches = new Map<string, Promise<string[]>>();
 const sessionCardUrlByVerseId = new Map<string, string>();
 const sessionResolvedByVersesKey = new Map<string, Record<string, string>>();
-const warmedCategorySets = new Set<string>();
+const warmedKeywordSets = new Set<string>();
 
 export function buildCarouselVersesKey(verses: readonly CarouselVerseRef[]): string {
   return verses.map((verse) => `${verse.id}:${verse.imageCategory}`).join("|");
@@ -61,19 +63,19 @@ function rememberSessionUrls(versesKey: string, urls: Record<string, string>): v
   }
 }
 
-function poolStorageKey(category: CarouselImageCategory): string {
-  return `${POOL_STORAGE_PREFIX}${category}`;
+function poolStorageKey(keyword: string): string {
+  return `${POOL_STORAGE_PREFIX}${keywordPoolStorageSlug(keyword)}`;
 }
 
 function cardStorageKey(verseId: string): string {
   return `${CARD_STORAGE_PREFIX}${verseId}`;
 }
 
-async function loadCategoryPool(category: CarouselImageCategory): Promise<CategoryPool> {
+async function loadKeywordPool(keyword: string): Promise<KeywordPool> {
   try {
-    const raw = await AsyncStorage.getItem(poolStorageKey(category));
+    const raw = await AsyncStorage.getItem(poolStorageKey(keyword));
     if (raw) {
-      const parsed = JSON.parse(raw) as CategoryPool;
+      const parsed = JSON.parse(raw) as KeywordPool;
       if (Array.isArray(parsed.urls) && typeof parsed.nextPage === "number") {
         return {
           urls: [...new Set(parsed.urls.filter((url) => typeof url === "string" && url.length > 0))],
@@ -85,23 +87,13 @@ async function loadCategoryPool(category: CarouselImageCategory): Promise<Catego
     /* fall through */
   }
 
-  // Migrate legacy single-URL cache into the pool.
-  try {
-    const legacy = await AsyncStorage.getItem(`${LEGACY_CATEGORY_PREFIX}${category}`);
-    if (legacy) {
-      return { urls: [legacy], nextPage: 2 };
-    }
-  } catch {
-    /* ignore */
-  }
-
   return { urls: [], nextPage: 1 };
 }
 
-async function saveCategoryPool(category: CarouselImageCategory, pool: CategoryPool): Promise<void> {
+async function saveKeywordPool(keyword: string, pool: KeywordPool): Promise<void> {
   try {
     await AsyncStorage.setItem(
-      poolStorageKey(category),
+      poolStorageKey(keyword),
       JSON.stringify({
         urls: [...new Set(pool.urls)],
         nextPage: pool.nextPage,
@@ -135,13 +127,13 @@ async function saveCardAssignment(verseId: string, url: string): Promise<void> {
   }
 }
 
-async function fetchNextPoolPage(category: CarouselImageCategory): Promise<string[]> {
-  const pending = pendingPoolFetches.get(category);
+async function fetchNextPoolPage(keyword: string): Promise<string[]> {
+  const poolKey = keywordPoolStorageSlug(keyword);
+  const pending = pendingPoolFetches.get(poolKey);
   if (pending) return pending;
 
   const promise = (async () => {
-    const pool = await loadCategoryPool(category);
-    const keyword = getPexelsSearchKeyword(category);
+    const pool = await loadKeywordPool(keyword);
     const fetched = await searchPexelsImages(keyword, {
       page: pool.nextPage,
       perPage: POOL_FETCH_PER_PAGE,
@@ -152,43 +144,58 @@ async function fetchNextPoolPage(category: CarouselImageCategory): Promise<strin
 
     pool.urls.push(...added);
     pool.nextPage = fetched.length > 0 ? pool.nextPage + 1 : pool.nextPage;
-    await saveCategoryPool(category, pool);
+    await saveKeywordPool(keyword, pool);
 
     return added;
   })().finally(() => {
-    pendingPoolFetches.delete(category);
+    pendingPoolFetches.delete(poolKey);
   });
 
-  pendingPoolFetches.set(category, promise);
+  pendingPoolFetches.set(poolKey, promise);
   return promise;
+}
+
+function keywordsForCategory(category: CarouselImageCategory, verseId: string): string[] {
+  const primary = getPexelsSearchKeywordForVerse(category, verseId);
+  const rest = getPexelsSearchKeywords(category).filter((keyword) => keyword !== primary);
+  return [primary, ...rest];
 }
 
 async function allocateUniqueUrl(
   category: CarouselImageCategory,
+  verseId: string,
   usedUrls: Set<string>,
   fallbackCategories: CarouselImageCategory[],
 ): Promise<string | null> {
   const categoriesToTry = [category, ...fallbackCategories.filter((c) => c !== category)];
 
   for (const candidateCategory of categoriesToTry) {
-    let pool = await loadCategoryPool(candidateCategory);
+    for (const keyword of keywordsForCategory(candidateCategory, verseId)) {
+      let pool = await loadKeywordPool(keyword);
 
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const unused = pool.urls.find((url) => !usedUrls.has(url));
-      if (unused) return unused;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const unused = pool.urls.find((url) => !usedUrls.has(url));
+        if (unused) return unused;
 
-      const added = await fetchNextPoolPage(candidateCategory);
-      if (added.length === 0) break;
+        const added = await fetchNextPoolPage(keyword);
+        if (added.length === 0) break;
 
-      pool = await loadCategoryPool(candidateCategory);
+        pool = await loadKeywordPool(keyword);
+      }
     }
   }
 
   return null;
 }
 
-function collectUniqueCategories(verses: readonly CarouselVerseRef[]): CarouselImageCategory[] {
-  return [...new Set(verses.map((verse) => verse.imageCategory))];
+function collectKeywordsForCategories(categories: readonly CarouselImageCategory[]): string[] {
+  const keywords = new Set<string>();
+  for (const category of categories) {
+    for (const keyword of getPexelsSearchKeywords(category)) {
+      keywords.add(keyword);
+    }
+  }
+  return [...keywords];
 }
 
 /**
@@ -206,8 +213,8 @@ export async function resolveCarouselBackgroundUrls(
 
   const usedUrls = new Set<string>();
   const result: Record<string, string> = {};
-  const categories = collectUniqueCategories(verses);
-  const categoriesKey = categories.join("|");
+  const categories = [...new Set(verses.map((verse) => verse.imageCategory))];
+  const keywordsKey = collectKeywordsForCategories(categories).join("|");
   const fallbackCategories: CarouselImageCategory[] = [
     ...categories,
     "default",
@@ -224,7 +231,7 @@ export async function resolveCarouselBackgroundUrls(
     if (url && usedUrls.has(url)) url = null;
 
     if (!url) {
-      url = await allocateUniqueUrl(verse.imageCategory, usedUrls, fallbackCategories);
+      url = await allocateUniqueUrl(verse.imageCategory, verse.id, usedUrls, fallbackCategories);
     }
 
     if (url) {
@@ -236,14 +243,14 @@ export async function resolveCarouselBackgroundUrls(
 
   rememberSessionUrls(versesKey, result);
 
-  if (!warmedCategorySets.has(categoriesKey)) {
+  if (!warmedKeywordSets.has(keywordsKey)) {
     await warmCarouselImagePool(categories, CAROUSEL_IMAGE_POOL_TARGET);
-    warmedCategorySets.add(categoriesKey);
+    warmedKeywordSets.add(keywordsKey);
   }
 
   const prefetchUrls = new Set<string>(Object.values(result));
-  for (const category of categories) {
-    const pool = await loadCategoryPool(category);
+  for (const keyword of collectKeywordsForCategories(categories)) {
+    const pool = await loadKeywordPool(keyword);
     for (const url of pool.urls) prefetchUrls.add(url);
   }
   for (const url of prefetchUrls) {
@@ -254,7 +261,7 @@ export async function resolveCarouselBackgroundUrls(
 }
 
 /**
- * Grows category pools until at least `targetSize` unique URLs are cached.
+ * Grows keyword pools until at least `targetSize` unique URLs are cached.
  */
 export async function warmCarouselImagePool(
   categories: readonly CarouselImageCategory[],
@@ -262,27 +269,28 @@ export async function warmCarouselImagePool(
 ): Promise<void> {
   if (categories.length === 0) return;
 
-  const uniqueCategories = [...new Set(categories)];
+  const keywords = collectKeywordsForCategories(categories);
+  if (keywords.length === 0) return;
 
   async function countUniquePoolUrls(): Promise<number> {
     const all = new Set<string>();
-    for (const category of uniqueCategories) {
-      const pool = await loadCategoryPool(category);
+    for (const keyword of keywords) {
+      const pool = await loadKeywordPool(keyword);
       for (const url of pool.urls) all.add(url);
     }
     return all.size;
   }
 
   let stagnantRounds = 0;
-  let categoryIndex = 0;
+  let keywordIndex = 0;
 
-  while ((await countUniquePoolUrls()) < targetSize && stagnantRounds < uniqueCategories.length * 3) {
+  while ((await countUniquePoolUrls()) < targetSize && stagnantRounds < keywords.length * 3) {
     const before = await countUniquePoolUrls();
-    const category = uniqueCategories[categoryIndex % uniqueCategories.length]!;
-    await fetchNextPoolPage(category);
+    const keyword = keywords[keywordIndex % keywords.length]!;
+    await fetchNextPoolPage(keyword);
     const after = await countUniquePoolUrls();
 
     stagnantRounds = after > before ? 0 : stagnantRounds + 1;
-    categoryIndex += 1;
+    keywordIndex += 1;
   }
 }

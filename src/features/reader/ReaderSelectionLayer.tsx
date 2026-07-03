@@ -1054,7 +1054,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
                   color: rc.selectionText,
                 }}
               >
-                {favoriteToastAdded ? "Added to journal carousel" : "Removed from journal carousel"}
+                {favoriteToastAdded ? "Added to Favorites" : "Removed from Favorites"}
               </Text>
             </View>
           </View>
