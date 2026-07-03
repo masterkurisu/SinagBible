@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   Text,
   View,
 } from "react-native";
 import { Stack, useLocalSearchParams, usePathname, useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   JournalNewEntryForm,
   type JournalEditDraft,
@@ -16,6 +13,7 @@ import {
 import {
   clearPendingJournalEditEntry,
   peekPendingJournalEditEntryFor,
+  setPendingJournalDetailEntry,
 } from "@/lib/journal-edit-bridge";
 import { resolveJournalEditRouteId } from "@/lib/journal-route-id";
 import { loadJournalEntryById, type MobileJournalListItem } from "@/lib/load-journal-entries";
@@ -40,7 +38,6 @@ const LOAD_TIMEOUT_MS = 18_000;
 export default function EditJournalEntryScreen() {
   const router = useRouter();
   const pathname = usePathname();
-  const insets = useSafeAreaInsets();
   const { id: idParam } = useLocalSearchParams<{ id?: string | string[] }>();
   const id = useMemo(
     () => resolveJournalEditRouteId(idParam, pathname),
@@ -62,9 +59,15 @@ export default function EditJournalEntryScreen() {
     [colors.parchment, colors.brown800],
   );
 
-  const handleAfterSave = useCallback(() => {
-    router.back();
-  }, [router]);
+  const handleAfterSave = useCallback(
+    (saved?: MobileJournalListItem) => {
+      if (saved) {
+        setPendingJournalDetailEntry(saved);
+      }
+      router.back();
+    },
+    [router],
+  );
 
   const [entry, setEntry] = useState<MobileJournalListItem | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -124,12 +127,7 @@ export default function EditJournalEntryScreen() {
   return (
     <>
       <Stack.Screen options={editStackScreenOptions} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 52 : 0}
-        style={{ flex: 1, backgroundColor: colors.parchment }}
-      >
-        <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: colors.parchment }}>
           {!id ? (
             <View className="px-4 py-8">
               <Text style={{ fontFamily: "Lora_400Regular", fontSize: 16, color: colors.tan300 }}>
@@ -193,8 +191,7 @@ export default function EditJournalEntryScreen() {
               onAfterSave={handleAfterSave}
             />
           )}
-        </View>
-      </KeyboardAvoidingView>
+      </View>
     </>
   );
 }

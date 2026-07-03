@@ -26,7 +26,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Path } from "react-native-svg";
-import { setPendingJournalEditEntry } from "@/lib/journal-edit-bridge";
+import {
+  peekPendingJournalDetailEntryFor,
+  setPendingJournalEditEntry,
+} from "@/lib/journal-edit-bridge";
 import { resolveJournalEntryRouteId } from "@/lib/journal-route-id";
 import { loadJournalEntryById } from "@/lib/load-journal-entries";
 import type { MobileJournalListItem } from "@/lib/load-journal-entries";
@@ -436,28 +439,41 @@ export default function JournalEntryScreen() {
     screenH,
   });
 
-  const load = useCallback(async () => {
-    if (!id) return;
-    setLoadError(false);
-    setStorageAccessError(false);
-    try {
-      const row = await loadJournalEntryById(id);
-      setEntry(row);
-      if (!row) setLoadError(true);
-    } catch (e) {
-      if (__DEV__) {
-        console.error(e);
-      }
-      setEntry(null);
-      setStorageAccessError(true);
-      setLoadError(true);
-    }
-  }, [id]);
-
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [load]),
+      if (!id) return;
+      let cancelled = false;
+      setLoadError(false);
+      setStorageAccessError(false);
+
+      const bridged = peekPendingJournalDetailEntryFor(id);
+      if (bridged) {
+        setEntry(bridged);
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      void (async () => {
+        try {
+          const row = await loadJournalEntryById(id);
+          if (cancelled) return;
+          setEntry(row);
+          if (!row) setLoadError(true);
+        } catch (e) {
+          if (cancelled) return;
+          if (__DEV__) {
+            console.error(e);
+          }
+          setEntry(null);
+          setStorageAccessError(true);
+          setLoadError(true);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [id]),
   );
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { getLocalEntries, getLocalEntry } from "@/lib/journal-local";
+import { getCachedLocalEntries, getLocalEntries, getLocalEntry } from "@/lib/journal-local";
 
 export type MobileJournalListItem = {
   id: string;
@@ -37,6 +37,18 @@ function localToListItem(e: {
     title: e.title,
     is_favorite: e.is_favorite,
   };
+}
+
+export function toMobileJournalListItem(
+  e: Parameters<typeof localToListItem>[0],
+): MobileJournalListItem {
+  return localToListItem(e);
+}
+
+export function getCachedJournalEntryById(id: string): MobileJournalListItem | null {
+  const local = getCachedLocalEntries().find((e) => e.id === id);
+  if (!local) return null;
+  return localToListItem(local);
 }
 
 /** Newest-first list from AsyncStorage. */

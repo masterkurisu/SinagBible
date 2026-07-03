@@ -1,6 +1,7 @@
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   Alert,
   Animated,
@@ -35,7 +36,12 @@ import {
   getPassageMisspellingSuggestion,
 } from "@sinag-bible/core";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
-import { saveLocalEntry, updateLocalEntry } from "@/lib/journal-local";
+import { saveLocalEntry, updateLocalEntry, plainReflectionToContent } from "@/lib/journal-local";
+import { setPendingJournalDetailEntry } from "@/lib/journal-edit-bridge";
+import {
+  toMobileJournalListItem,
+  type MobileJournalListItem,
+} from "@/lib/load-journal-entries";
 import {
   getJournalChapter,
   getJournalClosestBookSuggestion,
@@ -163,6 +169,10 @@ const REFLECTION_SCROLL_CARET_INTO_VIEW_DOM = `
 true;
 `;
 
+function reflectionHtmlSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Light text on save / primary gradient buttons */
 const SAVE_BUTTON_LABEL_COLOR = "#f5e9d6";
 
@@ -196,7 +206,7 @@ type Props = {
   /** When set, the form updates this entry instead of creating a new one. */
   editDraft?: JournalEditDraft | null;
   /** When set, called instead of default stack navigation after a successful save. */
-  onAfterSave?: () => void;
+  onAfterSave?: (saved?: MobileJournalListItem) => void;
   /** Cap scroll area height (e.g. bottom sheet on journal tab). */
   contentScrollMaxHeight?: number;
   /**
@@ -337,6 +347,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const [reflectionHtml, setReflectionHtml] = useState(() => editDraft?.content ?? "");
   const reflectionHtmlRef = useRef(reflectionHtml);
   reflectionHtmlRef.current = reflectionHtml;
+  const editDraftReflectionBaselineRef = useRef(editDraft?.content ?? "");
+  const reflectionEditedSinceBaselineRef = useRef(false);
+  const reflectionEditorReadyRef = useRef(false);
   const richEditorRef = useRef<RichEditor>(null);
   const fullscreenRichEditorRef = useRef<RichEditor>(null);
   const sheetFormScrollRef = useRef<ScrollView>(null);
@@ -404,6 +417,89 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const getActiveReflectionEditor = () =>
     reflectionFullscreenOpen ? fullscreenRichEditorRef.current : richEditorRef.current;
 
+  const normalizeReflectionHtml = (html: string): string => {
+    const cleaned = html.replace(/\u200B/g, "").trim();
+    if (!cleaned || cleaned === "<br>" || cleaned === "<div><br></div>" || cleaned === "<p><br></p>") return "";
+    return cleaned;
+  };
+
+  useEffect(() => {
+    editDraftReflectionBaselineRef.current = editDraft?.content ?? "";
+    reflectionEditedSinceBaselineRef.current = false;
+    reflectionEditorReadyRef.current = false;
+  }, [editDraft?.id, editDraft?.content]);
+
+  const onReflectionEditorInitialized = useCallback(() => {
+    reflectionEditorReadyRef.current = true;
+  }, []);
+
+  const reflectionPlainText = (html: string): string =>
+    html
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const [editReflectionPlainText, setEditReflectionPlainText] = useState(() =>
+    editDraft ? reflectionPlainText(editDraft.content ?? "") : "",
+  );
+
+  const readReflectionHtmlFromEditor = useCallback(async (): Promise<string> => {
+    const ed = getActiveReflectionEditor();
+    if (!ed) return normalizeReflectionHtml(reflectionHtmlRef.current);
+
+    for (let i = 0; i < 20 && !reflectionEditorReadyRef.current; i += 1) {
+      await reflectionHtmlSleep(50);
+    }
+
+    try {
+      const live = await ed.getContentHtml();
+      if (typeof live === "string") {
+        const normalized = normalizeReflectionHtml(live);
+        if (reflectionPlainText(normalized)) return normalized;
+      }
+    } catch {
+      /* bridge timeout / teardown */
+    }
+
+    return normalizeReflectionHtml(reflectionHtmlRef.current);
+  }, []);
+
+  const resolveHtmlForSave = useCallback(async (): Promise<string> => {
+    const stateHtml = normalizeReflectionHtml(reflectionHtmlRef.current);
+
+    if (editDraft) {
+      const baseline = normalizeReflectionHtml(editDraftReflectionBaselineRef.current);
+      const statePlain = reflectionPlainText(stateHtml);
+      const baselinePlain = reflectionPlainText(baseline);
+      const titleBaseline = editDraft.title?.trim() ?? "";
+      const titleChanged = title.trim() !== titleBaseline;
+      const passageChanged = passage.trim() !== editPassageFormatted.trim();
+
+      // onChange keeps reflectionHtmlRef in sync; trust it when reflection text changed.
+      if (statePlain && statePlain !== baselinePlain) {
+        return stateHtml;
+      }
+
+      // Title/passage-only edit; reflection unchanged in state.
+      if (titleChanged || passageChanged) {
+        return statePlain ? stateHtml : baseline;
+      }
+
+      // Reflection may have been edited but onChange has not synced yet.
+      return await readReflectionHtmlFromEditor();
+    }
+
+    const live = await readReflectionHtmlFromEditor();
+    return reflectionPlainText(live) ? live : stateHtml;
+  }, [
+    editDraft,
+    editPassageFormatted,
+    passage,
+    readReflectionHtmlFromEditor,
+    title,
+  ]);
+
   const undoReflection = () => {
     hapticLightImpact();
     getActiveReflectionEditor()?.commandDOM("document.execCommand('undo', false, null);");
@@ -414,12 +510,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     const ed = getActiveReflectionEditor();
     ed?.focusContentEditor();
     ed?.commandDOM(`document.execCommand('${command}', false, null);`);
-  };
-
-  const normalizeReflectionHtml = (html: string): string => {
-    const cleaned = html.replace(/\u200B/g, "").trim();
-    if (!cleaned || cleaned === "<br>" || cleaned === "<div><br></div>" || cleaned === "<p><br></p>") return "";
-    return cleaned;
   };
 
   const reflectionTypingHapticLastRef = useRef(0);
@@ -435,19 +525,22 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       reflectionTypingHapticLastRef.current = t;
       hapticSelection();
     }
-    setReflectionHtml(normalizeReflectionHtml(html));
+    const normalized = normalizeReflectionHtml(html);
+    reflectionHtmlRef.current = normalized;
+    setReflectionHtml(normalized);
+    if (
+      editDraft &&
+      reflectionPlainText(normalized) !==
+        reflectionPlainText(editDraftReflectionBaselineRef.current)
+    ) {
+      reflectionEditedSinceBaselineRef.current = true;
+    }
     if (Platform.OS === "android" && t - reflectionCaretScrollLastRef.current >= 80) {
       reflectionCaretScrollLastRef.current = t;
       scrollReflectionCaretIntoView();
     }
   };
 
-  const reflectionPlainText = (html: string): string =>
-    html
-      .replace(/<[^>]*>/g, " ")
-      .replace(/&nbsp;/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
   const hasReflectionInput = reflectionPlainText(reflectionHtml).length > 0;
   const hasDraftInput = passage.trim().length > 0 || title.trim().length > 0 || hasReflectionInput;
 
@@ -548,6 +641,16 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     if (suppressReflectionBlurRef.current || reflectionFullscreenOpen) return;
     const ed = getActiveReflectionEditor();
     if (ed?.isKeyboardOpen || keyboardHeight > 0) return;
+    void (async () => {
+      try {
+        const live = await ed?.getContentHtml();
+        if (typeof live === "string") {
+          setReflectionHtml(normalizeReflectionHtml(live));
+        }
+      } catch {
+        /* bridge timeout / teardown */
+      }
+    })();
     releaseActiveFormField("reflection");
     setJournalKeyboardOpen(false);
   };
@@ -570,31 +673,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       );
     });
   }, [keyboardHeight, reflectionFullscreenOpen, windowHeight]);
-
-  useEffect(() => {
-    if (!showReflectionFloatingToolbar || keyboardHeight <= 0) {
-      setReflectionToolbarBottomPx(FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX);
-      return;
-    }
-    let cancelled = false;
-    const runMeasure = () => {
-      if (!cancelled) measureReflectionToolbarBottomPx();
-    };
-    const raf = requestAnimationFrame(runMeasure);
-    const settleTimer = setTimeout(runMeasure, 48);
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf);
-      clearTimeout(settleTimer);
-    };
-  }, [
-    showReflectionFloatingToolbar,
-    keyboardHeight,
-    reflectionFullscreenOpen,
-    sheetKeyboardLiftPx,
-    contentScrollMaxHeight,
-    measureReflectionToolbarBottomPx,
-  ]);
 
   const openReflectionFullscreen = () => {
     hapticLightImpact();
@@ -781,9 +859,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     }
   };
 
-  const finishSave = (newEntryId?: string) => {
+  const finishSave = (newEntryId?: string, savedEntry?: MobileJournalListItem) => {
     if (onAfterSave) {
-      onAfterSave();
+      onAfterSave(savedEntry);
       return;
     }
     if (editDraft) {
@@ -798,23 +876,14 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   };
 
   /**
-   * RichEditor debounces CONTENT_CHANGE by ~50ms; saving immediately after typing can read stale
-   * React state. Always read live HTML from the WebView before validate/persist.
+   * RichEditor debounces CONTENT_CHANGE by ~50ms. For edits, onChange updates
+   * reflectionHtmlRef and resolveHtmlForSave prefers that state over WebView reads.
    */
   const flushReflectionHtmlFromEditor = async (): Promise<string> => {
-    const ed = getActiveReflectionEditor();
-    if (!ed) return normalizeReflectionHtml(reflectionHtmlRef.current);
-    try {
-      const live = await ed.getContentHtml();
-      if (typeof live === "string") {
-        const normalized = normalizeReflectionHtml(live);
-        setReflectionHtml(normalized);
-        return normalized;
-      }
-    } catch {
-      /* bridge timeout / teardown */
-    }
-    return normalizeReflectionHtml(reflectionHtmlRef.current);
+    const html = await resolveHtmlForSave();
+    reflectionHtmlRef.current = html;
+    setReflectionHtml(html);
+    return html;
   };
 
   const isEditMode = editDraft != null;
@@ -834,6 +903,43 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const androidPhoneMergedScrollMode =
     Platform.OS === "android" && !isTabletForm && !isPhoneSheetForm;
   const mergedFormScrollMode = readerMergedScrollMode || androidPhoneMergedScrollMode;
+
+  /** Full-screen routes (edit): anchor bottom is the screen edge — lift by keyboard inset. Sheets measure against the card. */
+  const reflectionFloatingToolbarBottomPx = sheetFormLayout
+    ? reflectionToolbarBottomPx
+    : keyboardHeight > 0
+      ? keyboardHeight + FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX
+      : FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX;
+
+  const formKeyboardVerticalOffset =
+    !sheetFormLayout && Platform.OS === "ios" && hideFormScreenTitle ? insets.top + 52 : 0;
+
+  useEffect(() => {
+    if (!sheetFormLayout) return;
+    if (!showReflectionFloatingToolbar || keyboardHeight <= 0) {
+      setReflectionToolbarBottomPx(FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX);
+      return;
+    }
+    let cancelled = false;
+    const runMeasure = () => {
+      if (!cancelled) measureReflectionToolbarBottomPx();
+    };
+    const raf = requestAnimationFrame(runMeasure);
+    const settleTimer = setTimeout(runMeasure, 48);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      clearTimeout(settleTimer);
+    };
+  }, [
+    sheetFormLayout,
+    showReflectionFloatingToolbar,
+    keyboardHeight,
+    reflectionFullscreenOpen,
+    sheetKeyboardLiftPx,
+    contentScrollMaxHeight,
+    measureReflectionToolbarBottomPx,
+  ]);
 
   const sheetTitleChromePx = hideFormScreenTitle ? 0 : 34;
   const sheetChromeOverheadPx = sheetTitleChromePx + SHEET_REFLECTION_CHROME_PX + 10;
@@ -980,6 +1086,61 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const handleSave = async () => {
     hapticLightImpact();
     dismissJournalKeyboard();
+
+    if (editDraft) {
+      const reflectionText = editReflectionPlainText.trim();
+      if (!reflectionText) {
+        Alert.alert("Reflection required", "Please write a reflection before saving.");
+        return;
+      }
+
+      setSaving(true);
+      try {
+        const parsed = passage.trim() ? parsePassageReference(passage.trim()) : null;
+        const hasPassage = parsed !== null;
+        const book = parsed?.book ?? "";
+        const chapter = parsed?.chapter ?? 0;
+        const verse_start = parsed?.verseStart ?? null;
+        const verse_end = parsed?.verseEnd ?? null;
+        const content = plainReflectionToContent(reflectionText);
+        const titleTrim = title.trim() || null;
+
+        const updated = await updateLocalEntry(editDraft.id, {
+          book,
+          chapter,
+          verse_start,
+          verse_end,
+          bible_translation: hasPassage ? journalTranslationId : null,
+          content,
+          title: titleTrim,
+        });
+        if (!updated) {
+          throw new Error("Journal entry not found");
+        }
+        const savedEntry: MobileJournalListItem = {
+          ...toMobileJournalListItem(updated),
+          book,
+          chapter,
+          verse_start,
+          verse_end,
+          bible_translation: hasPassage ? journalTranslationId : null,
+          content,
+          title: titleTrim,
+        };
+        setPendingJournalDetailEntry(savedEntry);
+        confirmSaveSuccess("Changes saved", () => finishSave(undefined, savedEntry));
+      } catch (e) {
+        if (__DEV__) {
+          console.error(e);
+        }
+        Alert.alert("Could not save", "Try again in a moment.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    await reflectionHtmlSleep(80);
     const htmlForSave = await flushReflectionHtmlFromEditor();
     if (!reflectionPlainText(htmlForSave)) {
       Alert.alert("Reflection required", "Please write a reflection before saving.");
@@ -996,20 +1157,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       const verse_end = parsed?.verseEnd ?? null;
       const content = normalizeReflectionHtml(htmlForSave);
       const titleTrim = title.trim() || null;
-
-      if (editDraft) {
-        await updateLocalEntry(editDraft.id, {
-          book,
-          chapter,
-          verse_start,
-          verse_end,
-          bible_translation: hasPassage ? journalTranslationId : null,
-          content,
-          title: titleTrim,
-        });
-        confirmSaveSuccess("Changes saved", () => finishSave());
-        return;
-      }
 
       const saved = await saveLocalEntry({
         book,
@@ -1247,42 +1394,74 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               : { position: "relative" as const }
           }
         >
-          <View
-            pointerEvents="box-none"
-            style={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              zIndex: 10,
-            }}
-          >
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Write reflection fullscreen"
-              onPress={openReflectionFullscreen}
-              activeOpacity={0.85}
-              style={reflectionOverlayButtonStyle}
+          {!editDraft ? (
+            <View
+              pointerEvents="box-none"
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                zIndex: 10,
+              }}
             >
-              <ReflectionFullscreenIcon size={18} color={toolbarIconColor} />
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Write reflection fullscreen"
+                onPress={openReflectionFullscreen}
+                activeOpacity={0.85}
+                style={reflectionOverlayButtonStyle}
+              >
+                <ReflectionFullscreenIcon size={18} color={toolbarIconColor} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
           <View
             className="rounded-2xl overflow-hidden"
             style={[reflectionParchmentStyle, { backgroundColor: colors.parchmentDark }]}
           >
-            <View style={[reflectionInnerPadStyle, { paddingTop: 36 }]}>
-              <RichEditor
-                key={`${editDraft?.id ?? "new-entry-reflection"}-${reflectionInlineRemountKey}-${themeId}`}
-                ref={richEditorRef}
-                {...REFLECTION_RICH_EDITOR_PROPS}
-                style={reflectionRichEditorLayoutStyle}
-                editorStyle={reflectionRichEditorEditorStyle}
-                placeholder=""
-                initialContentHTML={reflectionHtml}
-                onChange={onReflectionHtmlChangedFromEditor}
-                onFocus={onReflectionEditorFocus}
-                onBlur={onReflectionEditorBlur}
-              />
+            <View style={[reflectionInnerPadStyle, { paddingTop: editDraft ? 16 : 36 }]}>
+              {editDraft ? (
+                <TextInput
+                  multiline
+                  value={editReflectionPlainText}
+                  onChangeText={(text) => {
+                    hapticSelection();
+                    setEditReflectionPlainText(text);
+                    const html = plainReflectionToContent(text);
+                    reflectionHtmlRef.current = html;
+                    reflectionEditedSinceBaselineRef.current =
+                      reflectionPlainText(html) !==
+                      reflectionPlainText(editDraftReflectionBaselineRef.current);
+                  }}
+                  onFocus={onReflectionEditorFocus}
+                  onBlur={onReflectionEditorBlur}
+                  style={{
+                    fontFamily: "Lora_400Regular",
+                    fontSize: 17,
+                    lineHeight: 28,
+                    color: colors.brown800,
+                    minHeight: sheetFormLayout ? 120 : 200,
+                    textAlignVertical: "top",
+                    padding: 0,
+                  }}
+                  placeholder=""
+                  placeholderTextColor={colors.tan200}
+                />
+              ) : (
+                <RichEditor
+                  key={`new-entry-reflection-${reflectionInlineRemountKey}-${themeId}`}
+                  ref={richEditorRef}
+                  {...REFLECTION_RICH_EDITOR_PROPS}
+                  style={reflectionRichEditorLayoutStyle}
+                  editorStyle={reflectionRichEditorEditorStyle}
+                  placeholder=""
+                  initialContentHTML={reflectionHtml}
+                  editorInitializedCallback={onReflectionEditorInitialized}
+                  onChange={onReflectionHtmlChangedFromEditor}
+                  onFocus={onReflectionEditorFocus}
+                  onBlur={onReflectionEditorBlur}
+                />
+              )}
             </View>
           </View>
         </View>
@@ -1348,7 +1527,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         ref={toolbarAnchorRef}
         collapsable={false}
         onLayout={() => {
-          if (showReflectionFloatingToolbar && keyboardHeight > 0) {
+          if (sheetFormLayout && showReflectionFloatingToolbar && keyboardHeight > 0) {
             requestAnimationFrame(measureReflectionToolbarBottomPx);
           }
         }}
@@ -1368,7 +1547,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       <KeyboardAvoidingView
         style={{ flex: 1, minHeight: 0, position: "relative" }}
         behavior={sheetFormLayout && Platform.OS === "android" ? undefined : "padding"}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={formKeyboardVerticalOffset}
       >
         {mergedFormScrollMode ? (
           <ScrollView
@@ -1484,7 +1663,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       {showReflectionFloatingToolbar && !reflectionFullscreenOpen ? (
         <View
           pointerEvents="box-none"
-          style={[styles.floatingToolbarAnchorInline, { bottom: reflectionToolbarBottomPx }]}
+          style={[styles.floatingToolbarAnchorInline, { bottom: reflectionFloatingToolbarBottomPx }]}
         >
           {renderReflectionFloatingToolbar()}
         </View>
@@ -1574,6 +1753,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                   editorStyle={reflectionRichEditorEditorStyle}
                   placeholder=""
                   initialContentHTML={reflectionHtml}
+                  editorInitializedCallback={onReflectionEditorInitialized}
                   onChange={onReflectionHtmlChangedFromEditor}
                   onFocus={onReflectionEditorFocus}
                   onBlur={onReflectionEditorBlur}
@@ -1585,7 +1765,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         {showReflectionFloatingToolbar ? (
           <View
             pointerEvents="box-none"
-            style={[styles.floatingToolbarAnchorInline, { bottom: reflectionToolbarBottomPx }]}
+            style={[styles.floatingToolbarAnchorInline, { bottom: reflectionFloatingToolbarBottomPx }]}
           >
             {renderReflectionFloatingToolbar()}
           </View>

@@ -193,10 +193,7 @@ async function maybeMigrateLegacyJournalEntries(): Promise<void> {
   }
 }
 
-async function compactEmbeddedImages(
-  entries: LocalJournalEntry[],
-  options: { persist?: boolean },
-): Promise<LocalJournalEntry[]> {
+async function compactEmbeddedImages(entries: LocalJournalEntry[]): Promise<LocalJournalEntry[]> {
   let changed = false;
   const compacted = await Promise.all(
     entries.map(async (entry) => {
@@ -215,18 +212,7 @@ async function compactEmbeddedImages(
     entryCount: compacted.length,
   });
 
-  if (options.persist) {
-    scheduleCompactionPersist(compacted);
-  }
-
   return compacted;
-}
-
-function scheduleCompactionPersist(entries: LocalJournalEntry[]): void {
-  writeQueue = writeQueue.then(async () => {
-    await writeEntries(entries);
-    setLastLoadedEntriesCache(entries);
-  });
 }
 
 type ReadEntriesOptions = {
@@ -249,7 +235,7 @@ async function readEntriesFromStorage(options: ReadEntriesOptions = {}): Promise
     const withSample = await maybeWithSampleEntry(ensureSampleEntryIsImmutable(parsed));
     const compacted = options.skipCompaction
       ? withSample
-      : await compactEmbeddedImages(withSample, { persist: true });
+      : await compactEmbeddedImages(withSample);
     devLogStorageRead(raw.length, compacted.length);
     return compacted;
   } catch (error) {
@@ -333,7 +319,7 @@ async function enqueueStorageMutation(
   mutate: (entries: LocalJournalEntry[]) => LocalJournalEntry[],
 ): Promise<LocalJournalEntry[]> {
   let nextEntries: LocalJournalEntry[] = [];
-  writeQueue = writeQueue.then(async () => {
+  writeQueue = writeQueue.catch(() => {}).then(async () => {
     const current = await readEntriesFromStorage({
       allowCacheFallback: false,
       skipCompaction: true,
@@ -359,12 +345,31 @@ export async function getLocalEntries(): Promise<LocalJournalEntry[]> {
   return refreshLocalEntriesCache();
 }
 
+function upsertCachedLocalEntry(entry: LocalJournalEntry): void {
+  if (!lastLoadedEntriesCache) {
+    setLastLoadedEntriesCache([entry]);
+    return;
+  }
+  const byId = new Map(lastLoadedEntriesCache.map((row) => [row.id, row]));
+  byId.set(entry.id, entry);
+  setLastLoadedEntriesCache([...byId.values()]);
+}
+
 export async function getLocalEntry(id: string): Promise<LocalJournalEntry | null> {
   if (!id.startsWith("local-")) return null;
   try {
-    const entries = await readEntriesFromStorage({ allowCacheFallback: true });
-    setLastLoadedEntriesCache(entries);
-    return entries.find((e) => e.id === id) ?? null;
+    await maybeMigrateLegacyJournalEntries();
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return getCachedLocalEntries().find((e) => e.id === id) ?? null;
+    }
+    const parsed = parseStoredEntries(raw);
+    const fromDisk = parsed.find((e) => e.id === id) ?? null;
+    if (fromDisk) {
+      upsertCachedLocalEntry(fromDisk);
+      return fromDisk;
+    }
+    return getCachedLocalEntries().find((e) => e.id === id) ?? null;
   } catch {
     return getCachedLocalEntries().find((e) => e.id === id) ?? null;
   }
@@ -516,24 +521,55 @@ export async function saveLocalEntry(
 export async function updateLocalEntry(
   id: string,
   data: Partial<Omit<LocalJournalEntry, "id" | "created_at">>,
-): Promise<void> {
-  if (!id.startsWith("local-")) return;
+): Promise<LocalJournalEntry | null> {
+  if (!id.startsWith("local-")) return null;
   if (isSampleJournalEntry(id)) {
     const keys = Object.keys(data);
-    if (keys.length === 0 || keys.some((k) => k !== "is_favorite")) return;
+    if (keys.length === 0 || keys.some((k) => k !== "is_favorite")) return null;
   }
 
   const patch = data.content
     ? { ...data, content: await externalizeContentImages(data.content, id) }
     : data;
 
-  await enqueueStorageMutation((entries) => {
-    const index = entries.findIndex((e) => e.id === id);
-    if (index === -1) return entries;
-    const next = [...entries];
-    next[index] = { ...next[index], ...patch };
-    return next;
-  });
+  await maybeMigrateLegacyJournalEntries();
+  const raw = await AsyncStorage.getItem(STORAGE_KEY);
+  const entries: LocalJournalEntry[] = raw ? parseStoredEntries(raw) : [];
+  const index = entries.findIndex((e) => e.id === id);
+  if (index === -1) {
+    throw new JournalLocalStorageError(`Journal entry not found: ${id}`, "write");
+  }
+
+  const next = [...entries];
+  next[index] = { ...next[index], ...patch };
+  const updated = next[index]!;
+
+  const payload = JSON.stringify(next);
+  await AsyncStorage.setItem(STORAGE_KEY, payload);
+  setLastLoadedEntriesCache(sortEntriesNewestFirst(next));
+  devLogStorageWrite(payload.length, next.length);
+
+  const verifyRaw = await AsyncStorage.getItem(STORAGE_KEY);
+  if (!verifyRaw) {
+    throw new JournalLocalStorageError("Journal entry did not persist after save.", "write");
+  }
+  const verifyParsed = parseStoredEntries(verifyRaw);
+  const fromDisk = verifyParsed.find((e) => e.id === id);
+  if (!fromDisk) {
+    throw new JournalLocalStorageError("Journal entry did not persist after save.", "write");
+  }
+  if (patch.content !== undefined && fromDisk.content !== updated.content) {
+    throw new JournalLocalStorageError("Journal entry did not persist after save.", "write");
+  }
+
+  if (__DEV__) {
+    devLogJournalStorage("updateLocalEntry ok", {
+      id,
+      contentLen: updated.content.length,
+    });
+  }
+
+  return updated;
 }
 
 export async function deleteLocalEntry(id: string): Promise<void> {
