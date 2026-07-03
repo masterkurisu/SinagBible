@@ -4,6 +4,7 @@ module.exports = ({ config }) => ({
   extra: {
     ...config.extra,
     yvpAppKey: process.env.YVP_APP_KEY ?? process.env.EXPO_PUBLIC_YVP_APP_KEY,
-    pexelsApiKey: process.env.PEXELS_API_KEY,
+    pexelsApiKey:
+      process.env.PEXELS_API_KEY ?? process.env.EXPO_PUBLIC_PEXELS_API_KEY,
   },
 });

@@ -6,6 +6,7 @@
 - [ ] Run `pnpm --filter @sinag-bible/mobile lint`.
 - [ ] Run `pnpm --filter @sinag-bible/mobile typecheck`.
 - [ ] Verify `EXPO_PUBLIC_SENTRY_DSN` and `EXPO_PUBLIC_APP_ENV=production` are configured in EAS secrets.
+- [ ] Verify `PEXELS_API_KEY` and `YVP_APP_KEY` are configured in EAS secrets (required for carousel images and YouVersion translations).
 
 ## Policy + Store Compliance
 
