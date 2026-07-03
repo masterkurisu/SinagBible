@@ -5,7 +5,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  * Trim this list as each tour is finalized.
  */
 export const FEATURE_ONBOARDING_FORCE_PAGES: ReadonlySet<FeatureOnboardingPage> = __DEV__
-  ? new Set<FeatureOnboardingPage>()
+  ? new Set<FeatureOnboardingPage>([
+      // TODO: remove before release — forces saved journal entry coachmarks for testing
+      "journalDetail",
+    ])
   : new Set();
 
 /**

@@ -16,6 +16,7 @@ export type { LocalJournalEntry };
 
 const STORAGE_KEY = "sinagbible_journal_entries";
 const SAMPLE_ENTRY_DISMISSED_KEY = "sinagbible_sample_journal_entry_dismissed";
+const SAMPLE_ENTRY_FAVORITE_KEY = "sinagbible_sample_journal_entry_favorite";
 export const DEFAULT_SAMPLE_ENTRY_ID = "local-sample-john-3-16";
 const DEFAULT_SAMPLE_ENTRY_CREATED_AT = "2024-01-01T00:00:00.000Z";
 
@@ -70,12 +71,34 @@ async function isSampleEntryDismissed(): Promise<boolean> {
   }
 }
 
+async function getSampleEntryFavorite(): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem(SAMPLE_ENTRY_FAVORITE_KEY);
+    return raw === "1";
+  } catch {
+    return false;
+  }
+}
+
+async function setSampleEntryFavorite(isFavorite: boolean): Promise<void> {
+  try {
+    if (isFavorite) {
+      await AsyncStorage.setItem(SAMPLE_ENTRY_FAVORITE_KEY, "1");
+    } else {
+      await AsyncStorage.removeItem(SAMPLE_ENTRY_FAVORITE_KEY);
+    }
+  } catch {
+    // Best-effort preference: UI cache still reflects the toggle.
+  }
+}
+
 async function maybeWithSampleEntry(entries: LocalJournalEntry[]): Promise<LocalJournalEntry[]> {
   const hasSample = entries.some((entry) => entry.id === DEFAULT_SAMPLE_ENTRY_ID);
   if (hasSample) return entries;
   const dismissed = await isSampleEntryDismissed();
   if (dismissed) return entries;
-  return [getDefaultSampleEntry(), ...entries];
+  const is_favorite = await getSampleEntryFavorite();
+  return [{ ...getDefaultSampleEntry(), is_favorite }, ...entries];
 }
 
 /** Shown in UI when local journal storage cannot read or write. */
@@ -526,6 +549,26 @@ export async function updateLocalEntry(
   if (isSampleJournalEntry(id)) {
     const keys = Object.keys(data);
     if (keys.length === 0 || keys.some((k) => k !== "is_favorite")) return null;
+
+    const isFavorite = data.is_favorite === true;
+    await setSampleEntryFavorite(isFavorite);
+
+    await maybeMigrateLegacyJournalEntries();
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const persisted = raw ? parseStoredEntries(raw) : [];
+    if (persisted.some((e) => e.id === id)) {
+      await enqueueStorageMutation((entries) => {
+        const index = entries.findIndex((e) => e.id === id);
+        if (index === -1) return entries;
+        const next = [...entries];
+        next[index] = { ...next[index]!, is_favorite: isFavorite };
+        return next;
+      });
+    }
+
+    const updated = { ...getDefaultSampleEntry(), is_favorite: isFavorite };
+    upsertCachedLocalEntry(updated);
+    return updated;
   }
 
   const patch = data.content
@@ -593,6 +636,7 @@ export async function deleteLocalEntry(id: string): Promise<void> {
   if (id === DEFAULT_SAMPLE_ENTRY_ID) {
     try {
       await AsyncStorage.setItem(SAMPLE_ENTRY_DISMISSED_KEY, "1");
+      await AsyncStorage.removeItem(SAMPLE_ENTRY_FAVORITE_KEY);
     } catch {
       // Best-effort preference: if this fails we still delete the entry itself.
     }

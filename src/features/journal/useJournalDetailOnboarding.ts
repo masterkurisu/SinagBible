@@ -1,68 +1,39 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { InteractionManager, type LayoutRectangle, type View } from "react-native";
+import type { EdgeInsets } from "react-native-safe-area-context";
 import {
   isFeatureOnboardingDone,
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
+import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
+import { adjustAnchorForOnboardingModal } from "@/src/components/feature-onboarding/onboardingOverlayCoords";
 import {
-  JOURNAL_DETAIL_HEADER_ACTION_PX,
   JOURNAL_DETAIL_ONBOARDING_STEP_MS,
   JOURNAL_DETAIL_ONBOARDING_STEPS,
   type JournalDetailOnboardingStepId,
 } from "@/src/features/journal/journalDetailOnboardingSteps";
+import { resolveJournalDetailExportActionAnchor } from "@/src/features/journal/journalDetailHeaderToolTargets";
 
 const CONTENT_SETTLE_MS = 360;
-const HEADER_ACTION_GAP_PX = 2;
 
 type UseJournalDetailOnboardingArgs = {
   entryReady: boolean;
   targetRefs: Record<JournalDetailOnboardingStepId, RefObject<View | null>>;
+  trailingActionsRef: RefObject<View | null>;
+  insets: EdgeInsets;
   screenW: number;
   screenH: number;
+  androidTopToolsTopPx: number;
 };
-
-function measureViewInWindow(ref: RefObject<View | null>): Promise<LayoutRectangle | null> {
-  return new Promise((resolve) => {
-    const node = ref.current;
-    if (!node) {
-      resolve(null);
-      return;
-    }
-    node.measureInWindow((x, y, width, height) => {
-      if (width <= 0 || height <= 0) {
-        resolve(null);
-        return;
-      }
-      resolve({ x, y, width, height });
-    });
-  });
-}
-
-function fallbackHeaderAction(indexFromRight: number, screenW: number): LayoutRectangle {
-  const x =
-    screenW -
-    8 -
-    JOURNAL_DETAIL_HEADER_ACTION_PX -
-    indexFromRight * (JOURNAL_DETAIL_HEADER_ACTION_PX + HEADER_ACTION_GAP_PX);
-  return { x, y: 52, width: JOURNAL_DETAIL_HEADER_ACTION_PX, height: JOURNAL_DETAIL_HEADER_ACTION_PX };
-}
-
-function fallbackTarget(stepId: JournalDetailOnboardingStepId, screenW: number): LayoutRectangle {
-  switch (stepId) {
-    case "share-as-image":
-      return fallbackHeaderAction(2, screenW);
-    case "save-to-library":
-      return fallbackHeaderAction(1, screenW);
-    case "export-as-pdf":
-      return fallbackHeaderAction(0, screenW);
-  }
-}
 
 export function useJournalDetailOnboarding({
   entryReady,
   targetRefs,
+  trailingActionsRef,
+  insets,
   screenW,
   screenH: _screenH,
+  androidTopToolsTopPx,
 }: UseJournalDetailOnboardingArgs) {
   const [active, setActive] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
@@ -88,12 +59,32 @@ export function useJournalDetailOnboarding({
     async (index: number) => {
       const step = JOURNAL_DETAIL_ONBOARDING_STEPS[index];
       if (!step) return;
-      const measured = await measureViewInWindow(targetRefs[step.id]);
-      const anchor = measured ?? fallbackTarget(step.id, screenW);
+
+      const [measuredButton, measuredTrailingRow] = await Promise.all([
+        measureOnboardingTarget(targetRefs[step.id], {
+          minWidth: 20,
+          minHeight: 20,
+        }),
+        measureOnboardingTarget(trailingActionsRef, {
+          minWidth: 120,
+          minHeight: 36,
+        }),
+      ]);
+
+      const anchor = adjustAnchorForOnboardingModal(
+        resolveJournalDetailExportActionAnchor(
+          step.id,
+          measuredButton,
+          measuredTrailingRow,
+          insets,
+          screenW,
+          androidTopToolsTopPx,
+        ),
+      );
       setStepAnchor(anchor);
       setPresentedStepIndex(index);
     },
-    [screenW, targetRefs],
+    [androidTopToolsTopPx, insets, screenW, targetRefs, trailingActionsRef],
   );
 
   useEffect(() => {
@@ -136,10 +127,7 @@ export function useJournalDetailOnboarding({
 
   useEffect(() => {
     if (!active) return;
-    const measureTimeout = setTimeout(() => {
-      void measureCurrentStep(stepIndex);
-    }, 80);
-    return () => clearTimeout(measureTimeout);
+    void measureCurrentStep(stepIndex);
   }, [active, measureCurrentStep, stepIndex]);
 
   useEffect(() => () => clearTimer(), [clearTimer]);

@@ -1,9 +1,4 @@
-export type JournalOnboardingStepId =
-  | "create-from-bible"
-  | "swipe-actions"
-  | "date-grouping"
-  | "filters"
-  | "sort";
+export type JournalOnboardingStepId = "create-from-bible" | "swipe-actions";
 
 export type JournalOnboardingStep = {
   id: JournalOnboardingStepId;
@@ -22,21 +17,6 @@ export const JOURNAL_ONBOARDING_STEPS: JournalOnboardingStep[] = [
     id: "swipe-actions",
     title: "Swipe actions",
     description: "Swipe an entry to favorite or delete it.",
-  },
-  {
-    id: "date-grouping",
-    title: "Date grouping",
-    description: "Your entries are grouped by date for easy browsing.",
-  },
-  {
-    id: "filters",
-    title: "Filters",
-    description: "Filter by All, Old Testament, New Testament, or your Favorites.",
-  },
-  {
-    id: "sort",
-    title: "Sort",
-    description: "Sort entries by newest, oldest, or Bible book order.",
   },
 ];
 

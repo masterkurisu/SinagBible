@@ -25,6 +25,3 @@ export const JOURNAL_DETAIL_ONBOARDING_STEPS: JournalDetailOnboardingStep[] = [
 ];
 
 export const JOURNAL_DETAIL_ONBOARDING_STEP_MS = 4500;
-
-/** Approximate header action button size on the journal detail screen. */
-export const JOURNAL_DETAIL_HEADER_ACTION_PX = 40;

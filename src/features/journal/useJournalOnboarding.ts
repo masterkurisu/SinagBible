@@ -13,12 +13,9 @@ import {
 } from "@/src/features/journal/journalOnboardingSteps";
 
 const CONTENT_SETTLE_MS = 320;
-const MENU_OPEN_SETTLE_MS = 360;
 
 type UseJournalOnboardingArgs = {
   journalContentReady: boolean;
-  menuOpen: boolean;
-  setMenuOpen: (open: boolean) => void;
   targetRefs: Record<JournalOnboardingStepId, RefObject<View | null>>;
   screenW: number;
   screenH: number;
@@ -59,23 +56,11 @@ function fallbackTarget(
     }
     case "swipe-actions":
       return { x, y: JOURNAL_ONBOARDING_LIST_FALLBACK_TOP_PX + 140, width, height: 108 };
-    case "date-grouping":
-      return { x: 16, y: JOURNAL_ONBOARDING_LIST_FALLBACK_TOP_PX + 40, width: screenW - 32, height: 28 };
-    case "filters":
-      return { x: 16, y: 196, width: screenW - 32, height: 72 };
-    case "sort":
-      return { x: 16, y: 292, width: screenW - 32, height: 72 };
   }
-}
-
-function isMenuStep(stepId: JournalOnboardingStepId): boolean {
-  return stepId === "filters" || stepId === "sort";
 }
 
 export function useJournalOnboarding({
   journalContentReady,
-  menuOpen,
-  setMenuOpen,
   targetRefs,
   screenW,
   screenH,
@@ -99,9 +84,8 @@ export function useJournalOnboarding({
   const finishTour = useCallback(() => {
     clearTimer();
     setActive(false);
-    setMenuOpen(false);
     void markFeatureOnboardingDone("journal");
-  }, [clearTimer, setMenuOpen]);
+  }, [clearTimer]);
 
   const measureCurrentStep = useCallback(
     async (index: number) => {
@@ -159,30 +143,18 @@ export function useJournalOnboarding({
     const step = JOURNAL_ONBOARDING_STEPS[stepIndex];
     if (!step) return;
 
-    if (isMenuStep(step.id) && !menuOpen) {
-      setMenuOpen(true);
-      return;
-    }
-
-    const settleMs = isMenuStep(step.id) ? MENU_OPEN_SETTLE_MS : 0;
-    const measureTimeout = setTimeout(() => {
-      void measureCurrentStep(stepIndex);
-    }, settleMs);
-
-    return () => clearTimeout(measureTimeout);
-  }, [active, measureCurrentStep, menuOpen, setMenuOpen, stepIndex]);
+    void measureCurrentStep(stepIndex);
+  }, [active, measureCurrentStep, stepIndex]);
 
   useEffect(() => () => clearTimer(), [clearTimer]);
 
   const currentStep = active ? (JOURNAL_ONBOARDING_STEPS[presentedStepIndex] ?? null) : null;
-  const requiresMenuOpen = active && currentStep != null && isMenuStep(currentStep.id);
-  const showLayer = active && currentStep != null && stepAnchor != null && (!requiresMenuOpen || menuOpen);
+  const showLayer = active && currentStep != null && stepAnchor != null;
 
   return {
     showLayer,
     currentStep,
     stepAnchor,
-    requiresMenuOpen,
     tourActive: active,
   };
 }

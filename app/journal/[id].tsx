@@ -413,6 +413,7 @@ export default function JournalEntryScreen() {
   const shareActionRef = useRef<View>(null);
   const saveActionRef = useRef<View>(null);
   const pdfActionRef = useRef<View>(null);
+  const exportTrailingActionsRef = useRef<View>(null);
   const detailOnboardingTargetRefs = useMemo(
     (): Record<JournalDetailOnboardingStepId, React.RefObject<View | null>> => ({
       "share-as-image": shareActionRef,
@@ -435,8 +436,11 @@ export default function JournalEntryScreen() {
   const detailOnboarding = useJournalDetailOnboarding({
     entryReady: entry != null && !loadError,
     targetRefs: detailOnboardingTargetRefs,
+    trailingActionsRef: exportTrailingActionsRef,
+    insets,
     screenW,
     screenH,
+    androidTopToolsTopPx: journalAndroidTopToolsTopPx,
   });
 
   useFocusEffect(
@@ -767,21 +771,22 @@ export default function JournalEntryScreen() {
   const journalExportActions =
     entry && !loadError ? (
       <>
-        <View ref={shareActionRef} collapsable={false}>
-          {Platform.OS === "android" ? (
-            <ReaderM3IconButton
-              onPress={() => void handleShareImage()}
-              accessibilityLabel="Share journal as image"
-              rippleColor={androidAppBarRipple}
-              suppressHaptic
-            >
-              {exportAction === "share" ? (
-                <ActivityIndicator color={androidAppBarIconColor} size="small" />
-              ) : (
-                <ShareOutlineIcon color={androidAppBarIconColor} />
-              )}
-            </ReaderM3IconButton>
-          ) : (
+        {Platform.OS === "android" ? (
+          <ReaderM3IconButton
+            buttonRef={shareActionRef}
+            onPress={() => void handleShareImage()}
+            accessibilityLabel="Share journal as image"
+            rippleColor={androidAppBarRipple}
+            suppressHaptic
+          >
+            {exportAction === "share" ? (
+              <ActivityIndicator color={androidAppBarIconColor} size="small" />
+            ) : (
+              <ShareOutlineIcon color={androidAppBarIconColor} />
+            )}
+          </ReaderM3IconButton>
+        ) : (
+          <View ref={shareActionRef} collapsable={false}>
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Share journal as image"
@@ -802,23 +807,24 @@ export default function JournalEntryScreen() {
                 <ShareOutlineIcon color={headerIconColor} />
               )}
             </TouchableOpacity>
-          )}
-        </View>
-        <View ref={saveActionRef} collapsable={false}>
-          {Platform.OS === "android" ? (
-            <ReaderM3IconButton
-              onPress={() => void handleDownloadImage()}
-              accessibilityLabel="Save journal as image"
-              rippleColor={androidAppBarRipple}
-              suppressHaptic
-            >
-              {exportAction === "save" ? (
-                <ActivityIndicator color={androidAppBarIconColor} size="small" />
-              ) : (
-                <DownloadOutlineIcon color={androidAppBarIconColor} />
-              )}
-            </ReaderM3IconButton>
-          ) : (
+          </View>
+        )}
+        {Platform.OS === "android" ? (
+          <ReaderM3IconButton
+            buttonRef={saveActionRef}
+            onPress={() => void handleDownloadImage()}
+            accessibilityLabel="Save journal as image"
+            rippleColor={androidAppBarRipple}
+            suppressHaptic
+          >
+            {exportAction === "save" ? (
+              <ActivityIndicator color={androidAppBarIconColor} size="small" />
+            ) : (
+              <DownloadOutlineIcon color={androidAppBarIconColor} />
+            )}
+          </ReaderM3IconButton>
+        ) : (
+          <View ref={saveActionRef} collapsable={false}>
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Save journal as image"
@@ -839,23 +845,24 @@ export default function JournalEntryScreen() {
                 <DownloadOutlineIcon color={headerIconColor} />
               )}
             </TouchableOpacity>
-          )}
-        </View>
-        <View ref={pdfActionRef} collapsable={false}>
-          {Platform.OS === "android" ? (
-            <ReaderM3IconButton
-              onPress={() => void handleDownloadPdf()}
-              accessibilityLabel="Download journal as PDF"
-              rippleColor={androidAppBarRipple}
-              suppressHaptic
-            >
-              {exportAction === "pdf" ? (
-                <ActivityIndicator color={androidAppBarIconColor} size="small" />
-              ) : (
-                <Ionicons name="document-text-outline" size={22} color={androidAppBarIconColor} />
-              )}
-            </ReaderM3IconButton>
-          ) : (
+          </View>
+        )}
+        {Platform.OS === "android" ? (
+          <ReaderM3IconButton
+            buttonRef={pdfActionRef}
+            onPress={() => void handleDownloadPdf()}
+            accessibilityLabel="Download journal as PDF"
+            rippleColor={androidAppBarRipple}
+            suppressHaptic
+          >
+            {exportAction === "pdf" ? (
+              <ActivityIndicator color={androidAppBarIconColor} size="small" />
+            ) : (
+              <Ionicons name="document-text-outline" size={22} color={androidAppBarIconColor} />
+            )}
+          </ReaderM3IconButton>
+        ) : (
+          <View ref={pdfActionRef} collapsable={false}>
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Download journal as PDF"
@@ -876,8 +883,8 @@ export default function JournalEntryScreen() {
                 <Ionicons name="document-text-outline" size={22} color={headerIconColor} />
               )}
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
       </>
     ) : null;
 
@@ -912,7 +919,11 @@ export default function JournalEntryScreen() {
           headerRight:
             entry && !loadError
               ? () => (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 2, marginRight: 2 }}>
+                  <View
+                    ref={exportTrailingActionsRef}
+                    collapsable={false}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 2, marginRight: 2 }}
+                  >
                     {journalExportActions}
                   </View>
                 )
@@ -1172,6 +1183,8 @@ export default function JournalEntryScreen() {
           trailingActions={
             journalExportActions ? (
               <View
+                ref={exportTrailingActionsRef}
+                collapsable={false}
                 pointerEvents={exportAction !== null ? "none" : "auto"}
                 style={{ flexDirection: "row", alignItems: "center" }}
               >
@@ -1187,7 +1200,7 @@ export default function JournalEntryScreen() {
         step={detailOnboarding.currentStep}
         stepAnchor={detailOnboarding.stepAnchor}
         tooltipPlacement="below"
-        verticalOffsetPx={15}
+        verticalOffsetPx={-55}
         colors={{
           tooltipBackground: colors.brown800,
           tooltipText: "#f5f2ec",

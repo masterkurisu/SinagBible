@@ -24,6 +24,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 import { ReaderSettingsCogIcon } from "@/components/icons/ReaderSettingsCogIcon";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
+import { JournalDeleteEntryDialog } from "@/src/features/journal/JournalDeleteEntryDialog";
 import { JournalListAndroidAppBar } from "@/src/features/journal/JournalListAndroidAppBar";
 import { JournalInspirationCarousel } from "@/src/features/journal/JournalInspirationCarousel";
 import { JournalListM3TitleBlock } from "@/src/features/journal/JournalListM3TitleBlock";
@@ -418,16 +419,10 @@ export default function JournalIndexScreen() {
   const toastAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const createFromBibleRef = useRef<View | null>(null);
   const swipeActionsRef = useRef<View | null>(null);
-  const dateGroupingRef = useRef<View | null>(null);
-  const filtersRef = useRef<View | null>(null);
-  const sortRef = useRef<View | null>(null);
   const journalOnboardingTargetRefs = useMemo(
     (): Record<JournalOnboardingStepId, React.RefObject<View | null>> => ({
       "create-from-bible": createFromBibleRef,
       "swipe-actions": swipeActionsRef,
-      "date-grouping": dateGroupingRef,
-      filters: filtersRef,
-      sort: sortRef,
     }),
     [],
   );
@@ -489,6 +484,7 @@ export default function JournalIndexScreen() {
   const newEntryFormRef = useRef<JournalNewEntryFormHandle | null>(null);
   const newEntrySheetRef = useRef<JournalNewEntrySheetHandle | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [deleteDialogEntry, setDeleteDialogEntry] = useState<MobileJournalListItem | null>(null);
 
   useEffect(() => {
     Animated.timing(fabSpin, {
@@ -678,15 +674,9 @@ export default function JournalIndexScreen() {
     () => rows.find((row) => row.kind === "entry")?.item.id ?? null,
     [rows],
   );
-  const firstHeadingKey = useMemo(
-    () => rows.find((row) => row.kind === "heading")?.key ?? null,
-    [rows],
-  );
 
   const journalOnboarding = useJournalOnboarding({
     journalContentReady: !loading,
-    menuOpen: filterPanelOpen,
-    setMenuOpen: setFilterPanelOpen,
     targetRefs: journalOnboardingTargetRefs,
     screenW: windowWidth,
     screenH: windowHeight,
@@ -810,32 +800,20 @@ export default function JournalIndexScreen() {
     [showJournalToast],
   );
 
-  const requestDeleteEntry = useCallback(
-    (item: MobileJournalListItem) => {
-      Alert.alert("Delete entry?", "This cannot be undone.", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            void (async () => {
-              try {
-                await deleteLocalEntry(item.id);
-                setEntries((prev) => prev.filter((e) => e.id !== item.id));
-                showJournalToast("Entry deleted");
-              } catch (e) {
-                if (__DEV__) {
-                  console.error(e);
-                }
-                Alert.alert("Could not delete", "Try again.");
-              }
-            })();
-          },
-        },
-      ]);
-    },
-    [showJournalToast],
-  );
+  const requestDeleteEntry = useCallback((item: MobileJournalListItem) => {
+    setDeleteDialogEntry(item);
+  }, []);
+
+  const closeDeleteEntryDialog = useCallback(() => {
+    setDeleteDialogEntry(null);
+  }, []);
+
+  const confirmDeleteEntry = useCallback(async () => {
+    if (!deleteDialogEntry) return;
+    await deleteLocalEntry(deleteDialogEntry.id);
+    setEntries((prev) => prev.filter((e) => e.id !== deleteDialogEntry.id));
+    showJournalToast("Entry deleted");
+  }, [deleteDialogEntry, showJournalToast]);
 
   const keyExtractor = useCallback(
     (row: JournalRow) => (row.kind === "entry" ? row.item.id : row.key),
@@ -847,12 +825,7 @@ export default function JournalIndexScreen() {
   const renderJournalRow = useCallback<ListRenderItem<JournalRow>>(
     ({ item: row }) => {
       if (row.kind === "heading") {
-        const isFirstHeading = row.key === firstHeadingKey;
-        return (
-          <View ref={isFirstHeading ? dateGroupingRef : undefined} collapsable={false}>
-            <JournalListDateHeading label={row.label} />
-          </View>
-        );
+        return <JournalListDateHeading label={row.label} />;
       }
       const isFirstEntry = row.item.id === firstEntryId;
       if (isFirstEntry) {
@@ -881,7 +854,6 @@ export default function JournalIndexScreen() {
     [
       commitToggleFavorite,
       firstEntryId,
-      firstHeadingKey,
       handleEntryPress,
       journalListScrollGesture,
       requestDeleteEntry,
@@ -952,8 +924,6 @@ export default function JournalIndexScreen() {
                   dateTo={dateTo}
                   onDateFromChange={handleDateFromChange}
                   onDateToChange={handleDateToChange}
-                  filtersRef={filtersRef}
-                  sortRef={sortRef}
                   onOpenCarouselSettings={openCarouselSettings}
                   pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
                 />
@@ -970,7 +940,6 @@ export default function JournalIndexScreen() {
       dateFrom,
       dateTo,
       filter,
-      filtersRef,
       handleDateFromChange,
       handleDateToChange,
       handleSelectFilter,
@@ -987,7 +956,6 @@ export default function JournalIndexScreen() {
       searchQuery,
       setMenuOpen,
       sort,
-      sortRef,
     ],
   );
 
@@ -1059,6 +1027,14 @@ export default function JournalIndexScreen() {
         isOpen={carouselSettingsOpen}
         onClose={closeCarouselSettings}
         bundle={bundle}
+      />
+
+      <JournalDeleteEntryDialog
+        visible={deleteDialogEntry !== null}
+        onClose={closeDeleteEntryDialog}
+        onConfirmDelete={confirmDeleteEntry}
+        bundle={bundle}
+        isTabletLayout={settingsMenu.isTabletReaderLayout}
       />
 
       <Animated.View
@@ -1249,8 +1225,6 @@ export default function JournalIndexScreen() {
           dateTo={dateTo}
           onDateFromChange={handleDateFromChange}
           onDateToChange={handleDateToChange}
-          filtersRef={filtersRef}
-          sortRef={sortRef}
           onOpenCarouselSettings={openCarouselSettings}
           pointerEvents={journalOnboarding.tourActive ? "none" : "auto"}
         />
