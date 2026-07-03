@@ -89,7 +89,11 @@ export function useReaderSelection({
     setNoteTargetVerse(null);
     setNoteDraft("");
     setActionBarMode("default");
-  }, [bookSlug, chapterNumber, requestedTranslationId]);
+  }, [
+    chapter?.bookSlug ?? bookSlug,
+    chapter?.chapterNumber ?? chapterNumber,
+    requestedTranslationId,
+  ]);
 
   useEffect(() => {
     if (!copyToastVisible) return;

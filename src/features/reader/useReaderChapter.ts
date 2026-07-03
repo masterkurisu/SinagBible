@@ -2,15 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import { InteractionManager } from "react-native";
 import {
   getChapterBySlugForTranslation,
+  isBundledFeaturedTranslationId,
 } from "@sinag-bible/core/bible-translations";
 import { getUsfmBookId } from "@sinag-bible/core";
-import { fetchChapter as fetchApiChapter } from "@/lib/bible-api-service";
 import {
-  getCachedReaderChapter,
-  readerChapterCacheKey,
-  setCachedReaderChapter,
-  type ReaderChapterPayload,
-} from "@/lib/reader-chapter-cache";
+  apiChapterToBibleChapter,
+  fetchChapter as fetchApiChapter,
+  type ApiChapter,
+} from "@/lib/bible-api-service";
+import { canonicalTranslationId } from "@/lib/canonical-translation-id";
+import { isChapterDbOpen } from "@/lib/chapter-db";
+import { getChapterSync, hasChapterSync, getTranslationMetaSync } from "@/lib/chapter-store";
+import {
+  loadYvpTranslationAttribution,
+  type YvpTranslationAttribution,
+} from "@/lib/yvp-translation-attribution";
+import { yvpPassageToBibleChapter } from "@/lib/yvp-chapter-payload";
+import { isYvpTranslationId, type YvpPassage } from "@/lib/youversion-api";
 import {
   fetchReaderChapterContent,
   primeReaderChapterFetch,
@@ -18,11 +26,21 @@ import {
 } from "@/lib/reader-chapter-load";
 import { collectPrefetchChapterTargets } from "@/lib/reader-chapter-nav";
 import { mergeVerseInlineFromHelloaoChapter } from "@/lib/merge-helloao-verse-inline";
+import { isDeviceOffline } from "@/lib/network-connectivity";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 
 const READER_CHAPTER_PREFETCH_DEPTH = 2;
 
-export type ReaderChapterError = "chapter_not_found" | "load_failed";
+export type ReaderChapterPayload = {
+  resolvedTranslationId: string;
+  books: BibleBookNavItem[];
+  chapter: BibleChapter;
+};
+
+export type ReaderChapterError =
+  | "chapter_not_found"
+  | "load_failed"
+  | "not_downloaded_offline";
 
 function hasChapterInlineAnnotations(chapter: BibleChapter): boolean {
   return (chapter.verseInlineContent ?? []).some((segments) => segments.length > 0);
@@ -41,29 +59,82 @@ function payloadMatchesRoute(
   );
 }
 
+function buildWarmStartPayload(
+  translationId: string,
+  bookSlug: string,
+  chapterNumber: number,
+): ReaderChapterPayload | null {
+  if (translationId === "KJV" || !isChapterDbOpen()) return null;
+
+  const stored = getChapterSync(
+    canonicalTranslationId(translationId),
+    bookSlug,
+    chapterNumber,
+  );
+  if (!stored) return null;
+
+  if (stored.source === "helloao") {
+    const chapter = apiChapterToBibleChapter(bookSlug, stored.payload as ApiChapter);
+    return {
+      resolvedTranslationId: translationId,
+      books: [],
+      chapter,
+    };
+  }
+
+  if (stored.source === "yvp") {
+    const chapter = yvpPassageToBibleChapter(
+      bookSlug,
+      chapterNumber,
+      stored.payload as YvpPassage,
+    );
+    return {
+      resolvedTranslationId: translationId,
+      books: [],
+      chapter,
+    };
+  }
+
+  return null;
+}
+
+function isTranslationChapterAvailableOffline(
+  translationId: string,
+  bookSlug: string,
+  chapterNumber: number,
+): boolean {
+  if (translationId === "KJV" || isBundledFeaturedTranslationId(translationId)) {
+    return true;
+  }
+  if (!isChapterDbOpen()) return false;
+  const canonicalId = canonicalTranslationId(translationId);
+  if (hasChapterSync(canonicalId, bookSlug, chapterNumber)) return true;
+  return getTranslationMetaSync(canonicalId)?.fullyDownloaded === true;
+}
+
 export function useReaderChapter(bookSlug: string, chapterNumber: number, translationId: string) {
-  const cacheKey = readerChapterCacheKey(translationId, bookSlug, chapterNumber);
   const [readerPayload, setReaderPayload] = useState<ReaderChapterPayload | null>(
-    () => getCachedReaderChapter(cacheKey) ?? null,
+    () => buildWarmStartPayload(translationId, bookSlug, chapterNumber),
   );
   const readerPayloadRef = useRef(readerPayload);
   readerPayloadRef.current = readerPayload;
   const [error, setError] = useState<ReaderChapterError | null>(null);
+  const [yvpAttribution, setYvpAttribution] = useState<YvpTranslationAttribution | null>(() =>
+    loadYvpTranslationAttribution(translationId),
+  );
 
   const syncedPayload =
-    getCachedReaderChapter(cacheKey) ??
-    (readerPayload && payloadMatchesRoute(readerPayload, translationId, bookSlug, chapterNumber)
+    readerPayload && payloadMatchesRoute(readerPayload, translationId, bookSlug, chapterNumber)
       ? readerPayload
-      : null);
+      : null;
 
   useEffect(() => {
     let cancelled = false;
 
-    const memHit = getCachedReaderChapter(cacheKey);
-    if (memHit) {
-      setReaderPayload(memHit);
+    const warmStart = buildWarmStartPayload(translationId, bookSlug, chapterNumber);
+    if (warmStart) {
+      setReaderPayload(warmStart);
       setError(null);
-      return;
     }
 
     const loadChapter = async () => {
@@ -88,6 +159,16 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
         ]);
 
         if (!chapter) {
+          if (
+            !(await isTranslationChapterAvailableOffline(resolvedTranslation, bookSlug, chapterNumber)) &&
+            (await isDeviceOffline())
+          ) {
+            if (cancelled) return;
+            setReaderPayload(null);
+            setError("not_downloaded_offline");
+            return;
+          }
+
           resolvedTranslation = "KJV";
           books = await resolveReaderBooksForTranslation("KJV", null);
           chapter = await getChapterBySlugForTranslation("KJV", bookSlug, chapterNumber);
@@ -101,11 +182,20 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
           return;
         }
 
-        const payload = { resolvedTranslationId: resolvedTranslation, books, chapter };
-        setCachedReaderChapter(cacheKey, payload);
-        setReaderPayload(payload);
+        setReaderPayload({ resolvedTranslationId: resolvedTranslation, books, chapter });
+        if (isYvpTranslationId(resolvedTranslation)) {
+          setYvpAttribution(loadYvpTranslationAttribution(resolvedTranslation));
+        }
       } catch {
         if (!cancelled) {
+          if (
+            !(await isTranslationChapterAvailableOffline(translationId, bookSlug, chapterNumber)) &&
+            (await isDeviceOffline())
+          ) {
+            setReaderPayload(null);
+            setError("not_downloaded_offline");
+            return;
+          }
           setReaderPayload(null);
           setError("load_failed");
         }
@@ -128,7 +218,15 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
       cancelled = true;
       task.cancel();
     };
-  }, [translationId, bookSlug, chapterNumber, cacheKey]);
+  }, [translationId, bookSlug, chapterNumber]);
+
+  useEffect(() => {
+    if (!isYvpTranslationId(translationId)) {
+      setYvpAttribution(null);
+      return;
+    }
+    setYvpAttribution(loadYvpTranslationAttribution(translationId));
+  }, [translationId]);
 
   const kjvInlineEnrichmentKey =
     readerPayload?.resolvedTranslationId === "KJV" &&
@@ -191,11 +289,22 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
     }
   }, [translationId, bookSlug, chapterNumber, readerPayload?.books]);
 
-  const chapter = (syncedPayload ?? readerPayload)?.chapter;
-  const books = (syncedPayload ?? readerPayload)?.books;
-  const resolvedTranslationId = (syncedPayload ?? readerPayload)?.resolvedTranslationId;
+  const chapter = syncedPayload?.chapter ?? null;
+  const books =
+    syncedPayload?.books ??
+    (readerPayload?.books && readerPayload.books.length > 0 ? readerPayload.books : null);
+  const resolvedTranslationId =
+    syncedPayload?.resolvedTranslationId ?? readerPayload?.resolvedTranslationId;
   const isContentSynced = syncedPayload != null;
-  const isLoading = error == null && readerPayload == null;
+  const isLoading = error == null && chapter == null;
 
-  return { chapter, books, resolvedTranslationId, isContentSynced, isLoading, error };
+  return {
+    chapter,
+    books,
+    resolvedTranslationId,
+    yvpAttribution,
+    isContentSynced,
+    isLoading,
+    error,
+  };
 }

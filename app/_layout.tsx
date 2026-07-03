@@ -8,7 +8,7 @@ import { useFonts } from "expo-font";
 import { STARTUP_FONT_MAP } from "@/lib/app-font-map";
 import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useState } from "react";
-import { Platform } from "react-native";
+import { InteractionManager, AppState, Platform } from "react-native";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { ScreenLoadingSkeleton } from "@/components/loading-skeleton";
 import { OnboardingContainer } from "@/src/features/onboarding/OnboardingContainer";
@@ -22,12 +22,26 @@ import { initAppLogs } from "@/lib/app-logs";
 import { initCrashReporting } from "@/lib/crash-reporting";
 import { applyPlatformOrientationLock } from "@/lib/apply-platform-orientation-lock";
 import { loadHapticsEnabledPreference } from "@/lib/haptics-preference";
+import { openChapterDb } from "@/lib/chapter-db";
+import { migrateAsyncStorageChapters } from "@/lib/migrate-async-storage";
+import { fetchChapterRemoteConfig } from "@/lib/chapter-remote-config";
+import { reconcileWithRemoteConfig } from "@/lib/chapter-store";
 
 SplashScreen.preventAutoHideAsync();
 initAppLogs();
 initCrashReporting();
 void applyPlatformOrientationLock();
 void loadHapticsEnabledPreference();
+
+function runChapterRemoteReconcile(): void {
+  void fetchChapterRemoteConfig()
+    .then((config) => {
+      if (config) reconcileWithRemoteConfig(config);
+    })
+    .catch((error) => {
+      console.warn("chapter-store remote reconcile failed", error);
+    });
+}
 
 function ThemedStatusBar() {
   const { themeId } = useMobileAppTheme();
@@ -61,6 +75,7 @@ function RootLayoutContent() {
   const router = useRouter();
   const [fontsLoaded] = useFonts(STARTUP_FONT_MAP);
   const [onboardingStorageReady, setOnboardingStorageReady] = useState(false);
+  const [chapterDbReady, setChapterDbReady] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(false);
   const [pendingHomeAfterOnboarding, setPendingHomeAfterOnboarding] = useState(false);
 
@@ -86,6 +101,49 @@ function RootLayoutContent() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void openChapterDb()
+      .then(() => {
+        if (!cancelled) setChapterDbReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setChapterDbReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!chapterDbReady) return;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      void migrateAsyncStorageChapters().catch((error) => {
+        console.warn("chapter-store migration failed", error);
+      });
+      runChapterRemoteReconcile();
+    });
+
+    return () => {
+      task.cancel();
+    };
+  }, [chapterDbReady]);
+
+  useEffect(() => {
+    if (!chapterDbReady) return;
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        runChapterRemoteReconcile();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [chapterDbReady]);
 
   useEffect(() => {
     return subscribeOnboardingState((done) => {
@@ -114,14 +172,14 @@ function RootLayoutContent() {
   }, [pendingHomeAfterOnboarding, onboardingDone, router]);
 
   useEffect(() => {
-    if (fontsLoaded && onboardingStorageReady) {
+    if (fontsLoaded && onboardingStorageReady && chapterDbReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, onboardingStorageReady]);
+  }, [fontsLoaded, onboardingStorageReady, chapterDbReady]);
 
   return (
     <>
-      {!fontsLoaded ? (
+      {!fontsLoaded || !chapterDbReady ? (
         <ScreenLoadingSkeleton lines={5} caption="Loading…" />
       ) : !onboardingStorageReady ? null : onboardingDone ? (
         <ThemedStack />

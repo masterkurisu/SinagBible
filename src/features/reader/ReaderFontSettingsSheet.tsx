@@ -21,7 +21,6 @@ import {
   ReaderAlignLeftIcon,
   ReaderAlignRightIcon,
 } from "@/components/icons/ReaderFontSheetAlignIcons";
-import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 import { hapticLightImpact } from "@/lib/haptics";
 import {
   READER_VERSE_BODY_FONT_OPTIONS,
@@ -199,7 +198,7 @@ export function ReaderFontSettingsSheet({
             {
               justifyContent: useBottomSheet ? "flex-end" : "flex-start",
               paddingTop: useBottomSheet ? 0 : Math.max(insets.top, 12) + 16,
-              paddingBottom: useBottomSheet ? nativeTabSheetBottomInsetPx(insets.bottom, 0) : 0,
+              paddingBottom: 0,
               paddingHorizontal: useBottomSheet ? 0 : 12,
             },
           ]}
@@ -252,7 +251,7 @@ export function ReaderFontSettingsSheet({
                 contentContainerStyle={{
                   paddingHorizontal: padH,
                   paddingTop: useBottomSheet ? 4 * scale : 20 * scale,
-                  paddingBottom: 24 * scale,
+                  paddingBottom: 24 * scale + (useBottomSheet ? insets.bottom : 0),
                 }}
               >
                 <M3SettingsSheetTitle

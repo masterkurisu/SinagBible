@@ -74,9 +74,16 @@ export type ReaderVerseRowProps = {
   verseTextAlign: ReaderVerseTextAlignProp;
   onVersePress: (verseNum: number) => void;
   onVerseLongPress: (verseNum: number) => void;
+  yvpFootnotes?: Record<number, { label: string; body: string }>;
+  onYvpFootnotePress?: (noteId: number) => void;
 };
 
-function renderVerseBodyInline(items: BibleVerseInlineItem[], wordsOfJesusColor: string) {
+function renderVerseBodyInline(
+  items: BibleVerseInlineItem[],
+  wordsOfJesusColor: string,
+  yvpFootnotes?: Record<number, { label: string; body: string }>,
+  onYvpFootnotePress?: (noteId: number) => void,
+) {
   return items.map((item, idx) => {
     const key = `seg-${idx}`;
     if (typeof item === "string") {
@@ -90,7 +97,20 @@ function renderVerseBodyInline(items: BibleVerseInlineItem[], wordsOfJesusColor:
       );
     }
     if ("noteId" in item && typeof item.noteId === "number") {
-      return null;
+      const footnote = yvpFootnotes?.[item.noteId];
+      if (!footnote || !onYvpFootnotePress) return null;
+      return (
+        <Text
+          key={key}
+          onPress={() => onYvpFootnotePress(item.noteId)}
+          suppressHighlighting
+          style={{ fontSize: 11, lineHeight: 16, textDecorationLine: "underline" }}
+          accessibilityRole="button"
+          accessibilityLabel={`Footnote ${footnote.label}`}
+        >
+          {footnote.label}
+        </Text>
+      );
     }
     if ("heading" in item && typeof item.heading === "string") {
       return (
@@ -132,6 +152,8 @@ function ReaderVerseRowInner({
   verseTextAlign,
   onVersePress,
   onVerseLongPress,
+  yvpFootnotes,
+  onYvpFootnotePress,
 }: ReaderVerseRowProps) {
   const useInlineBody = Boolean(verseInlineContent && verseInlineContent.length > 0);
   const rowBg = isSelected ? selectionBackground : hl ? HIGHLIGHT_BG[hl] : "transparent";
@@ -180,7 +202,12 @@ function ReaderVerseRowInner({
           ]}
         >
           {useInlineBody && verseInlineContent
-            ? renderVerseBodyInline(verseInlineContent, wordsOfJesusInk)
+            ? renderVerseBodyInline(
+                verseInlineContent,
+                wordsOfJesusInk,
+                yvpFootnotes,
+                onYvpFootnotePress,
+              )
             : verseText}
         </Text>
       </Pressable>
@@ -214,5 +241,7 @@ export const ReaderVerseRow = memo(ReaderVerseRowInner, (prev, next) => {
   if (prev.verseTextAlign !== next.verseTextAlign) return false;
   if (prev.onVersePress !== next.onVersePress) return false;
   if (prev.onVerseLongPress !== next.onVerseLongPress) return false;
+  if (prev.yvpFootnotes !== next.yvpFootnotes) return false;
+  if (prev.onYvpFootnotePress !== next.onYvpFootnotePress) return false;
   return true;
 });

@@ -45,6 +45,13 @@ import { hapticLightImpact } from "@/lib/haptics";
 import { MAX_PINNED_TRANSLATIONS } from "@/lib/default-pinned-translations";
 import type { ToggleFavoriteTranslationResult } from "@/lib/use-favorite-translations";
 import { prefetchTranslationChaptersForReader } from "@/lib/reader-chapter-load";
+import { isOnWifi } from "@/lib/use-translation-download";
+import {
+  isTranslationFullyDownloaded,
+  supportsFullTranslationDownload,
+} from "@/lib/translation-offline-capability";
+import { startTranslationDownload } from "@/lib/translation-download";
+import { TranslationOfflineStatus } from "@/src/features/reader/TranslationOfflineStatus";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 import {
   READER_M3_ON_SURFACE,
@@ -477,6 +484,21 @@ export function TranslationPickerSheet({
           readerBooks,
         );
       }
+      if (result === "pinned") {
+        const internalId = getInternalIdFromApiId(id) ?? id;
+        if (
+          supportsFullTranslationDownload(internalId) &&
+          !isTranslationFullyDownloaded(internalId)
+        ) {
+          void isOnWifi().then((onWifi) => {
+            if (onWifi) {
+              void startTranslationDownload(internalId).catch(() => {
+                /* progress surfaced in picker row */
+              });
+            }
+          });
+        }
+      }
     },
     [toggleFavoriteTranslation, readerBookSlug, readerChapterNumber, readerBooks],
   );
@@ -717,63 +739,72 @@ export function TranslationPickerSheet({
     const isSelected = item.id === resolvedTranslationApiId;
     const abbr = getTranslationPickerAbbreviation(item);
     const showDivider = !isAndroidSheet;
+    const rowKey = opts.keyPrefix ? `${opts.keyPrefix}-${item.id}` : item.id;
     return (
-      <TouchableOpacity
-        key={opts.keyPrefix ? `${opts.keyPrefix}-${item.id}` : item.id}
-        activeOpacity={0.85}
-        onPress={() => selectTranslation(item.id)}
-        style={translationRowStyle(isSelected, opts.isFirstPinned)}
-      >
-        <Text
-          style={{
-            fontFamily: "Lora_400Regular_Italic",
-            fontSize: isAndroidSheet ? 13 : 12,
-            color: isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : ui.brown800,
-            width: 48,
-          }}
+      <View key={rowKey}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => selectTranslation(item.id)}
+          style={translationRowStyle(isSelected, opts.isFirstPinned)}
         >
-          {abbr}
-        </Text>
-        {showDivider ? (
-          <View
-            style={{
-              width: 1,
-              alignSelf: "stretch",
-              backgroundColor: isSelected ? `${ui.gold}73` : ui.borderSolid,
-              opacity: isSelected ? 1 : 0.9,
-            }}
-          />
-        ) : null}
-        <View style={{ flex: 1 }}>
           <Text
             style={{
-              fontFamily: isAndroidSheet ? "Inter_400Regular" : "Inter_400Regular",
-              fontSize: isAndroidSheet ? 16 : 14,
-              color: isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800,
-            }}
-            numberOfLines={1}
-          >
-            {item.label}
-          </Text>
-          <Text
-            style={{
-              fontFamily: "Inter_400Regular",
-              fontSize: isAndroidSheet ? 14 : 11,
-              color: sheetMutedColor,
+              fontFamily: "Lora_400Regular_Italic",
+              fontSize: isAndroidSheet ? 13 : 12,
+              color: isAndroidSheet ? READER_M3_ON_SURFACE_VARIANT : ui.brown800,
+              width: 48,
             }}
           >
-            {item.languageSection}
+            {abbr}
           </Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          {isSelected ? <Ionicons name="checkmark" size={isAndroidSheet ? 20 : 15} color={ui.gold} /> : null}
-          <TranslationPinButton
-            isPinned={opts.isPinned}
-            onPress={() => handleTogglePin(item.id, opts.isPinned)}
+          {showDivider ? (
+            <View
+              style={{
+                width: 1,
+                alignSelf: "stretch",
+                backgroundColor: isSelected ? `${ui.gold}73` : ui.borderSolid,
+                opacity: isSelected ? 1 : 0.9,
+              }}
+            />
+          ) : null}
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontFamily: isAndroidSheet ? "Inter_400Regular" : "Inter_400Regular",
+                fontSize: isAndroidSheet ? 16 : 14,
+                color: isAndroidSheet ? READER_M3_ON_SURFACE : ui.brown800,
+              }}
+              numberOfLines={1}
+            >
+              {item.label}
+            </Text>
+            <Text
+              style={{
+                fontFamily: "Inter_400Regular",
+                fontSize: isAndroidSheet ? 14 : 11,
+                color: sheetMutedColor,
+              }}
+            >
+              {item.languageSection}
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {isSelected ? <Ionicons name="checkmark" size={isAndroidSheet ? 20 : 15} color={ui.gold} /> : null}
+            <TranslationPinButton
+              isPinned={opts.isPinned}
+              onPress={() => handleTogglePin(item.id, opts.isPinned)}
+              ui={ui}
+            />
+          </View>
+        </TouchableOpacity>
+        <View style={{ paddingLeft: isAndroidSheet ? 64 : 60, paddingRight: 16, paddingBottom: 8 }}>
+          <TranslationOfflineStatus
+            translationId={item.id}
             ui={ui}
+            mutedColor={sheetMutedColor}
           />
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 

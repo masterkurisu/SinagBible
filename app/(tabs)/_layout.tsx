@@ -29,6 +29,7 @@ import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
 import { refreshLocalEntriesCache } from "@/lib/journal-local";
 import { warmReaderTranslationSearchCache } from "@/lib/bible-search-service";
 import { getPreferredReaderTranslation } from "@/lib/reader-last-position";
+import { usePinnedTranslationsPrefetch } from "@/lib/use-pinned-translations-prefetch";
 
 /** True when the active reader tab is showing a chapter (not the redirect index). */
 function isReaderChapterRoute(pathname: string | null): boolean {
@@ -85,6 +86,8 @@ function TabLayoutInner() {
   const [hasJournalDraft, setHasJournalDraft] = useState(false);
   const discoveredDraftKeysRef = useRef<string[]>([]);
   const lastDraftDiscoveryAtRef = useRef(0);
+
+  usePinnedTranslationsPrefetch();
 
   useEffect(() => {
     if (peekReaderLastPosition() == null) {

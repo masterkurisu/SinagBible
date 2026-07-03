@@ -41,6 +41,12 @@ export type BibleVerseInlineItem =
   | BibleVerseInlineLineBreak
   | BibleVerseFootnoteRef;
 
+/** YVP footnote body resolved from passage HTML (`yv-n` spans). */
+export type YvpFootnoteBody = {
+  label: string;
+  body: string;
+};
+
 /** A resolved chapter with its verses */
 export type BibleChapter = {
   bookName: string;
@@ -51,6 +57,8 @@ export type BibleChapter = {
    * Structured fragments per verse when available; indices align with `verses` (verse 1 → index 0).
    */
   verseInlineContent?: BibleVerseInlineItem[][];
+  /** Footnote bodies keyed by `noteId` referenced in `verseInlineContent`. YVP only. */
+  yvpFootnotes?: Record<number, YvpFootnoteBody>;
 };
 
 /** Result shape for full-text verse search */

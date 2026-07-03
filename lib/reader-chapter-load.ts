@@ -8,11 +8,6 @@ import {
 import { getUsfmBookId } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import { apiChapterToBibleChapter, fetchChapter as fetchApiChapter, fetchTranslationBookNav } from "@/lib/bible-api-service";
-import {
-  getCachedReaderChapter,
-  readerChapterCacheKey,
-  setCachedReaderChapter,
-} from "@/lib/reader-chapter-cache";
 import { collectPrefetchChapterTargets } from "@/lib/reader-chapter-nav";
 import {
   fetchYvpBookNav,
@@ -32,7 +27,7 @@ export function readerUsesPerChapterFetch(translationId: string): boolean {
 
 /**
  * Prefetches the current chapter (plus neighbors) and book navigation so pinned or
- * selected translations load instantly from AsyncStorage on chapter changes.
+ * selected translations load instantly from encrypted SQLite on chapter changes.
  */
 export function prefetchTranslationChaptersForReader(
   translationId: string,
@@ -68,6 +63,10 @@ export function prefetchTranslationChaptersForReader(
   });
 }
 
+/**
+ * Best-effort prefetch of chapter text into the encrypted store (helloao) or YVP
+ * session cache. Book nav is warmed when not already supplied.
+ */
 export function primeReaderChapterFetch(
   translationId: string,
   target: { slug: string; chapter: number } | null | undefined,
@@ -75,40 +74,24 @@ export function primeReaderChapterFetch(
 ): void {
   if (!target || translationId === "KJV") return;
 
-  const cacheKey = readerChapterCacheKey(translationId, target.slug, target.chapter);
-  if (!getCachedReaderChapter(cacheKey)) {
-    void (async () => {
-      try {
-        const chapter = await fetchReaderChapterContent(translationId, target.slug, target.chapter);
-        if (!chapter || getCachedReaderChapter(cacheKey)) return;
-        const nav =
-          books && books.length > 0
-            ? books
-            : await resolveReaderBooksForTranslation(translationId, null);
-        setCachedReaderChapter(cacheKey, {
-          resolvedTranslationId: translationId,
-          books: nav,
-          chapter,
-        });
-      } catch {
-        /* prefetch is best-effort */
-      }
-    })();
-  }
+  void fetchReaderChapterContent(translationId, target.slug, target.chapter).catch(() => {
+    /* prefetch is best-effort */
+  });
+
+  if (books && books.length > 0) return;
 
   const yvpBibleId = parseYvpBibleId(translationId);
   if (yvpBibleId != null) {
-    void fetchYvpChapter(yvpBibleId, target.slug, target.chapter).catch(() => {
+    void fetchYvpBookNav(yvpBibleId).catch(() => {
       /* prefetch is best-effort */
     });
     return;
   }
-  const usfm = getUsfmBookId(target.slug);
-  if (!usfm) return;
+
   const apiId = isTranslationId(translationId)
     ? getExternalApiId(translationId as TranslationId)
     : translationId;
-  void fetchApiChapter(apiId, usfm, target.chapter).catch(() => {
+  void fetchTranslationBookNav(apiId).catch(() => {
     /* prefetch is best-effort */
   });
 }

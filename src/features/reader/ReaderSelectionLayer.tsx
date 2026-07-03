@@ -419,6 +419,8 @@ type ReaderVerseStableVisualData = {
   readerVerseLineHeight: number;
   readerVerseBodyFontFamily: string;
   verseTextAlign: ReaderVerseTextAlign;
+  yvpFootnotes?: Record<number, { label: string; body: string }>;
+  onYvpFootnotePress?: (noteId: number) => void;
 };
 
 type ReaderVerseFlashRowProps = {
@@ -469,6 +471,8 @@ const MemoizedReaderVerseFlashRow = memo(
           verseTextAlign={vd.verseTextAlign}
           onVersePress={onVersePress}
           onVerseLongPress={onVerseLongPress}
+          yvpFootnotes={vd.yvpFootnotes}
+          onYvpFootnotePress={vd.onYvpFootnotePress}
         />
       </View>
     );
@@ -559,6 +563,8 @@ export type ReaderSelectionLayerProps = {
   /** When false, loading phase shows spinner only (used for backup import reload). */
   translationLoadingShowLabel?: boolean;
   translationLoadingAccentColor?: string;
+  yvpFootnotes?: Record<number, { label: string; body: string }>;
+  onYvpFootnotePress?: (noteId: number) => void;
 };
 
 export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
@@ -617,6 +623,8 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   translationLoadingDoneLabel,
   translationLoadingShowLabel = true,
   translationLoadingAccentColor,
+  yvpFootnotes,
+  onYvpFootnotePress,
 }: ReaderSelectionLayerProps) {
   const actionBarOnboardingStudyNotesRef = useRef<View | null>(null);
   const actionBarOnboardingHighlightRef = useRef<View | null>(null);
@@ -835,6 +843,8 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
       readerVerseLineHeight,
       readerVerseBodyFontFamily,
       verseTextAlign,
+      yvpFootnotes,
+      onYvpFootnotePress,
     }),
     [
       themeId,
@@ -847,6 +857,8 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
       readerVerseLineHeight,
       readerVerseBodyFontFamily,
       verseTextAlign,
+      yvpFootnotes,
+      onYvpFootnotePress,
     ],
   );
 

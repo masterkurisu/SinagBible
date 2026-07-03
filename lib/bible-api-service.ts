@@ -2,7 +2,7 @@
  * Bible API service for bible.helloao.org (Free Use Bible API).
  *
  * - Available translations: fetched once and kept in a module-level promise cache.
- * - Chapters: offline-first — served from AsyncStorage when available, otherwise
+ * - Chapters: offline-first — served from encrypted SQLite when available, otherwise
  *   fetched over the network and persisted for future offline access.
  *
  * Base URL:  https://bible.helloao.org/api
@@ -27,6 +27,19 @@ import {
 } from "@sinag-bible/core/helloao-verse-inline";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
+import { canonicalTranslationId } from "@/lib/canonical-translation-id";
+import { isChapterDbOpen } from "@/lib/chapter-db";
+import {
+  clearAllStoredChapters,
+  clearChapterStoreMemoryCache,
+  getChapterSync,
+  getTranslationMetaSync,
+  hasChapterSync,
+  putChapter,
+} from "@/lib/chapter-store";
+import { resetPinnedTranslationsPrefetchSession } from "@/lib/pinned-translations-prefetch";
+import { clearTranslationDownloadSession } from "@/lib/translation-download";
+import { clearYvpMemoryCaches } from "@/lib/youversion-api";
 
 const BIBLE_API_BASE_URL = "https://bible.helloao.org/api";
 const CHAPTER_CACHE_KEY_PREFIX = "sb:bible-api:chapter:";
@@ -121,8 +134,34 @@ function resolveApiTranslationId(translationId: string): string {
   return resolveFeaturedTranslationApiId(translationId.toLowerCase());
 }
 
+/** Resolves reader / picker ids to helloao.org API translation ids. */
+export function resolveHelloaoApiTranslationId(translationId: string): string {
+  return resolveApiTranslationId(translationId);
+}
+
 function booksStorageKey(translationId: string): string {
   return `${BOOKS_CACHE_KEY_PREFIX}${translationId}`;
+}
+
+function chapterFetchDedupKey(
+  canonicalId: string,
+  bookSlug: string,
+  chapterNumber: number,
+): string {
+  return `${canonicalId}:${bookSlug}:${chapterNumber}`;
+}
+
+function readStoredHelloaoChapter(
+  canonicalId: string,
+  bookSlug: string,
+  chapterNumber: number,
+): ApiChapter | null {
+  if (!isChapterDbOpen()) return null;
+
+  const stored = getChapterSync(canonicalId, bookSlug, chapterNumber);
+  if (!stored || stored.source !== "helloao") return null;
+
+  return stored.payload as ApiChapter;
 }
 
 // ---------------------------------------------------------------------------
@@ -202,12 +241,8 @@ export async function getTranslationPickerItemsFromApi(): Promise<TranslationPic
 }
 
 // ---------------------------------------------------------------------------
-// Chapter fetch — offline-first with AsyncStorage persistence
+// Chapter fetch — offline-first with encrypted SQLite persistence
 // ---------------------------------------------------------------------------
-
-function chapterStorageKey(translationId: string, bookId: string, chapter: number): string {
-  return `${CHAPTER_CACHE_KEY_PREFIX}${translationId}:${bookId}:${chapter}`;
-}
 
 function parseChapterResponse(
   translationId: string,
@@ -315,8 +350,8 @@ export function fetchTranslationBookNav(translationId: string): Promise<BibleBoo
  *
  * Resolution order:
  *  1. In-flight promise (de-duplication within the same session)
- *  2. AsyncStorage (offline cache)
- *  3. Network — result is persisted to AsyncStorage before returning
+ *  2. Encrypted SQLite store (helloao chapters)
+ *  3. Network — result is persisted to SQLite before returning
  *
  * @param translationId  API translation ID, e.g. `"BSB"` or `"eng_asv"`.
  * @param bookId         USFM book code, e.g. `"GEN"`, `"MAT"`.
@@ -327,41 +362,53 @@ export function fetchChapter(
   bookId: string,
   chapterNumber: number,
 ): Promise<ApiChapter> {
-  const storageKey = chapterStorageKey(translationId, bookId, chapterNumber);
+  const apiId = resolveApiTranslationId(translationId);
+  const canonicalId = canonicalTranslationId(apiId);
+  const bookSlug = getBookSlugFromUsfm(bookId);
+  const dedupKey = bookSlug
+    ? chapterFetchDedupKey(canonicalId, bookSlug, chapterNumber)
+    : `${apiId}:${bookId}:${chapterNumber}`;
 
-  const inflight = chapterFetchCache.get(storageKey);
+  const inflight = chapterFetchCache.get(dedupKey);
   if (inflight) return inflight;
 
   const p = (async () => {
-    // 1. Offline-first: return cached copy immediately if available.
-    try {
-      const cached = await AsyncStorage.getItem(storageKey);
-      if (cached) {
-        return JSON.parse(cached) as ApiChapter;
+    if (bookSlug) {
+      const stored = readStoredHelloaoChapter(canonicalId, bookSlug, chapterNumber);
+      if (stored) return stored;
+
+      const meta = getTranslationMetaSync(canonicalId);
+      if (meta?.fullyDownloaded) {
+        throw new Error(
+          `bible-api: chapter missing from fully downloaded translation ${canonicalId}/${bookSlug}/${chapterNumber}`,
+        );
       }
-    } catch {
-      /* ignore storage read errors — fall through to network */
     }
 
-    // 2. Network fetch.
-    const url = `${BIBLE_API_BASE_URL}/${translationId}/${bookId}/${chapterNumber}.json`;
+    const url = `${BIBLE_API_BASE_URL}/${apiId}/${bookId}/${chapterNumber}.json`;
     const raw = await fetchJsonWithTimeout<ApiChapterResponse>(url);
-    const chapter = parseChapterResponse(translationId, bookId, chapterNumber, raw);
+    const chapter = parseChapterResponse(apiId, bookId, chapterNumber, raw);
 
-    // 3. Persist for offline access; ignore write failures.
-    try {
-      await AsyncStorage.setItem(storageKey, JSON.stringify(chapter));
-    } catch {
-      /* ignore storage write errors */
+    if (bookSlug && isChapterDbOpen()) {
+      try {
+        putChapter({
+          translationId: canonicalId,
+          bookSlug,
+          chapterNumber,
+          source: "helloao",
+          payload: chapter,
+        });
+      } catch {
+        /* ignore store write errors — still return the fetched chapter */
+      }
     }
 
     return chapter;
   })();
 
-  chapterFetchCache.set(storageKey, p);
+  chapterFetchCache.set(dedupKey, p);
 
-  // On failure: remove from in-flight cache so the next call can retry.
-  void p.catch(() => chapterFetchCache.delete(storageKey));
+  void p.catch(() => chapterFetchCache.delete(dedupKey));
 
   return p;
 }
@@ -387,20 +434,31 @@ export async function isChapterCached(
   bookId: string,
   chapterNumber: number,
 ): Promise<boolean> {
-  try {
-    const key = chapterStorageKey(translationId, bookId, chapterNumber);
-    const value = await AsyncStorage.getItem(key);
-    return value !== null;
-  } catch {
-    return false;
-  }
+  if (!isChapterDbOpen()) return false;
+
+  const bookSlug = getBookSlugFromUsfm(bookId);
+  if (!bookSlug) return false;
+
+  return hasChapterSync(canonicalTranslationId(translationId), bookSlug, chapterNumber);
 }
 
 /**
- * Removes all bible-api chapter entries from AsyncStorage and clears the
- * in-flight cache. Useful for a "clear offline data" setting.
+ * Clears all persisted chapter rows from encrypted SQLite (`helloao` and `yvp`
+ * sources). Translation metadata (`fully_downloaded`, copyright notices) is kept.
+ * Also removes legacy plaintext chapter keys from AsyncStorage and clears
+ * in-flight helloao fetch dedup state.
+ *
+ * For a full encrypted store wipe (delete-my-data), use {@link deleteChapterDatabase}.
  */
 export async function clearChapterCache(): Promise<void> {
+  if (isChapterDbOpen()) {
+    try {
+      clearAllStoredChapters();
+    } catch {
+      /* ignore */
+    }
+  }
+
   try {
     const allKeys = await AsyncStorage.getAllKeys();
     const chapterKeys = allKeys.filter((k) => k.startsWith(CHAPTER_CACHE_KEY_PREFIX));
@@ -410,6 +468,7 @@ export async function clearChapterCache(): Promise<void> {
   } catch {
     /* ignore */
   }
+
   chapterFetchCache.clear();
 }
 
@@ -417,4 +476,8 @@ export function clearBibleApiMemoryCaches(): void {
   availableTranslationsCache = null;
   chapterFetchCache.clear();
   translationBooksCache.clear();
+  clearChapterStoreMemoryCache();
+  clearYvpMemoryCaches();
+  clearTranslationDownloadSession();
+  resetPinnedTranslationsPrefetchSession();
 }

@@ -135,6 +135,9 @@ import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSetting
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
 import { readerSettingsSideSheetWidthPx, READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
+import { ReaderYvpAttributionFooter } from "@/src/features/reader/ReaderYvpAttributionFooter";
+import { ReaderYvpFootnoteSheet } from "@/src/features/reader/ReaderYvpFootnoteSheet";
+import type { YvpFootnoteBody } from "@sinag-bible/types";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
 import { useReaderTabBarAutoHide } from "@/src/features/reader/useReaderTabBarAutoHide";
 
@@ -213,6 +216,8 @@ export default function ReaderChapterScreen() {
     chapter,
     books,
     resolvedTranslationId,
+    yvpAttribution,
+    isContentSynced,
     isLoading: readerChapterLoading,
     error: readerChapterError,
   } = useReaderChapter(bookSlug ?? "", chapterNumber, requestedTranslationId);
@@ -223,7 +228,7 @@ export default function ReaderChapterScreen() {
     removeHighlightsFromVerses,
     applyHighlightToVerses,
     persistNoteForVerse,
-  } = useReaderStorage(chapter, resolvedTranslationId);
+  } = useReaderStorage(chapter ?? undefined, resolvedTranslationId);
 
   const { items: translationPickerItems } = useTranslationPicker();
   const { favoriteTranslationIds, toggleFavoriteTranslation } = useFavoriteTranslations();
@@ -240,6 +245,7 @@ export default function ReaderChapterScreen() {
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
   const [moreSettingsSheetOpen, setMoreSettingsSheetOpen] = useState(false);
   const [deleteMyDataDialogOpen, setDeleteMyDataDialogOpen] = useState(false);
+  const [activeYvpFootnote, setActiveYvpFootnote] = useState<YvpFootnoteBody | null>(null);
   const [readerDropdown, setReaderDropdown] = useState<ReaderToolsDropdown | null>(null);
   const [dropdownAnchor, setDropdownAnchor] = useState<LayoutRectangle | null>(null);
 
@@ -632,6 +638,15 @@ export default function ReaderChapterScreen() {
     setCommentaryPanelOpen(true);
   }, []);
 
+  const handleYvpFootnotePress = useCallback(
+    (noteId: number) => {
+      const footnote = chapter?.yvpFootnotes?.[noteId];
+      if (!footnote) return;
+      setActiveYvpFootnote(footnote);
+    },
+    [chapter?.yvpFootnotes],
+  );
+
   const closeNewEntrySheet = useCallback(() => {
     setNewEntrySheetOpen(false);
   }, []);
@@ -769,12 +784,7 @@ export default function ReaderChapterScreen() {
   }, [toolsMenuOpen, closeToolsMenu]);
 
   const isReaderContentCurrent = Boolean(
-    chapter &&
-      books &&
-      resolvedTranslationId &&
-      chapter.bookSlug === (bookSlug ?? "") &&
-      chapter.chapterNumber === chapterNumber &&
-      resolvedTranslationId === requestedTranslationId,
+    isContentSynced && books && resolvedTranslationId,
   );
 
   const isTranslationSwitching = Boolean(
@@ -1037,6 +1047,13 @@ export default function ReaderChapterScreen() {
     const { prevChapter, nextChapter } = chapterNav;
     return (
       <Animated.View style={{ opacity: readerVersesOpacityAnim }}>
+        {yvpAttribution ? (
+          <ReaderYvpAttributionFooter
+            attribution={yvpAttribution}
+            textColor={colors.tan300}
+            linkColor={colors.brown800}
+          />
+        ) : null}
         <View style={readerFlashListChromeStyles.footerNavRow}>
           {prevChapter ? (
             <TouchableOpacity
@@ -1091,6 +1108,7 @@ export default function ReaderChapterScreen() {
     requestedTranslationId,
     readerVersesOpacityAnim,
     chapterNav,
+    yvpAttribution,
     colors.parchmentDark,
     colors.brown800,
     resolvedTranslationId,
@@ -1344,10 +1362,16 @@ export default function ReaderChapterScreen() {
   }, [chapterNav, resolvedTranslationId, books, goToReaderChapter, hideChapterNavArrowsFromMotion]);
 
   if (readerChapterError) {
+    const errorMessage =
+      readerChapterError === "not_downloaded_offline"
+        ? "This translation isn't downloaded for offline use."
+        : readerChapterError === "load_failed"
+          ? "Couldn't load this chapter. Check your connection and try again."
+          : "Chapter not found.";
     return (
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: rc.sceneSurface }}>
         <Text style={{ fontFamily: "Inter_400Regular", color: colors.tan300, textAlign: "center" }}>
-          Chapter not found.
+          {errorMessage}
         </Text>
       </View>
     );
@@ -1672,6 +1696,8 @@ export default function ReaderChapterScreen() {
           !readerDataImportReloadingRef.current
         }
         translationLoadingAccentColor={colors.gold}
+        yvpFootnotes={chapter.yvpFootnotes}
+        onYvpFootnotePress={handleYvpFootnotePress}
       />
 
       </Animated.View>
@@ -1882,6 +1908,14 @@ export default function ReaderChapterScreen() {
           tooltipText: rc.selectionText,
           scrim: "rgba(0,0,0,0.45)",
         }}
+      />
+
+      <ReaderYvpFootnoteSheet
+        visible={activeYvpFootnote != null}
+        footnote={activeYvpFootnote}
+        onClose={() => setActiveYvpFootnote(null)}
+        backgroundColor={rc.sceneSurface}
+        textColor={colors.brown800}
       />
 
     </View>

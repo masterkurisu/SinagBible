@@ -8,6 +8,9 @@ import { getBookSlugFromUsfm, getUsfmBookId } from "@sinag-bible/core/bible-meta
 import { getBookNavForTranslation } from "@sinag-bible/core/bible-translations";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import Constants from "expo-constants";
+import { isChapterDbOpen } from "@/lib/chapter-db";
+import { getChapterSync, putChapter, upsertTranslationMeta } from "@/lib/chapter-store";
+import { yvpPassageToBibleChapter } from "@/lib/yvp-chapter-payload";
 
 const YVP_API_BASE_URL = "https://api.youversion.com/v1";
 const YVP_API_TIMEOUT_MS = 12_000;
@@ -56,6 +59,10 @@ type YvpBiblesPage = {
 type YvpBibleDetail = {
   id: number;
   books: string[];
+  copyright?: string;
+  promotional_content?: string;
+  info?: string;
+  publisher_url?: string;
 };
 
 type YvpBookRecord = {
@@ -66,7 +73,8 @@ type YvpBookRecord = {
 
 const yvpBiblesCache = new Map<string, Promise<YvpBible[]>>();
 const yvpBookNavCache = new Map<number, Promise<BibleBookNavItem[]>>();
-const yvpChapterCache = new Map<string, Promise<BibleChapter>>();
+const yvpChapterInflight = new Map<string, Promise<BibleChapter>>();
+const yvpMetaUpserted = new Set<number>();
 
 export function isYvpTranslationId(translationId: string): boolean {
   return translationId.startsWith(YVP_TRANSLATION_ID_PREFIX);
@@ -169,26 +177,21 @@ async function yvpFetch<T>(path: string, searchParams?: Record<string, string>):
   }
 }
 
-function stripHtmlTags(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+async function ensureYvpTranslationMeta(bibleId: number): Promise<void> {
+  if (!isChapterDbOpen() || yvpMetaUpserted.has(bibleId)) return;
 
-function parseYvpChapterHtml(html: string): { number: number; text: string }[] {
-  const verses: { number: number; text: string }[] = [];
-  const parts = html.split(/<span class="yv-vlbl">(\d+)<\/span>/);
-  for (let i = 1; i < parts.length; i += 2) {
-    const num = Number.parseInt(parts[i] ?? "", 10);
-    const raw = parts[i + 1] ?? "";
-    const text = stripHtmlTags(raw);
-    if (num > 0 && text) {
-      verses.push({ number: num, text });
-    }
+  try {
+    const detail = await yvpFetch<YvpBibleDetail>(`/bibles/${bibleId}`);
+    upsertTranslationMeta({
+      translationId: formatYvpTranslationId(bibleId),
+      copyrightNotice: detail.copyright ?? null,
+      trademarkNotice: detail.promotional_content ?? detail.info ?? null,
+      contentVersion: String(bibleId),
+    });
+    yvpMetaUpserted.add(bibleId);
+  } catch {
+    /* meta fetch is best-effort — chapter text can still render */
   }
-  return verses;
 }
 
 /**
@@ -245,6 +248,8 @@ export function fetchYvpBookNav(bibleId: number): Promise<BibleBookNavItem[]> {
   if (cached) return cached;
 
   const p = (async () => {
+    void ensureYvpTranslationMeta(bibleId);
+
     const [bible, kjvNav] = await Promise.all([
       yvpFetch<YvpBibleDetail>(`/bibles/${bibleId}`),
       getBookNavForTranslation("KJV"),
@@ -324,34 +329,72 @@ export function fetchYvpChapter(
     return Promise.reject(new Error(`youversion-api: unknown book slug "${bookSlug}"`));
   }
 
-  const cacheKey = `${bibleId}:${usfm}:${chapterNumber}`;
-  const inflight = yvpChapterCache.get(cacheKey);
+  const translationId = formatYvpTranslationId(bibleId);
+  const dedupKey = `${translationId}:${bookSlug}:${chapterNumber}`;
+
+  if (isChapterDbOpen()) {
+    const stored = getChapterSync(translationId, bookSlug, chapterNumber);
+    if (stored?.source === "yvp") {
+      return Promise.resolve(
+        yvpPassageToBibleChapter(bookSlug, chapterNumber, stored.payload as YvpPassage),
+      );
+    }
+  }
+
+  const inflight = yvpChapterInflight.get(dedupKey);
   if (inflight) return inflight;
 
   const p = (async () => {
+    void ensureYvpTranslationMeta(bibleId);
+
     const passageId = buildChapterPassageId(usfm, chapterNumber);
     const raw = await yvpFetch<YvpPassage>(
       `/bibles/${bibleId}/passages/${encodeURIComponent(passageId)}`,
-      { format: "html" },
+      {
+        format: "html",
+        include_notes: "true",
+        include_headings: "true",
+      },
     );
 
-    const verses = parseYvpChapterHtml(raw.content ?? "");
-    if (verses.length === 0) {
-      throw new Error(`youversion-api: no verses parsed for ${passageId}`);
+    if (isChapterDbOpen()) {
+      try {
+        putChapter({
+          translationId,
+          bookSlug,
+          chapterNumber,
+          source: "yvp",
+          payload: raw,
+        });
+      } catch {
+        /* ignore store write errors */
+      }
     }
 
-    const bookNav = await fetchYvpBookNav(bibleId);
-    const bookName = bookNav.find((book) => book.slug === bookSlug)?.name ?? usfm;
+    let bookName: string | undefined;
+    try {
+      const bookNav = await fetchYvpBookNav(bibleId);
+      bookName = bookNav.find((book) => book.slug === bookSlug)?.name;
+    } catch {
+      /* optional */
+    }
 
-    return {
-      bookName,
-      bookSlug,
-      chapterNumber,
-      verses: verses.map((verse) => verse.text),
-    };
+    return yvpPassageToBibleChapter(bookSlug, chapterNumber, raw, bookName);
   })();
 
-  yvpChapterCache.set(cacheKey, p);
-  void p.catch(() => yvpChapterCache.delete(cacheKey));
+  yvpChapterInflight.set(dedupKey, p);
+  void p.finally(() => yvpChapterInflight.delete(dedupKey));
+  void p.catch(() => {
+    /* handled by caller */
+  });
+
   return p;
+}
+
+/** Clears session-level YVP fetch caches (delete-my-data / debug). */
+export function clearYvpMemoryCaches(): void {
+  yvpBiblesCache.clear();
+  yvpBookNavCache.clear();
+  yvpChapterInflight.clear();
+  yvpMetaUpserted.clear();
 }
