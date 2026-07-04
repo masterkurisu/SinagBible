@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -189,15 +189,21 @@ function ReaderVerseRowInner({
     isSelected || inkOnHighlight != null ? textCol : wordsOfJesusDefaultColor;
 
   const [underlineLines, setUnderlineLines] = useState<readonly TextLayoutLine[]>([]);
+  const verseBodyLayoutLinesRef = useRef<readonly TextLayoutLine[]>([]);
 
   useEffect(() => {
-    if (!isUnderline) setUnderlineLines([]);
+    if (isUnderline) {
+      setUnderlineLines(verseBodyLayoutLinesRef.current);
+    }
   }, [isUnderline]);
 
   const handleVerseBodyTextLayout = useCallback(
     (event: NativeSyntheticEvent<TextLayoutEventData>) => {
-      if (!isUnderline) return;
-      setUnderlineLines(event.nativeEvent.lines);
+      const lines = event.nativeEvent.lines;
+      verseBodyLayoutLinesRef.current = lines;
+      if (isUnderline) {
+        setUnderlineLines(lines);
+      }
     },
     [isUnderline],
   );
@@ -232,7 +238,7 @@ function ReaderVerseRowInner({
         <View style={styles.verseBodyWrap}>
           <Text
             style={[styles.verseBody, verseBodyTextStyle]}
-            onTextLayout={isUnderline ? handleVerseBodyTextLayout : undefined}
+            onTextLayout={handleVerseBodyTextLayout}
           >
             {useInlineBody && verseInlineContent
               ? renderVerseBodyInline(

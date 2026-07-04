@@ -280,8 +280,9 @@ export function ReaderAnnotationSheet({
                     styles.colorSwatchOuter,
                     {
                       opacity: pressed ? 0.85 : 1,
-                      borderColor: picked ? bundle.chrome.tabTint : "rgba(0,0,0,0.08)",
-                      borderWidth: picked ? 2.5 : 1,
+                      borderColor: picked ? sheetChrome.onSurface : sheetChrome.outlineVariant,
+                      borderWidth: picked ? 3 : 1,
+                      backgroundColor: picked ? sheetChrome.secondaryContainer : "transparent",
                     },
                   ]}
                 >
