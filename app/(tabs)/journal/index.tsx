@@ -38,6 +38,10 @@ import {
   JOURNAL_LOCAL_STORAGE_USER_MESSAGE,
   updateLocalEntry,
 } from "@/lib/journal-local";
+import {
+  peekPendingJournalListUpsert,
+  takePendingJournalListUpsert,
+} from "@/lib/journal-edit-bridge";
 import { stripHtmlPreview } from "@/lib/journal-preview";
 import {
   journalTabNewEntryFabBottomPx,
@@ -518,9 +522,19 @@ export default function JournalIndexScreen() {
   };
 
 
+  const mergePendingListUpsert = useCallback((rows: MobileJournalListItem[]) => {
+    const pending = takePendingJournalListUpsert();
+    if (!pending) return rows;
+    const index = rows.findIndex((entry) => entry.id === pending.id);
+    if (index === -1) return rows;
+    const next = [...rows];
+    next[index] = { ...rows[index]!, ...pending };
+    return next;
+  }, []);
+
   const load = useCallback(async () => {
     try {
-      const rows = await loadJournalListItems();
+      const rows = mergePendingListUpsert(await loadJournalListItems());
       setEntries(rows);
     } catch (e) {
       if (__DEV__) {
@@ -532,7 +546,7 @@ export default function JournalIndexScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [mergePendingListUpsert]);
 
   const showJournalToast = useCallback((message: string) => {
     toastAnimRef.current?.stop();
@@ -572,6 +586,17 @@ export default function JournalIndexScreen() {
   useFocusEffect(
     useCallback(() => {
       setHasVisitedJournalTab(true);
+      const pending = peekPendingJournalListUpsert();
+      if (pending) {
+        setEntries((prev) => {
+          if (prev.length === 0) return prev;
+          const index = prev.findIndex((entry) => entry.id === pending.id);
+          if (index === -1) return prev;
+          const next = [...prev];
+          next[index] = { ...prev[index]!, ...pending };
+          return next;
+        });
+      }
       let cancelled = false;
       setLoading(true);
       const task = InteractionManager.runAfterInteractions(() => {
@@ -1048,6 +1073,7 @@ export default function JournalIndexScreen() {
             ref={listRef}
             className="flex-1 px-4"
             data={rows}
+            extraData={entries}
             keyExtractor={keyExtractor}
             ItemSeparatorComponent={JournalListRowSeparator}
             removeClippedSubviews={Platform.OS === "android"}

@@ -10,6 +10,9 @@ export const VERSE_ANNOTATION_UNDERLINE_THICKNESS_PX = 3;
 /** Gap between the line box bottom and the underline. */
 export const VERSE_ANNOTATION_UNDERLINE_GAP_PX = 1;
 
+/** Extra downward offset for squiggle underlines (straight underlines unchanged). */
+export const VERSE_ANNOTATION_SQUIGGLE_VERTICAL_OFFSET_PX = 2;
+
 /** Underline ink opacity for dark colors — keeps strokes from obscuring verse text. */
 export const VERSE_ANNOTATION_UNDERLINE_DARK_OPACITY = 0.7;
 

@@ -575,22 +575,19 @@ export async function updateLocalEntry(
     ? { ...data, content: await externalizeContentImages(data.content, id) }
     : data;
 
-  await maybeMigrateLegacyJournalEntries();
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
-  const entries: LocalJournalEntry[] = raw ? parseStoredEntries(raw) : [];
-  const index = entries.findIndex((e) => e.id === id);
-  if (index === -1) {
-    throw new JournalLocalStorageError(`Journal entry not found: ${id}`, "write");
-  }
+  let updated: LocalJournalEntry | null = null;
+  await enqueueStorageMutation((entries) => {
+    const index = entries.findIndex((e) => e.id === id);
+    if (index === -1) {
+      throw new JournalLocalStorageError(`Journal entry not found: ${id}`, "write");
+    }
+    const next = [...entries];
+    next[index] = { ...next[index]!, ...patch };
+    updated = next[index]!;
+    return next;
+  });
 
-  const next = [...entries];
-  next[index] = { ...next[index], ...patch };
-  const updated = next[index]!;
-
-  const payload = JSON.stringify(next);
-  await AsyncStorage.setItem(STORAGE_KEY, payload);
-  setLastLoadedEntriesCache(sortEntriesNewestFirst(next));
-  devLogStorageWrite(payload.length, next.length);
+  if (!updated) return null;
 
   const verifyRaw = await AsyncStorage.getItem(STORAGE_KEY);
   if (!verifyRaw) {

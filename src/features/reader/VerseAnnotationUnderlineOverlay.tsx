@@ -4,6 +4,7 @@ import Svg, { Path } from "react-native-svg";
 import type { UnderlineStyle, AnnotationColorId } from "@sinag-bible/types";
 import { buildM3SquiggleSvgPath } from "@/src/features/reader/m3SquigglePath";
 import {
+  VERSE_ANNOTATION_SQUIGGLE_VERTICAL_OFFSET_PX,
   VERSE_ANNOTATION_UNDERLINE_GAP_PX,
   VERSE_ANNOTATION_UNDERLINE_THICKNESS_PX,
   resolveUnderlineStyle,
@@ -68,7 +69,8 @@ export const VerseAnnotationUnderlineOverlay = memo(function VerseAnnotationUnde
           VERSE_ANNOTATION_UNDERLINE_GAP_PX -
           (resolvedStyle === "squiggly"
             ? squiggleMetrics.svgHeight
-            : VERSE_ANNOTATION_UNDERLINE_THICKNESS_PX);
+            : VERSE_ANNOTATION_UNDERLINE_THICKNESS_PX) +
+          (resolvedStyle === "squiggly" ? VERSE_ANNOTATION_SQUIGGLE_VERTICAL_OFFSET_PX : 0);
 
         if (resolvedStyle === "squiggly") {
           const pathKey = squigglePathCacheKey(
