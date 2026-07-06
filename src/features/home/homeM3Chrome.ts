@@ -22,16 +22,6 @@ export const HOME_M3_TITLE_LINE_HEIGHT_PX = 24;
 export const HOME_M3_BODY_FONT_PX = 16;
 export const HOME_M3_BODY_LINE_HEIGHT_PX = 24;
 
-/** M3 label medium — assist chip (12sp). */
-export const HOME_M3_CHIP_FONT_PX = 12;
-export const HOME_M3_CHIP_LINE_HEIGHT_PX = 16;
-export const HOME_M3_CHIP_LETTER_SPACING = 0.5;
-
-/** M3 assist chip — 32dp tall, fully rounded. */
-export const HOME_M3_CHIP_HEIGHT_PX = 32;
-export const HOME_M3_CHIP_RADIUS_PX = 16;
-export const HOME_M3_CHIP_PADDING_H_PX = 12;
-
 /** M3 hero CTA — 48dp tall filled / tonal buttons. */
 export const HOME_M3_CTA_HEIGHT_PX = 48;
 export const HOME_M3_CTA_RADIUS_PX = 24;

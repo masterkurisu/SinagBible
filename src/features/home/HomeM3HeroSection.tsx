@@ -1,6 +1,5 @@
 import { Text, View } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
-import { HomeM3AssistChip } from "@/src/features/home/HomeM3AssistChip";
 import { HomeM3CtaButton } from "@/src/features/home/HomeM3CtaButton";
 import {
   HOME_M3_BODY_FONT_PX,
@@ -15,7 +14,7 @@ import {
   HOME_M3_TITLE_LINE_HEIGHT_PX,
 } from "@/src/features/home/homeM3Chrome";
 
-const HERO_CHIPS = ["Bible", "Journal", "Reflection"] as const;
+const HERO_TAGS = ["Bible", "Journal", "Reflection"] as const;
 
 export type HomeM3HeroSectionProps = {
   bundle: MobileAppThemeBundle;
@@ -23,7 +22,7 @@ export type HomeM3HeroSectionProps = {
   onWriteJournal: () => void;
 };
 
-/** M3 hero — eyebrow, assist chips, display headline, body copy, and primary CTAs. */
+/** M3 hero — eyebrow, decorative tag line, display headline, body copy, and primary CTAs. */
 export function HomeM3HeroSection({
   bundle,
   onReadScripture,
@@ -47,11 +46,20 @@ export function HomeM3HeroSection({
         Sinag Bible
       </Text>
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
-        {HERO_CHIPS.map((chip) => (
-          <HomeM3AssistChip key={chip} label={chip} bundle={bundle} />
-        ))}
-      </View>
+      <Text
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{
+          marginTop: 10,
+          fontFamily: "Lora_400Regular",
+          fontSize: HOME_M3_TITLE_FONT_PX,
+          lineHeight: HOME_M3_TITLE_LINE_HEIGHT_PX,
+          fontStyle: "italic",
+          color: h.tagline,
+        }}
+      >
+        {HERO_TAGS.join("  ·  ")}
+      </Text>
 
       <Text
         accessibilityRole="header"
