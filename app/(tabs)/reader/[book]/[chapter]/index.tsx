@@ -1904,6 +1904,7 @@ export default function ReaderChapterScreen() {
         spotlightTargetsStep={readerFeatureOnboarding.spotlightTargetsStep}
         coachMarkAnchor={readerFeatureOnboarding.coachMarkAnchor}
         onDismiss={readerFeatureOnboarding.dismissCurrentStep}
+        onSkipTour={readerFeatureOnboarding.skipTour}
         colors={{
           tooltipBackground: rc.selectionBackground,
           tooltipText: rc.selectionText,

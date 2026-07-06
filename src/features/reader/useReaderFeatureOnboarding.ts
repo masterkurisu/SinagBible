@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { type LayoutRectangle, Platform, type View } from "react-native";
 import type { EdgeInsets } from "react-native-safe-area-context";
 import {
+  getFeatureOnboardingProgress,
   isFeatureOnboardingDone,
   markFeatureOnboardingDone,
+  setFeatureOnboardingProgress,
 } from "@/lib/feature-onboarding-storage";
 import {
   measureOnboardingTarget,
@@ -281,9 +283,13 @@ export function useReaderFeatureOnboarding({
     storageCheckedRef.current = true;
     void (async () => {
       const done = await isFeatureOnboardingDone("reader");
-      if (!done) {
-        setActive(true);
-      }
+      if (done) return;
+
+      const savedStep = await getFeatureOnboardingProgress("reader");
+      const steps = readerOnboardingStepsForPlatform();
+      const resumeIndex = Math.min(savedStep, Math.max(0, steps.length - 1));
+      setStepIndex(resumeIndex);
+      setActive(true);
     })();
   }, [readerContentReady]);
 
@@ -410,7 +416,7 @@ export function useReaderFeatureOnboarding({
       ]);
       setSpotlightTargetsStep("clear-selection");
       setCoachMarkAnchor(null);
-      setTargetsReady(selectedVerseCount > 0 || measured != null);
+      setTargetsReady(true);
       return;
     }
   }, [
@@ -451,21 +457,30 @@ export function useReaderFeatureOnboarding({
     selectedVerseCount,
   ]);
 
+  const finishTour = useCallback(() => {
+    setActive(false);
+    void markFeatureOnboardingDone("reader");
+    onTourComplete?.();
+  }, [onTourComplete]);
+
   const advanceStep = useCallback(() => {
     const steps = readerOnboardingStepsForPlatform();
     const nextIndex = stepIndex + 1;
     if (nextIndex >= steps.length) {
-      setActive(false);
-      void markFeatureOnboardingDone("reader");
-      onTourComplete?.();
+      finishTour();
       return;
     }
+    void setFeatureOnboardingProgress("reader", nextIndex);
     setStepIndex(nextIndex);
-  }, [onTourComplete, stepIndex]);
+  }, [finishTour, stepIndex]);
 
   const dismissCurrentStep = useCallback(() => {
     advanceStep();
   }, [advanceStep]);
+
+  const skipTour = useCallback(() => {
+    finishTour();
+  }, [finishTour]);
 
   const completeInteractionStep = useCallback(() => {
     if (isInteractionCoachMark || isClearSelectionStep) {
@@ -491,6 +506,7 @@ export function useReaderFeatureOnboarding({
     coachMarkAnchor,
     forceChapterNavArrowsVisible,
     dismissCurrentStep,
+    skipTour,
     completeInteractionStep,
     message: currentStep ? READER_ONBOARDING_MESSAGES[currentStep] : "",
     subtitle: currentStep ? READER_ONBOARDING_SUBTITLES[currentStep] : undefined,

@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { useSbTabScreenPadding } from "@/lib/use-sb-bottom-padding";
 import { hapticLightImpact } from "@/lib/haptics";
+import { loadReaderLastPosition, peekReaderLastPosition } from "@/lib/reader-last-position";
+import { READER_INTERNAL_NO_STACK_ANIMATION } from "@/lib/reader-hub-navigation";
 import { HomeM3HeroSection } from "@/src/features/home/HomeM3HeroSection";
 import { HomeM3DailyVerseCard } from "@/src/features/home/HomeM3DailyVerseCard";
 import {
@@ -23,10 +25,30 @@ export default function HomeScreen() {
   const navigateWithHaptic = useCallback(
     (href: Href) => {
       hapticLightImpact();
-      router.push(href);
+      router.navigate(href);
     },
     [router],
   );
+
+  const openReader = useCallback(() => {
+    hapticLightImpact();
+    const cached = peekReaderLastPosition();
+    if (cached) {
+      router.navigate(
+        `/reader/${cached.bookSlug}/${cached.chapter}?translation=${encodeURIComponent(cached.translationId)}&${READER_INTERNAL_NO_STACK_ANIMATION}=1` as Href,
+      );
+      return;
+    }
+    void loadReaderLastPosition().then((saved) => {
+      if (saved) {
+        router.navigate(
+          `/reader/${saved.bookSlug}/${saved.chapter}?translation=${encodeURIComponent(saved.translationId)}&${READER_INTERNAL_NO_STACK_ANIMATION}=1` as Href,
+        );
+      } else {
+        router.navigate("/reader" as Href);
+      }
+    });
+  }, [router]);
 
   return (
     <View
@@ -43,7 +65,7 @@ export default function HomeScreen() {
         <View style={{ paddingTop: Math.max(20, insets.top) }}>
           <HomeM3HeroSection
             bundle={bundle}
-            onReadScripture={() => navigateWithHaptic("/reader")}
+            onReadScripture={openReader}
             onWriteJournal={() => navigateWithHaptic("/journal")}
           />
         </View>

@@ -25,6 +25,7 @@ type SpotlightOverlayProps = {
   message: string;
   subtitle?: string;
   onDismiss: () => void;
+  onSkip?: () => void;
   scrimOpacity?: number;
   targetPadding?: number;
   labelPosition?: "below" | "above" | "center" | "auto";
@@ -340,6 +341,7 @@ export function SpotlightOverlay({
   message,
   subtitle,
   onDismiss,
+  onSkip,
   scrimOpacity = 0.62,
   targetPadding = 8,
   labelPosition = "auto",
@@ -417,10 +419,13 @@ export function SpotlightOverlay({
       )}
 
       <Animated.View
-        pointerEvents="none"
+        pointerEvents={onSkip ? "box-none" : "none"}
         style={[styles.labelWrap, labelStyle, { opacity: labelOpacity }]}
       >
-        <View style={[onboardingTooltipStyles.card, { backgroundColor: colors.tooltipBackground }]}>
+        <View
+          pointerEvents={onSkip ? "auto" : "none"}
+          style={[onboardingTooltipStyles.card, { backgroundColor: colors.tooltipBackground }]}
+        >
           <Text style={[onboardingTooltipStyles.message, { color: colors.tooltipText }]}>{displayMessage}</Text>
           {displaySubtitle ? (
             <Text style={[onboardingTooltipStyles.hint, { color: colors.tooltipText }]}>{displaySubtitle}</Text>
@@ -429,6 +434,19 @@ export function SpotlightOverlay({
             <Text style={[onboardingTooltipStyles.hint, { color: colors.tooltipText }]}>
               Tap anywhere to continue
             </Text>
+          ) : null}
+          {onSkip ? (
+            <Pressable
+              onPress={onSkip}
+              accessibilityRole="button"
+              accessibilityLabel="Skip tour"
+              hitSlop={8}
+              style={{ marginTop: 8 }}
+            >
+              <Text style={[onboardingTooltipStyles.hint, { color: colors.tooltipText, textDecorationLine: "underline" }]}>
+                Skip tour
+              </Text>
+            </Pressable>
           ) : null}
         </View>
       </Animated.View>

@@ -17,6 +17,7 @@ type ReaderFeatureOnboardingLayerProps = {
   spotlightTargetsStep: ReaderOnboardingStep | null;
   coachMarkAnchor: { x: number; y: number; width: number; height: number } | null;
   onDismiss: () => void;
+  onSkipTour: () => void;
   colors: {
     tooltipBackground: string;
     tooltipText: string;
@@ -51,6 +52,7 @@ export function ReaderFeatureOnboardingLayer({
   spotlightTargets,
   coachMarkAnchor,
   onDismiss,
+  onSkipTour,
   colors,
 }: ReaderFeatureOnboardingLayerProps) {
   const spotlightVisible = visible && isSpotlightStep && step != null;
@@ -72,6 +74,7 @@ export function ReaderFeatureOnboardingLayer({
               message={message}
               subtitle={subtitle}
               onDismiss={onDismiss}
+              onSkip={onSkipTour}
               colors={{
                 tooltipBackground: colors.tooltipBackground,
                 tooltipText: colors.tooltipText,
@@ -94,6 +97,7 @@ export function ReaderFeatureOnboardingLayer({
           <CoachMarkOverlay
             message={message}
             onDismiss={onDismiss}
+            onSkip={onSkipTour}
             anchor={coachMarkAnchor}
             placement="center"
             dimmed={false}

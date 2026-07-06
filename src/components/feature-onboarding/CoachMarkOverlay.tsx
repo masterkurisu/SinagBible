@@ -4,6 +4,7 @@ import { onboardingTooltipStyles } from "@/src/components/feature-onboarding/onb
 type CoachMarkOverlayProps = {
   message: string;
   onDismiss?: () => void;
+  onSkip?: () => void;
   anchor?: LayoutRectangle | null;
   placement?: "center" | "near-anchor-below" | "near-anchor-above";
   dimmed?: boolean;
@@ -19,6 +20,7 @@ type CoachMarkOverlayProps = {
 export function CoachMarkOverlay({
   message,
   onDismiss,
+  onSkip,
   anchor,
   placement = "center",
   dimmed = true,
@@ -58,11 +60,27 @@ export function CoachMarkOverlay({
           accessibilityLabel={`${message}. ${hint ?? ""}`}
         />
       ) : null}
-      <View pointerEvents="none" style={[styles.cardWrap, cardPositionStyle]}>
-        <View style={[onboardingTooltipStyles.card, { backgroundColor: colors.tooltipBackground }]}>
+      <View pointerEvents={onSkip ? "box-none" : "none"} style={[styles.cardWrap, cardPositionStyle]}>
+        <View
+          pointerEvents={onSkip ? "auto" : "none"}
+          style={[onboardingTooltipStyles.card, { backgroundColor: colors.tooltipBackground }]}
+        >
           <Text style={[onboardingTooltipStyles.message, { color: colors.tooltipText }]}>{message}</Text>
           {hint ? (
             <Text style={[onboardingTooltipStyles.hint, { color: colors.tooltipText }]}>{hint}</Text>
+          ) : null}
+          {onSkip ? (
+            <Pressable
+              onPress={onSkip}
+              accessibilityRole="button"
+              accessibilityLabel="Skip tour"
+              hitSlop={8}
+              style={{ marginTop: 8, alignSelf: "center" }}
+            >
+              <Text style={[onboardingTooltipStyles.hint, { color: colors.tooltipText, textDecorationLine: "underline" }]}>
+                Skip tour
+              </Text>
+            </Pressable>
           ) : null}
         </View>
       </View>
