@@ -15,6 +15,10 @@ import {
   READER_M3_SURFACE_CONTAINER,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
+/** Single continuous shake — no stepped wind-up at extremes. */
+const JIGGLE_DURATION_MS = 220;
+const JIGGLE_OFFSET_PX = 5;
+
 export type ReaderM3IconButtonProps = {
   onPress: () => void;
   accessibilityLabel: string;
@@ -23,8 +27,8 @@ export type ReaderM3IconButtonProps = {
   rippleColor?: string;
   /** Increment to play a brief spin (e.g. after async work). */
   spinNonce?: number;
-  /** Brief spin on each press — M3 busy feedback when opening panels. */
-  spinOnPress?: boolean;
+  /** Brief jiggle on each press — M3 expressive tap feedback. */
+  jiggleOnPress?: boolean;
   /** Skip haptic when the parent `onPress` already fires one. */
   suppressHaptic?: boolean;
   hitSlop?: { top: number; right: number; bottom: number; left: number };
@@ -34,7 +38,7 @@ export type ReaderM3IconButtonProps = {
 };
 
 /**
- * M3 standard icon button — ripple, press scale, selected container, optional spin.
+ * M3 standard icon button — ripple, press scale, selected container, optional jiggle.
  * Android only; iOS callers should use their own Pressable chrome.
  */
 export function ReaderM3IconButton({
@@ -44,7 +48,7 @@ export function ReaderM3IconButton({
   selected = false,
   rippleColor = READER_M3_ICON_BUTTON_RIPPLE,
   spinNonce = 0,
-  spinOnPress = true,
+  jiggleOnPress = true,
   suppressHaptic = false,
   hitSlop = { top: 4, right: 4, bottom: 4, left: 4 },
   buttonRef,
@@ -53,7 +57,9 @@ export function ReaderM3IconButton({
 }: ReaderM3IconButtonProps) {
   const selectedAnim = useRef(new Animated.Value(selected ? 1 : 0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const jigglePhase = useRef(new Animated.Value(0)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
+  const jiggleLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const spinLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
@@ -64,6 +70,20 @@ export function ReaderM3IconButton({
       useNativeDriver: true,
     }).start();
   }, [selected, selectedAnim]);
+
+  const playJiggle = useCallback(() => {
+    jiggleLoopRef.current?.stop();
+    jigglePhase.setValue(0);
+    jiggleLoopRef.current = Animated.timing(jigglePhase, {
+      toValue: 1,
+      duration: JIGGLE_DURATION_MS,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    });
+    jiggleLoopRef.current.start(() => {
+      jigglePhase.setValue(0);
+    });
+  }, [jigglePhase]);
 
   const playSpin = useCallback(() => {
     spinLoopRef.current?.stop();
@@ -84,35 +104,56 @@ export function ReaderM3IconButton({
     playSpin();
   }, [playSpin, spinNonce]);
 
-  useEffect(() => () => spinLoopRef.current?.stop(), []);
+  useEffect(
+    () => () => {
+      jiggleLoopRef.current?.stop();
+      spinLoopRef.current?.stop();
+    },
+    [],
+  );
 
   const handlePress = useCallback(() => {
     if (!suppressHaptic) hapticLightImpact();
-    if (spinOnPress) playSpin();
+    if (jiggleOnPress) playJiggle();
     onPress();
-  }, [onPress, playSpin, spinOnPress, suppressHaptic]);
+  }, [jiggleOnPress, onPress, playJiggle, suppressHaptic]);
 
   const handlePressIn = useCallback(() => {
+    if (jiggleOnPress) return;
     Animated.spring(scaleAnim, {
       toValue: 0.9,
       friction: 8,
       tension: 320,
       useNativeDriver: true,
     }).start();
-  }, [scaleAnim]);
+  }, [jiggleOnPress, scaleAnim]);
 
   const handlePressOut = useCallback(() => {
+    if (jiggleOnPress) return;
     Animated.spring(scaleAnim, {
       toValue: 1,
       friction: 6,
       tension: 220,
       useNativeDriver: true,
     }).start();
-  }, [scaleAnim]);
+  }, [jiggleOnPress, scaleAnim]);
 
   const selectedBgOpacity = selectedAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
+  });
+
+  const jiggleTranslateX = jigglePhase.interpolate({
+    inputRange: [0, 0.1, 0.26, 0.46, 0.66, 0.84, 1],
+    outputRange: [
+      0,
+      -JIGGLE_OFFSET_PX,
+      JIGGLE_OFFSET_PX,
+      -JIGGLE_OFFSET_PX * 0.7,
+      JIGGLE_OFFSET_PX * 0.7,
+      -JIGGLE_OFFSET_PX * 0.2,
+      0,
+    ],
   });
 
   const busyRotation = spinAnim.interpolate({
@@ -159,7 +200,13 @@ export function ReaderM3IconButton({
             },
           ]}
         />
-        <Animated.View style={{ transform: [{ scale: scaleAnim }, { rotate: busyRotation }] }}>
+        <Animated.View
+          style={{
+            transform: jiggleOnPress
+              ? [{ translateX: jiggleTranslateX }, { rotate: busyRotation }]
+              : [{ scale: scaleAnim }, { rotate: busyRotation }],
+          }}
+        >
           {children}
         </Animated.View>
       </Pressable>

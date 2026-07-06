@@ -40,7 +40,7 @@ export function ReaderActionBarIconButton({
         buttonRef={buttonRef}
         style={style}
         suppressHaptic
-        spinOnPress={false}
+        jiggleOnPress={false}
       >
         {children}
       </ReaderM3IconButton>
