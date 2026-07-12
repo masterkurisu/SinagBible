@@ -30,6 +30,7 @@ import {
   State,
   type ScrollView as GHScrollViewRef,
 } from "react-native-gesture-handler";
+import { getTestament } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { MenuOptionsIcon } from "@/components/icons/MenuOptionsIcon";
@@ -230,7 +231,6 @@ export function ReaderBookSheetWindowOverlay({
 }
 
 const BOOK_SELECTOR_VIEW_STORAGE_KEY = "sb:reader:bookSelectorView";
-const OT_BOOK_COUNT = 39;
 /** Space above the scrolled-to book so it is not flush with the sheet header. */
 const BOOK_LIST_SCROLL_TOP_INSET = 40;
 
@@ -327,10 +327,16 @@ export function BookPickerSheet({
   );
 
   const { oldTestamentBooks, newTestamentBooks } = useMemo(() => {
-    return {
-      oldTestamentBooks: books.slice(0, OT_BOOK_COUNT),
-      newTestamentBooks: books.slice(OT_BOOK_COUNT),
-    };
+    const oldTestamentBooks: BibleBookNavItem[] = [];
+    const newTestamentBooks: BibleBookNavItem[] = [];
+    for (const book of books) {
+      if (getTestament(book.slug) === "new") {
+        newTestamentBooks.push(book);
+      } else {
+        oldTestamentBooks.push(book);
+      }
+    }
+    return { oldTestamentBooks, newTestamentBooks };
   }, [books]);
 
   const azSortedBooks = useMemo(
@@ -460,9 +466,8 @@ export function BookPickerSheet({
       return;
     }
     resetPickerState();
-    const currentBookIndex = books.findIndex((b) => b.slug === chapter.bookSlug);
-    if (currentBookIndex >= 0 && bookSelectorViewMode === "testament") {
-      setSelectorTestamentTab(currentBookIndex < OT_BOOK_COUNT ? "old" : "new");
+    if (books.some((b) => b.slug === chapter.bookSlug) && bookSelectorViewMode === "testament") {
+      setSelectorTestamentTab(getTestament(chapter.bookSlug));
     }
     bookSheetClosingRef.current = false;
     bookSheetTranslateY.stopAnimation();
