@@ -91,7 +91,8 @@ android {
 
     namespace 'com.sinagbible.app.dev'
     defaultConfig {
-        applicationId 'com.sinagbible.app.dev'
+        // Must be a string literal — EAS CLI parses this statically for credentials lookup.
+        applicationId 'com.sinagbible.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -109,6 +110,7 @@ android {
     }
     buildTypes {
         debug {
+            applicationIdSuffix '.dev'
             signingConfig signingConfigs.debug
         }
         release {
