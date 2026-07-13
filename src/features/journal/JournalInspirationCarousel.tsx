@@ -11,7 +11,10 @@ import {
 import { FlatList, Pressable } from "react-native-gesture-handler";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import type { CarouselImageTheme } from "@/lib/carousel-image-themes";
+import { isCarouselLightBackgroundTheme } from "@/lib/carousel-image-themes";
 import type { CarouselDisplayVerse } from "@/lib/journal-carousel-verses";
+import { getCarouselCardGradient } from "@/lib/journal-carousel-verses";
 import { useJournalCarouselVerses } from "@/lib/use-journal-carousel-verses";
 import { useCarouselBackgroundUrls } from "@/lib/use-carousel-background-urls";
 import {
@@ -30,22 +33,37 @@ const CAROUSEL_VERTICAL_PADDING_PX = 16;
 
 type CarouselCardProps = {
   item: CarouselDisplayVerse;
+  cardIndex: number;
   cardWidth: number;
   imageUrl: string | null;
+  imageTheme: CarouselImageTheme;
   captureRef: (node: View | null) => void;
   onLongPress: (item: CarouselDisplayVerse) => void;
 };
 
 const CarouselCard = memo(function CarouselCard({
   item,
+  cardIndex,
   cardWidth,
   imageUrl,
+  imageTheme,
   captureRef,
   onLongPress,
 }: CarouselCardProps) {
   const cardHeight = Math.round(cardWidth * 1.12);
   const borderRadius = CAROUSEL_CARD_RADIUS_PX;
-  const showImage = Boolean(imageUrl);
+  const isLightBackground = isCarouselLightBackgroundTheme(imageTheme);
+  const showImage =
+    Boolean(imageUrl) &&
+    imageTheme !== "gradient" &&
+    imageTheme !== "light-gradient" &&
+    imageTheme !== "simple";
+  const showSolidBackground = imageTheme === "simple";
+  const cardGradient = useMemo(
+    () => getCarouselCardGradient(item.id, cardIndex, imageTheme, item.gradient),
+    [cardIndex, imageTheme, item.gradient, item.id],
+  );
+  const solidColor = cardGradient[1];
   const cardStyle = useMemo(
     () => [styles.cardShell, { width: cardWidth, height: cardHeight, borderRadius }],
     [borderRadius, cardHeight, cardWidth],
@@ -63,13 +81,17 @@ const CarouselCard = memo(function CarouselCard({
         accessibilityHint="Long press for share and image options"
         style={StyleSheet.absoluteFill}
       >
-        <LinearGradient
-          colors={[...item.gradient]}
-          locations={[0, 0.55, 1]}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+        {showSolidBackground ? (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: solidColor }]} />
+        ) : (
+          <LinearGradient
+            colors={[...cardGradient]}
+            locations={[0, 0.45, 1]}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
 
         {showImage ? (
           <Image
@@ -83,22 +105,31 @@ const CarouselCard = memo(function CarouselCard({
           />
         ) : null}
 
-        <LinearGradient
-          colors={["rgba(26,22,15,0.08)", "rgba(26,22,15,0.52)", "rgba(26,22,15,0.82)"]}
-          locations={[0, 0.45, 1]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+        {isLightBackground ? null : (
+          <LinearGradient
+            colors={["rgba(26,22,15,0.08)", "rgba(26,22,15,0.52)", "rgba(26,22,15,0.82)"]}
+            locations={[0, 0.45, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
 
         <View style={styles.cardContent}>
           {item.badgeLabel ? (
-            <Text style={styles.cardBadge}>{item.badgeLabel}</Text>
+            <Text style={isLightBackground ? styles.cardBadgeLight : styles.cardBadge}>
+              {item.badgeLabel}
+            </Text>
           ) : null}
-          <Text style={styles.cardText} numberOfLines={4}>
+          <Text
+            style={isLightBackground ? styles.cardTextLight : styles.cardText}
+            numberOfLines={4}
+          >
             {item.text}
           </Text>
-          <Text style={styles.cardReference}>{item.reference}</Text>
+          <Text style={isLightBackground ? styles.cardReferenceLight : styles.cardReference}>
+            {item.reference}
+          </Text>
         </View>
       </Pressable>
 
@@ -115,7 +146,7 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
   const { width: windowWidth } = useWindowDimensions();
   const { bundle } = useMobileAppTheme();
   const { displayVerses, removeFavorite } = useJournalCarouselVerses();
-  const { getImageUrl } = useCarouselBackgroundUrls(displayVerses);
+  const { getImageUrl, imageTheme } = useCarouselBackgroundUrls(displayVerses);
   const listRef = useRef<FlatList<CarouselDisplayVerse> | null>(null);
   const captureRefs = useRef(new Map<string, View>());
   const [menuState, setMenuState] = useState<MenuState | null>(null);
@@ -225,13 +256,15 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
       ({ item, index }) => (
         <CarouselCard
           item={item}
+          cardIndex={index}
           cardWidth={cardWidths[index]!}
           imageUrl={getImageUrl(item)}
+          imageTheme={imageTheme}
           captureRef={setCaptureRef(item.id)}
           onLongPress={handleLongPress}
         />
       ),
-    [cardWidths, getImageUrl, handleLongPress, setCaptureRef],
+    [cardWidths, getImageUrl, handleLongPress, imageTheme, setCaptureRef],
   );
 
   const keyExtractor = (item: CarouselDisplayVerse) => item.id;
@@ -315,11 +348,27 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
+  cardBadgeLight: {
+    marginBottom: 8,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    lineHeight: 14,
+    color: "#5c4a32",
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+  },
   cardText: {
     fontFamily: "Lora_400Regular",
     fontSize: 16,
     lineHeight: 22,
     color: "#f5f2ec",
+    fontStyle: "italic",
+  },
+  cardTextLight: {
+    fontFamily: "Lora_400Regular",
+    fontSize: 16,
+    lineHeight: 22,
+    color: "#2c2416",
     fontStyle: "italic",
   },
   cardReference: {
@@ -328,6 +377,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: "#e8dcc8",
+    letterSpacing: 0.2,
+  },
+  cardReferenceLight: {
+    marginTop: 10,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#5c4a32",
     letterSpacing: 0.2,
   },
 });

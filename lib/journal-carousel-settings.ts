@@ -1,4 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  DEFAULT_CAROUSEL_IMAGE_THEME,
+  normalizeCarouselImageTheme,
+  type CarouselImageTheme,
+} from "@/lib/carousel-image-themes";
 
 const STORAGE_KEY = "sb:journal:carousel-settings";
 
@@ -11,6 +16,8 @@ export type CarouselRotationInterval =
   | "1h"
   | "daily";
 
+export type CarouselImageRefreshInterval = CarouselRotationInterval | "never";
+
 export type JournalCarouselSettings = {
   randomize: boolean;
   /** When randomize is on — include user favorites in the shuffled pool. */
@@ -21,6 +28,10 @@ export type JournalCarouselSettings = {
   verseCount: number;
   /** How often the visible favorites rotate. Used when randomize is off. */
   rotationInterval: CarouselRotationInterval;
+  /** How often carousel card backgrounds automatically refresh. */
+  imageRefreshInterval: CarouselImageRefreshInterval;
+  /** Pexels search theme for carousel backgrounds. */
+  imageTheme: CarouselImageTheme;
 };
 
 export const JOURNAL_CAROUSEL_MIN_VERSE_COUNT = 1;
@@ -49,12 +60,25 @@ export const CAROUSEL_ROTATION_INTERVAL_MS: Record<CarouselRotationInterval, num
   daily: 86_400_000,
 };
 
+export const CAROUSEL_IMAGE_REFRESH_INTERVAL_OPTIONS: {
+  value: CarouselImageRefreshInterval;
+  label: string;
+}[] = [
+  { value: "never", label: "Manual only" },
+  ...CAROUSEL_ROTATION_INTERVAL_OPTIONS,
+];
+
+export const CAROUSEL_IMAGE_REFRESH_INTERVAL_MS: Record<CarouselRotationInterval, number> =
+  CAROUSEL_ROTATION_INTERVAL_MS;
+
 export const DEFAULT_JOURNAL_CAROUSEL_SETTINGS: JournalCarouselSettings = {
   randomize: false,
   randomizeFavorites: true,
   shuffleDefaultsDaily: true,
   verseCount: 20,
   rotationInterval: "daily",
+  imageRefreshInterval: "never",
+  imageTheme: DEFAULT_CAROUSEL_IMAGE_THEME,
 };
 
 const listeners = new Set<(settings: JournalCarouselSettings) => void>();
@@ -71,6 +95,12 @@ function normalizeSettings(raw: Partial<JournalCarouselSettings>): JournalCarous
     ? raw.rotationInterval!
     : DEFAULT_JOURNAL_CAROUSEL_SETTINGS.rotationInterval;
 
+  const imageRefreshInterval = CAROUSEL_IMAGE_REFRESH_INTERVAL_OPTIONS.some(
+    (o) => o.value === raw.imageRefreshInterval,
+  )
+    ? raw.imageRefreshInterval!
+    : DEFAULT_JOURNAL_CAROUSEL_SETTINGS.imageRefreshInterval;
+
   return {
     randomize: raw.randomize ?? DEFAULT_JOURNAL_CAROUSEL_SETTINGS.randomize,
     randomizeFavorites:
@@ -79,6 +109,8 @@ function normalizeSettings(raw: Partial<JournalCarouselSettings>): JournalCarous
       raw.shuffleDefaultsDaily ?? DEFAULT_JOURNAL_CAROUSEL_SETTINGS.shuffleDefaultsDaily,
     verseCount: clampVerseCount(raw.verseCount ?? DEFAULT_JOURNAL_CAROUSEL_SETTINGS.verseCount),
     rotationInterval: interval,
+    imageRefreshInterval,
+    imageTheme: normalizeCarouselImageTheme(raw.imageTheme),
   };
 }
 
@@ -125,3 +157,10 @@ export async function patchJournalCarouselSettings(
   const current = await loadJournalCarouselSettings();
   return saveJournalCarouselSettings({ ...current, ...patch });
 }
+
+export type { CarouselImageTheme } from "@/lib/carousel-image-themes";
+export {
+  CAROUSEL_IMAGE_THEME_OPTIONS,
+  DEFAULT_CAROUSEL_IMAGE_THEME,
+  getCarouselImageThemeLabel,
+} from "@/lib/carousel-image-themes";

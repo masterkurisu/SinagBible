@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { dailyVerseDayKey } from "@/lib/daily-verse";
-import { getDailyVerseCarouselDisplay } from "@/lib/journal-carousel-verses";
+import { getDailyVerseCarouselDisplay, getCarouselCardGradient } from "@/lib/journal-carousel-verses";
 import { useCarouselBackgroundUrls } from "@/lib/use-carousel-background-urls";
 import { HomeM3VerseCard } from "@/src/features/home/HomeM3VerseCard";
 
@@ -14,7 +14,11 @@ export function HomeM3DailyVerseCard({ bundle }: HomeM3DailyVerseCardProps) {
   const dayKey = dailyVerseDayKey();
   const dailyVerse = useMemo(() => getDailyVerseCarouselDisplay(), [dayKey]);
   const displayVerses = useMemo(() => [dailyVerse], [dailyVerse]);
-  const { getImageUrl } = useCarouselBackgroundUrls(displayVerses);
+  const { getImageUrl, imageTheme } = useCarouselBackgroundUrls(displayVerses);
+  const cardGradient = useMemo(
+    () => getCarouselCardGradient(dailyVerse.id, 0, imageTheme, dailyVerse.gradient),
+    [dailyVerse.gradient, dailyVerse.id, imageTheme],
+  );
 
   return (
     <HomeM3VerseCard
@@ -23,7 +27,8 @@ export function HomeM3DailyVerseCard({ bundle }: HomeM3DailyVerseCardProps) {
       reference={dailyVerse.reference}
       badgeLabel={dailyVerse.badgeLabel}
       imageUrl={getImageUrl(dailyVerse)}
-      gradient={dailyVerse.gradient}
+      imageTheme={imageTheme}
+      gradient={cardGradient}
     />
   );
 }

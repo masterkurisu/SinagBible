@@ -32,7 +32,9 @@ function settingsEqual(a: JournalCarouselSettings, b: JournalCarouselSettings): 
     a.randomizeFavorites === b.randomizeFavorites &&
     a.shuffleDefaultsDaily === b.shuffleDefaultsDaily &&
     a.verseCount === b.verseCount &&
-    a.rotationInterval === b.rotationInterval
+    a.rotationInterval === b.rotationInterval &&
+    a.imageRefreshInterval === b.imageRefreshInterval &&
+    a.imageTheme === b.imageTheme
   );
 }
 

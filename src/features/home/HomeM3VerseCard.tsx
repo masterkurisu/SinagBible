@@ -2,6 +2,9 @@ import { StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import type { CarouselImageTheme } from "@/lib/carousel-image-themes";
+import { isCarouselLightBackgroundTheme } from "@/lib/carousel-image-themes";
+import { getCarouselCardGradient } from "@/lib/journal-carousel-verses";
 import {
   HOME_M3_BODY_FONT_PX,
   HOME_M3_BODY_LINE_HEIGHT_PX,
@@ -19,6 +22,7 @@ export type HomeM3VerseCardProps = {
   bundle: MobileAppThemeBundle;
   badgeLabel?: string;
   imageUrl?: string | null;
+  imageTheme?: CarouselImageTheme;
   gradient?: readonly [string, string, string];
 };
 
@@ -29,12 +33,23 @@ export function HomeM3VerseCard({
   bundle,
   badgeLabel,
   imageUrl,
+  imageTheme = "auto",
   gradient,
 }: HomeM3VerseCardProps) {
   const h = bundle.home;
   const primary = bundle.chrome.tabTint;
-  const hasImage = Boolean(imageUrl);
-  const showPhotoChrome = hasImage || Boolean(gradient);
+  const isLightBackground = isCarouselLightBackgroundTheme(imageTheme);
+  const resolvedGradient =
+    gradient ? getCarouselCardGradient("home-daily-verse", 0, imageTheme, gradient) : gradient;
+  const showImage =
+    Boolean(imageUrl) &&
+    imageTheme !== "gradient" &&
+    imageTheme !== "light-gradient" &&
+    imageTheme !== "simple";
+  const showSolidBackground = imageTheme === "simple";
+  const showPhotoChrome = showImage || Boolean(resolvedGradient) || showSolidBackground;
+  const chromeTextColor = isLightBackground ? "#2c2416" : "#f5f2ec";
+  const chromeAccentColor = isLightBackground ? "#5c4a32" : "#e8dcc8";
 
   return (
     <View
@@ -51,17 +66,19 @@ export function HomeM3VerseCard({
         shadowRadius: 3,
       }}
     >
-      {gradient ? (
+      {showSolidBackground && resolvedGradient ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: resolvedGradient[1] }]} />
+      ) : resolvedGradient ? (
         <LinearGradient
-          colors={[...gradient]}
-          locations={[0, 0.55, 1]}
+          colors={[...resolvedGradient]}
+          locations={[0, 0.45, 1]}
           start={{ x: 0.1, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
 
-      {hasImage ? (
+      {showImage ? (
         <Image
           source={{ uri: imageUrl! }}
           style={StyleSheet.absoluteFill}
@@ -73,7 +90,7 @@ export function HomeM3VerseCard({
         />
       ) : null}
 
-      {showPhotoChrome ? (
+      {showPhotoChrome && !isLightBackground ? (
         <LinearGradient
           colors={["rgba(26,22,15,0.08)", "rgba(26,22,15,0.52)", "rgba(26,22,15,0.82)"]}
           locations={[0, 0.45, 1]}
@@ -91,7 +108,7 @@ export function HomeM3VerseCard({
               fontFamily: "Inter_600SemiBold",
               fontSize: 11,
               lineHeight: 14,
-              color: "#e8dcc8",
+              color: showPhotoChrome ? chromeAccentColor : primary,
               letterSpacing: 1.4,
               textTransform: "uppercase",
             }}
@@ -104,7 +121,7 @@ export function HomeM3VerseCard({
             fontFamily: "Lora_400Regular",
             fontSize: 32,
             lineHeight: 36,
-            color: showPhotoChrome ? "#e8dcc8" : primary,
+            color: showPhotoChrome ? chromeAccentColor : primary,
             marginBottom: 8,
           }}
           accessibilityElementsHidden
@@ -117,7 +134,7 @@ export function HomeM3VerseCard({
             fontSize: HOME_M3_BODY_FONT_PX,
             lineHeight: HOME_M3_BODY_LINE_HEIGHT_PX,
             fontStyle: "italic",
-            color: showPhotoChrome ? "#f5f2ec" : h.quoteText,
+            color: showPhotoChrome ? chromeTextColor : h.quoteText,
           }}
         >
           {quote}
@@ -129,7 +146,7 @@ export function HomeM3VerseCard({
             fontSize: HOME_M3_REFERENCE_FONT_PX,
             lineHeight: HOME_M3_REFERENCE_LINE_HEIGHT_PX,
             letterSpacing: HOME_M3_REFERENCE_LETTER_SPACING,
-            color: showPhotoChrome ? "#e8dcc8" : primary,
+            color: showPhotoChrome ? chromeAccentColor : primary,
           }}
         >
           {reference}

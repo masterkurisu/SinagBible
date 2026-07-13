@@ -11,6 +11,7 @@ import {
   getCarouselImageCategoryForBookSlug,
   type CarouselImageCategory,
 } from "@/lib/pexels-image-mapper";
+import type { CarouselImageTheme } from "@/lib/carousel-image-themes";
 
 const STORAGE_KEY = "sb:journal:carousel-verses";
 
@@ -52,26 +53,69 @@ export const DAILY_VERSE_CAROUSEL_ID_PREFIX = "daily-verse:";
 
 const CAROUSEL_GRADIENTS: readonly (readonly [string, string, string])[] = [
   // Warm earth
-  ["#3d3428", "#2c2416", "#1a160f"],
   ["#5c4f3a", "#4a3826", "#3d3428"],
+  ["#6e5f48", "#5a4a36", "#4a3f30"],
   // Forest & moss
-  ["#2a3d2e", "#1f3024", "#141f18"],
-  ["#3a4a35", "#2d3a28", "#1e261c"],
+  ["#3d5240", "#2f4234", "#243528"],
+  ["#4a5c46", "#3a4a36", "#2e3c2c"],
   // Slate & mist
-  ["#3a4248", "#2c3338", "#1e2328"],
-  ["#4a5058", "#3a4048", "#2a3038"],
-  // Deep teal / ocean
-  ["#1e3a3f", "#152c30", "#0d1e22"],
-  ["#2a4548", "#1e3538", "#142528"],
+  ["#4a545c", "#3a444c", "#2e363c"],
+  ["#5a626a", "#4a5258", "#3c444a"],
+  // Teal / ocean
+  ["#2e4f54", "#234448", "#1a363a"],
+  ["#3a5c60", "#2e4a4e", "#243c40"],
   // Burgundy dusk
-  ["#4a2a32", "#3a2228", "#2a181e"],
-  ["#3d2838", "#302030", "#241828"],
+  ["#5c3842", "#4a2e36", "#3a242c"],
   // Navy twilight
-  ["#282e42", "#1e2438", "#141a2e"],
-  ["#2a3450", "#222c40", "#1a2230"],
+  ["#3a4258", "#2e3648", "#242c3c"],
   // Soft lavender-gray
-  ["#3a3848", "#302e3e", "#262434"],
+  ["#4a4858", "#3e3c4c", "#343240"],
 ];
+
+const CAROUSEL_LIGHT_GRADIENTS: readonly (readonly [string, string, string])[] = [
+  // Warm cream
+  ["#fff9f0", "#f5e6cc", "#e8cfaa"],
+  ["#fff5e6", "#edd9b8", "#dcc090"],
+  // Soft sage
+  ["#f2f8ee", "#dcead4", "#c4dbb8"],
+  ["#eaf4e6", "#d0e4ca", "#b6d4ae"],
+  // Sky
+  ["#f0f6fc", "#d4e6f4", "#b8d4ec"],
+  ["#eaf2fa", "#c8dff0", "#a8cce8"],
+  // Blush
+  ["#fdf3f0", "#f4ddd6", "#e8c8be"],
+  // Lavender
+  ["#f6f2fc", "#e6dcf4", "#d4c6ea"],
+  // Golden hour
+  ["#fff8e8", "#fce8b8", "#f2d080"],
+  // Mist
+  ["#f4f6f8", "#e2e8ee", "#ccd6de"],
+];
+
+const CAROUSEL_PASTEL_SOLIDS: readonly string[] = [
+  "#f9d8e5", // rose
+  "#fde4cf", // peach
+  "#fff1bf", // butter
+  "#d8f3dc", // mint
+  "#cce3ff", // sky
+  "#e4d4f4", // lavender
+  "#ffd6e0", // pink
+  "#c8ebe8", // seafoam
+  "#f5e6cc", // sand
+  "#e2f0d8", // sage
+  "#fce8f3", // blush
+  "#dbeafe", // powder blue
+  "#f3e8ff", // lilac
+  "#fef08a", // soft yellow
+  "#bbf7d0", // light green
+  "#fecdd3", // coral
+];
+
+function carouselPastelSolidForVerse(verseId: string, layoutIndex: number): readonly [string, string, string] {
+  const paletteIndex = (carouselHashSeed(verseId) + layoutIndex) % CAROUSEL_PASTEL_SOLIDS.length;
+  const color = CAROUSEL_PASTEL_SOLIDS[paletteIndex]!;
+  return [color, color, color];
+}
 
 function carouselHashSeed(seed: string): number {
   let hash = 2166136261;
@@ -85,6 +129,26 @@ function carouselHashSeed(seed: string): number {
 function carouselGradientForVerse(id: string, index: number): readonly [string, string, string] {
   const paletteIndex = (carouselHashSeed(id) + index) % CAROUSEL_GRADIENTS.length;
   return CAROUSEL_GRADIENTS[paletteIndex]!;
+}
+
+function carouselLightGradientForVerse(id: string, index: number): readonly [string, string, string] {
+  const paletteIndex = (carouselHashSeed(id) + index) % CAROUSEL_LIGHT_GRADIENTS.length;
+  return CAROUSEL_LIGHT_GRADIENTS[paletteIndex]!;
+}
+
+export function getCarouselCardGradient(
+  verseId: string,
+  layoutIndex: number,
+  imageTheme: CarouselImageTheme,
+  fallback: readonly [string, string, string],
+): readonly [string, string, string] {
+  if (imageTheme === "light-gradient") {
+    return carouselLightGradientForVerse(verseId, layoutIndex);
+  }
+  if (imageTheme === "simple") {
+    return carouselPastelSolidForVerse(verseId, layoutIndex);
+  }
+  return fallback;
 }
 
 const WIDTH_RATIOS = [0.58, 0.72, 0.64] as const;
