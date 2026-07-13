@@ -49,10 +49,11 @@ export type ReaderOnboardingStep =
   | "clear-selection";
 
 function readerOnboardingStepsForPlatform(): ReaderOnboardingStep[] {
-  const steps: ReaderOnboardingStep[] = ["book-selector", "settings"];
-  if (Platform.OS === "android") {
-    steps.push("font-settings");
-  }
+  // Header icon spotlights follow left-to-right layout (Android app bar vs iOS tools pill).
+  const steps: ReaderOnboardingStep[] =
+    Platform.OS === "android"
+      ? ["settings", "book-selector", "font-settings"]
+      : ["book-selector", "settings"];
   steps.push("page-turns", "tap-select-verse", "long-press-highlight", "clear-selection");
   return steps;
 }

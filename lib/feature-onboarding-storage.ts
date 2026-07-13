@@ -1,22 +1,26 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { onboardingDebugForcedFeaturePages } from "@/lib/onboarding-debug";
 
 /**
  * Dev-only: always re-run these tours and skip persisting completion.
- * Trim this list as each tour is finalized.
+ * Populated from `lib/onboarding-debug.ts` — edit flags there.
  */
-export const FEATURE_ONBOARDING_FORCE_PAGES: ReadonlySet<FeatureOnboardingPage> = __DEV__
-  ? new Set<FeatureOnboardingPage>()
-  : new Set();
+export const FEATURE_ONBOARDING_FORCE_PAGES: ReadonlySet<FeatureOnboardingPage> =
+  onboardingDebugForcedFeaturePages();
 
 /**
  * Dev-only: treat these tours as completed (suppress onboarding).
+ * Forced pages take precedence over skip.
  */
 export const FEATURE_ONBOARDING_SKIP_PAGES: ReadonlySet<FeatureOnboardingPage> = __DEV__
-  ? new Set<FeatureOnboardingPage>(["reader", "readerActionBar"])
+  ? new Set<FeatureOnboardingPage>()
   : new Set();
 
 /** @deprecated Use `FEATURE_ONBOARDING_FORCE_PAGES` — true when any page is forced. */
 export const FEATURE_ONBOARDING_FORCE_ALL = FEATURE_ONBOARDING_FORCE_PAGES.size > 0;
+
+/** @deprecated Use `FEATURE_ONBOARDING_FORCE_ALL` from onboarding-debug. */
+export { FEATURE_ONBOARDING_DEBUG_FORCE_ALL } from "@/lib/onboarding-debug";
 
 /** AsyncStorage keys for per-screen first-use feature tours. */
 export const FEATURE_ONBOARDING_STORAGE_KEYS = {
@@ -48,9 +52,9 @@ export function isFeatureOnboardingSkipped(page: FeatureOnboardingPage): boolean
 }
 
 export async function isFeatureOnboardingDone(page: FeatureOnboardingPage): Promise<boolean> {
+  if (isFeatureOnboardingForced(page)) return false;
   if (featureOnboardingDoneMemory.has(page)) return true;
   if (isFeatureOnboardingSkipped(page)) return true;
-  if (isFeatureOnboardingForced(page)) return false;
   try {
     const v = await AsyncStorage.getItem(FEATURE_ONBOARDING_STORAGE_KEYS[page]);
     if (v === "true") {
@@ -110,11 +114,30 @@ export async function isFeatureOnboardingPrerequisiteDone(
 }
 
 export async function markFeatureOnboardingDone(page: FeatureOnboardingPage): Promise<void> {
-  featureOnboardingDoneMemory.add(page);
   if (isFeatureOnboardingForced(page) || isFeatureOnboardingSkipped(page)) return;
+  featureOnboardingDoneMemory.add(page);
   try {
     await AsyncStorage.setItem(FEATURE_ONBOARDING_STORAGE_KEYS[page], "true");
     await clearFeatureOnboardingProgress(page);
+  } catch {
+    // ignore
+  }
+}
+
+/** Clear in-memory completion cache (e.g. on dev force-reset). */
+export function resetFeatureOnboardingMemory(): void {
+  featureOnboardingDoneMemory.clear();
+}
+
+/** Remove all saved feature-tour completion + progress from AsyncStorage. */
+export async function resetAllFeatureOnboardingStorage(): Promise<void> {
+  resetFeatureOnboardingMemory();
+  const keys = [
+    ...Object.values(FEATURE_ONBOARDING_STORAGE_KEYS),
+    ...Object.values(FEATURE_ONBOARDING_PROGRESS_KEYS),
+  ];
+  try {
+    await AsyncStorage.multiRemove(keys);
   } catch {
     // ignore
   }

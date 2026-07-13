@@ -12,6 +12,7 @@ import { InteractionManager, AppState, Platform } from "react-native";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { ScreenLoadingSkeleton } from "@/components/loading-skeleton";
 import { OnboardingContainer } from "@/src/features/onboarding/OnboardingContainer";
+import { ONBOARDING_DEBUG_FORCE_APP_INTRO } from "@/lib/onboarding-debug";
 import {
   ONBOARDING_DONE_STORAGE_KEY,
   publishOnboardingState,
@@ -27,7 +28,7 @@ import { migrateAsyncStorageChapters } from "@/lib/migrate-async-storage";
 import { fetchChapterRemoteConfig } from "@/lib/chapter-remote-config";
 import { reconcileWithRemoteConfig } from "@/lib/chapter-store";
 import {
-  FEATURE_ONBOARDING_DEBUG_FORCE_ALL,
+  FEATURE_ONBOARDING_FORCE_ALL,
   resetAllFeatureOnboardingStorage,
 } from "@/lib/feature-onboarding-storage";
 
@@ -38,9 +39,14 @@ initCrashReporting();
 void applyPlatformOrientationLock();
 void loadHapticsEnabledPreference();
 
-if (__DEV__ && FEATURE_ONBOARDING_DEBUG_FORCE_ALL) {
+if (__DEV__ && ONBOARDING_DEBUG_FORCE_APP_INTRO) {
+  console.info("[onboarding] forceAppIntro is on — app intro slides will show.");
+  void AsyncStorage.removeItem(ONBOARDING_DONE_STORAGE_KEY);
+}
+
+if (__DEV__ && FEATURE_ONBOARDING_FORCE_ALL) {
   console.info(
-    "[feature-onboarding] DEBUG_FORCE_ALL is on — all feature tours will re-run (reader, journal, editor, detail, …).",
+    "[feature-onboarding] force flag(s) on — feature tours will re-run (see lib/onboarding-debug.ts).",
   );
   void resetAllFeatureOnboardingStorage();
 }

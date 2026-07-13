@@ -68,7 +68,7 @@ import {
   readerActionBarBottomPx,
   readerAndroidListBottomPaddingPx,
 } from "@/lib/native-tab-chrome";
-import { READER_SCROLL_JS_BRIDGE_DELTA_PX, READER_TAB_BAR_SCROLL_JS_BRIDGE_DELTA_PX } from "@/lib/device-capability";
+import { READER_SCROLL_JS_BRIDGE_DELTA_PX } from "@/lib/device-capability";
 import { useReaderTabBarScrollHidden, useRegisterReaderSettingsSlideProgress } from "@/lib/reader-tab-bar-visibility-context";
 import {
   READER_SETTINGS_MENU_SPRING_CLOSE,
@@ -142,7 +142,7 @@ import { ReaderYvpAttributionFooter } from "@/src/features/reader/ReaderYvpAttri
 import { ReaderYvpFootnoteSheet } from "@/src/features/reader/ReaderYvpFootnoteSheet";
 import type { YvpFootnoteBody } from "@sinag-bible/types";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
-import { useReaderTabBarAutoHide } from "@/src/features/reader/useReaderTabBarAutoHide";
+import { useReaderTabBarScrollDriver } from "@/src/features/reader/useReaderTabBarScrollDriver";
 
 const READER_FONT_CARD_PADDING_TOP_PX = 12;
 
@@ -309,7 +309,6 @@ export default function ReaderChapterScreen() {
   /** Drives cross-fade between in-content heading and stack header title (UI-thread scroll). */
   const readerScrollY = useSharedValue(0);
   const lastScrollBridgeY = useSharedValue(-1);
-  const lastTabBarScrollBridgeY = useSharedValue(-1);
   const latestScrollMetricsRef = useRef({ y: 0, contentHeight: 0, viewportHeight: 0 });
   const [readerPageHeadingHeight, setReaderPageHeadingHeight] = useState(96);
   const onReaderPageHeadingLayout = useCallback((height: number) => {
@@ -423,8 +422,7 @@ export default function ReaderChapterScreen() {
     readerScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
     readerScrollY.value = 0;
     lastScrollBridgeY.value = -1;
-    lastTabBarScrollBridgeY.value = -1;
-  }, [bookSlug, chapterNumber, requestedTranslationId, readerScrollY, lastScrollBridgeY, lastTabBarScrollBridgeY, initialScrollVerse]);
+  }, [bookSlug, chapterNumber, requestedTranslationId, readerScrollY, lastScrollBridgeY, initialScrollVerse]);
 
   const clearMobileSettingsFollowUp = useCallback(() => {
     if (mobileSettingsFollowUpTimeoutRef.current != null) {
@@ -1223,13 +1221,15 @@ export default function ReaderChapterScreen() {
     readerFeatureOnboarding.showLayer;
 
   const {
-    onTabBarScroll,
+    contentHeightSV,
+    viewportHeightSV,
     onTabBarContentSizeChange,
     onTabBarListLayout,
-  } = useReaderTabBarAutoHide({
+  } = useReaderTabBarScrollDriver({
     chapterRouteKey: chapterNavRouteKey,
     enabled: Platform.OS === "android",
     forceVisible: tabBarAutoHideForceVisible,
+    readerScrollY,
   });
 
   const {
@@ -1260,31 +1260,11 @@ export default function ReaderChapterScreen() {
     [onChapterNavArrowsScroll],
   );
 
-  const onReaderTabBarScrollSideEffects = useCallback(
-    (y: number, contentHeight: number, viewportHeight: number) => {
-      latestScrollMetricsRef.current = { y, contentHeight, viewportHeight };
-      const nativeEvent = {
-        contentOffset: { y, x: 0 },
-        contentSize: { height: contentHeight, width: 0 },
-        layoutMeasurement: { height: viewportHeight, width: 0 },
-      } as NativeScrollEvent;
-      onTabBarScroll({ nativeEvent } as NativeSyntheticEvent<NativeScrollEvent>);
-    },
-    [onTabBarScroll],
-  );
-
   const flushReaderScrollSideEffects = useCallback(() => {
     const { y, contentHeight, viewportHeight } = latestScrollMetricsRef.current;
     onReaderScrollSideEffects(y, contentHeight, viewportHeight);
-    onReaderTabBarScrollSideEffects(y, contentHeight, viewportHeight);
     lastScrollBridgeY.value = y;
-    lastTabBarScrollBridgeY.value = y;
-  }, [
-    onReaderScrollSideEffects,
-    onReaderTabBarScrollSideEffects,
-    lastScrollBridgeY,
-    lastTabBarScrollBridgeY,
-  ]);
+  }, [onReaderScrollSideEffects, lastScrollBridgeY]);
 
   const onReaderScrollBeginDragWithChapterNav = useCallback(() => {
     onReaderScrollBeginDrag();
@@ -1306,16 +1286,10 @@ export default function ReaderChapterScreen() {
     onScroll: (event) => {
       const y = event.contentOffset.y;
       readerScrollY.value = y;
+      contentHeightSV.value = event.contentSize.height;
+      viewportHeightSV.value = event.layoutMeasurement.height;
       const contentHeight = event.contentSize.height;
       const viewportHeight = event.layoutMeasurement.height;
-      const tabBarBridgeDelta = Math.abs(y - lastTabBarScrollBridgeY.value);
-      if (
-        lastTabBarScrollBridgeY.value < 0 ||
-        tabBarBridgeDelta >= READER_TAB_BAR_SCROLL_JS_BRIDGE_DELTA_PX
-      ) {
-        lastTabBarScrollBridgeY.value = y;
-        runOnJS(onReaderTabBarScrollSideEffects)(y, contentHeight, viewportHeight);
-      }
       const dy = Math.abs(y - lastScrollBridgeY.value);
       if (lastScrollBridgeY.value < 0 || dy >= READER_SCROLL_JS_BRIDGE_DELTA_PX) {
         lastScrollBridgeY.value = y;

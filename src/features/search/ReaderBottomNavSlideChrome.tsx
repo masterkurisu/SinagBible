@@ -1,15 +1,14 @@
-import { Animated, Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { usePathname } from "expo-router";
+import Reanimated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform } from "react-native";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import { mixHexColors } from "@/lib/mix-hex-color";
 import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
 import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
-import {
-  androidBottomNavChromeHideSlidePx,
-  androidBottomNavChromeSlideTranslateY,
-} from "@/src/features/search/tabBarSearchFabChrome";
+import { androidBottomNavChromeHideSlidePx } from "@/src/features/search/tabBarSearchFabChrome";
 
 /** True when the active reader tab is showing a chapter (not the redirect index). */
 function isReaderChapterRoute(pathname: string | null): boolean {
@@ -23,7 +22,7 @@ function isReaderChapterRoute(pathname: string | null): boolean {
 }
 
 type ReaderBottomNavSlideChromeProps = {
-  tabBarSlideProgress: Animated.Value;
+  tabBarSlideProgressSV: SharedValue<number>;
   slideOverlayActive: boolean;
   /** Native tab is hidden — slide chrome replaces it for the transition. */
   nativeTabBarHidden: boolean;
@@ -36,7 +35,7 @@ type ReaderBottomNavSlideChromeProps = {
  * The panel spans the FAB and nav strip so nothing visually leads during the slide.
  */
 export function ReaderBottomNavSlideChrome({
-  tabBarSlideProgress,
+  tabBarSlideProgressSV,
   slideOverlayActive,
   nativeTabBarHidden,
   settingsTabBarTint,
@@ -52,31 +51,32 @@ export function ReaderBottomNavSlideChrome({
     tabHapticKeyFromPathname(pathname) === "reader" &&
     isReaderChapterRoute(pathname);
 
-  if (!onReaderChapter) return null;
-
   const slideChromeHeight = androidBottomNavChromeHideSlidePx(insets.bottom);
   const tabBarSurface = mixHexColors(
     bundle.reader.sceneSurface,
     sheetChrome.settingsPanelBackground,
     settingsTabBarTint,
   );
-  const slideTranslateY = androidBottomNavChromeSlideTranslateY(
-    tabBarSlideProgress,
-    insets.bottom,
-  );
+
+  const slideAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: tabBarSlideProgressSV.value * slideChromeHeight }],
+  }));
+
+  if (!onReaderChapter) return null;
+
   /** Full panel while native is hidden — one rigid block slides with the FAB. */
   const showSlidePanel = nativeTabBarHidden || slideOverlayActive;
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      <Animated.View
+      <Reanimated.View
         pointerEvents="box-none"
         style={[
           styles.slideHost,
           {
             height: slideChromeHeight,
-            transform: [{ translateY: slideTranslateY }],
           },
+          slideAnimatedStyle,
         ]}
       >
         {showSlidePanel ? (
@@ -92,7 +92,7 @@ export function ReaderBottomNavSlideChrome({
           />
         ) : null}
         <TabBarSearchFab tabBarInteractionHidden={tabBarInteractionHidden} />
-      </Animated.View>
+      </Reanimated.View>
     </View>
   );
 }
