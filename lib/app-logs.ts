@@ -1,7 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
-import { cacheDirectory, EncodingType, writeAsStringAsync } from "expo-file-system/legacy";
+import {
+  cacheDirectory,
+  documentDirectory,
+  EncodingType,
+  makeDirectoryAsync,
+  StorageAccessFramework,
+  writeAsStringAsync,
+} from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
@@ -16,6 +23,7 @@ export type AppLogEntry = {
 
 const MAX_ENTRIES = 2500;
 const PERSIST_STORAGE_KEY = "sb:app-logs" as const;
+const LOGS_SAVE_DIRECTORY_URI_KEY = "sb:backup-save-directory-uri" as const;
 const PERSIST_DEBOUNCE_MS = 1500;
 
 let nextId = 1;
@@ -184,6 +192,89 @@ function buildExportFilename(): string {
 }
 
 export type ShareAppLogsResult = "shared" | "unavailable" | "failed";
+export type AppLogsSaveResult = "saved" | "cancelled" | "failed";
+
+function logsBaseName(filename: string): string {
+  return filename.replace(/\.txt$/i, "");
+}
+
+async function getOrRequestAndroidSaveDirectoryUri(): Promise<string | null> {
+  const cached = await AsyncStorage.getItem(LOGS_SAVE_DIRECTORY_URI_KEY);
+  if (cached) return cached;
+
+  const downloadsUri = StorageAccessFramework.getUriForDirectoryInRoot("Download");
+  const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync(downloadsUri);
+  if (!permissions.granted) return null;
+
+  await AsyncStorage.setItem(LOGS_SAVE_DIRECTORY_URI_KEY, permissions.directoryUri);
+  return permissions.directoryUri;
+}
+
+async function saveLogsToAndroidDevice(text: string, filename: string): Promise<AppLogsSaveResult> {
+  let directoryUri = await getOrRequestAndroidSaveDirectoryUri();
+  if (!directoryUri) return "cancelled";
+
+  const writeToDirectory = async (parentUri: string): Promise<void> => {
+    const fileUri = await StorageAccessFramework.createFileAsync(
+      parentUri,
+      logsBaseName(filename),
+      "text/plain",
+    );
+    await writeAsStringAsync(fileUri, text, { encoding: EncodingType.UTF8 });
+  };
+
+  try {
+    await writeToDirectory(directoryUri);
+    return "saved";
+  } catch (error) {
+    appendLog("warn", [
+      "[app-logs:android-save-retry]",
+      error instanceof Error ? error.message : String(error),
+    ]);
+    await AsyncStorage.removeItem(LOGS_SAVE_DIRECTORY_URI_KEY);
+    directoryUri = await getOrRequestAndroidSaveDirectoryUri();
+    if (!directoryUri) return "cancelled";
+    try {
+      await writeToDirectory(directoryUri);
+      return "saved";
+    } catch (retryError) {
+      appendLog("error", [
+        "[app-logs:android-save-failed]",
+        retryError instanceof Error ? retryError.message : String(retryError),
+      ]);
+      return "failed";
+    }
+  }
+}
+
+async function saveLogsToIosDevice(text: string, filename: string): Promise<AppLogsSaveResult> {
+  if (!documentDirectory) return "failed";
+  const dir = `${documentDirectory}logs/`;
+  await makeDirectoryAsync(dir, { intermediates: true });
+  await writeAsStringAsync(`${dir}${filename}`, text, { encoding: EncodingType.UTF8 });
+  return "saved";
+}
+
+export async function saveAppLogsToDevice(): Promise<AppLogsSaveResult> {
+  logAppEvent("app-logs:save-requested", { entryCount: entries.length });
+
+  try {
+    const text = buildAppLogsExportText();
+    const filename = buildExportFilename();
+    const result =
+      Platform.OS === "android"
+        ? await saveLogsToAndroidDevice(text, filename)
+        : await saveLogsToIosDevice(text, filename);
+
+    if (result === "saved") {
+      logAppEvent("app-logs:saved", { entryCount: entries.length, platform: Platform.OS });
+    }
+    return result;
+  } catch (error) {
+    appendLog("error", ["[app-logs:save-failed]", error instanceof Error ? error.message : String(error)]);
+    return "failed";
+  }
+}
 
 export async function shareAppLogs(): Promise<ShareAppLogsResult> {
   logAppEvent("app-logs:export-requested", { entryCount: entries.length });

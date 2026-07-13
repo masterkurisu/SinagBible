@@ -18,7 +18,7 @@ import { CreditsIcon } from "@/components/icons/CreditsIcon";
 import { KofiSupportBlock } from "@/components/kofi-support-block";
 import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Switch } from "@/components/M3Switch";
-import { shareAppLogs } from "@/lib/app-logs";
+import { saveAppLogsToDevice } from "@/lib/app-logs";
 import { hapticLightImpact } from "@/lib/haptics";
 import { getReaderSheetChrome, useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
@@ -151,8 +151,8 @@ export function ReaderMoreSettingsSheet({
   const rippleColor = bundle.chrome.androidRipple;
   const { width: screenW } = useWindowDimensions();
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
-  const [saveLogsBusy, setSaveLogsBusy] = useState(false);
-  const [saveLogsSnackbar, setSaveLogsSnackbar] = useState<string | null>(null);
+  const [logsExportBusy, setLogsExportBusy] = useState(false);
+  const [logsSnackbar, setLogsSnackbar] = useState<string | null>(null);
   const sheetSlideAnim = useRef(new Animated.Value(0)).current;
   const sheetOpacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -206,30 +206,40 @@ export function ReaderMoreSettingsSheet({
     })();
   }, [hapticsEnabled]);
 
-  const handleSaveLogs = useCallback(() => {
-    if (saveLogsBusy) return;
+  const dismissLogsSnackbar = useCallback(() => {
+    setLogsSnackbar(null);
+  }, []);
+
+  const runAfterSheetDismiss = useCallback(async () => {
+    onClose();
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 320);
+    });
+  }, [onClose]);
+
+  const handleSaveLogsToDevice = useCallback(() => {
+    if (logsExportBusy) return;
     hapticLightImpact();
-    setSaveLogsBusy(true);
+    setLogsExportBusy(true);
     void (async () => {
       try {
-        const result = await shareAppLogs();
-        if (result === "shared") {
-          setSaveLogsSnackbar("Logs ready to save or share");
-          return;
-        }
-        if (result === "unavailable") {
-          Alert.alert(
-            "Sharing unavailable",
-            "Sharing is not available on this device. Try again on a physical device.",
+        await runAfterSheetDismiss();
+        const result = await saveAppLogsToDevice();
+        if (result === "saved") {
+          setLogsSnackbar(
+            Platform.OS === "android"
+              ? "Logs saved to Downloads"
+              : "Logs saved in Files → Sinag Bible → logs",
           );
           return;
         }
+        if (result === "cancelled") return;
         Alert.alert("Could not save logs", "Something went wrong. Try again.");
       } finally {
-        setSaveLogsBusy(false);
+        setLogsExportBusy(false);
       }
     })();
-  }, [saveLogsBusy]);
+  }, [logsExportBusy, runAfterSheetDismiss]);
 
   const handleImportExport = useCallback(() => {
     hapticLightImpact();
@@ -244,6 +254,7 @@ export function ReaderMoreSettingsSheet({
   const slideFrom = useBottomSheet ? 48 : READER_MENU_SLIDE_FROM_PX;
 
   return (
+    <>
     <Modal visible={isOpen} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.root}>
         <Pressable
@@ -332,13 +343,13 @@ export function ReaderMoreSettingsSheet({
                     label="Save logs"
                     scale={scale}
                     accessibilityLabel="Save logs"
-                    onPress={handleSaveLogs}
-                    disabled={saveLogsBusy}
-                    busy={saveLogsBusy}
+                    onPress={handleSaveLogsToDevice}
+                    disabled={logsExportBusy}
+                    busy={logsExportBusy}
                     rippleColor={rippleColor}
                     trailing={
                       <MaterialIcons
-                        name="ios-share"
+                        name="download"
                         size={trailingIconSize}
                         color={sheetChrome.onSurfaceVariant}
                       />
@@ -409,14 +420,18 @@ export function ReaderMoreSettingsSheet({
             </View>
           </Animated.View>
         </View>
-        <M3Snackbar
-          message={saveLogsSnackbar ?? ""}
-          visible={saveLogsSnackbar != null}
-          onDismiss={() => setSaveLogsSnackbar(null)}
-          bottomInset={insets.bottom + 16}
-        />
       </View>
     </Modal>
+    <M3Snackbar
+      message={logsSnackbar ?? ""}
+      visible={logsSnackbar != null}
+      onDismiss={dismissLogsSnackbar}
+      bottomInset={insets.bottom + 16}
+      icon="check-circle"
+      actionLabel="Dismiss"
+      onAction={dismissLogsSnackbar}
+    />
+    </>
   );
 }
 
