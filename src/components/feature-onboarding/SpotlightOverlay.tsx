@@ -9,6 +9,16 @@ import {
   useWindowDimensions,
 } from "react-native";
 import Svg, { Circle, Defs, Mask, Rect } from "react-native-svg";
+import Reanimated, {
+  Easing as ReanimatedEasing,
+  cancelAnimation,
+  runOnJS,
+  useAnimatedProps,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
+import { isLowEndDevice } from "@/lib/device-capability";
 import { onboardingTooltipStyles } from "@/src/components/feature-onboarding/onboarding-tooltip-styles";
 
 export type SpotlightTarget = {
@@ -42,6 +52,10 @@ type SpotlightOverlayProps = {
 
 const TARGET_MORPH_MS = 520;
 const LABEL_CROSSFADE_MS = 300;
+const MAX_MORPH_HOLES = 4;
+
+const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
+const AnimatedRect = Reanimated.createAnimatedComponent(Rect);
 
 function toCircleTarget(target: SpotlightTarget, pad: number): SpotlightTarget {
   const cx = target.x + target.width / 2;
@@ -89,22 +103,23 @@ function targetsCanMorph(a: SpotlightTarget[], b: SpotlightTarget[]): boolean {
   return a.every((target) => shapeOf(target) === fromShape) && b.every((target) => shapeOf(target) === fromShape);
 }
 
-function lerpTargets(from: SpotlightTarget[], to: SpotlightTarget[], t: number): SpotlightTarget[] {
-  const count = Math.max(from.length, to.length);
-  return Array.from({ length: count }, (_, index) => {
-    const start = from[Math.min(index, from.length - 1)]!;
-    const end = to[Math.min(index, to.length - 1)]!;
-    const startRadius = start.borderRadius ?? 0;
-    const endRadius = end.borderRadius ?? startRadius;
-    return {
-      x: start.x + (end.x - start.x) * t,
-      y: start.y + (end.y - start.y) * t,
-      width: start.width + (end.width - start.width) * t,
-      height: start.height + (end.height - start.height) * t,
-      borderRadius: startRadius + (endRadius - startRadius) * t,
-      shape: start.shape,
-    };
-  });
+function targetsEqual(a: SpotlightTarget[], b: SpotlightTarget[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every(
+      (target, index) =>
+        target.x === b[index]?.x &&
+        target.y === b[index]?.y &&
+        target.width === b[index]?.width &&
+        target.height === b[index]?.height,
+    )
+  );
+}
+
+function targetCornerRadius(target: SpotlightTarget): number {
+  if (target.shape === "circle") return target.width / 2;
+  if (target.shape === "pill") return target.height / 2;
+  return target.borderRadius ?? 12;
 }
 
 function pickLabelPlacement(
@@ -224,67 +239,310 @@ function SvgMaskedScrim({
   );
 }
 
-function useMorphingTargets(paddedTargets: SpotlightTarget[]): SpotlightTarget[] {
-  const prevTargetsRef = useRef<SpotlightTarget[]>(paddedTargets);
-  const morphAnimRef = useRef<Animated.CompositeAnimation | null>(null);
-  const [renderTargets, setRenderTargets] = useState(paddedTargets);
+type MorphHoleChannel = {
+  fromX: SharedValue<number>;
+  fromY: SharedValue<number>;
+  fromW: SharedValue<number>;
+  fromH: SharedValue<number>;
+  fromRx: SharedValue<number>;
+  toX: SharedValue<number>;
+  toY: SharedValue<number>;
+  toW: SharedValue<number>;
+  toH: SharedValue<number>;
+  toRx: SharedValue<number>;
+};
+
+function useMorphHoleChannel(): MorphHoleChannel {
+  return {
+    fromX: useSharedValue(0),
+    fromY: useSharedValue(0),
+    fromW: useSharedValue(0),
+    fromH: useSharedValue(0),
+    fromRx: useSharedValue(0),
+    toX: useSharedValue(0),
+    toY: useSharedValue(0),
+    toW: useSharedValue(0),
+    toH: useSharedValue(0),
+    toRx: useSharedValue(0),
+  };
+}
+
+function useMorphHoleChannels(): MorphHoleChannel[] {
+  const h0 = useMorphHoleChannel();
+  const h1 = useMorphHoleChannel();
+  const h2 = useMorphHoleChannel();
+  const h3 = useMorphHoleChannel();
+  return [h0, h1, h2, h3];
+}
+
+function assignMorphHoleChannel(
+  channel: MorphHoleChannel,
+  from: SpotlightTarget,
+  to: SpotlightTarget,
+) {
+  channel.fromX.value = from.x;
+  channel.fromY.value = from.y;
+  channel.fromW.value = from.width;
+  channel.fromH.value = from.height;
+  channel.fromRx.value = targetCornerRadius(from);
+  channel.toX.value = to.x;
+  channel.toY.value = to.y;
+  channel.toW.value = to.width;
+  channel.toH.value = to.height;
+  channel.toRx.value = targetCornerRadius(to);
+}
+
+function MorphCircleHole({
+  channel,
+  progress,
+}: {
+  channel: MorphHoleChannel;
+  progress: SharedValue<number>;
+}) {
+  const animatedProps = useAnimatedProps(() => {
+    const t = progress.value;
+    const width = channel.fromW.value + (channel.toW.value - channel.fromW.value) * t;
+    const x = channel.fromX.value + (channel.toX.value - channel.fromX.value) * t;
+    const y = channel.fromY.value + (channel.toY.value - channel.fromY.value) * t;
+    const r = width / 2;
+    return {
+      cx: x + r,
+      cy: y + r,
+      r,
+    };
+  });
+
+  return <AnimatedCircle animatedProps={animatedProps} fill="black" />;
+}
+
+function MorphRectHole({
+  channel,
+  progress,
+}: {
+  channel: MorphHoleChannel;
+  progress: SharedValue<number>;
+}) {
+  const animatedProps = useAnimatedProps(() => {
+    const t = progress.value;
+    const width = channel.fromW.value + (channel.toW.value - channel.fromW.value) * t;
+    const height = channel.fromH.value + (channel.toH.value - channel.fromH.value) * t;
+    const x = channel.fromX.value + (channel.toX.value - channel.fromX.value) * t;
+    const y = channel.fromY.value + (channel.toY.value - channel.fromY.value) * t;
+    const rx = channel.fromRx.value + (channel.toRx.value - channel.fromRx.value) * t;
+    return {
+      x,
+      y,
+      width,
+      height,
+      rx,
+      ry: rx,
+    };
+  });
+
+  return <AnimatedRect animatedProps={animatedProps} fill="black" />;
+}
+
+function ReanimatedMorphScrim({
+  channels,
+  holeCount,
+  holeShapes,
+  progress,
+  scrimOpacity,
+  maskId,
+}: {
+  channels: MorphHoleChannel[];
+  holeCount: number;
+  holeShapes: Array<SpotlightTarget["shape"]>;
+  progress: SharedValue<number>;
+  scrimOpacity: number;
+  maskId: string;
+}) {
+  const { width: screenW, height: screenH } = useWindowDimensions();
+
+  return (
+    <Svg
+      pointerEvents="none"
+      width={screenW}
+      height={screenH}
+      style={StyleSheet.absoluteFill}
+    >
+      <Defs>
+        <Mask id={maskId} maskUnits="userSpaceOnUse">
+          <Rect x={0} y={0} width={screenW} height={screenH} fill="white" />
+          {Array.from({ length: holeCount }, (_, index) => {
+            const channel = channels[index]!;
+            const shape = holeShapes[index] ?? "rect";
+            if (shape === "circle") {
+              return <MorphCircleHole key={`morph-hole-${index}`} channel={channel} progress={progress} />;
+            }
+            return <MorphRectHole key={`morph-hole-${index}`} channel={channel} progress={progress} />;
+          })}
+        </Mask>
+      </Defs>
+      <Rect
+        x={0}
+        y={0}
+        width={screenW}
+        height={screenH}
+        fill={`rgba(0,0,0,${scrimOpacity})`}
+        mask={`url(#${maskId})`}
+      />
+    </Svg>
+  );
+}
+
+type SpotlightTransition =
+  | { mode: "static"; targets: SpotlightTarget[] }
+  | {
+      mode: "crossfade";
+      outgoing: SpotlightTarget[];
+      incoming: SpotlightTarget[];
+      outgoingOpacity: Animated.Value;
+      incomingOpacity: Animated.Value;
+    }
+  | {
+      mode: "morph";
+      targets: SpotlightTarget[];
+      holeCount: number;
+      holeShapes: Array<SpotlightTarget["shape"]>;
+      progress: SharedValue<number>;
+    };
+
+function useSpotlightTargetTransition(paddedTargets: SpotlightTarget[]): {
+  transition: SpotlightTransition;
+  morphChannels: MorphHoleChannel[];
+} {
+  const prevTargetsRef = useRef(paddedTargets);
+  const crossfadeAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const morphChannels = useMorphHoleChannels();
+  const morphProgress = useSharedValue(1);
+  const morphHoleCount = useRef(0);
+  const morphHoleShapes = useRef<Array<SpotlightTarget["shape"]>>([]);
+
+  const outgoingOpacity = useRef(new Animated.Value(0)).current;
+  const incomingOpacity = useRef(new Animated.Value(1)).current;
+
+  const [transition, setTransition] = useState<SpotlightTransition>({
+    mode: "static",
+    targets: paddedTargets,
+  });
+
+  const finishMorph = useRef(() => {
+    setTransition({ mode: "static", targets: prevTargetsRef.current });
+  }).current;
+
+  const finishCrossfade = useRef((next: SpotlightTarget[]) => {
+    outgoingOpacity.setValue(0);
+    incomingOpacity.setValue(1);
+    setTransition({ mode: "static", targets: next });
+  }).current;
 
   useEffect(() => {
     const previous = prevTargetsRef.current;
     const next = paddedTargets;
 
-    if (
-      previous === next ||
-      (previous.length === next.length &&
-        previous.every(
-          (target, index) =>
-            target.x === next[index]?.x &&
-            target.y === next[index]?.y &&
-            target.width === next[index]?.width &&
-            target.height === next[index]?.height,
-        ))
-    ) {
-      prevTargetsRef.current = next;
-      setRenderTargets(next);
+    if (targetsEqual(previous, next)) {
       return;
     }
 
-    morphAnimRef.current?.stop();
+    crossfadeAnimRef.current?.stop();
+    cancelAnimation(morphProgress);
 
     if (!targetsCanMorph(previous, next)) {
       prevTargetsRef.current = next;
-      setRenderTargets(next);
+      setTransition({ mode: "static", targets: next });
       return;
     }
 
-    const progress = new Animated.Value(0);
-    const listenerId = progress.addListener(({ value }) => {
-      setRenderTargets(lerpTargets(previous, next, value));
+    prevTargetsRef.current = next;
+
+    if (isLowEndDevice) {
+      outgoingOpacity.setValue(1);
+      incomingOpacity.setValue(0);
+      setTransition({
+        mode: "crossfade",
+        outgoing: previous,
+        incoming: next,
+        outgoingOpacity,
+        incomingOpacity,
+      });
+
+      crossfadeAnimRef.current = Animated.parallel([
+        Animated.timing(outgoingOpacity, {
+          toValue: 0,
+          duration: TARGET_MORPH_MS,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(incomingOpacity, {
+          toValue: 1,
+          duration: TARGET_MORPH_MS,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]);
+
+      crossfadeAnimRef.current.start(({ finished }) => {
+        crossfadeAnimRef.current = null;
+        if (finished) {
+          finishCrossfade(next);
+        }
+      });
+      return;
+    }
+
+    const holeCount = Math.min(Math.max(previous.length, next.length), MAX_MORPH_HOLES);
+    morphHoleCount.current = holeCount;
+    morphHoleShapes.current = Array.from({ length: holeCount }, (_, index) => {
+      const from = previous[Math.min(index, previous.length - 1)]!;
+      return from.shape ?? "rect";
     });
 
-    morphAnimRef.current = Animated.timing(progress, {
-      toValue: 1,
-      duration: TARGET_MORPH_MS,
-      easing: Easing.inOut(Easing.cubic),
-      useNativeDriver: false,
+    for (let index = 0; index < holeCount; index += 1) {
+      const from = previous[Math.min(index, previous.length - 1)]!;
+      const to = next[Math.min(index, next.length - 1)]!;
+      assignMorphHoleChannel(morphChannels[index]!, from, to);
+    }
+
+    morphProgress.value = 0;
+    setTransition({
+      mode: "morph",
+      targets: next,
+      holeCount,
+      holeShapes: [...morphHoleShapes.current],
+      progress: morphProgress,
     });
 
-    morphAnimRef.current.start(({ finished }) => {
-      progress.removeListener(listenerId);
-      morphAnimRef.current = null;
-      if (finished) {
-        prevTargetsRef.current = next;
-        setRenderTargets(next);
-      }
-    });
+    morphProgress.value = withTiming(
+      1,
+      {
+        duration: TARGET_MORPH_MS,
+        easing: ReanimatedEasing.inOut(ReanimatedEasing.cubic),
+      },
+      (finished) => {
+        if (finished) {
+          runOnJS(finishMorph)();
+        }
+      },
+    );
+  }, [
+    finishCrossfade,
+    finishMorph,
+    incomingOpacity,
+    morphProgress,
+    outgoingOpacity,
+    paddedTargets,
+  ]);
 
-    return () => {
-      morphAnimRef.current?.stop();
-      progress.removeListener(listenerId);
-    };
-  }, [paddedTargets]);
+  useEffect(
+    () => () => {
+      crossfadeAnimRef.current?.stop();
+      cancelAnimation(morphProgress);
+    },
+    [morphProgress],
+  );
 
-  return renderTargets;
+  return { transition, morphChannels };
 }
 
 function useCrossfadingLabel(message: string, subtitle?: string) {
@@ -353,19 +611,27 @@ export function SpotlightOverlay({
 }: SpotlightOverlayProps) {
   const { height: screenH } = useWindowDimensions();
   const maskId = `spotlight-${useId().replace(/[^a-zA-Z0-9-_]/g, "")}`;
+  const morphMaskId = `${maskId}-morph`;
 
   const paddedTargets = useMemo(
     () => targets.map((t) => paddedTarget(t, targetPadding)),
     [targets, targetPadding],
   );
 
-  const renderTargets = useMorphingTargets(paddedTargets);
+  const { transition, morphChannels } = useSpotlightTargetTransition(paddedTargets);
   const { displayMessage, displaySubtitle, labelOpacity } = useCrossfadingLabel(message, subtitle);
 
+  const interactionTargets =
+    transition.mode === "crossfade"
+      ? transition.incoming
+      : transition.mode === "morph"
+        ? transition.targets
+        : transition.targets;
+
   const labelTarget =
-    renderTargets[labelAnchorTargetIndex] ?? renderTargets[0];
-  const topTargetY = renderTargets.length
-    ? Math.min(...renderTargets.map((t) => t.y))
+    interactionTargets[labelAnchorTargetIndex] ?? interactionTargets[0];
+  const topTargetY = interactionTargets.length
+    ? Math.min(...interactionTargets.map((t) => t.y))
     : 0;
 
   const resolvedLabelPosition =
@@ -403,10 +669,44 @@ export function SpotlightOverlay({
 
   return (
     <View style={styles.root} pointerEvents="box-none" accessibilityViewIsModal>
-      <SvgMaskedScrim targets={renderTargets} scrimOpacity={scrimOpacity} maskId={maskId} />
+      {transition.mode === "crossfade" ? (
+        <>
+          <Animated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { opacity: transition.outgoingOpacity }]}
+          >
+            <SvgMaskedScrim
+              targets={transition.outgoing}
+              scrimOpacity={scrimOpacity}
+              maskId={`${maskId}-out`}
+            />
+          </Animated.View>
+          <Animated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { opacity: transition.incomingOpacity }]}
+          >
+            <SvgMaskedScrim
+              targets={transition.incoming}
+              scrimOpacity={scrimOpacity}
+              maskId={`${maskId}-in`}
+            />
+          </Animated.View>
+        </>
+      ) : transition.mode === "morph" ? (
+        <ReanimatedMorphScrim
+          channels={morphChannels}
+          holeCount={transition.holeCount}
+          holeShapes={transition.holeShapes}
+          progress={transition.progress}
+          scrimOpacity={scrimOpacity}
+          maskId={morphMaskId}
+        />
+      ) : (
+        <SvgMaskedScrim targets={transition.targets} scrimOpacity={scrimOpacity} maskId={maskId} />
+      )}
 
       {allowTargetInteraction ? (
-        renderTargets.map((target, index) => (
+        interactionTargets.map((target, index) => (
           <ScrimPressPanels key={`touch-${index}`} target={target} onPress={onDismiss} />
         ))
       ) : (

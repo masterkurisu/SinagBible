@@ -1,7 +1,6 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Animated,
-  Easing,
   Platform,
   Pressable,
   StyleSheet,
@@ -41,7 +40,7 @@ export function TabBarSearchFab({
   const isAndroid = Platform.OS === "android";
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const elevationAnim = useRef(new Animated.Value(TAB_BAR_SEARCH_FAB_ELEVATION_PX)).current;
+  const [pressed, setPressed] = useState(false);
 
   const handlePress = useCallback(() => {
     hapticLightImpact();
@@ -53,38 +52,24 @@ export function TabBarSearchFab({
   }, [closeSearch, isOpen, openSearch]);
 
   const handlePressIn = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 0.94,
-        friction: 8,
-        tension: 320,
-        useNativeDriver: true,
-      }),
-      Animated.timing(elevationAnim, {
-        toValue: TAB_BAR_SEARCH_FAB_ELEVATION_PX + 4,
-        duration: 120,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [elevationAnim, scaleAnim]);
+    setPressed(true);
+    Animated.spring(scaleAnim, {
+      toValue: 0.94,
+      friction: 8,
+      tension: 320,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim]);
 
   const handlePressOut = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 6,
-        tension: 220,
-        useNativeDriver: true,
-      }),
-      Animated.timing(elevationAnim, {
-        toValue: TAB_BAR_SEARCH_FAB_ELEVATION_PX,
-        duration: 160,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [elevationAnim, scaleAnim]);
+    setPressed(false);
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 6,
+      tension: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim]);
 
   if (isOpen) {
     return null;
@@ -94,6 +79,9 @@ export function TabBarSearchFab({
   const containerColor = isAndroid ? chrome.androidIndicator : searchTheme.cardBackground;
   const iconColor = searchTheme.bodyText;
   const rippleColor = isAndroid ? chrome.androidRipple : "rgba(0,0,0,0.08)";
+  const elevationPx = pressed
+    ? TAB_BAR_SEARCH_FAB_ELEVATION_PX + 4
+    : TAB_BAR_SEARCH_FAB_ELEVATION_PX;
 
   return (
     <Animated.View
@@ -106,7 +94,7 @@ export function TabBarSearchFab({
           width: size,
           height: size,
           borderRadius: size / 2,
-          elevation: isAndroid ? elevationAnim : undefined,
+          elevation: isAndroid ? elevationPx : undefined,
         },
         style,
       ]}

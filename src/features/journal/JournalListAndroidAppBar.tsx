@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
-  Animated,
-  Easing,
   Platform,
   StyleSheet,
   TextInput,
@@ -11,6 +9,16 @@ import {
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { MaterialIcons } from "@expo/vector-icons";
+import Reanimated, {
+  Easing as ReanimatedEasing,
+  Extrapolation,
+  cancelAnimation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { ReaderM3IconButton } from "@/src/features/reader/ReaderM3IconButton";
 import { JournalListM3TitleBlock } from "@/src/features/journal/JournalListM3TitleBlock";
@@ -27,10 +35,8 @@ const SEARCH_BAR_HEIGHT_PX = 48;
 const SEARCH_OPEN_MS = 420;
 const SEARCH_CLOSE_MS = 380;
 
-/** M3 emphasized decelerate — elements entering the screen. */
-const M3_ENTER_EASING = Easing.bezier(0.05, 0.7, 0.1, 1);
-/** M3 emphasized accelerate — elements leaving the screen. */
-const M3_EXIT_EASING = Easing.bezier(0.3, 0, 0.8, 0.15);
+const REANIMATED_M3_ENTER_EASING = ReanimatedEasing.bezier(0.05, 0.7, 0.1, 1);
+const REANIMATED_M3_EXIT_EASING = ReanimatedEasing.bezier(0.3, 0, 0.8, 0.15);
 
 export type JournalListAndroidAppBarProps = {
   topInsetPx: number;
@@ -72,8 +78,7 @@ export function JournalListAndroidAppBar({
   const s = bundle.search;
   const chrome = bundle.chrome;
   const inputRef = useRef<TextInputType | null>(null);
-  const searchProgress = useRef(new Animated.Value(0)).current;
-  const searchAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const searchProgress = useSharedValue(0);
   const focusAfterOpenRef = useRef(false);
 
   const paddingLeft = Math.max(insets.left, 4);
@@ -94,77 +99,72 @@ export function JournalListAndroidAppBar({
     );
   }, [centerGapPx, paddingLeft, paddingRight, windowWidth]);
 
+  const collapsedSearchScaleX = READER_M3_APP_BAR_ICON_BUTTON_PX / expandedSearchWidth;
+
+  const focusSearchInput = useCallback(() => {
+    inputRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     if (!searchOpen) {
       inputRef.current?.blur();
-    }
-    if (searchOpen) {
+    } else {
       focusAfterOpenRef.current = true;
     }
 
-    searchAnimRef.current?.stop();
-    const anim = Animated.timing(searchProgress, {
-      toValue: searchOpen ? 1 : 0,
-      duration: searchOpen ? SEARCH_OPEN_MS : SEARCH_CLOSE_MS,
-      easing: searchOpen ? M3_ENTER_EASING : M3_EXIT_EASING,
-      useNativeDriver: false,
-    });
-    searchAnimRef.current = anim;
-    anim.start(({ finished }) => {
-      if (finished && searchOpen && focusAfterOpenRef.current) {
-        focusAfterOpenRef.current = false;
-        inputRef.current?.focus();
-      }
-    });
+    cancelAnimation(searchProgress);
+    searchProgress.value = withTiming(
+      searchOpen ? 1 : 0,
+      {
+        duration: searchOpen ? SEARCH_OPEN_MS : SEARCH_CLOSE_MS,
+        easing: searchOpen ? REANIMATED_M3_ENTER_EASING : REANIMATED_M3_EXIT_EASING,
+      },
+      (finished) => {
+        if (finished && searchOpen && focusAfterOpenRef.current) {
+          focusAfterOpenRef.current = false;
+          runOnJS(focusSearchInput)();
+        }
+      },
+    );
+  }, [focusSearchInput, searchOpen, searchProgress]);
 
-    return () => {
-      anim.stop();
+  const searchShellStyle = useAnimatedStyle(() => {
+    const progress = searchProgress.value;
+    const scaleX = interpolate(
+      progress,
+      [0, 1],
+      [collapsedSearchScaleX, 1],
+      Extrapolation.CLAMP,
+    );
+    const opacity = interpolate(progress, [0, 0.18, 1], [0, 1, 1], Extrapolation.CLAMP);
+    const translateX = (expandedSearchWidth * (1 - scaleX)) / 2;
+
+    return {
+      opacity,
+      transform: [{ translateX }, { scaleX }],
     };
-  }, [searchOpen, searchProgress]);
+  }, [collapsedSearchScaleX, expandedSearchWidth]);
 
-  const animatedSearchWidth = searchProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [READER_M3_APP_BAR_ICON_BUTTON_PX, expandedSearchWidth],
-    extrapolate: "clamp",
-  });
+  const searchIconStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(searchProgress.value, [0, 0.42, 1], [1, 0, 0], Extrapolation.CLAMP),
+  }));
 
-  const searchFieldOpacity = searchProgress.interpolate({
-    inputRange: [0, 0.18, 1],
-    outputRange: [0, 1, 1],
-    extrapolate: "clamp",
-  });
+  const inputStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(searchProgress.value, [0, 0.28, 0.62, 1], [0, 0, 1, 1], Extrapolation.CLAMP),
+  }));
 
-  const searchIconOpacity = searchProgress.interpolate({
-    inputRange: [0, 0.42, 1],
-    outputRange: [1, 0, 0],
-    extrapolate: "clamp",
-  });
+  const actionsStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(searchProgress.value, [0, 0.48, 0.78, 1], [0, 0, 1, 1], Extrapolation.CLAMP),
+  }));
 
-  const inputOpacity = searchProgress.interpolate({
-    inputRange: [0, 0.28, 0.62, 1],
-    outputRange: [0, 0, 1, 1],
-    extrapolate: "clamp",
-  });
-
-  const actionsOpacity = searchProgress.interpolate({
-    inputRange: [0, 0.48, 0.78, 1],
-    outputRange: [0, 0, 1, 1],
-    extrapolate: "clamp",
-  });
-
-  const titleOpacity = searchProgress.interpolate({
-    inputRange: [0, 0.35, 1],
-    outputRange: [1, 0, 0],
-    extrapolate: "clamp",
-  });
-
-  const trailingWidth = searchProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [READER_M3_APP_BAR_ICON_BUTTON_PX * 2, READER_M3_APP_BAR_ICON_BUTTON_PX],
-    extrapolate: "clamp",
-  });
+  const titleStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(searchProgress.value, [0, 0.35, 1], [1, 0, 0], Extrapolation.CLAMP),
+  }));
 
   const showClear = searchQuery.length > 0;
+  const trailingWidthPx = searchOpen
+    ? READER_M3_APP_BAR_ICON_BUTTON_PX
+    : READER_M3_APP_BAR_ICON_BUTTON_PX * 2;
 
   const themedStyles = useMemo(
     () =>
@@ -201,15 +201,15 @@ export function JournalListAndroidAppBar({
           <View style={styles.leading}>{leadingAction}</View>
 
           <View style={[styles.center, { marginHorizontal: centerGapPx / 2 }]}>
-            <Animated.View
+            <Reanimated.View
               pointerEvents={searchOpen ? "auto" : "none"}
               style={[
                 styles.searchShell,
                 {
-                  width: animatedSearchWidth,
-                  opacity: searchFieldOpacity,
+                  width: expandedSearchWidth,
                   backgroundColor: chrome.androidIndicator,
                 },
+                searchShellStyle,
               ]}
             >
               <MaterialCommunityIcons
@@ -218,7 +218,7 @@ export function JournalListAndroidAppBar({
                 color={s.muted}
                 style={styles.searchGlyph}
               />
-              <Animated.View style={[styles.inputWrap, { opacity: inputOpacity }]}>
+              <Reanimated.View style={[styles.inputWrap, inputStyle]}>
                 <TextInput
                   ref={inputRef}
                   value={searchQuery}
@@ -232,9 +232,9 @@ export function JournalListAndroidAppBar({
                   selectionColor={s.tint}
                   accessibilityLabel="Search journal entries"
                 />
-              </Animated.View>
+              </Reanimated.View>
               {showClear ? (
-                <Animated.View style={{ opacity: actionsOpacity }}>
+                <Reanimated.View style={actionsStyle}>
                   <TouchableOpacity
                     onPress={() => onChangeSearchQuery("")}
                     activeOpacity={0.65}
@@ -245,9 +245,9 @@ export function JournalListAndroidAppBar({
                   >
                     <MaterialCommunityIcons name="close-circle" size={20} color={s.muted} />
                   </TouchableOpacity>
-                </Animated.View>
+                </Reanimated.View>
               ) : null}
-              <Animated.View style={{ opacity: actionsOpacity }}>
+              <Reanimated.View style={actionsStyle}>
                 <TouchableOpacity
                   onPress={onCloseSearch}
                   activeOpacity={0.65}
@@ -258,13 +258,13 @@ export function JournalListAndroidAppBar({
                 >
                   <MaterialCommunityIcons name="close" size={22} color={s.muted} />
                 </TouchableOpacity>
-              </Animated.View>
-            </Animated.View>
+              </Reanimated.View>
+            </Reanimated.View>
           </View>
 
-          <Animated.View style={[styles.trailing, { width: trailingWidth }]}>
-            <Animated.View
-              style={[styles.searchIconSlot, { opacity: searchIconOpacity }]}
+          <View style={[styles.trailing, { width: trailingWidthPx }]}>
+            <Reanimated.View
+              style={[styles.searchIconSlot, searchIconStyle]}
               pointerEvents={searchOpen ? "none" : "auto"}
             >
               <ReaderM3IconButton
@@ -277,24 +277,24 @@ export function JournalListAndroidAppBar({
                   <MaterialIcons name="search" size={24} color={searchIconColor} />
                 </View>
               </ReaderM3IconButton>
-            </Animated.View>
+            </Reanimated.View>
             <View style={styles.filterSlot}>{filterAction}</View>
-          </Animated.View>
+          </View>
         </View>
 
-        <Animated.View
+        <Reanimated.View
           pointerEvents={searchOpen ? "none" : "auto"}
           style={[
             styles.titleBlock,
+            titleStyle,
             {
-              opacity: titleOpacity,
               paddingLeft: Math.max(insets.left, 16),
               paddingRight: Math.max(insets.right, 16),
             },
           ]}
         >
           <JournalListM3TitleBlock headline={headline} subtitle={subtitle} />
-        </Animated.View>
+        </Reanimated.View>
       </View>
     </View>
   );

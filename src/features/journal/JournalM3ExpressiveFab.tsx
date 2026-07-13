@@ -1,5 +1,5 @@
-import { useCallback, useRef, type Ref } from "react";
-import { Animated, Easing, Platform, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
+import { useCallback, useRef, useState, type Ref } from "react";
+import { Animated, Platform, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import {
   JOURNAL_M3_FAB_ELEVATION_PX,
@@ -33,45 +33,31 @@ export function JournalM3ExpressiveFab({
   style,
 }: JournalM3ExpressiveFabProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const elevationAnim = useRef(new Animated.Value(JOURNAL_M3_FAB_ELEVATION_PX)).current;
+  const [pressed, setPressed] = useState(false);
 
   const handlePress = useCallback(() => {
     onPress();
   }, [onPress]);
 
   const handlePressIn = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 0.94,
-        friction: 8,
-        tension: 320,
-        useNativeDriver: true,
-      }),
-      Animated.timing(elevationAnim, {
-        toValue: JOURNAL_M3_FAB_ELEVATION_PX + 6,
-        duration: 120,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [elevationAnim, scaleAnim]);
+    setPressed(true);
+    Animated.spring(scaleAnim, {
+      toValue: 0.94,
+      friction: 8,
+      tension: 320,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim]);
 
   const handlePressOut = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 6,
-        tension: 220,
-        useNativeDriver: true,
-      }),
-      Animated.timing(elevationAnim, {
-        toValue: JOURNAL_M3_FAB_ELEVATION_PX,
-        duration: 160,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [elevationAnim, scaleAnim]);
+    setPressed(false);
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 6,
+      tension: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim]);
 
   const iconRotate = iconOpenProgress.interpolate({
     inputRange: [0, 1],
@@ -81,6 +67,7 @@ export function JournalM3ExpressiveFab({
   if (Platform.OS !== "android") return null;
 
   const size = JOURNAL_M3_FAB_SIZE_PX;
+  const elevationPx = pressed ? JOURNAL_M3_FAB_ELEVATION_PX + 6 : JOURNAL_M3_FAB_ELEVATION_PX;
 
   return (
     <Animated.View
@@ -92,7 +79,7 @@ export function JournalM3ExpressiveFab({
           width: size,
           height: size,
           borderRadius: size / 2,
-          elevation: elevationAnim,
+          elevation: elevationPx,
         },
         style,
       ]}

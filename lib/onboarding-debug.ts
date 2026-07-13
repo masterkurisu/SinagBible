@@ -29,7 +29,7 @@ export const ONBOARDING_DEBUG = {
     readerSettings: true,
     readerActionBar: false,
     readerBookPicker: true,
-    journal: true,
+    journal: false,
     journalEditor: true,
     journalDetail: true,
   },
