@@ -26,12 +26,24 @@ import { openChapterDb } from "@/lib/chapter-db";
 import { migrateAsyncStorageChapters } from "@/lib/migrate-async-storage";
 import { fetchChapterRemoteConfig } from "@/lib/chapter-remote-config";
 import { reconcileWithRemoteConfig } from "@/lib/chapter-store";
+import {
+  FEATURE_ONBOARDING_DEBUG_FORCE_ALL,
+  resetAllFeatureOnboardingStorage,
+} from "@/lib/feature-onboarding-storage";
 
 SplashScreen.preventAutoHideAsync();
+SplashScreen.setOptions({ fade: true, duration: 300 });
 initAppLogs();
 initCrashReporting();
 void applyPlatformOrientationLock();
 void loadHapticsEnabledPreference();
+
+if (__DEV__ && FEATURE_ONBOARDING_DEBUG_FORCE_ALL) {
+  console.info(
+    "[feature-onboarding] DEBUG_FORCE_ALL is on — all feature tours will re-run (reader, journal, editor, detail, …).",
+  );
+  void resetAllFeatureOnboardingStorage();
+}
 
 function runChapterRemoteReconcile(): void {
   void fetchChapterRemoteConfig()
@@ -174,7 +186,7 @@ function RootLayoutContent() {
 
   useEffect(() => {
     if (fontsLoaded && onboardingStorageReady && chapterDbReady) {
-      SplashScreen.hideAsync();
+      void SplashScreen.hideAsync();
     }
   }, [fontsLoaded, onboardingStorageReady, chapterDbReady]);
 

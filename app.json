@@ -28,7 +28,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#F1EDE6"
       },
       "package": "com.sinagbible.app",
       "versionCode": 1,
@@ -78,7 +78,24 @@
         }
       ],
       "expo-asset",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "android": {
+            "backgroundColor": "#FFFFFF",
+            "image": "./assets/splash-icon.png",
+            "imageWidth": 200
+          },
+          "ios": {
+            "backgroundColor": "#FFFFFF",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
       [
         "expo-file-system",
         {

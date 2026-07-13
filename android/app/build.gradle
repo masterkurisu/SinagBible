@@ -89,7 +89,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.sinagbible.app.dev'
+    namespace 'com.sinagbible.app'
     defaultConfig {
         // Must be a string literal — EAS CLI parses this statically for credentials lookup.
         applicationId 'com.sinagbible.app'
