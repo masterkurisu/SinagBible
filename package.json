@@ -43,7 +43,7 @@
     "@sinag-bible/tokens": "workspace:*",
     "@sinag-bible/types": "workspace:*",
     "@sinag-bible/ui": "workspace:*",
-    "expo": "~57.0.4",
+    "expo": "^57.0.0",
     "expo-asset": "~57.0.3",
     "expo-clipboard": "~57.0.0",
     "expo-constants": "~57.0.3",
