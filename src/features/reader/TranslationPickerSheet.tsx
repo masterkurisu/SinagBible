@@ -35,6 +35,13 @@ import {
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import type { BibleBookNavItem } from "@sinag-bible/types";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
+import { SheetContentSkeleton } from "@/components/sheet-content-skeleton";
+import {
+  NESTED_SHEET_OPEN_DURATION_MS,
+  SHEET_OPEN_DURATION_MS,
+  SHEET_SCRIM_DURATION_MS,
+} from "@/lib/device-capability";
+import { useDeferSheetContentMount } from "@/lib/use-defer-sheet-content";
 import {
   compareTranslationPickerAbbreviations,
   getTranslationPickerAbbreviation,
@@ -164,6 +171,10 @@ export function TranslationPickerSheet({
   const langSheetClosingRef = useRef(false);
   const langSheetDragStartYRef = useRef(0);
   const langSearchInputRef = useRef<TextInput>(null);
+
+  const { contentReady, notifySheetAnimatedIn } = useDeferSheetContentMount(isOpen);
+  const { contentReady: langListReady, notifySheetAnimatedIn: notifyLangSheetAnimatedIn } =
+    useDeferSheetContentMount(langSheetOpen, NESTED_SHEET_OPEN_DURATION_MS);
 
   const availableLanguages = useMemo(
     () => getTranslationLanguageFilterOptions(translationPickerItems),
@@ -524,34 +535,38 @@ export function TranslationPickerSheet({
     if (Platform.OS === "android") {
       Animated.timing(dropOpacityAnim, {
         toValue: 1,
-        duration: 200,
+        duration: SHEET_SCRIM_DURATION_MS,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }).start();
       translationPickerSheetTranslateY.setValue(Dimensions.get("window").height);
       Animated.timing(translationPickerSheetTranslateY, {
         toValue: 0,
-        duration: 280,
+        duration: SHEET_OPEN_DURATION_MS,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-      }).start();
+      }).start(({ finished }) => {
+        if (finished) notifySheetAnimatedIn();
+      });
       return;
     }
     Animated.parallel([
       Animated.timing(dropSlideAnim, {
         toValue: 1,
-        duration: 280,
+        duration: SHEET_OPEN_DURATION_MS,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(dropOpacityAnim, {
         toValue: 1,
-        duration: 240,
+        duration: SHEET_SCRIM_DURATION_MS + 40,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-    ]).start();
-  }, [isOpen, dropSlideAnim, dropOpacityAnim, translationPickerSheetTranslateY]);
+    ]).start(({ finished }) => {
+      if (finished) notifySheetAnimatedIn();
+    });
+  }, [isOpen, dropSlideAnim, dropOpacityAnim, translationPickerSheetTranslateY, notifySheetAnimatedIn]);
 
   useEffect(() => {
     if (!isOpen || Platform.OS !== "android") return;
@@ -571,11 +586,13 @@ export function TranslationPickerSheet({
     langSheetTranslateY.setValue(Dimensions.get("window").height * 0.35);
     Animated.timing(langSheetTranslateY, {
       toValue: 0,
-      duration: 240,
+      duration: NESTED_SHEET_OPEN_DURATION_MS,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
-    }).start();
-  }, [langSheetOpen, langSheetTranslateY]);
+    }).start(({ finished }) => {
+      if (finished) notifyLangSheetAnimatedIn();
+    });
+  }, [langSheetOpen, langSheetTranslateY, notifyLangSheetAnimatedIn]);
 
   useEffect(() => {
     if (!langSheetOpen) {
@@ -691,6 +708,7 @@ export function TranslationPickerSheet({
   const sheetContentBg = isAndroidSheet ? rc.sceneSurface : ui.parchment;
   const sheetTitleColor = isAndroidSheet ? sheetChrome.onSurface : ui.brown800;
   const sheetMutedColor = isAndroidSheet ? sheetChrome.onSurfaceVariant : ui.tan300;
+  const skeletonBoneColor = isAndroidSheet ? sheetChrome.surfaceContainer : `${ui.borderSolid}99`;
   const searchFieldStyle = isAndroidSheet
     ? {
         flex: 1,
@@ -987,6 +1005,8 @@ export function TranslationPickerSheet({
           onScrollBeginDrag={() => Keyboard.dismiss()}
           nestedScrollEnabled={isAndroidSheet}
         >
+          {contentReady ? (
+            <>
           {showPinnedInPicker ? (
             <>
               <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Hide keyboard">
@@ -1074,6 +1094,14 @@ export function TranslationPickerSheet({
               )}
             </View>
           ) : null}
+            </>
+          ) : (
+            <SheetContentSkeleton
+              boneColor={skeletonBoneColor}
+              rowHeight={isAndroidSheet ? 56 : 52}
+              rows={showResults ? 6 : 4}
+            />
+          )}
         </ScrollView>
 
         {!isAndroidSheet ? (
@@ -1218,6 +1246,7 @@ export function TranslationPickerSheet({
           />
         </View>
       </View>
+      {langListReady ? (
       <GHFlatList
         data={filteredLanguages}
         keyExtractor={(item) => item}
@@ -1242,6 +1271,14 @@ export function TranslationPickerSheet({
         }
         renderItem={renderLangSheetItem}
       />
+      ) : (
+        <SheetContentSkeleton
+          boneColor={skeletonBoneColor}
+          rowHeight={isAndroidSheet ? 48 : 44}
+          rows={8}
+          style={{ height: langSheetListBodyHeight, paddingHorizontal: isAndroidSheet ? 24 : 16 }}
+        />
+      )}
       {!isAndroidSheet ? (
         <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: Math.max(insets.bottom, 12) + 8 }}>
           <TouchableOpacity

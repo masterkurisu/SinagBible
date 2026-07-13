@@ -34,7 +34,14 @@ import { getTestament } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { MenuOptionsIcon } from "@/components/icons/MenuOptionsIcon";
+import { SheetContentSkeleton } from "@/components/sheet-content-skeleton";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
+import {
+  SHEET_OPEN_DURATION_MS,
+  SHEET_OPEN_USE_SPRING,
+  SHEET_SCRIM_DURATION_MS,
+} from "@/lib/device-capability";
+import { useDeferSheetContentMount } from "@/lib/use-defer-sheet-content";
 import { getSelectChapterHeadingForLanguage } from "@/lib/reader-chapter-label";
 import { hapticLightImpact } from "@/lib/haptics";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
@@ -310,6 +317,8 @@ export function BookPickerSheet({
   const sheetHorizontalPad = isAndroidSheet ? m3SheetPad : readerBookSheetPad;
   const sheetScreenEdgePad = isAndroidSheet ? 0 : readerBookSheetScreenEdgePad;
 
+  const { contentReady, notifySheetAnimatedIn } = useDeferSheetContentMount(isOpen);
+
   const bookPickerOnboarding = useBookPickerOnboarding({
     isOpen,
     pickerStep: step,
@@ -475,27 +484,42 @@ export function BookPickerSheet({
       dropOpacityAnim.setValue(0);
       Animated.timing(dropOpacityAnim, {
         toValue: 1,
-        duration: 200,
+        duration: SHEET_SCRIM_DURATION_MS,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }).start();
       bookSheetTranslateY.setValue(Dimensions.get("window").height);
       Animated.timing(bookSheetTranslateY, {
         toValue: 0,
-        duration: 280,
+        duration: SHEET_OPEN_DURATION_MS,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-      }).start();
+      }).start(({ finished }) => {
+        if (finished) notifySheetAnimatedIn();
+      });
       return;
     }
     dropOpacityAnim.setValue(1);
     bookSheetTranslateY.setValue(Dimensions.get("window").height);
-    Animated.spring(bookSheetTranslateY, {
+    if (SHEET_OPEN_USE_SPRING) {
+      Animated.spring(bookSheetTranslateY, {
+        toValue: 0,
+        friction: 9,
+        tension: 68,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) notifySheetAnimatedIn();
+      });
+      return;
+    }
+    Animated.timing(bookSheetTranslateY, {
       toValue: 0,
-      friction: 9,
-      tension: 68,
+      duration: SHEET_OPEN_DURATION_MS,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
-    }).start();
+    }).start(({ finished }) => {
+      if (finished) notifySheetAnimatedIn();
+    });
   }, [
     isOpen,
     bookSheetTranslateY,
@@ -505,10 +529,11 @@ export function BookPickerSheet({
     books,
     chapter.bookSlug,
     bookSelectorViewMode,
+    notifySheetAnimatedIn,
   ]);
 
   useEffect(() => {
-    if (!isOpen || step !== "books") return;
+    if (!isOpen || step !== "books" || !contentReady) return;
 
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
@@ -520,6 +545,7 @@ export function BookPickerSheet({
   }, [
     isOpen,
     step,
+    contentReady,
     bookSelectorViewMode,
     selectorTestamentTab,
     chapter.bookSlug,
@@ -640,6 +666,7 @@ export function BookPickerSheet({
 
   const sheetTitleColor = isAndroidSheet ? sheetChrome.onSurface : colors.brown800;
   const sheetMutedColor = isAndroidSheet ? sheetChrome.onSurfaceVariant : colors.gold;
+  const skeletonBoneColor = isAndroidSheet ? sheetChrome.surfaceContainer : `${colors.borderSolid}99`;
 
   if (!isOpen) return null;
 
@@ -801,6 +828,7 @@ export function BookPickerSheet({
               scrollEventThrottle={16}
               onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
             >
+            {contentReady ? (
             <View ref={bookListContentRef} collapsable={false}>
             {bookSelectorViewMode === "grid"
               ? gridSectionsForPicker.map((section) => {
@@ -1177,6 +1205,13 @@ export function BookPickerSheet({
                 )
               : null}
             </View>
+            ) : (
+              <SheetContentSkeleton
+                boneColor={skeletonBoneColor}
+                rowHeight={isAndroidSheet ? 56 : 44}
+                rows={10}
+              />
+            )}
             </GHScrollView>
           </NativeViewGestureHandler>
         </>
@@ -1246,7 +1281,8 @@ export function BookPickerSheet({
               scrollEventThrottle={16}
               onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
             >
-            {Array.from({ length: pickerBook.chapterCount }, (_, i) => i + 1).map((chNum) => {
+            {contentReady ? (
+            Array.from({ length: pickerBook.chapterCount }, (_, i) => i + 1).map((chNum) => {
               const isCurrent =
                 pickerBook.slug === chapter.bookSlug && chNum === chapter.chapterNumber;
               return (
@@ -1293,7 +1329,16 @@ export function BookPickerSheet({
                   </Text>
                 </TouchableOpacity>
               );
-            })}
+            })
+            ) : (
+              <SheetContentSkeleton
+                variant="grid"
+                boneColor={skeletonBoneColor}
+                columns={readerChapterCols}
+                cellSize={readerChapterGridCellWResolved}
+                gap={readerBookGridGap}
+              />
+            )}
             </GHScrollView>
           </NativeViewGestureHandler>
         </View>
