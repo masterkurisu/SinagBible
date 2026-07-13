@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { InteractionManager, unstable_batchedUpdates } from "react-native";
+import { unstable_batchedUpdates } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   DEFAULT_READER_VERSE_BODY_FONT_ID,
@@ -106,6 +106,10 @@ function loadReaderPreferencesFromStorage(): Promise<CachedReaderPrefs> {
   readerPrefsLoadPromise = AsyncStorage.multiGet([...READER_PREF_STORAGE_KEYS])
     .then((pairs) => {
       cachedReaderPrefs = parseReaderPrefsFromPairs(pairs);
+      const lazyKey = readerVerseBodyFontLazyKey(cachedReaderPrefs.fontFamilyId);
+      if (lazyKey) {
+        void ensureLazyFontLoaded(lazyKey);
+      }
       return cachedReaderPrefs;
     })
     .catch(() => {
@@ -143,7 +147,7 @@ export type ReaderPreferences = {
 
 export function useReaderPreferences() {
   const { bundle, themeId, setThemeId } = useMobileAppTheme();
-  useLazyFont();
+  const { isFontLoaded } = useLazyFont();
 
   const initialPrefs = getInitialCachedReaderPrefs();
   const [fontScale, setFontScaleState] = useState(initialPrefs.fontScale);
@@ -161,25 +165,18 @@ export function useReaderPreferences() {
     verseTextAlignUserTouchedRef.current = false;
     fontFamilyUserTouchedRef.current = false;
 
-    if (cachedReaderPrefs) {
-      return;
-    }
-
     let cancelled = false;
-    const task = InteractionManager.runAfterInteractions(() => {
-      void loadReaderPreferencesFromStorage().then((prefs) => {
-        if (cancelled) return;
-        unstable_batchedUpdates(() => {
-          if (!fontScaleUserTouchedRef.current) setFontScaleState(prefs.fontScale);
-          if (!lineSpacingUserTouchedRef.current) setLineSpacingScaleState(prefs.lineSpacingScale);
-          if (!verseTextAlignUserTouchedRef.current) setVerseTextAlignState(prefs.verseTextAlign);
-          if (!fontFamilyUserTouchedRef.current) setFontFamilyIdState(prefs.fontFamilyId);
-        });
+    void loadReaderPreferencesFromStorage().then((prefs) => {
+      if (cancelled) return;
+      unstable_batchedUpdates(() => {
+        if (!fontScaleUserTouchedRef.current) setFontScaleState(prefs.fontScale);
+        if (!lineSpacingUserTouchedRef.current) setLineSpacingScaleState(prefs.lineSpacingScale);
+        if (!verseTextAlignUserTouchedRef.current) setVerseTextAlignState(prefs.verseTextAlign);
+        if (!fontFamilyUserTouchedRef.current) setFontFamilyIdState(prefs.fontFamilyId);
       });
     });
     return () => {
       cancelled = true;
-      task.cancel();
     };
   }, []);
 
@@ -234,7 +231,13 @@ export function useReaderPreferences() {
 
   const readerVerseFontSize = 16 * fontScale;
   const readerVerseLineHeight = 28 * fontScale * lineSpacingScale;
-  const readerVerseBodyFontFamilyValue = readerVerseBodyFontFamily(fontFamilyId);
+  const readerVerseBodyFontFamilyValue = useMemo(() => {
+    const lazyKey = readerVerseBodyFontLazyKey(fontFamilyId);
+    if (lazyKey != null && !isFontLoaded(lazyKey)) {
+      return readerVerseBodyFontFamily(DEFAULT_READER_VERSE_BODY_FONT_ID);
+    }
+    return readerVerseBodyFontFamily(fontFamilyId);
+  }, [fontFamilyId, isFontLoaded]);
 
   return {
     prefs,
@@ -249,3 +252,6 @@ export function useReaderPreferences() {
     readerVerseBodyFontFamily: readerVerseBodyFontFamilyValue,
   };
 }
+
+/** Warm prefs + verse body font before the reader screen mounts. */
+void loadReaderPreferencesFromStorage();
