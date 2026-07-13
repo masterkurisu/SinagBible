@@ -1,13 +1,17 @@
-import { Platform, StatusBar, type LayoutRectangle } from "react-native";
+import { type LayoutRectangle } from "react-native";
 
 /**
- * On Android, `measureInWindow` coords are often relative to the app content area
- * (below the status bar) while `Modal` + `statusBarTranslucent` overlays use the
- * full screen origin — shift anchors down so spotlights/coachmarks align with targets.
+ * Y-offset when mapping measured anchors onto full-screen `Modal` overlays with
+ * `statusBarTranslucent`.
+ *
+ * RN 0.86 + edge-to-edge (`edgeToEdgeEnabled` in gradle.properties): `measureInWindow`
+ * returns full-window coordinates that already match the modal coordinate space.
+ *
+ * Pre-0.86 Android subtracted status-bar insets from `measureInWindow`, so callers
+ * added `StatusBar.currentHeight` here to align spotlights/coachmarks with targets.
  */
 export function onboardingModalYOffset(): number {
-  if (Platform.OS !== "android") return 0;
-  return StatusBar.currentHeight ?? 0;
+  return 0;
 }
 
 export function adjustAnchorForOnboardingModal(rect: LayoutRectangle): LayoutRectangle {

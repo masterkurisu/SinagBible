@@ -26,12 +26,12 @@ export const ONBOARDING_DEBUG = {
    */
   features: {
     reader: false,
-    readerSettings: true,
+    readerSettings: false,
     readerActionBar: false,
-    readerBookPicker: true,
+    readerBookPicker: false,
     journal: false,
-    journalEditor: true,
-    journalDetail: true,
+    journalEditor: false,
+    journalDetail: false,
   },
 } as const;
 

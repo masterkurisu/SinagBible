@@ -4,6 +4,8 @@ import {
   isFeatureOnboardingDone,
   markFeatureOnboardingDone,
 } from "@/lib/feature-onboarding-storage";
+import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
+import { adjustAnchorForOnboardingModal } from "@/src/components/feature-onboarding/onboardingOverlayCoords";
 import {
   JOURNAL_NEW_ENTRY_FAB_PX,
   JOURNAL_ONBOARDING_LIST_FALLBACK_TOP_PX,
@@ -21,23 +23,6 @@ type UseJournalOnboardingArgs = {
   screenH: number;
   newEntryFabBottomPx: number;
 };
-
-function measureViewInWindow(ref: RefObject<View | null>): Promise<LayoutRectangle | null> {
-  return new Promise((resolve) => {
-    const node = ref.current;
-    if (!node) {
-      resolve(null);
-      return;
-    }
-    node.measureInWindow((x, y, width, height) => {
-      if (width <= 0 || height <= 0) {
-        resolve(null);
-        return;
-      }
-      resolve({ x, y, width, height });
-    });
-  });
-}
 
 function fallbackTarget(
   stepId: JournalOnboardingStepId,
@@ -91,8 +76,13 @@ export function useJournalOnboarding({
     async (index: number) => {
       const step = JOURNAL_ONBOARDING_STEPS[index];
       if (!step) return;
-      const measured = await measureViewInWindow(targetRefs[step.id]);
-      const anchor = measured ?? fallbackTarget(step.id, screenW, screenH, newEntryFabBottomPx);
+      const measured = await measureOnboardingTarget(targetRefs[step.id], {
+        minWidth: 20,
+        minHeight: 20,
+      });
+      const anchor = adjustAnchorForOnboardingModal(
+        measured ?? fallbackTarget(step.id, screenW, screenH, newEntryFabBottomPx),
+      );
       setStepAnchor(anchor);
       setPresentedStepIndex(index);
     },
