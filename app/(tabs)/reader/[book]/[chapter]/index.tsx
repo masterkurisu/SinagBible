@@ -1865,7 +1865,13 @@ export default function ReaderChapterScreen() {
         insets={insets}
         isTabletReaderLayout={isTabletReaderLayout}
       />
-      <PrivacyPolicySheet visible={readerPrivacyPolicyOpen} onClose={() => setReaderPrivacyPolicyOpen(false)} />
+      <PrivacyPolicySheet
+        visible={readerPrivacyPolicyOpen}
+        onClose={() => setReaderPrivacyPolicyOpen(false)}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
+      />
       <TermsOfServiceSheet visible={readerTermsOpen} onClose={() => setReaderTermsOpen(false)} />
       <ReaderDeleteMyDataDialog
         isOpen={deleteMyDataDialogOpen}

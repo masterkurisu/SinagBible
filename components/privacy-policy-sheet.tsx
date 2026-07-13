@@ -1,100 +1,34 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Easing,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { Asset } from "expo-asset";
 import { readAsStringAsync, EncodingType } from "expo-file-system/legacy";
-import {
-  GestureHandlerRootView,
-  PanGestureHandler,
-  State,
-  TouchableOpacity as GestureHandlerTouchableOpacity,
-  type PanGestureHandlerGestureEvent,
-  type PanGestureHandlerStateChangeEvent,
-} from "react-native-gesture-handler";
 import Markdown from "react-native-markdown-display";
-import { colors } from "@sinag-bible/ui";
+import { ReaderM3BottomSheet } from "@/src/components/m3/ReaderM3BottomSheet";
+import { M3Button } from "@/src/components/m3/M3Button";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
+import type { ReaderSheetChrome } from "@/lib/reader-sheet-chrome";
+import {
+  READER_M3_BODY_FONT_PX,
+  READER_M3_BODY_LINE_HEIGHT_PX,
+  READER_M3_LABEL_FONT_PX,
+  READER_M3_LABEL_LINE_HEIGHT_PX,
+  READER_M3_SETTINGS_SHEET_TITLE_FONT,
+  READER_M3_SETTINGS_SHEET_TITLE_FONT_PX,
+  READER_M3_SETTINGS_SHEET_TITLE_LINE_HEIGHT_PX,
+} from "@/src/features/reader/readerSettingsPanelChrome";
 
 /**
  * Bundled from repo root `privacy_policy.md` (see `metro.config.js` `.md` asset handling).
- *
- * Wire up later, for example:
- * `const [open, setOpen] = useState(false);`
- * `<PrivacyPolicySheet visible={open} onClose={() => setOpen(false)} />`
  */
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro asset module
 const privacyPolicyMdModule = require("../privacy_policy.md") as number;
-
-const UI_EMPHASIS_FONT = "Inter_500Medium" as const;
-
-const markdownStyles = {
-  body: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 14,
-    color: colors.brown800,
-    lineHeight: 22,
-  },
-  paragraph: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 14,
-    color: colors.brown800,
-    lineHeight: 22,
-    marginTop: 0,
-    marginBottom: 12,
-  },
-  heading1: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 18,
-    color: colors.brown800,
-    marginBottom: 8,
-  },
-  heading2: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 15,
-    color: colors.brown800,
-    marginTop: 20,
-    marginBottom: 6,
-  },
-  heading3: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 15,
-    color: colors.brown800,
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  strong: {
-    fontFamily: "Inter_600SemiBold",
-  },
-  hr: {
-    backgroundColor: colors.tan100,
-    height: 1,
-    marginVertical: 16,
-  },
-  bullet_list: {
-    marginBottom: 8,
-  },
-  ordered_list: {
-    marginBottom: 8,
-  },
-} as const;
 
 async function readBundledPrivacyPolicy(): Promise<string> {
   const asset = Asset.fromModule(privacyPolicyMdModule);
   await asset.downloadAsync();
   const uri = asset.localUri ?? asset.uri;
   if (!uri) throw new Error("Privacy policy asset missing");
-  // Dev: Metro may still expose an http(s) asset URL; legacy read only supports file:// etc.
   if (/^https?:\/\//i.test(uri)) {
     const res = await fetch(uri);
     if (!res.ok) throw new Error(`Privacy policy fetch failed (${res.status})`);
@@ -103,97 +37,122 @@ async function readBundledPrivacyPolicy(): Promise<string> {
   return readAsStringAsync(uri, { encoding: EncodingType.UTF8 });
 }
 
+function preparePrivacyPolicyMarkdown(raw: string): { subtitle?: string; body: string } {
+  const effectiveMatch = raw.match(/\*\*Effective date:\*\*\s*(.+)/i);
+  const subtitle = effectiveMatch?.[1]?.trim();
+  const bodyStart = raw.search(/^## /m);
+  const body = bodyStart >= 0 ? raw.slice(bodyStart).trim() : raw.trim();
+  return { subtitle, body };
+}
+
+function buildMarkdownStyles(scale: number, sheetChrome: ReaderSheetChrome) {
+  const bodySize = READER_M3_BODY_FONT_PX * scale * 0.9375;
+  const bodyLineHeight = READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.9375;
+  const sectionSize = READER_M3_SETTINGS_SHEET_TITLE_FONT_PX * scale * 0.9;
+  const sectionLineHeight = READER_M3_SETTINGS_SHEET_TITLE_LINE_HEIGHT_PX * scale * 0.9;
+  const labelSize = READER_M3_LABEL_FONT_PX * scale;
+  const labelLineHeight = READER_M3_LABEL_LINE_HEIGHT_PX * scale;
+
+  return {
+    body: {
+      fontFamily: "Inter_400Regular",
+      fontSize: bodySize,
+      lineHeight: bodyLineHeight,
+      color: sheetChrome.onSurface,
+    },
+    paragraph: {
+      fontFamily: "Inter_400Regular",
+      fontSize: bodySize,
+      lineHeight: bodyLineHeight,
+      color: sheetChrome.onSurface,
+      marginTop: 0,
+      marginBottom: 12 * scale,
+    },
+    heading1: {
+      fontFamily: READER_M3_SETTINGS_SHEET_TITLE_FONT,
+      fontSize: sectionSize,
+      lineHeight: sectionLineHeight,
+      color: sheetChrome.onSurface,
+      marginTop: 8 * scale,
+      marginBottom: 8 * scale,
+    },
+    heading2: {
+      fontFamily: READER_M3_SETTINGS_SHEET_TITLE_FONT,
+      fontSize: sectionSize,
+      lineHeight: sectionLineHeight,
+      color: sheetChrome.onSurface,
+      marginTop: 20 * scale,
+      marginBottom: 8 * scale,
+    },
+    heading3: {
+      fontFamily: "Inter_500Medium",
+      fontSize: labelSize + 2 * scale,
+      lineHeight: labelLineHeight + 4 * scale,
+      color: sheetChrome.onSurface,
+      marginTop: 14 * scale,
+      marginBottom: 6 * scale,
+    },
+    strong: {
+      fontFamily: "Inter_500Medium",
+      color: sheetChrome.onSurface,
+    },
+    em: {
+      fontFamily: "Inter_400Regular",
+      fontStyle: "italic" as const,
+      color: sheetChrome.onSurfaceVariant,
+    },
+    hr: {
+      backgroundColor: sheetChrome.outlineVariant,
+      height: 1,
+      marginVertical: 16 * scale,
+    },
+    bullet_list: {
+      marginBottom: 10 * scale,
+    },
+    ordered_list: {
+      marginBottom: 10 * scale,
+    },
+    list_item: {
+      marginBottom: 4 * scale,
+    },
+    bullet_list_icon: {
+      marginLeft: 0,
+      marginRight: 8 * scale,
+      color: sheetChrome.onSurfaceVariant,
+    },
+  } as const;
+}
+
 export type PrivacyPolicySheetProps = {
   visible: boolean;
   onClose: () => void;
+  bundle: MobileAppThemeBundle;
+  insets: { top: number; bottom: number; left: number; right: number };
+  isTabletReaderLayout?: boolean;
 };
 
-const DISMISS_DISTANCE_THRESHOLD_PX = 90;
-const DISMISS_VELOCITY_THRESHOLD = 520;
-
-export function PrivacyPolicySheet({ visible, onClose }: PrivacyPolicySheetProps) {
-  const insets = useSafeAreaInsets();
-  const { height: windowH } = useWindowDimensions();
+export function PrivacyPolicySheet({
+  visible,
+  onClose,
+  bundle,
+  insets,
+  isTabletReaderLayout = false,
+}: PrivacyPolicySheetProps) {
   const [markdown, setMarkdown] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
-  const sheetTranslateY = useRef(new Animated.Value(0)).current;
-  const sheetClosingRef = useRef(false);
-  const sheetDragStartYRef = useRef(0);
-
-  const animateCloseSheet = useCallback(
-    (velocityY = 0, draggedY = 0) => {
-      if (sheetClosingRef.current) return;
-      sheetClosingRef.current = true;
-      const h = Dimensions.get("window").height;
-      const targetY = h + 56;
-      const vel = Math.max(0, velocityY);
-      const duration = Math.max(170, Math.min(340, Math.round(300 - Math.min(1.85, vel) * 88)));
-      sheetTranslateY.stopAnimation();
-      const clamped = Math.max(0, draggedY);
-      if (clamped > 0) {
-        sheetTranslateY.setValue(clamped);
-      }
-      Animated.timing(sheetTranslateY, {
-        toValue: targetY,
-        duration,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start(() => {
-        sheetClosingRef.current = false;
-        sheetTranslateY.setValue(0);
-        onClose();
-      });
-    },
-    [onClose, sheetTranslateY],
+  const scale = isTabletReaderLayout ? 1.35 : 1;
+  const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
+  const markdownStyles = useMemo(
+    () => buildMarkdownStyles(scale, sheetChrome),
+    [scale, sheetChrome],
   );
 
-  const onSheetDismissGestureEvent = useCallback(
-    (e: PanGestureHandlerGestureEvent) => {
-      if (sheetClosingRef.current) return;
-      const ty = e.nativeEvent.translationY;
-      sheetTranslateY.setValue(Math.max(0, sheetDragStartYRef.current + ty));
-    },
-    [sheetTranslateY],
+  const prepared = useMemo(
+    () => (markdown ? preparePrivacyPolicyMarkdown(markdown) : null),
+    [markdown],
   );
-
-  const onSheetDismissGestureStateChange = useCallback(
-    (e: PanGestureHandlerStateChangeEvent) => {
-      const { state, oldState, velocityY, translationY } = e.nativeEvent;
-      if (state === State.ACTIVE && oldState !== State.ACTIVE) {
-        sheetTranslateY.stopAnimation((value: number) => {
-          sheetDragStartYRef.current = value;
-        });
-      }
-      if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
-        if (sheetClosingRef.current) return;
-        const ty = translationY ?? 0;
-        const y = Math.max(0, sheetDragStartYRef.current + ty);
-        const vyPxPerS = Math.abs(velocityY ?? 0);
-        const velForCloseAnim = Math.min(1.85, vyPxPerS / 520);
-        if (y > DISMISS_DISTANCE_THRESHOLD_PX || vyPxPerS > DISMISS_VELOCITY_THRESHOLD) {
-          animateCloseSheet(velForCloseAnim, y);
-          return;
-        }
-        Animated.spring(sheetTranslateY, {
-          toValue: 0,
-          velocity: Math.max(0, (velocityY ?? 0) / 1000),
-          friction: 9,
-          tension: 75,
-          useNativeDriver: true,
-        }).start();
-      }
-    },
-    [animateCloseSheet, sheetTranslateY],
-  );
-
-  useEffect(() => {
-    if (!visible) return;
-    sheetClosingRef.current = false;
-    sheetTranslateY.stopAnimation();
-    sheetTranslateY.setValue(0);
-  }, [visible, sheetTranslateY]);
 
   useEffect(() => {
     if (!visible || markdown !== null) return;
@@ -231,142 +190,71 @@ export function PrivacyPolicySheet({ visible, onClose }: PrivacyPolicySheetProps
     })();
   }, []);
 
-  const cardMaxH = windowH * 0.9;
-  const bottomPad = Math.max(insets.bottom, 12) + 12;
-
-  const onBackdropPress = useCallback(() => {
-    if (sheetClosingRef.current) return;
-    animateCloseSheet(0, 0);
-  }, [animateCloseSheet]);
-
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={onBackdropPress}
-      accessibilityViewIsModal
+    <ReaderM3BottomSheet
+      isOpen={visible}
+      onClose={onClose}
+      bundle={bundle}
+      insets={insets}
+      isTabletReaderLayout={isTabletReaderLayout}
+      title="Privacy Policy"
+      subtitle={prepared?.subtitle ? `Effective ${prepared.subtitle}` : undefined}
+      accessibilityDismissLabel="Dismiss privacy policy"
+      maxHeightRatio={0.9}
     >
-      <GestureHandlerRootView style={styles.root}>
-        <Pressable
-          style={styles.backdrop}
-          onPress={onBackdropPress}
-          accessibilityLabel="Dismiss privacy policy"
-        />
-        <View
-          pointerEvents="box-none"
-          style={[styles.sheetWrap, { paddingBottom: bottomPad, paddingTop: insets.top + 8 }]}
-        >
-          <Animated.View style={[styles.card, { maxHeight: cardMaxH }, { transform: [{ translateY: sheetTranslateY }] }]}>
-            <PanGestureHandler
-              onGestureEvent={onSheetDismissGestureEvent}
-              onHandlerStateChange={onSheetDismissGestureStateChange}
-              activeOffsetY={8}
-              failOffsetX={[-32, 32]}
-            >
-              <GestureHandlerTouchableOpacity
-                activeOpacity={1}
-                accessibilityRole="button"
-                accessibilityLabel="Drag down to close privacy policy"
-                accessibilityHint="Swipe down on the handle to dismiss"
-                style={styles.handleRow}
-              >
-                <View pointerEvents="none" style={styles.handlePill} />
-              </GestureHandlerTouchableOpacity>
-            </PanGestureHandler>
-            {loading && markdown === null ? (
-              <View style={styles.centerBox}>
-                <ActivityIndicator color={colors.tan200} />
-              </View>
-            ) : loadError ? (
-              <View style={styles.centerBox}>
-                <Text style={styles.errorText}>Could not load the privacy policy.</Text>
-                <Pressable onPress={retryLoad} style={styles.retryBtn}>
-                  <Text style={styles.retryLabel}>Try again</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <ScrollView
-                style={styles.scroll}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator
-                keyboardShouldPersistTaps="handled"
-              >
-                <Markdown style={markdownStyles}>{markdown ?? ""}</Markdown>
-              </ScrollView>
-            )}
-          </Animated.View>
+      {loading && markdown === null ? (
+        <View style={[styles.stateBox, { minHeight: 160 * scale, gap: 12 * scale }]}>
+          <ActivityIndicator color={bundle.chrome.tabTint} />
+          <Text
+            style={{
+              fontFamily: "Inter_400Regular",
+              fontSize: READER_M3_BODY_FONT_PX * scale * 0.875,
+              lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.875,
+              color: sheetChrome.onSurfaceVariant,
+              textAlign: "center",
+            }}
+          >
+            Loading privacy policy…
+          </Text>
         </View>
-      </GestureHandlerRootView>
-    </Modal>
+      ) : loadError ? (
+        <View style={[styles.stateBox, { minHeight: 160 * scale, gap: 16 * scale }]}>
+          <Text
+            style={{
+              fontFamily: "Inter_400Regular",
+              fontSize: READER_M3_BODY_FONT_PX * scale * 0.9375,
+              lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.9375,
+              color: sheetChrome.onSurface,
+              textAlign: "center",
+            }}
+          >
+            Could not load the privacy policy.
+          </Text>
+          <M3Button
+            label="Try again"
+            onPress={retryLoad}
+            variant="tonal"
+            bundle={bundle}
+            scale={scale}
+            accessibilityLabel="Retry loading privacy policy"
+          />
+        </View>
+      ) : (
+        <View style={styles.markdownWrap}>
+          <Markdown style={markdownStyles}>{prepared?.body ?? ""}</Markdown>
+        </View>
+      )}
+    </ReaderM3BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(44,36,22,0.52)" },
-  sheetWrap: {
-    flex: 1,
-    justifyContent: "flex-end",
-    alignItems: "center",
-    paddingHorizontal: 5,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 520,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.borderSolid,
-    backgroundColor: colors.parchment,
-    overflow: "hidden",
-    shadowColor: "#2c2416",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  handleRow: {
-    width: "100%",
+  stateBox: {
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 10,
-    paddingBottom: 6,
-    backgroundColor: colors.parchment,
+    paddingVertical: 24,
   },
-  handlePill: {
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: "rgba(0,0,0,0.22)",
-  },
-  scroll: { flexGrow: 0 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
-  centerBox: {
-    minHeight: 160,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-    gap: 12,
-  },
-  errorText: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 14,
-    lineHeight: 22,
-    color: colors.brown800,
-    textAlign: "center",
-  },
-  retryBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: colors.parchmentDeep,
-    borderWidth: 1,
-    borderColor: colors.borderSolid,
-  },
-  retryLabel: {
-    fontFamily: UI_EMPHASIS_FONT,
-    fontSize: 14,
-    color: colors.brown800,
+  markdownWrap: {
+    gap: 0,
   },
 });

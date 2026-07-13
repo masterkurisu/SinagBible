@@ -500,6 +500,9 @@ export function ReaderSettingsFollowUpLayer({
       <PrivacyPolicySheet
         visible={followUp.readerPrivacyPolicyOpen}
         onClose={() => followUp.setReaderPrivacyPolicyOpen(false)}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
       />
       <TermsOfServiceSheet visible={followUp.readerTermsOpen} onClose={() => followUp.setReaderTermsOpen(false)} />
       <ReaderDeleteMyDataDialog
