@@ -12,11 +12,22 @@ import { FlatList, Pressable } from "react-native-gesture-handler";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import type { CarouselImageTheme } from "@/lib/carousel-image-themes";
-import { isCarouselLightBackgroundTheme } from "@/lib/carousel-image-themes";
+import {
+  isCarouselLightBackgroundTheme,
+  usesCarouselPhotoBackground,
+} from "@/lib/carousel-image-themes";
 import type { CarouselDisplayVerse } from "@/lib/journal-carousel-verses";
 import { getCarouselCardGradient } from "@/lib/journal-carousel-verses";
 import { useJournalCarouselVerses } from "@/lib/use-journal-carousel-verses";
+import {
+  getEffectiveCarouselCardSize,
+  hasCarouselCardSizeOverride,
+  patchCarouselCardSize,
+  removeCarouselCardSize,
+  type CarouselCardSize,
+} from "@/lib/journal-carousel-card-sizes";
 import { useCarouselBackgroundUrls } from "@/lib/use-carousel-background-urls";
+import { requestCarouselCardImageRefresh } from "@/lib/pexels-repository";
 import {
   copyCarouselCardImage,
   saveCarouselCardImage,
@@ -78,7 +89,7 @@ const CarouselCard = memo(function CarouselCard({
       <Pressable
         onLongPress={() => onLongPress(item)}
         delayLongPress={420}
-        accessibilityHint="Long press for share and image options"
+        accessibilityHint="Long press for share, image, refresh, and size options"
         style={StyleSheet.absoluteFill}
       >
         {showSolidBackground ? (
@@ -145,7 +156,7 @@ type MenuState = {
 export const JournalInspirationCarousel = memo(function JournalInspirationCarousel() {
   const { width: windowWidth } = useWindowDimensions();
   const { bundle } = useMobileAppTheme();
-  const { displayVerses, removeFavorite } = useJournalCarouselVerses();
+  const { displayVerses, settings, cardSizeOverrides, removeFavorite } = useJournalCarouselVerses();
   const { getImageUrl, imageTheme } = useCarouselBackgroundUrls(displayVerses);
   const listRef = useRef<FlatList<CarouselDisplayVerse> | null>(null);
   const captureRefs = useRef(new Map<string, View>());
@@ -156,16 +167,6 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
     () => displayVerses.map((verse) => Math.round(windowWidth * verse.widthRatio)),
     [displayVerses, windowWidth],
   );
-
-  const snapOffsets = useMemo(() => {
-    const offsets: number[] = [0];
-    let running = cardWidths[0]! + CAROUSEL_GAP_PX;
-    for (let i = 1; i < displayVerses.length; i++) {
-      offsets.push(running);
-      running += cardWidths[i]! + CAROUSEL_GAP_PX;
-    }
-    return offsets;
-  }, [cardWidths, displayVerses.length]);
 
   const carouselHeight = useMemo(() => {
     if (cardWidths.length === 0) return 0;
@@ -229,6 +230,56 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
     });
   }, [runImageAction]);
 
+  const handleRefreshImage = useCallback(() => {
+    if (!menuState) return;
+    const item = menuState.item;
+    closeMenu();
+    hapticLightImpact();
+    void requestCarouselCardImageRefresh(
+      { id: item.id, imageCategory: item.imageCategory },
+      imageTheme,
+    );
+  }, [closeMenu, imageTheme, menuState]);
+
+  const menuCardIndex = useMemo(() => {
+    if (!menuState) return -1;
+    return displayVerses.findIndex((verse) => verse.id === menuState.item.id);
+  }, [displayVerses, menuState]);
+
+  const menuCardSize = useMemo((): CarouselCardSize | null => {
+    if (!menuState || menuCardIndex < 0) return null;
+    return getEffectiveCarouselCardSize(
+      menuState.item.id,
+      menuCardIndex,
+      cardSizeOverrides,
+      settings.defaultCardSize,
+    );
+  }, [cardSizeOverrides, menuCardIndex, menuState, settings.defaultCardSize]);
+
+  const menuHasCardSizeOverride = useMemo(() => {
+    if (!menuState) return false;
+    return hasCarouselCardSizeOverride(menuState.item.id, cardSizeOverrides);
+  }, [cardSizeOverrides, menuState]);
+
+  const handleSelectCardSize = useCallback(
+    (size: CarouselCardSize) => {
+      if (!menuState) return;
+      const item = menuState.item;
+      closeMenu();
+      hapticLightImpact();
+      void patchCarouselCardSize(item.id, size);
+    },
+    [closeMenu, menuState],
+  );
+
+  const handleResetCardSize = useCallback(() => {
+    if (!menuState) return;
+    const item = menuState.item;
+    closeMenu();
+    hapticLightImpact();
+    void removeCarouselCardSize(item.id);
+  }, [closeMenu, menuState]);
+
   const handleRemoveFavorite = useCallback(() => {
     if (!menuState?.item.isUserFavorite || menuState.item.isDailyVerse) return;
     const item = menuState.item;
@@ -283,10 +334,7 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
           renderItem={renderItem}
           horizontal
           showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToOffsets={snapOffsets}
-          snapToAlignment="start"
-          disableIntervalMomentum
+          decelerationRate="normal"
           nestedScrollEnabled={Platform.OS === "android"}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={CarouselSeparator}
@@ -300,10 +348,16 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
         item={menuState?.item ?? null}
         busy={exportBusy}
         bundle={bundle}
+        showRefreshImage={usesCarouselPhotoBackground(imageTheme)}
         onClose={closeMenu}
         onShare={handleShare}
         onSaveImage={handleSaveImage}
         onCopyImage={handleCopyImage}
+        onRefreshImage={handleRefreshImage}
+        cardSize={menuCardSize}
+        hasCardSizeOverride={menuHasCardSizeOverride}
+        onSelectCardSize={handleSelectCardSize}
+        onResetCardSize={handleResetCardSize}
         onRemoveFavorite={handleRemoveFavorite}
       />
     </>

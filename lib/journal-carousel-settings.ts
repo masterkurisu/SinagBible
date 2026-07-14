@@ -1,5 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  DEFAULT_CAROUSEL_DEFAULT_CARD_SIZE,
+  clearCarouselCardSizes,
+  normalizeCarouselDefaultCardSize,
+  type CarouselDefaultCardSize,
+} from "@/lib/journal-carousel-card-sizes";
+import {
   DEFAULT_CAROUSEL_IMAGE_THEME,
   normalizeCarouselImageTheme,
   type CarouselImageTheme,
@@ -32,6 +38,8 @@ export type JournalCarouselSettings = {
   imageRefreshInterval: CarouselImageRefreshInterval;
   /** Pexels search theme for carousel backgrounds. */
   imageTheme: CarouselImageTheme;
+  /** Default card width preset — per-verse overrides take precedence. */
+  defaultCardSize: CarouselDefaultCardSize;
 };
 
 export const JOURNAL_CAROUSEL_MIN_VERSE_COUNT = 1;
@@ -79,6 +87,7 @@ export const DEFAULT_JOURNAL_CAROUSEL_SETTINGS: JournalCarouselSettings = {
   rotationInterval: "daily",
   imageRefreshInterval: "never",
   imageTheme: DEFAULT_CAROUSEL_IMAGE_THEME,
+  defaultCardSize: DEFAULT_CAROUSEL_DEFAULT_CARD_SIZE,
 };
 
 const listeners = new Set<(settings: JournalCarouselSettings) => void>();
@@ -111,6 +120,7 @@ function normalizeSettings(raw: Partial<JournalCarouselSettings>): JournalCarous
     rotationInterval: interval,
     imageRefreshInterval,
     imageTheme: normalizeCarouselImageTheme(raw.imageTheme),
+    defaultCardSize: normalizeCarouselDefaultCardSize(raw.defaultCardSize),
   };
 }
 
@@ -155,6 +165,12 @@ export async function patchJournalCarouselSettings(
   patch: Partial<JournalCarouselSettings>,
 ): Promise<JournalCarouselSettings> {
   const current = await loadJournalCarouselSettings();
+  if (
+    patch.defaultCardSize != null &&
+    patch.defaultCardSize !== current.defaultCardSize
+  ) {
+    await clearCarouselCardSizes();
+  }
   return saveJournalCarouselSettings({ ...current, ...patch });
 }
 
@@ -164,3 +180,10 @@ export {
   DEFAULT_CAROUSEL_IMAGE_THEME,
   getCarouselImageThemeLabel,
 } from "@/lib/carousel-image-themes";
+export type { CarouselCardSize, CarouselDefaultCardSize } from "@/lib/journal-carousel-card-sizes";
+export {
+  CAROUSEL_CARD_SIZE_OPTIONS,
+  CAROUSEL_DEFAULT_CARD_SIZE_OPTIONS,
+  getCarouselCardSizeLabel,
+  getCarouselDefaultCardSizeLabel,
+} from "@/lib/journal-carousel-card-sizes";

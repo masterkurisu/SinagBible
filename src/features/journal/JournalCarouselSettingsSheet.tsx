@@ -22,9 +22,11 @@ import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Switch } from "@/components/M3Switch";
 import { hapticLightImpact, hapticWarning } from "@/lib/haptics";
 import {
+  CAROUSEL_DEFAULT_CARD_SIZE_OPTIONS,
   CAROUSEL_IMAGE_REFRESH_INTERVAL_OPTIONS,
   CAROUSEL_IMAGE_THEME_OPTIONS,
   CAROUSEL_ROTATION_INTERVAL_OPTIONS,
+  getCarouselDefaultCardSizeLabel,
   getCarouselImageThemeLabel,
   JOURNAL_CAROUSEL_MAX_VERSE_COUNT,
   JOURNAL_CAROUSEL_MIN_VERSE_COUNT,
@@ -185,6 +187,18 @@ export function JournalCarouselSettingsSheet({
     });
   }, [patch, settings]);
 
+  const cycleDefaultCardSize = useCallback(() => {
+    if (!settings) return;
+    hapticLightImpact();
+    const currentIndex = CAROUSEL_DEFAULT_CARD_SIZE_OPTIONS.findIndex(
+      (option) => option.value === settings.defaultCardSize,
+    );
+    const nextIndex = (currentIndex + 1) % CAROUSEL_DEFAULT_CARD_SIZE_OPTIONS.length;
+    void patch({
+      defaultCardSize: CAROUSEL_DEFAULT_CARD_SIZE_OPTIONS[nextIndex]!.value,
+    });
+  }, [patch, settings]);
+
   const refreshImages = useCallback(() => {
     hapticLightImpact();
     void requestCarouselImageRefresh(settings?.imageTheme);
@@ -259,6 +273,8 @@ export function JournalCarouselSettingsSheet({
     )?.label ?? "Manual only";
 
   const imageThemeLabel = getCarouselImageThemeLabel(settings.imageTheme);
+
+  const defaultCardSizeLabel = getCarouselDefaultCardSizeLabel(settings.defaultCardSize);
 
   return (
     <Modal
@@ -444,6 +460,38 @@ export function JournalCarouselSettingsSheet({
                   </View>
                   <Text style={[styles.intervalValue, { color: j.filterOpenerText }]}>{intervalLabel}</Text>
                 </Pressable>
+
+                <View style={[styles.sectionDivider, { backgroundColor: j.panelBorder }]} />
+
+                <View>
+                  <Text style={[styles.sectionTitle, { color: colors.brown800 }]}>Card layout</Text>
+                  <Text style={[styles.sectionDescription, { color: j.subtitleQuote }]}>
+                    Default width for carousel cards. Long-press a card to resize individually.
+                  </Text>
+
+                  <Pressable
+                    onPress={cycleDefaultCardSize}
+                    style={[
+                      styles.intervalRow,
+                      {
+                        borderColor: j.panelBorder,
+                        backgroundColor: j.filterOpenerBackground,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Change default card size"
+                  >
+                    <View style={styles.rowText}>
+                      <Text style={[styles.rowLabel, { color: colors.brown800 }]}>Default card size</Text>
+                      <Text style={[styles.rowDescription, { color: j.subtitleQuote }]}>
+                        Applies to all cards unless you set a size per card.
+                      </Text>
+                    </View>
+                    <Text style={[styles.intervalValue, { color: j.filterOpenerText }]}>
+                      {defaultCardSizeLabel}
+                    </Text>
+                  </Pressable>
+                </View>
 
                 <View style={[styles.sectionDivider, { backgroundColor: j.panelBorder }]} />
 

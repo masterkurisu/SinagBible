@@ -12,6 +12,11 @@ import {
   type CarouselImageCategory,
 } from "@/lib/pexels-image-mapper";
 import type { CarouselImageTheme } from "@/lib/carousel-image-themes";
+import {
+  resolveCarouselWidthRatio,
+  type CarouselCardSize,
+  type CarouselDefaultCardSize,
+} from "@/lib/journal-carousel-card-sizes";
 
 const STORAGE_KEY = "sb:journal:carousel-verses";
 
@@ -151,7 +156,28 @@ export function getCarouselCardGradient(
   return fallback;
 }
 
-const WIDTH_RATIOS = [0.58, 0.72, 0.64] as const;
+type CarouselCardSizing = {
+  overrides: Readonly<Record<string, CarouselCardSize>>;
+  defaultCardSize: CarouselDefaultCardSize;
+};
+
+const DEFAULT_CAROUSEL_CARD_SIZING: CarouselCardSizing = {
+  overrides: {},
+  defaultCardSize: "varied",
+};
+
+function resolveCardWidthRatio(
+  verseId: string,
+  layoutIndex: number,
+  sizing: CarouselCardSizing,
+): number {
+  return resolveCarouselWidthRatio(
+    verseId,
+    layoutIndex,
+    sizing.overrides,
+    sizing.defaultCardSize,
+  );
+}
 
 export const DEFAULT_CAROUSEL_VERSES: Omit<CarouselVerseRecord, "addedAt">[] = [
   {
@@ -204,12 +230,13 @@ export function carouselRecordToDisplay(
   index: number,
   isUserFavorite: boolean,
   options?: { isDailyVerse?: boolean; badgeLabel?: string },
+  sizing: CarouselCardSizing = DEFAULT_CAROUSEL_CARD_SIZING,
 ): CarouselDisplayVerse {
   return {
     id: record.id,
     reference: record.reference,
     text: record.text,
-    widthRatio: WIDTH_RATIOS[index % WIDTH_RATIOS.length]!,
+    widthRatio: resolveCardWidthRatio(record.id, index, sizing),
     gradient: carouselGradientForVerse(record.id, index),
     imageCategory: options?.isDailyVerse
       ? "daily-verse"
@@ -220,14 +247,17 @@ export function carouselRecordToDisplay(
   };
 }
 
-export function getDailyVerseCarouselDisplay(date: Date = new Date()): CarouselDisplayVerse {
+export function getDailyVerseCarouselDisplay(
+  date: Date = new Date(),
+  sizing: CarouselCardSizing = DEFAULT_CAROUSEL_CARD_SIZING,
+): CarouselDisplayVerse {
   const daily = getDailyVerse(date);
   const dayKey = dailyVerseDayKey(date);
   return {
     id: `${DAILY_VERSE_CAROUSEL_ID_PREFIX}${dayKey}`,
     reference: formatDailyVerseReference(daily.reference),
     text: daily.text,
-    widthRatio: WIDTH_RATIOS[0]!,
+    widthRatio: resolveCardWidthRatio(`${DAILY_VERSE_CAROUSEL_ID_PREFIX}${dayKey}`, 0, sizing),
     gradient: carouselGradientForVerse(dayKey, 0),
     imageCategory: "daily-verse",
     isUserFavorite: false,
@@ -248,10 +278,13 @@ function matchesDailyVerseReference(reference: string, date: Date = new Date()):
   );
 }
 
-function restyleCarouselVerses(verses: CarouselDisplayVerse[]): CarouselDisplayVerse[] {
+function restyleCarouselVerses(
+  verses: CarouselDisplayVerse[],
+  sizing: CarouselCardSizing = DEFAULT_CAROUSEL_CARD_SIZING,
+): CarouselDisplayVerse[] {
   return verses.map((verse, index) => ({
     ...verse,
-    widthRatio: WIDTH_RATIOS[(index + 1) % WIDTH_RATIOS.length]!,
+    widthRatio: resolveCardWidthRatio(verse.id, index + 1, sizing),
     gradient: carouselGradientForVerse(verse.id, index + 1),
   }));
 }
@@ -259,8 +292,9 @@ function restyleCarouselVerses(verses: CarouselDisplayVerse[]): CarouselDisplayV
 function withPinnedDailyVerse(
   verses: CarouselDisplayVerse[],
   date: Date = new Date(),
+  sizing: CarouselCardSizing = DEFAULT_CAROUSEL_CARD_SIZING,
 ): CarouselDisplayVerse[] {
-  const daily = getDailyVerseCarouselDisplay(date);
+  const daily = getDailyVerseCarouselDisplay(date, sizing);
   const dailyRef = normalizeCarouselReference(daily.reference);
   const rest = verses.filter(
     (verse) =>
@@ -268,7 +302,7 @@ function withPinnedDailyVerse(
       !verse.id.startsWith(DAILY_VERSE_CAROUSEL_ID_PREFIX) &&
       normalizeCarouselReference(verse.reference) !== dailyRef,
   );
-  return [daily, ...restyleCarouselVerses(rest)];
+  return [daily, ...restyleCarouselVerses(rest, sizing)];
 }
 
 function excludeDailyVerseFromPool(records: CarouselPoolRecord[], date: Date = new Date()): CarouselPoolRecord[] {
@@ -279,14 +313,19 @@ export function mergeCarouselDisplayVerses(
   favorites: CarouselVerseRecord[],
   settings?: JournalCarouselSettings,
   rotationOffset = 0,
+  cardSizeOverrides: Record<string, CarouselCardSize> = {},
 ): CarouselDisplayVerse[] {
   if (!settings) {
-    return mergeCarouselDisplayVersesLegacy(favorites);
+    return mergeCarouselDisplayVersesLegacy(favorites, cardSizeOverrides);
   }
-  return buildCarouselDisplayVerses(favorites, settings, rotationOffset);
+  return buildCarouselDisplayVerses(favorites, settings, rotationOffset, cardSizeOverrides);
 }
 
-function mergeCarouselDisplayVersesLegacy(favorites: CarouselVerseRecord[]): CarouselDisplayVerse[] {
+function mergeCarouselDisplayVersesLegacy(
+  favorites: CarouselVerseRecord[],
+  cardSizeOverrides: Record<string, CarouselCardSize> = {},
+): CarouselDisplayVerse[] {
+  const sizing: CarouselCardSizing = { overrides: cardSizeOverrides, defaultCardSize: "varied" };
   const seen = new Set<string>();
   const merged: CarouselDisplayVerse[] = [];
 
@@ -298,7 +337,7 @@ function mergeCarouselDisplayVersesLegacy(favorites: CarouselVerseRecord[]): Car
     if (seen.has(record.id)) continue;
     if (matchesDailyVerseReference(record.reference)) continue;
     seen.add(record.id);
-    merged.push(carouselRecordToDisplay(record, merged.length, true));
+    merged.push(carouselRecordToDisplay(record, merged.length, true, undefined, sizing));
     if (merged.length >= JOURNAL_CAROUSEL_DISPLAY_CAP - 1) break;
   }
 
@@ -313,10 +352,10 @@ function mergeCarouselDisplayVersesLegacy(favorites: CarouselVerseRecord[]): Car
     if (seen.has(passageKey) || seen.has(fallback.id)) continue;
     if (matchesDailyVerseReference(fallback.reference)) continue;
     seen.add(fallback.id);
-    merged.push(carouselRecordToDisplay(fallback, merged.length, false));
+    merged.push(carouselRecordToDisplay(fallback, merged.length, false, undefined, sizing));
   }
 
-  return withPinnedDailyVerse(merged);
+  return withPinnedDailyVerse(merged, new Date(), sizing);
 }
 
 type CarouselPoolRecord = Omit<CarouselVerseRecord, "addedAt"> & { addedAt?: string };
@@ -392,7 +431,13 @@ export function buildCarouselDisplayVerses(
   favorites: CarouselVerseRecord[],
   settings: JournalCarouselSettings,
   rotationOffset = 0,
+  cardSizeOverrides: Record<string, CarouselCardSize> = {},
 ): CarouselDisplayVerse[] {
+  const sizing: CarouselCardSizing = {
+    overrides: cardSizeOverrides,
+    defaultCardSize: settings.defaultCardSize,
+  };
+
   if (settings.randomize) {
     const pool: CarouselPoolRecord[] = [];
     if (settings.randomizeFavorites) {
@@ -418,9 +463,9 @@ export function buildCarouselDisplayVerses(
     const rest = shuffled
       .slice(0, limit)
       .map((record, index) =>
-        carouselRecordToDisplay(record, index + 1, isUserCarouselRecord(record)),
+        carouselRecordToDisplay(record, index + 1, isUserCarouselRecord(record), undefined, sizing),
       );
-    return withPinnedDailyVerse(rest);
+    return withPinnedDailyVerse(rest, new Date(), sizing);
   }
 
   const pool = excludeDailyVerseFromPool(
@@ -431,9 +476,9 @@ export function buildCarouselDisplayVerses(
   );
   const window = rotatingWindow(pool, rotationOffset, Math.max(0, settings.verseCount - 1));
   const rest = window.map((record, index) =>
-    carouselRecordToDisplay(record, index + 1, isUserCarouselRecord(record)),
+    carouselRecordToDisplay(record, index + 1, isUserCarouselRecord(record), undefined, sizing),
   );
-  return withPinnedDailyVerse(rest);
+  return withPinnedDailyVerse(rest, new Date(), sizing);
 }
 
 export async function loadCarouselFavorites(): Promise<CarouselVerseRecord[]> {

@@ -92,6 +92,31 @@ export async function requestCarouselImageRefresh(
   return result;
 }
 
+/** Fetches a new background URL for a single carousel card. */
+export async function requestCarouselCardImageRefresh(
+  verse: CarouselVerseRef,
+  imageTheme?: CarouselImageTheme,
+): Promise<string | null> {
+  const theme = imageTheme ?? (await loadJournalCarouselSettings()).imageTheme;
+  if (!usesCarouselPhotoBackground(theme)) return null;
+
+  const verses = collectActiveCarouselVerses();
+  const excludeUrls = new Set<string>();
+  for (const candidate of verses) {
+    const assignmentKey = resolveAssignmentKey(theme, candidate);
+    const url = await getCardAssignment(candidate.id, assignmentKey);
+    if (url) excludeUrls.add(url);
+  }
+
+  const assignmentKey = resolveAssignmentKey(theme, verse);
+  await clearCarouselCardAssignments([verse.id], [assignmentKey]);
+
+  const result = await resolveCarouselBackgroundUrls([verse], { excludeUrls, imageTheme: theme });
+  const url = result[verse.id] ?? null;
+  if (url) notifyCarouselImageRefresh({ [verse.id]: url });
+  return url;
+}
+
 export function buildCarouselVersesKey(
   verses: readonly CarouselVerseRef[],
   imageTheme: CarouselImageTheme = "auto",

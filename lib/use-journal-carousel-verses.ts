@@ -7,6 +7,11 @@ import {
   type JournalCarouselSettings,
 } from "@/lib/journal-carousel-settings";
 import {
+  loadCarouselCardSizes,
+  subscribeCarouselCardSizes,
+  type CarouselCardSize,
+} from "@/lib/journal-carousel-card-sizes";
+import {
   buildCarouselDisplayVerses,
   loadCarouselFavorites,
   removeCarouselFavorite,
@@ -34,23 +39,42 @@ function settingsEqual(a: JournalCarouselSettings, b: JournalCarouselSettings): 
     a.verseCount === b.verseCount &&
     a.rotationInterval === b.rotationInterval &&
     a.imageRefreshInterval === b.imageRefreshInterval &&
-    a.imageTheme === b.imageTheme
+    a.imageTheme === b.imageTheme &&
+    a.defaultCardSize === b.defaultCardSize
   );
+}
+
+function cardSizeOverridesEqual(
+  a: Record<string, CarouselCardSize>,
+  b: Record<string, CarouselCardSize>,
+): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
 }
 
 export function useJournalCarouselVerses() {
   const [favorites, setFavorites] = useState<CarouselVerseRecord[]>([]);
   const [settings, setSettings] = useState<JournalCarouselSettings>(DEFAULT_JOURNAL_CAROUSEL_SETTINGS);
+  const [cardSizeOverrides, setCardSizeOverrides] = useState<Record<string, CarouselCardSize>>({});
   const [rotationOffset, setRotationOffset] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
-    const [items, nextSettings] = await Promise.all([
+    const [items, nextSettings, overrides] = await Promise.all([
       loadCarouselFavorites(),
       loadJournalCarouselSettings(),
+      loadCarouselCardSizes(),
     ]);
     setFavorites((prev) => (favoritesEqual(prev, items) ? prev : items));
     setSettings((prev) => (settingsEqual(prev, nextSettings) ? prev : nextSettings));
+    setCardSizeOverrides((prev) =>
+      cardSizeOverridesEqual(prev, overrides) ? prev : overrides,
+    );
     setLoaded(true);
     return items;
   }, []);
@@ -70,6 +94,10 @@ export function useJournalCarouselVerses() {
       setSettings(next);
       setRotationOffset(0);
     });
+  }, []);
+
+  useEffect(() => {
+    return subscribeCarouselCardSizes(setCardSizeOverrides);
   }, []);
 
   useEffect(() => {
@@ -93,13 +121,14 @@ export function useJournalCarouselVerses() {
   }, []);
 
   const displayVerses = useMemo<CarouselDisplayVerse[]>(
-    () => buildCarouselDisplayVerses(favorites, settings, rotationOffset),
-    [favorites, rotationOffset, settings],
+    () => buildCarouselDisplayVerses(favorites, settings, rotationOffset, cardSizeOverrides),
+    [cardSizeOverrides, favorites, rotationOffset, settings],
   );
 
   return {
     favorites,
     settings,
+    cardSizeOverrides,
     displayVerses,
     loaded,
     reload,

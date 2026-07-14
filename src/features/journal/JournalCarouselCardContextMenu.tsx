@@ -13,6 +13,10 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import type { CarouselDisplayVerse } from "@/lib/journal-carousel-verses";
+import {
+  CAROUSEL_CARD_SIZE_OPTIONS,
+  type CarouselCardSize,
+} from "@/lib/journal-carousel-card-sizes";
 import { hapticLightImpact } from "@/lib/haptics";
 
 const MENU_RADIUS_PX = 16;
@@ -29,7 +33,13 @@ export type JournalCarouselCardContextMenuProps = {
   onShare: () => void;
   onSaveImage: () => void;
   onCopyImage: () => void;
+  onRefreshImage?: () => void;
   onRemoveFavorite?: () => void;
+  showRefreshImage?: boolean;
+  cardSize?: CarouselCardSize | null;
+  hasCardSizeOverride?: boolean;
+  onSelectCardSize?: (size: CarouselCardSize) => void;
+  onResetCardSize?: () => void;
 };
 
 type MenuRowProps = {
@@ -74,6 +84,47 @@ function MenuRow({
   );
 }
 
+function MenuSelectableRow({
+  label,
+  selected,
+  onPress,
+  textColor,
+  iconColor,
+  disabled = false,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  textColor: string;
+  iconColor: string;
+  disabled?: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={() => {
+        if (disabled) return;
+        hapticLightImpact();
+        onPress();
+      }}
+      disabled={disabled}
+      activeOpacity={0.65}
+      style={[styles.menuRow, disabled ? styles.menuRowDisabled : null]}
+      accessibilityRole="menuitem"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled, selected }}
+    >
+      <View style={styles.menuSelectableIconSlot}>
+        {selected ? (
+          <MaterialIcons name="check" size={20} color={iconColor} />
+        ) : null}
+      </View>
+      <Text style={[styles.menuRowLabel, styles.menuSelectableLabel, { color: textColor }]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 export const JournalCarouselCardContextMenu = memo(function JournalCarouselCardContextMenu({
   visible,
   item,
@@ -83,7 +134,13 @@ export const JournalCarouselCardContextMenu = memo(function JournalCarouselCardC
   onShare,
   onSaveImage,
   onCopyImage,
+  onRefreshImage,
   onRemoveFavorite,
+  showRefreshImage = false,
+  cardSize = null,
+  hasCardSizeOverride = false,
+  onSelectCardSize,
+  onResetCardSize,
 }: JournalCarouselCardContextMenuProps) {
   const { width: screenW } = useWindowDimensions();
   const colors = bundle.ui;
@@ -165,6 +222,44 @@ export const JournalCarouselCardContextMenu = memo(function JournalCarouselCardC
             textColor={onSurface}
             iconColor={onSurfaceVariant}
           />
+          {showRefreshImage && onRefreshImage ? (
+            <MenuRow
+              icon="refresh"
+              label="Refresh image"
+              onPress={onRefreshImage}
+              disabled={busy}
+              textColor={onSurface}
+              iconColor={onSurfaceVariant}
+            />
+          ) : null}
+
+          {onSelectCardSize ? (
+            <>
+              <View style={[styles.menuDivider, { backgroundColor: j.panelBorder, marginTop: 4 }]} />
+              <Text style={[styles.menuSectionLabel, { color: onSurfaceVariant }]}>Card size</Text>
+              {CAROUSEL_CARD_SIZE_OPTIONS.map((option) => (
+                <MenuSelectableRow
+                  key={option.value}
+                  label={option.label}
+                  selected={cardSize === option.value}
+                  onPress={() => onSelectCardSize(option.value)}
+                  disabled={busy}
+                  textColor={onSurface}
+                  iconColor={onSurfaceVariant}
+                />
+              ))}
+              {hasCardSizeOverride && onResetCardSize ? (
+                <MenuRow
+                  icon="restart-alt"
+                  label="Use default size"
+                  onPress={onResetCardSize}
+                  disabled={busy}
+                  textColor={onSurface}
+                  iconColor={onSurfaceVariant}
+                />
+              ) : null}
+            </>
+          ) : null}
 
           {showRemove ? (
             <>
@@ -231,6 +326,24 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     marginHorizontal: 12,
     marginBottom: 4,
+  },
+  menuSectionLabel: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 2,
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  menuSelectableIconSlot: {
+    width: MENU_ICON_SIZE_PX,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuSelectableLabel: {
+    marginLeft: 12,
   },
   menuRow: {
     height: MENU_ITEM_HEIGHT_PX,
