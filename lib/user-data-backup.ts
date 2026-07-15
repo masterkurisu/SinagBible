@@ -20,6 +20,7 @@ import {
   isSampleJournalEntry,
   replaceAllLocalEntries,
 } from "@/lib/journal-local";
+import { JOURNAL_MIGRATION_FLAG_KEY } from "@/lib/journal-db";
 import {
   loadCarouselFavorites,
   replaceCarouselFavorites,
@@ -365,13 +366,14 @@ export async function exportUserData(): Promise<UserDataBackupResult> {
 }
 
 async function applyUserDataBackup(backup: UserDataBackupV1): Promise<void> {
+  await replaceAllLocalEntries(backup.journalEntries);
   await Promise.all([
-    replaceAllLocalEntries(backup.journalEntries),
     replaceCarouselFavorites(backup.favoriteVerses),
     importAllReaderChapterAnnotations(backup.readerChapters),
   ]);
 
   await AsyncStorage.setItem("sinagbible_sample_journal_entry_dismissed", "1");
+  await AsyncStorage.setItem(JOURNAL_MIGRATION_FLAG_KEY, "true");
 }
 
 export type PickImportBackupResult =

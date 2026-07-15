@@ -24,6 +24,7 @@ import { initCrashReporting } from "@/lib/crash-reporting";
 import { applyPlatformOrientationLock } from "@/lib/apply-platform-orientation-lock";
 import { loadHapticsEnabledPreference } from "@/lib/haptics-preference";
 import { openChapterDb } from "@/lib/chapter-db";
+import { initJournalStorage } from "@/lib/journal-local";
 import { migrateAsyncStorageChapters } from "@/lib/migrate-async-storage";
 import { fetchChapterRemoteConfig } from "@/lib/chapter-remote-config";
 import { reconcileWithRemoteConfig } from "@/lib/chapter-store";
@@ -123,13 +124,15 @@ function RootLayoutContent() {
 
   useEffect(() => {
     let cancelled = false;
-    void openChapterDb()
-      .then(() => {
+    void (async () => {
+      try {
+        await Promise.all([openChapterDb(), initJournalStorage()]);
+      } catch (error) {
+        console.warn("journal storage startup failed", error);
+      } finally {
         if (!cancelled) setChapterDbReady(true);
-      })
-      .catch(() => {
-        if (!cancelled) setChapterDbReady(true);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };

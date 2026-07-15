@@ -35,6 +35,7 @@ import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { loadJournalListItems, type MobileJournalListItem } from "@/lib/load-journal-entries";
 import {
   deleteLocalEntry,
+  getJournalListRevision,
   JOURNAL_LOCAL_STORAGE_USER_MESSAGE,
   updateLocalEntry,
 } from "@/lib/journal-local";
@@ -1073,7 +1074,7 @@ export default function JournalIndexScreen() {
             ref={listRef}
             className="flex-1 px-4"
             data={rows}
-            extraData={entries}
+            extraData={getJournalListRevision()}
             keyExtractor={keyExtractor}
             ItemSeparatorComponent={JournalListRowSeparator}
             removeClippedSubviews={Platform.OS === "android"}

@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { clearBibleApiMemoryCaches } from "@/lib/bible-api-service";
 import { resetChapterDatabase } from "@/lib/chapter-db";
-import { clearLocalEntriesMemoryCache, deleteAllJournalImages } from "@/lib/journal-local";
+import { deleteJournalDatabase } from "@/lib/journal-db";
+import { deleteAllJournalImages, prepareJournalStorageForWipe } from "@/lib/journal-local";
 import { ONBOARDING_DONE_STORAGE_KEY, publishOnboardingState } from "@/lib/onboarding-storage";
 import { clearReaderLastPositionMemoryCache } from "@/lib/reader-last-position";
 import { clearReaderChapterStorageCache } from "@/lib/use-reader-storage";
@@ -11,15 +12,23 @@ import { clearReaderChapterStorageCache } from "@/lib/use-reader-storage";
  * App Store Review Guideline 5.1.1 and Google Play data deletion policy require this in-app flow.
  */
 export async function deleteAllUserData(): Promise<void> {
-  clearBibleApiMemoryCaches();
-  clearLocalEntriesMemoryCache();
-  clearReaderLastPositionMemoryCache();
-  clearReaderChapterStorageCache();
+  try {
+    clearBibleApiMemoryCaches();
+    clearReaderLastPositionMemoryCache();
+    clearReaderChapterStorageCache();
 
-  await deleteAllJournalImages();
-  await AsyncStorage.clear();
-  await resetChapterDatabase();
+    await prepareJournalStorageForWipe();
+    await deleteAllJournalImages();
+    await deleteJournalDatabase();
+    await AsyncStorage.clear();
+    await resetChapterDatabase();
 
-  await AsyncStorage.removeItem(ONBOARDING_DONE_STORAGE_KEY);
-  publishOnboardingState(false);
+    await AsyncStorage.removeItem(ONBOARDING_DONE_STORAGE_KEY);
+    publishOnboardingState(false);
+  } catch (error) {
+    if (__DEV__) {
+      console.error("[delete-my-data] failed", error);
+    }
+    throw error;
+  }
 }
