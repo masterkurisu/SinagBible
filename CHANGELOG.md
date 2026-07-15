@@ -6,11 +6,15 @@ All notable changes to Sinag Bible, organized by version.
 
 ## 1.0.0.9
 
+`5f2f75df` → `0e3e2ae5` (25 commits)
+
 ### New features & UI
+- **Changelog viewer** — in-app changelog sheet in More menu, bundled from `CHANGELOG.md`
 - **Verse carousel** — image customization + customizable card sizes
 - **Privacy policy** — updated and redesigned
 - **Home** — removed tab-style design from top list
 - **Reader app bar** — icon animations changed to jiggle
+- **Journal translation labels** — passage references show translation abbreviations instead of raw IDs (list, detail, and new entry form)
 
 ### Fixes
 - Missing translations
