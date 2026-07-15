@@ -29,6 +29,7 @@ import {
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 
 import { JOURNAL_NEW_ENTRY_FAB_PX } from "@/src/features/journal/journalFabChrome";
+import { clearDefaultJournalDraft } from "@/lib/journal-draft-index";
 import { JournalDraftCloseDialog } from "@/src/features/journal/JournalDraftCloseDialog";
 
 const FAB_SIZE_PX = JOURNAL_NEW_ENTRY_FAB_PX;
@@ -310,6 +311,7 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
 
   const handleDiscardDraft = useCallback(() => {
     setDraftCloseDialogOpen(false);
+    void clearDefaultJournalDraft();
     animateClose();
   }, [animateClose]);
 

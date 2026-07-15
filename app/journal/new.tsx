@@ -6,6 +6,7 @@ import { JournalNewEntryForm, type JournalNewEntryInitialParams } from "@/compon
 import { JOURNAL_NEW_ENTRY_FORM_TOP_OFFSET_PX } from "@/lib/native-tab-chrome";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
+import { clearDefaultJournalDraft } from "@/lib/journal-draft-index";
 import { JournalDraftCloseDialog } from "@/src/features/journal/JournalDraftCloseDialog";
 
 const NEW_ENTRY_STACK_SCREEN_OPTIONS = {
@@ -126,6 +127,7 @@ export default function NewJournalEntryScreen() {
         onKeepEditing={() => setDiscardDialogOpen(false)}
         onDiscard={() => {
           setDiscardDialogOpen(false);
+          void clearDefaultJournalDraft();
           router.back();
         }}
         bundle={bundle}

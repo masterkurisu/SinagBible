@@ -37,6 +37,12 @@ import {
 } from "@sinag-bible/core";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { saveLocalEntry, updateLocalEntry, plainReflectionToContent } from "@/lib/journal-local";
+import {
+  clearDefaultJournalDraft,
+  DEFAULT_JOURNAL_DRAFT_ID,
+  loadDefaultJournalDraft,
+  registerJournalDraft,
+} from "@/lib/journal-draft-index";
 import { setPendingJournalDetailEntry } from "@/lib/journal-edit-bridge";
 import {
   toMobileJournalListItem,
@@ -350,6 +356,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const editDraftReflectionBaselineRef = useRef(editDraft?.content ?? "");
   const reflectionEditedSinceBaselineRef = useRef(false);
   const reflectionEditorReadyRef = useRef(false);
+  const pendingDraftReflectionRef = useRef<string | null>(null);
+  const draftHydrationDoneRef = useRef(editDraft != null);
   const richEditorRef = useRef<RichEditor>(null);
   const fullscreenRichEditorRef = useRef<RichEditor>(null);
   const sheetFormScrollRef = useRef<ScrollView>(null);
@@ -431,6 +439,11 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const onReflectionEditorInitialized = useCallback(() => {
     reflectionEditorReadyRef.current = true;
+    const pending = pendingDraftReflectionRef.current;
+    if (pending) {
+      richEditorRef.current?.setContentHTML(pending.length ? pending : "<br>");
+      pendingDraftReflectionRef.current = null;
+    }
   }, []);
 
   const reflectionPlainText = (html: string): string =>
@@ -543,6 +556,62 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const hasReflectionInput = reflectionPlainText(reflectionHtml).length > 0;
   const hasDraftInput = passage.trim().length > 0 || title.trim().length > 0 || hasReflectionInput;
+
+  useEffect(() => {
+    if (editDraft) return;
+    let cancelled = false;
+    void loadDefaultJournalDraft().then((draft) => {
+      if (cancelled) return;
+      if (draft) {
+        if (draft.passage.trim()) setPassage(draft.passage);
+        if (draft.title.trim()) setTitle(draft.title);
+        if (draft.reflectionHtml) {
+          const normalized = normalizeReflectionHtml(draft.reflectionHtml);
+          reflectionHtmlRef.current = normalized;
+          setReflectionHtml(normalized);
+          if (reflectionEditorReadyRef.current) {
+            richEditorRef.current?.setContentHTML(normalized.length ? normalized : "<br>");
+          } else {
+            pendingDraftReflectionRef.current = normalized;
+          }
+        }
+      }
+      draftHydrationDoneRef.current = true;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [editDraft]);
+
+  useEffect(() => {
+    if (editDraft || !draftHydrationDoneRef.current) return;
+    if (!hasDraftInput) {
+      void clearDefaultJournalDraft();
+      return;
+    }
+    const timer = setTimeout(() => {
+      void registerJournalDraft(
+        DEFAULT_JOURNAL_DRAFT_ID,
+        JSON.stringify({
+          passage,
+          title,
+          reflectionHtml: reflectionHtmlRef.current,
+          journalTranslationId,
+          initialParams,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [
+    editDraft,
+    hasDraftInput,
+    passage,
+    title,
+    reflectionHtml,
+    journalTranslationId,
+    initialParams,
+  ]);
 
   useEffect(() => {
     onDirtyChange?.(hasDraftInput);
@@ -1128,6 +1197,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           title: titleTrim,
         };
         setPendingJournalDetailEntry(savedEntry);
+        await clearDefaultJournalDraft();
         confirmSaveSuccess("Changes saved", () => finishSave(undefined, savedEntry));
       } catch (e) {
         if (__DEV__) {
@@ -1169,6 +1239,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         is_favorite: false,
       });
 
+      await clearDefaultJournalDraft();
       confirmSaveSuccess("Reflection saved", () => finishSave(saved.id));
     } catch (e) {
       if (__DEV__) {

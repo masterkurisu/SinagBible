@@ -308,11 +308,13 @@ export function initAppLogs(): void {
   if (installed) return;
   installed = true;
 
-  console.log = wrapConsoleMethod("log");
-  console.info = wrapConsoleMethod("info");
-  console.warn = wrapConsoleMethod("warn");
-  console.error = wrapConsoleMethod("error");
-  console.debug = wrapConsoleMethod("debug");
+  if (__DEV__) {
+    console.log = wrapConsoleMethod("log");
+    console.info = wrapConsoleMethod("info");
+    console.warn = wrapConsoleMethod("warn");
+    console.error = wrapConsoleMethod("error");
+    console.debug = wrapConsoleMethod("debug");
+  }
 
   installGlobalErrorHandler();
 

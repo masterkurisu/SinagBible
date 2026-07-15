@@ -3,7 +3,6 @@ import { AppState, Platform, View } from "react-native";
 import { usePathname } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import {
@@ -26,6 +25,7 @@ import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
 import { TabBarSearchProvider } from "@/lib/tab-bar-search-context";
 import { TabBarSearchLayer } from "@/src/features/search/TabBarSearchLayer";
 import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
+import { hasAnyJournalDraft } from "@/lib/journal-draft-index";
 import { refreshLocalEntriesCache } from "@/lib/journal-local";
 import { warmReaderTranslationSearchCache } from "@/lib/bible-search-service";
 import { getPreferredReaderTranslation } from "@/lib/reader-last-position";
@@ -42,16 +42,7 @@ function isReaderChapterRoute(pathname: string | null): boolean {
   return afterReader.length >= 2 && afterReader[0] !== "index";
 }
 
-const JOURNAL_DRAFT_KEY_CANDIDATES = [
-  "sinagbible_journal_draft",
-  "sb:journal:draft",
-  "quietword_journal_draft",
-  "qs:journal:draft",
-  "sb-journal-draft",
-  "qs-journal-draft",
-  "journal_draft",
-];
-const DRAFT_DISCOVERY_INTERVAL_MS = 60_000;
+const DRAFT_BADGE_REFRESH_INTERVAL_MS = 60_000;
 
 export default function TabLayout() {
   return (
@@ -84,8 +75,7 @@ function TabLayoutInner() {
       ? mixHexColors(reader.sceneSurface, READER_TOOLS_MENU_TAB_BAR_COLOR, readerSettingsTabBarTint)
       : TAB_BAR_BACKGROUND;
   const [hasJournalDraft, setHasJournalDraft] = useState(false);
-  const discoveredDraftKeysRef = useRef<string[]>([]);
-  const lastDraftDiscoveryAtRef = useRef(0);
+  const lastDraftBadgeRefreshAtRef = useRef(0);
 
   usePinnedTranslationsPrefetch();
 
@@ -102,37 +92,17 @@ function TabLayoutInner() {
   useEffect(() => {
     let cancelled = false;
 
-    const hasAnyDraftValue = async (allowDiscovery: boolean): Promise<boolean> => {
-      const keysToCheck = [...JOURNAL_DRAFT_KEY_CANDIDATES, ...discoveredDraftKeysRef.current];
-      for (const key of keysToCheck) {
-        const raw = await AsyncStorage.getItem(key);
-        if (raw && raw !== "null" && raw !== '""' && raw !== "{}") {
-          return true;
-        }
-      }
-      if (allowDiscovery) {
-        // Discovery scan is expensive; only run when explicitly needed.
-        const allKeys = await AsyncStorage.getAllKeys();
-        const discovered = allKeys.filter((k) => /journal.*draft|draft.*journal/i.test(k));
-        discoveredDraftKeysRef.current = discovered;
-        for (const key of discovered) {
-          const raw = await AsyncStorage.getItem(key);
-          if (raw && raw !== "null" && raw !== '""' && raw !== "{}") {
-            return true;
-          }
-        }
-      }
-      return false;
-    };
-
-    const refreshDraftBadge = async (forceDiscovery: boolean) => {
+    const refreshDraftBadge = async (force: boolean) => {
       try {
         const now = Date.now();
-        const shouldDiscover =
-          forceDiscovery ||
-          now - lastDraftDiscoveryAtRef.current >= DRAFT_DISCOVERY_INTERVAL_MS;
-        if (shouldDiscover) lastDraftDiscoveryAtRef.current = now;
-        const next = await hasAnyDraftValue(shouldDiscover);
+        if (
+          !force &&
+          now - lastDraftBadgeRefreshAtRef.current < DRAFT_BADGE_REFRESH_INTERVAL_MS
+        ) {
+          return;
+        }
+        lastDraftBadgeRefreshAtRef.current = now;
+        const next = await hasAnyJournalDraft();
         if (!cancelled) setHasJournalDraft(next);
       } catch {
         if (!cancelled) setHasJournalDraft(false);
@@ -142,7 +112,7 @@ function TabLayoutInner() {
     void refreshDraftBadge(true);
     const appStateSub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
-        void refreshDraftBadge(true);
+        void refreshDraftBadge(false);
       }
     });
 
@@ -154,22 +124,9 @@ function TabLayoutInner() {
 
   useEffect(() => {
     if (activeTabKey !== "journal") return;
-    // Refresh badge when user returns to the tab where drafts are edited.
-    void (async () => {
-      try {
-        const keysToCheck = [...JOURNAL_DRAFT_KEY_CANDIDATES, ...discoveredDraftKeysRef.current];
-        for (const key of keysToCheck) {
-          const raw = await AsyncStorage.getItem(key);
-          if (raw && raw !== "null" && raw !== '""' && raw !== "{}") {
-            setHasJournalDraft(true);
-            return;
-          }
-        }
-        setHasJournalDraft(false);
-      } catch {
-        setHasJournalDraft(false);
-      }
-    })();
+    void hasAnyJournalDraft()
+      .then(setHasJournalDraft)
+      .catch(() => setHasJournalDraft(false));
   }, [activeTabKey]);
 
   useEffect(() => {
