@@ -84,6 +84,7 @@ import {
   type JournalNewEntrySheetHandle,
 } from "@/src/features/journal/JournalNewEntrySheet";
 import { PrivacyPolicySheet } from "@/components/privacy-policy-sheet";
+import { ChangelogsSheet } from "@/components/changelogs-sheet";
 import { CreditsSheet } from "@/components/credits-sheet";
 import { TermsOfServiceSheet } from "@/components/terms-of-service-sheet";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
@@ -240,6 +241,7 @@ export default function ReaderChapterScreen() {
   const [readerPrivacyPolicyOpen, setReaderPrivacyPolicyOpen] = useState(false);
   const [readerTermsOpen, setReaderTermsOpen] = useState(false);
   const [readerCreditsOpen, setReaderCreditsOpen] = useState(false);
+  const [readerChangelogsOpen, setReaderChangelogsOpen] = useState(false);
   const [dataBackupSheetOpen, setDataBackupSheetOpen] = useState(false);
   const [readerDataImportReloading, setReaderDataImportReloading] = useState(false);
   const [readerDataImportPicking, setReaderDataImportPicking] = useState(false);
@@ -505,6 +507,13 @@ export default function ReaderChapterScreen() {
     }, 0);
   }, [closeMoreSettingsPopup]);
 
+  const openChangelogsFromMoreSheet = useCallback(() => {
+    closeMoreSettingsPopup();
+    setTimeout(() => {
+      setReaderChangelogsOpen(true);
+    }, 0);
+  }, [closeMoreSettingsPopup]);
+
   const openDataBackupFromMoreSheet = useCallback(() => {
     closeMoreSettingsPopup();
     setTimeout(() => {
@@ -752,6 +761,7 @@ export default function ReaderChapterScreen() {
     else if (deleteMyDataDialogOpen) closeDeleteMyDataDialog();
     else if (readerPrivacyPolicyOpen) setReaderPrivacyPolicyOpen(false);
     else if (readerCreditsOpen) setReaderCreditsOpen(false);
+    else if (readerChangelogsOpen) setReaderChangelogsOpen(false);
     else if (commentaryPanelOpen) setCommentaryPanelOpen(false);
     else if (readerDropdown === "translation" || readerDropdown === "theme") closeReaderDropdown();
   }, [
@@ -766,6 +776,7 @@ export default function ReaderChapterScreen() {
     closeDeleteMyDataDialog,
     readerPrivacyPolicyOpen,
     readerCreditsOpen,
+    readerChangelogsOpen,
     commentaryPanelOpen,
     readerDropdown,
     closeReaderDropdown,
@@ -914,6 +925,7 @@ export default function ReaderChapterScreen() {
     readerDropdown != null ||
     readerPrivacyPolicyOpen ||
     readerCreditsOpen ||
+    readerChangelogsOpen ||
     noteModalVisible ||
     newEntrySheetOpen;
   const chapterNavArrowsEnabled =
@@ -1129,6 +1141,7 @@ export default function ReaderChapterScreen() {
     readerDropdown != null ||
     readerPrivacyPolicyOpen ||
     readerCreditsOpen ||
+    readerChangelogsOpen ||
     noteModalVisible ||
     newEntrySheetOpen;
 
@@ -1215,6 +1228,7 @@ export default function ReaderChapterScreen() {
       readerDropdown != null ||
       readerPrivacyPolicyOpen ||
       readerCreditsOpen ||
+    readerChangelogsOpen ||
       noteModalVisible ||
       newEntrySheetOpen) ||
     selectedVerses.length > 0 ||
@@ -1652,6 +1666,7 @@ export default function ReaderChapterScreen() {
           readerDropdown != null ||
           readerPrivacyPolicyOpen ||
           readerCreditsOpen ||
+    readerChangelogsOpen ||
           newEntrySheetOpen
         }
         readerFeatureOnboardingActive={readerFeatureOnboarding.showLayer}
@@ -1817,6 +1832,7 @@ export default function ReaderChapterScreen() {
         isOpen={moreSettingsSheetOpen}
         onClose={closeMoreSettingsPopup}
         onSelectCredits={openCreditsFromMoreSheet}
+        onSelectChangelogs={openChangelogsFromMoreSheet}
         onSelectImportExport={openDataBackupFromMoreSheet}
         bundle={bundle}
         insets={insets}
@@ -1835,6 +1851,13 @@ export default function ReaderChapterScreen() {
         onClose={() => setReaderCreditsOpen(false)}
         onOpenPrivacyPolicy={openPrivacyPolicyFromCredits}
         onOpenTermsOfService={openTermsFromCredits}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
+      />
+      <ChangelogsSheet
+        visible={readerChangelogsOpen}
+        onClose={() => setReaderChangelogsOpen(false)}
         bundle={bundle}
         insets={insets}
         isTabletReaderLayout={isTabletReaderLayout}

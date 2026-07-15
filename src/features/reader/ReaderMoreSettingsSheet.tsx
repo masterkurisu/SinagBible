@@ -35,6 +35,7 @@ export type ReaderMoreSettingsSheetProps = {
   isOpen: boolean;
   onClose: () => void;
   onSelectCredits: () => void;
+  onSelectChangelogs: () => void;
   onSelectImportExport: () => void;
   bundle: MobileAppThemeBundle;
   insets: { top: number; bottom: number; left: number; right: number };
@@ -126,6 +127,7 @@ export function ReaderMoreSettingsSheet({
   isOpen,
   onClose,
   onSelectCredits,
+  onSelectChangelogs,
   onSelectImportExport,
   bundle,
   insets,
@@ -207,6 +209,11 @@ export function ReaderMoreSettingsSheet({
     onSelectCredits();
   }, [onSelectCredits]);
 
+  const handleChangelogs = useCallback(() => {
+    hapticLightImpact();
+    onSelectChangelogs();
+  }, [onSelectChangelogs]);
+
   return (
     <>
       <ReaderM3BottomSheet
@@ -232,25 +239,6 @@ export function ReaderMoreSettingsSheet({
           ]}
         >
           <MoreSettingsRow
-            label="Save logs"
-            scale={scale}
-            accessibilityLabel="Save logs"
-            onPress={handleSaveLogsToDevice}
-            disabled={logsExportBusy}
-            busy={logsExportBusy}
-            rippleColor={rippleColor}
-            trailing={
-              <MaterialIcons
-                name="download"
-                size={trailingIconSize}
-                color={sheetChrome.onSurfaceVariant}
-              />
-            }
-          />
-
-          <MoreSettingsDivider scale={scale} />
-
-          <MoreSettingsRow
             label="Haptic feedback"
             scale={scale}
             accessibilityLabel="Haptic feedback"
@@ -272,13 +260,19 @@ export function ReaderMoreSettingsSheet({
           <MoreSettingsDivider scale={scale} />
 
           <MoreSettingsRow
-            label="Credits"
+            label="Save logs"
             scale={scale}
-            accessibilityLabel="Credits"
-            onPress={handleCredits}
+            accessibilityLabel="Save logs"
+            onPress={handleSaveLogsToDevice}
+            disabled={logsExportBusy}
+            busy={logsExportBusy}
             rippleColor={rippleColor}
             trailing={
-              <CreditsIcon size={trailingIconSize} color={sheetChrome.onSurfaceVariant} />
+              <MaterialIcons
+                name="download"
+                size={trailingIconSize}
+                color={sheetChrome.onSurfaceVariant}
+              />
             }
           />
 
@@ -293,6 +287,36 @@ export function ReaderMoreSettingsSheet({
             trailing={
               <MaterialIcons
                 name="import-export"
+                size={trailingIconSize}
+                color={sheetChrome.onSurfaceVariant}
+              />
+            }
+          />
+
+          <MoreSettingsDivider scale={scale} />
+
+          <MoreSettingsRow
+            label="Credits"
+            scale={scale}
+            accessibilityLabel="Credits"
+            onPress={handleCredits}
+            rippleColor={rippleColor}
+            trailing={
+              <CreditsIcon size={trailingIconSize} color={sheetChrome.onSurfaceVariant} />
+            }
+          />
+
+          <MoreSettingsDivider scale={scale} />
+
+          <MoreSettingsRow
+            label="Changelogs"
+            scale={scale}
+            accessibilityLabel="Changelogs"
+            onPress={handleChangelogs}
+            rippleColor={rippleColor}
+            trailing={
+              <MaterialIcons
+                name="history"
                 size={trailingIconSize}
                 color={sheetChrome.onSurfaceVariant}
               />

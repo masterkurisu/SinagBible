@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import type { Href } from "expo-router";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { ChangelogsSheet } from "@/components/changelogs-sheet";
 import { CreditsSheet } from "@/components/credits-sheet";
 import { PrivacyPolicySheet } from "@/components/privacy-policy-sheet";
 import { TermsOfServiceSheet } from "@/components/terms-of-service-sheet";
@@ -67,6 +68,7 @@ export function useReaderSettingsFollowUpState({
   const [readerPrivacyPolicyOpen, setReaderPrivacyPolicyOpen] = useState(false);
   const [readerTermsOpen, setReaderTermsOpen] = useState(false);
   const [readerCreditsOpen, setReaderCreditsOpen] = useState(false);
+  const [readerChangelogsOpen, setReaderChangelogsOpen] = useState(false);
   const [dataBackupSheetOpen, setDataBackupSheetOpen] = useState(false);
   const [commentaryPanelOpen, setCommentaryPanelOpen] = useState(false);
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
@@ -164,6 +166,13 @@ export function useReaderSettingsFollowUpState({
     }, 0);
   }, [closeMoreSettingsPopup]);
 
+  const openChangelogsFromMoreSheet = useCallback(() => {
+    closeMoreSettingsPopup();
+    setTimeout(() => {
+      setReaderChangelogsOpen(true);
+    }, 0);
+  }, [closeMoreSettingsPopup]);
+
   const openDataBackupFromMoreSheet = useCallback(() => {
     closeMoreSettingsPopup();
     setTimeout(() => {
@@ -213,6 +222,7 @@ export function useReaderSettingsFollowUpState({
     else if (deleteMyDataDialogOpen) closeDeleteMyDataDialog();
     else if (readerPrivacyPolicyOpen) setReaderPrivacyPolicyOpen(false);
     else if (readerCreditsOpen) setReaderCreditsOpen(false);
+    else if (readerChangelogsOpen) setReaderChangelogsOpen(false);
     else if (commentaryPanelOpen) setCommentaryPanelOpen(false);
     else if (readerDropdown === "translation" || readerDropdown === "theme") closeReaderDropdown();
   }, [
@@ -226,6 +236,7 @@ export function useReaderSettingsFollowUpState({
     moreSettingsSheetOpen,
     dataBackupSheetOpen,
     readerCreditsOpen,
+    readerChangelogsOpen,
     readerDropdown,
     readerPrivacyPolicyOpen,
   ]);
@@ -237,6 +248,8 @@ export function useReaderSettingsFollowUpState({
     setReaderTermsOpen,
     readerCreditsOpen,
     setReaderCreditsOpen,
+    readerChangelogsOpen,
+    setReaderChangelogsOpen,
     dataBackupSheetOpen,
     setDataBackupSheetOpen,
     commentaryPanelOpen,
@@ -261,6 +274,7 @@ export function useReaderSettingsFollowUpState({
     openMobileReaderCommentaryFromMenu,
     openMobileReaderMoreFromMenu,
     openCreditsFromMoreSheet,
+    openChangelogsFromMoreSheet,
     openDataBackupFromMoreSheet,
     openDataBackupFromDeleteReminder,
     openPrivacyPolicyFromCredits,
@@ -475,6 +489,7 @@ export function ReaderSettingsFollowUpLayer({
         isOpen={followUp.moreSettingsSheetOpen}
         onClose={followUp.closeMoreSettingsPopup}
         onSelectCredits={followUp.openCreditsFromMoreSheet}
+        onSelectChangelogs={followUp.openChangelogsFromMoreSheet}
         onSelectImportExport={followUp.openDataBackupFromMoreSheet}
         bundle={bundle}
         insets={insets}
@@ -493,6 +508,13 @@ export function ReaderSettingsFollowUpLayer({
         onClose={() => followUp.setReaderCreditsOpen(false)}
         onOpenPrivacyPolicy={followUp.openPrivacyPolicyFromCredits}
         onOpenTermsOfService={followUp.openTermsFromCredits}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
+      />
+      <ChangelogsSheet
+        visible={followUp.readerChangelogsOpen}
+        onClose={() => followUp.setReaderChangelogsOpen(false)}
         bundle={bundle}
         insets={insets}
         isTabletReaderLayout={isTabletReaderLayout}
