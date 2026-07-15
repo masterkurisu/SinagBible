@@ -159,6 +159,11 @@ export function useTranslationPicker(): {
       }
       if (yvpResult.status === "fulfilled") {
         setYvpItems(yvpResult.value);
+        if (__DEV__ && yvpResult.value.length === 0) {
+          console.warn(
+            "[useTranslationPicker] YouVersion catalog returned 0 bibles — check YVP_APP_KEY and network.",
+          );
+        }
       } else if (__DEV__) {
         console.warn(
           "[useTranslationPicker] YouVersion catalog failed:",

@@ -104,7 +104,10 @@ export function parseYvpBibleId(translationId: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-/** Curated language ranges for the translation picker (fast parallel fetch). */
+/**
+ * Curated language ranges for the translation picker (parallel fetch per range).
+ * Ilocano (`ilo`) is omitted — YVP returns HTTP 204 with no catalog entries; use helloao `ilo_ulb`.
+ */
 const YVP_PICKER_LANGUAGE_RANGES = ["en", "fil", "tl", "ceb", "es"] as const;
 
 function getYvpAppKey(): string {
@@ -116,6 +119,16 @@ function getYvpAppKey(): string {
     throw new Error("youversion-api: YVP_APP_KEY is not configured");
   }
   return key;
+}
+
+/** True when a YouVersion Platform app key is available at runtime. */
+export function isYvpApiConfigured(): boolean {
+  try {
+    getYvpAppKey();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function mapYvpBible(record: YvpBibleRecord): YvpBible {
@@ -193,7 +206,12 @@ async function yvpFetch<T>(path: string, searchParams?: Record<string, string>):
       if (!res.ok) {
         throw new YvpHttpError(res.status, url.pathname, parseRetryAfterMs(res));
       }
-      return (await res.json()) as T;
+      // Some collection queries (e.g. language_ranges[]=ilo) return 204 with no body.
+      const text = await res.text();
+      if (!text.trim()) {
+        return {} as T;
+      }
+      return JSON.parse(text) as T;
     } catch (error) {
       if (error instanceof YvpHttpError && error.status === 429 && attempt < YVP_FETCH_MAX_RETRIES) {
         const delayMs = error.retryAfterMs ?? YVP_FETCH_RETRY_BASE_MS * 2 ** attempt;
@@ -234,18 +252,28 @@ async function ensureYvpTranslationMeta(bibleId: number): Promise<void> {
  * Result is cached for the app session.
  */
 export function fetchYvpBibles(): Promise<YvpBible[]> {
+  if (!isYvpApiConfigured()) {
+    return Promise.resolve([]);
+  }
+
   const cacheKey = "picker";
   const cached = yvpBiblesCache.get(cacheKey);
   if (cached) return cached;
 
   const p = (async () => {
-    const pages = await Promise.all(
+    const results = await Promise.allSettled(
       YVP_PICKER_LANGUAGE_RANGES.map((range) => fetchYvpBiblesForLanguageRange(range)),
     );
     const byId = new Map<number, YvpBible>();
-    for (const bibles of pages) {
-      for (const bible of bibles) {
-        byId.set(bible.id, bible);
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        for (const bible of result.value) {
+          byId.set(bible.id, bible);
+        }
+        continue;
+      }
+      if (__DEV__) {
+        console.warn("[fetchYvpBibles] language range failed:", result.reason);
       }
     }
     return [...byId.values()];

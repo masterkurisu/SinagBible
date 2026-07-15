@@ -189,13 +189,23 @@ export function TranslationPickerSheet({
     return availableLanguages.filter((l) => l.toLowerCase().includes(q));
   }, [availableLanguages, langSearch]);
 
+  const isFilteringTranslations = useMemo(
+    () => searchQuery.trim().length > 0 || langFilter != null,
+    [searchQuery, langFilter],
+  );
+
   const filteredTranslations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const filtered = translationPickerItems.filter((item) => {
       if (langFilter && item.languageSection !== langFilter) return false;
       if (!query) return true;
       const abbr = getTranslationPickerAbbreviation(item).toLowerCase();
-      return item.label.toLowerCase().includes(query) || abbr.includes(query);
+      const language = item.languageSection.toLowerCase();
+      return (
+        item.label.toLowerCase().includes(query) ||
+        abbr.includes(query) ||
+        language.includes(query)
+      );
     });
     if (langFilter != null) {
       return filtered.slice().sort(compareTranslationPickerAbbreviations);
@@ -203,10 +213,14 @@ export function TranslationPickerSheet({
     return filtered;
   }, [langFilter, searchQuery, translationPickerItems]);
 
-  const showResults = useMemo(
-    () => searchQuery.trim().length > 0 || langFilter != null,
-    [searchQuery, langFilter],
-  );
+  /** Full browse list; pinned rows stay in the header when not filtering. */
+  const translationListData = useMemo(() => {
+    if (isFilteringTranslations) return filteredTranslations;
+    const pinnedSet = new Set(favoriteTranslationIds);
+    return filteredTranslations.filter((item) => !pinnedSet.has(item.id));
+  }, [favoriteTranslationIds, filteredTranslations, isFilteringTranslations]);
+
+  const showResults = translationListData.length > 0 || isFilteringTranslations;
   const languageFilterActive = langFilter != null;
   const showPinnedInPicker = !languageFilterActive;
 
@@ -930,6 +944,22 @@ export function TranslationPickerSheet({
             {langFilter}
           </Text>
         ) : null}
+
+        {showResults && !isFilteringTranslations && translationListData.length > 0 ? (
+          <Text
+            style={{
+              fontFamily: isAndroidSheet ? "Inter_500Medium" : "Inter_400Regular",
+              fontSize: isAndroidSheet ? 14 : 10,
+              letterSpacing: isAndroidSheet ? 0.1 : 1,
+              textTransform: isAndroidSheet ? "none" : "uppercase",
+              color: sheetMutedColor,
+              opacity: isAndroidSheet ? 1 : 0.75,
+              marginBottom: 8,
+            }}
+          >
+            All translations
+          </Text>
+        ) : null}
       </>
     );
   }, [
@@ -938,13 +968,15 @@ export function TranslationPickerSheet({
     languageFilterActive,
     pinnedTranslations,
     sheetMutedColor,
+    isFilteringTranslations,
     showPinnedInPicker,
     showResults,
+    translationListData.length,
     ui.borderSolid,
   ]);
 
   const renderTranslationPickerEmpty = useCallback(() => {
-    if (!showResults) return null;
+    if (!isFilteringTranslations) return null;
     return (
       <Text
         style={{
@@ -957,7 +989,7 @@ export function TranslationPickerSheet({
         No translations found{langFilter ? ` for ${langFilter}` : ""}.
       </Text>
     );
-  }, [isAndroidSheet, langFilter, sheetMutedColor, showResults]);
+  }, [isAndroidSheet, isFilteringTranslations, langFilter, sheetMutedColor]);
 
   const translationListExtraData = useMemo(
     () => ({
@@ -965,8 +997,9 @@ export function TranslationPickerSheet({
       favoriteTranslationIds,
       langFilter,
       searchQuery,
+      listCount: translationListData.length,
     }),
-    [favoriteTranslationIds, langFilter, resolvedTranslationApiId, searchQuery],
+    [favoriteTranslationIds, langFilter, resolvedTranslationApiId, searchQuery, translationListData.length],
   );
 
   const pickerBody = (
@@ -1140,7 +1173,7 @@ export function TranslationPickerSheet({
         {contentReady ? (
           <FlashList
             ref={translationListFlashListRef}
-            data={showResults ? filteredTranslations : []}
+            data={translationListData}
             keyExtractor={(item) => item.id}
             renderItem={renderTranslationListItem}
             ListHeaderComponent={renderTranslationPickerHeader}
@@ -1321,7 +1354,9 @@ export function TranslationPickerSheet({
       </View>
       {langListReady ? (
       <GHFlatList
+        key={langSheetOpen ? "lang-sheet-open" : "lang-sheet-closed"}
         data={filteredLanguages}
+        extraData={filteredLanguages}
         keyExtractor={(item) => item}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === "ios" ? "on-drag" : "none"}
