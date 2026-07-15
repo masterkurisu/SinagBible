@@ -24,6 +24,18 @@ export const READER_FLASH_LIST_DRAW_DISTANCE_PX = motionTier === "reduced" ? 200
 /** FlashList scrollEventThrottle — fewer JS bridge crossings on low-RAM Android. */
 export const READER_SCROLL_EVENT_THROTTLE = motionTier === "reduced" ? 32 : 8;
 
+/** Book picker grid view — 3-column FlashList layout. */
+export const BOOK_PICKER_GRID_COLUMNS = 3;
+
+/** Chapter picker grid — 5-column FlashList layout. */
+export const CHAPTER_PICKER_GRID_COLUMNS = 5;
+
+/** Sheet picker FlashList draw distance — mirrors reader chapter list tuning. */
+export const PICKER_FLASH_LIST_DRAW_DISTANCE_PX = READER_FLASH_LIST_DRAW_DISTANCE_PX;
+
+/** Sheet picker scroll throttle — mirrors reader chapter list tuning. */
+export const PICKER_SCROLL_EVENT_THROTTLE = READER_SCROLL_EVENT_THROTTLE;
+
 /** Min scroll delta (px) before runOnJS nav-arrow side effects fire. */
 export const READER_SCROLL_JS_BRIDGE_DELTA_PX = motionTier === "reduced" ? 24 : 8;
 

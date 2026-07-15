@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { LinearGradient } from "expo-linear-gradient";
 import type {
   PanGestureHandlerGestureEvent,
@@ -26,9 +27,7 @@ import type {
 import {
   NativeViewGestureHandler,
   PanGestureHandler,
-  ScrollView as GHScrollView,
   State,
-  type ScrollView as GHScrollViewRef,
 } from "react-native-gesture-handler";
 import { getTestament } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
@@ -37,6 +36,8 @@ import { MenuOptionsIcon } from "@/components/icons/MenuOptionsIcon";
 import { SheetContentSkeleton } from "@/components/sheet-content-skeleton";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import {
+  BOOK_PICKER_GRID_COLUMNS,
+  CHAPTER_PICKER_GRID_COLUMNS,
   SHEET_OPEN_DURATION_MS,
   SHEET_OPEN_USE_SPRING,
   SHEET_SCRIM_DURATION_MS,
@@ -52,6 +53,7 @@ import {
   READER_M3_APP_BAR_ICON_BUTTON_PX,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useBookPickerOnboarding } from "@/src/features/reader/useBookPickerOnboarding";
+import { pickerFlashListPerfProps } from "@/src/features/reader/pickerFlashListChrome";
 import { FullWindowOverlay } from "react-native-screens";
 
 const M3_SHEET_TOP_RADIUS_PX = 28;
@@ -238,8 +240,15 @@ export function ReaderBookSheetWindowOverlay({
 }
 
 const BOOK_SELECTOR_VIEW_STORAGE_KEY = "sb:reader:bookSelectorView";
-/** Space above the scrolled-to book so it is not flush with the sheet header. */
 const BOOK_LIST_SCROLL_TOP_INSET = 40;
+
+type BookPickerGridFlashItem =
+  | { kind: "section"; key: string; label: string }
+  | { kind: "book"; key: string; book: BibleBookNavItem };
+
+type BookPickerRowFlashItem = { key: string; book: BibleBookNavItem };
+
+type ChapterPickerFlashItem = { key: string; chapterNumber: number };
 
 export type BookPickerSheetProps = {
   isOpen: boolean;
@@ -284,7 +293,7 @@ export function BookPickerSheet({
   readerBookSheetScreenEdgePad = 5,
   readerBookGridGap = 8,
   readerBookGridCellW = 100,
-  readerChapterCols = 5,
+  readerChapterCols = CHAPTER_PICKER_GRID_COLUMNS,
   readerChapterGridCellW = 56,
 }: BookPickerSheetProps) {
   const { bundle } = useMobileAppTheme();
@@ -304,9 +313,9 @@ export function BookPickerSheet({
   const bookSheetDragStartYRef = useRef(0);
   const bookSheetPanRef = useRef<PanGestureHandler>(null);
   const bookSheetScrollNativeRef = useRef<NativeViewGestureHandler>(null);
-  const bookListScrollRef = useRef<GHScrollViewRef>(null);
-  const bookListContentRef = useRef<View>(null);
-  const currentBookItemRef = useRef<View>(null);
+  const bookGridFlashListRef = useRef<FlashListRef<BookPickerGridFlashItem>>(null);
+  const bookRowFlashListRef = useRef<FlashListRef<BookPickerRowFlashItem>>(null);
+  const chapterListFlashListRef = useRef<FlashListRef<ChapterPickerFlashItem>>(null);
   const bookViewFilterButtonRef = useRef<View>(null);
 
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -380,7 +389,7 @@ export function BookPickerSheet({
     setBookViewMenuOpen(false);
   }, [isAndroidSheet]);
 
-  const bookGridColumns = 3;
+  const bookGridColumns = BOOK_PICKER_GRID_COLUMNS;
   const bookSheetInnerW = Math.max(
     240,
     screenW - sheetScreenEdgePad * 2 - sheetHorizontalPad * 2,
@@ -392,9 +401,542 @@ export function BookPickerSheet({
       Math.floor((bookSheetInnerW - readerBookGridGap * (bookGridColumns - 1)) / bookGridColumns),
     ),
   );
+  const bookGridFlashData = useMemo((): BookPickerGridFlashItem[] => {
+    const items: BookPickerGridFlashItem[] = [];
+    for (const section of gridSectionsForPicker) {
+      if (!section.items.length) continue;
+      items.push({ kind: "section", key: `section-${section.id}`, label: section.label });
+      for (const book of section.items) {
+        items.push({ kind: "book", key: book.slug, book });
+      }
+    }
+    return items;
+  }, [gridSectionsForPicker]);
+
+  const testamentBooksForPicker = useMemo(
+    () => (selectorTestamentTab === "old" ? oldTestamentBooks : newTestamentBooks),
+    [selectorTestamentTab, oldTestamentBooks, newTestamentBooks],
+  );
+
+  const bookListFlashData = useMemo((): BookPickerRowFlashItem[] => {
+    const source =
+      bookSelectorViewMode === "az"
+        ? azSortedBooks
+        : bookSelectorViewMode === "testament"
+          ? testamentBooksForPicker
+          : [];
+    return source.map((book) => ({ key: book.slug, book }));
+  }, [azSortedBooks, bookSelectorViewMode, testamentBooksForPicker]);
+
+  const chapterGridFlashData = useMemo((): ChapterPickerFlashItem[] => {
+    if (!pickerBook) return [];
+    return Array.from({ length: pickerBook.chapterCount }, (_, index) => ({
+      key: String(index + 1),
+      chapterNumber: index + 1,
+    }));
+  }, [pickerBook]);
+
+  const bookListFlashExtraData = useMemo(
+    () => ({
+      bookSlug: chapter.bookSlug,
+      viewMode: bookSelectorViewMode,
+      testamentTab: selectorTestamentTab,
+    }),
+    [bookSelectorViewMode, chapter.bookSlug, selectorTestamentTab],
+  );
+
+  const chapterListFlashExtraData = useMemo(
+    () => ({
+      bookSlug: pickerBook?.slug ?? "",
+      chapterNumber: chapter.chapterNumber,
+    }),
+    [chapter.chapterNumber, pickerBook?.slug],
+  );
+
   const readerChapterGridCellWResolved = Math.floor(
     (bookSheetInnerW - readerBookGridGap * (readerChapterCols - 1)) / readerChapterCols,
   );
+
+  const sheetTitleColor = isAndroidSheet ? sheetChrome.onSurface : colors.brown800;
+  const sheetMutedColor = isAndroidSheet ? sheetChrome.onSurfaceVariant : colors.gold;
+  const skeletonBoneColor = isAndroidSheet ? sheetChrome.surfaceContainer : `${colors.borderSolid}99`;
+
+  const openBookChapters = useCallback((book: BibleBookNavItem) => {
+    hapticLightImpact();
+    setPickerBook(book);
+    setStep("chapters");
+  }, []);
+
+  const renderBookGridItem = useCallback(
+    ({ item }: { item: BookPickerGridFlashItem }) => {
+      if (item.kind === "section") {
+        return (
+          <View style={{ width: "100%", marginBottom: 8, marginTop: item.key.endsWith("-nt") ? 10 : 0 }}>
+            <Text
+              style={{
+                fontFamily: "Inter_400Regular",
+                fontSize: isAndroidSheet ? 12 : 10,
+                letterSpacing: isAndroidSheet ? 0.5 : 2.2,
+                color: sheetMutedColor,
+                paddingHorizontal: isAndroidSheet ? 0 : 4,
+              }}
+            >
+              {item.label}
+            </Text>
+          </View>
+        );
+      }
+
+      const b = item.book;
+      const isCurrentBook = b.slug === chapter.bookSlug;
+      return (
+        <TouchableOpacity
+          onPress={() => openBookChapters(b)}
+          style={{
+            width: readerBookGridCellWResolved,
+            marginBottom: readerBookGridGap,
+          }}
+          activeOpacity={0.75}
+          accessibilityLabel={`Choose chapter for ${b.name}`}
+        >
+          <View
+            style={{
+              borderRadius: isAndroidSheet ? 12 : 20,
+              overflow: "hidden",
+            }}
+          >
+            {isCurrentBook && !isAndroidSheet ? (
+              <LinearGradient
+                colors={rc.translationSelectedGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  paddingVertical: 8,
+                  paddingHorizontal: 6,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: "Lora_400Regular",
+                    fontSize: 16,
+                    color: rc.selectionText,
+                    textAlign: "center",
+                  }}
+                >
+                  {b.name}
+                </Text>
+              </LinearGradient>
+            ) : (
+              <View
+                style={{
+                  paddingVertical: isAndroidSheet ? 10 : 8,
+                  paddingHorizontal: 6,
+                  backgroundColor: isAndroidSheet
+                    ? isCurrentBook
+                      ? `${colors.gold}33`
+                      : sheetChrome.surfaceContainer
+                    : colors.parchment,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: isAndroidSheet ? 44 : undefined,
+                }}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular",
+                    fontSize: isAndroidSheet ? 14 : 16,
+                    color: isAndroidSheet ? sheetChrome.onSurface : colors.brown800,
+                    textAlign: "center",
+                  }}
+                >
+                  {b.name}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [
+      chapter.bookSlug,
+      colors.brown800,
+      colors.gold,
+      colors.parchment,
+      isAndroidSheet,
+      openBookChapters,
+      rc.selectionText,
+      rc.translationSelectedGradient,
+      readerBookGridCellWResolved,
+      readerBookGridGap,
+      sheetChrome.onSurface,
+      sheetChrome.surfaceContainer,
+      sheetMutedColor,
+    ],
+  );
+
+  const renderBookAzRow = useCallback(
+    ({ item }: { item: BookPickerRowFlashItem }) => {
+      const b = item.book;
+      const isCurrentBook = b.slug === chapter.bookSlug;
+      const rowPad = {
+        flexDirection: "row" as const,
+        alignItems: "center" as const,
+        justifyContent: "space-between" as const,
+        paddingVertical: isAndroidSheet ? 12 : 8,
+        paddingHorizontal: isAndroidSheet ? 0 : 12,
+        minHeight: isAndroidSheet ? 56 : undefined,
+      };
+      return (
+        <TouchableOpacity
+          onPress={() => openBookChapters(b)}
+          style={{
+            marginBottom: isAndroidSheet ? 0 : readerBookGridGap,
+            borderRadius: isAndroidSheet ? 12 : 20,
+            overflow: "hidden",
+            backgroundColor:
+              isAndroidSheet && isCurrentBook ? sheetChrome.surfaceContainer : "transparent",
+          }}
+          activeOpacity={0.75}
+          accessibilityLabel={`Choose chapter for ${b.name}`}
+        >
+          {isCurrentBook && !isAndroidSheet ? (
+            <LinearGradient
+              colors={rc.translationSelectedGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={rowPad}
+            >
+              <Text
+                style={{
+                  fontFamily: "Lora_400Regular",
+                  fontSize: 18,
+                  color: rc.selectionText,
+                  flexShrink: 1,
+                }}
+              >
+                {b.name}
+              </Text>
+              <View
+                style={{
+                  borderRadius: 999,
+                  backgroundColor: "rgba(255,255,255,0.12)",
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.gold }}>
+                  {b.chapterCount} ch
+                </Text>
+              </View>
+            </LinearGradient>
+          ) : (
+            <View style={[rowPad, !isAndroidSheet ? { backgroundColor: colors.parchment } : undefined]}>
+              <Text
+                style={{
+                  fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular",
+                  fontSize: isAndroidSheet ? 16 : 18,
+                  color: isAndroidSheet ? sheetChrome.onSurface : colors.brown800,
+                  flexShrink: 1,
+                }}
+              >
+                {b.name}
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text
+                  style={{
+                    fontFamily: "Inter_400Regular",
+                    fontSize: isAndroidSheet ? 14 : 11,
+                    color: sheetMutedColor,
+                  }}
+                >
+                  {b.chapterCount} ch
+                </Text>
+                {isAndroidSheet && isCurrentBook ? (
+                  <Ionicons name="checkmark" size={20} color={colors.gold} />
+                ) : null}
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    },
+    [
+      chapter.bookSlug,
+      colors.brown800,
+      colors.gold,
+      colors.parchment,
+      isAndroidSheet,
+      openBookChapters,
+      rc.selectionText,
+      rc.translationSelectedGradient,
+      readerBookGridGap,
+      sheetChrome.onSurface,
+      sheetChrome.surfaceContainer,
+      sheetMutedColor,
+    ],
+  );
+
+  const renderBookTestamentRow = useCallback(
+    ({ item }: { item: BookPickerRowFlashItem }) => {
+      const b = item.book;
+      const isCurrentBook = b.slug === chapter.bookSlug;
+      const genre = BOOK_GENRE_BY_SLUG[b.slug] ?? "Book";
+      const testamentRowPad = {
+        flexDirection: "row" as const,
+        alignItems: "center" as const,
+        justifyContent: "space-between" as const,
+        paddingVertical: isAndroidSheet ? 12 : 8,
+        paddingHorizontal: isAndroidSheet ? 0 : 12,
+        minHeight: isAndroidSheet ? 56 : undefined,
+      };
+      return (
+        <TouchableOpacity
+          onPress={() => openBookChapters(b)}
+          style={{
+            marginBottom: isAndroidSheet ? 0 : readerBookGridGap,
+            borderRadius: isAndroidSheet ? 12 : 20,
+            overflow: "hidden",
+            backgroundColor:
+              isAndroidSheet && isCurrentBook ? sheetChrome.surfaceContainer : "transparent",
+          }}
+          activeOpacity={0.75}
+          accessibilityLabel={`Choose chapter for ${b.name}`}
+        >
+          {isCurrentBook && !isAndroidSheet ? (
+            <LinearGradient
+              colors={rc.translationSelectedGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={testamentRowPad}
+            >
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: "Lora_400Regular",
+                    fontSize: 18,
+                    color: rc.selectionText,
+                    flexShrink: 1,
+                  }}
+                >
+                  {b.name}
+                </Text>
+                <View
+                  style={{
+                    borderRadius: 999,
+                    backgroundColor: "rgba(255,255,255,0.12)",
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: "Inter_400Regular",
+                      fontSize: 10,
+                      letterSpacing: 0.4,
+                      color: colors.gold,
+                    }}
+                  >
+                    {genre}
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={{
+                  borderRadius: 999,
+                  backgroundColor: "rgba(255,255,255,0.12)",
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.gold }}>
+                  {b.chapterCount} ch
+                </Text>
+              </View>
+            </LinearGradient>
+          ) : (
+            <View
+              style={[
+                testamentRowPad,
+                !isAndroidSheet ? { backgroundColor: colors.parchment } : undefined,
+              ]}
+            >
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular",
+                    fontSize: isAndroidSheet ? 16 : 18,
+                    color: isAndroidSheet ? sheetChrome.onSurface : colors.brown800,
+                    flexShrink: 1,
+                  }}
+                >
+                  {b.name}
+                </Text>
+                {!isAndroidSheet ? (
+                  <View
+                    style={{
+                      borderRadius: 999,
+                      backgroundColor: "rgba(0,0,0,0.05)",
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 10,
+                        letterSpacing: 0.4,
+                        color: colors.gold,
+                      }}
+                    >
+                      {genre}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {isAndroidSheet ? (
+                  <Text
+                    style={{
+                      fontFamily: "Inter_400Regular",
+                      fontSize: 14,
+                      color: sheetMutedColor,
+                    }}
+                  >
+                    {genre} · {b.chapterCount} ch
+                  </Text>
+                ) : (
+                  <View
+                    style={{
+                      borderRadius: 999,
+                      backgroundColor: "rgba(0,0,0,0.05)",
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                    }}
+                  >
+                    <Text style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.gold }}>
+                      {b.chapterCount} ch
+                    </Text>
+                  </View>
+                )}
+                {isAndroidSheet && isCurrentBook ? (
+                  <Ionicons name="checkmark" size={20} color={colors.gold} />
+                ) : null}
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    },
+    [
+      chapter.bookSlug,
+      colors.brown800,
+      colors.gold,
+      colors.parchment,
+      isAndroidSheet,
+      openBookChapters,
+      rc.selectionText,
+      rc.translationSelectedGradient,
+      readerBookGridGap,
+      sheetChrome.onSurface,
+      sheetChrome.surfaceContainer,
+      sheetMutedColor,
+    ],
+  );
+
+  const renderChapterGridItem = useCallback(
+    ({ item }: { item: ChapterPickerFlashItem }) => {
+      if (!pickerBook) return null;
+      const chNum = item.chapterNumber;
+      const isCurrent = pickerBook.slug === chapter.bookSlug && chNum === chapter.chapterNumber;
+      return (
+        <TouchableOpacity
+          onPress={() => {
+            hapticLightImpact();
+            onClose();
+            goToReaderChapter(pickerBook.slug, chNum, resolvedTranslationId);
+          }}
+          style={{
+            width: readerChapterGridCellWResolved,
+            marginBottom: readerBookGridGap,
+            borderRadius: 12,
+            paddingVertical: isAndroidSheet ? 12 : 10,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: isAndroidSheet
+              ? isCurrent
+                ? `${colors.gold}33`
+                : sheetChrome.surfaceContainer
+              : colors.parchment,
+            borderWidth: isAndroidSheet ? 0 : 1,
+            borderColor: isCurrent ? colors.brown800 : colors.borderSolid,
+            minHeight: isAndroidSheet ? 48 : undefined,
+          }}
+          activeOpacity={0.75}
+          accessibilityLabel={`Open ${pickerBook.name} chapter ${chNum}`}
+        >
+          <Text
+            style={{
+              fontFamily: "Inter_500Medium",
+              fontSize: isAndroidSheet ? 16 : 14,
+              color: isCurrent
+                ? colors.gold
+                : isAndroidSheet
+                  ? sheetChrome.onSurface
+                  : colors.brown800,
+            }}
+          >
+            {chNum}
+          </Text>
+        </TouchableOpacity>
+      );
+    },
+    [
+      chapter.bookSlug,
+      chapter.chapterNumber,
+      colors.borderSolid,
+      colors.brown800,
+      colors.gold,
+      colors.parchment,
+      goToReaderChapter,
+      isAndroidSheet,
+      onClose,
+      pickerBook,
+      readerBookGridGap,
+      readerChapterGridCellWResolved,
+      resolvedTranslationId,
+      sheetChrome.onSurface,
+      sheetChrome.surfaceContainer,
+    ],
+  );
+
+  const overrideBookGridItemLayout = useCallback(
+    (layout: { span?: number }, item: BookPickerGridFlashItem) => {
+      if (item.kind === "section") {
+        layout.span = BOOK_PICKER_GRID_COLUMNS;
+      }
+    },
+    [],
+  );
+
+  const bookGridKeyExtractor = useCallback((item: BookPickerGridFlashItem) => item.key, []);
+  const bookRowKeyExtractor = useCallback((item: BookPickerRowFlashItem) => item.key, []);
+  const chapterGridKeyExtractor = useCallback((item: ChapterPickerFlashItem) => item.key, []);
+  const bookGridItemType = useCallback((item: BookPickerGridFlashItem) => item.kind, []);
+
+  const findCurrentBookFlashIndex = useCallback((): number => {
+    if (bookSelectorViewMode === "grid") {
+      return bookGridFlashData.findIndex(
+        (item) => item.kind === "book" && item.book.slug === chapter.bookSlug,
+      );
+    }
+    return bookListFlashData.findIndex((item) => item.book.slug === chapter.bookSlug);
+  }, [bookGridFlashData, bookListFlashData, bookSelectorViewMode, chapter.bookSlug]);
 
   useEffect(() => {
     let cancelled = false;
@@ -448,22 +990,32 @@ export function BookPickerSheet({
   }, []);
 
   const scrollBookListToCurrentBook = useCallback(() => {
-    const scrollView = bookListScrollRef.current;
-    const content = bookListContentRef.current;
-    const currentItem = currentBookItemRef.current;
-    if (!scrollView || !content || !currentItem) return;
-
-    currentItem.measureLayout(
-      content,
-      (_x, y) => {
-        scrollView.scrollTo({
-          y: Math.max(0, y - BOOK_LIST_SCROLL_TOP_INSET),
-          animated: false,
-        });
-      },
-      () => {},
-    );
-  }, []);
+    const list =
+      bookSelectorViewMode === "grid"
+        ? bookGridFlashListRef.current
+        : bookRowFlashListRef.current;
+    const index = findCurrentBookFlashIndex();
+    if (!list || index < 0) return;
+    try {
+      list.scrollToIndex({
+        index,
+        viewOffset: BOOK_LIST_SCROLL_TOP_INSET,
+        animated: false,
+      });
+    } catch {
+      requestAnimationFrame(() => {
+        try {
+          list.scrollToIndex({
+            index,
+            viewOffset: BOOK_LIST_SCROLL_TOP_INSET,
+            animated: false,
+          });
+        } catch {
+          // FlashList may not have measured yet; skip scroll-to-current.
+        }
+      });
+    }
+  }, [bookSelectorViewMode, findCurrentBookFlashIndex]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -664,10 +1216,6 @@ export function BookPickerSheet({
         elevation: 10,
       };
 
-  const sheetTitleColor = isAndroidSheet ? sheetChrome.onSurface : colors.brown800;
-  const sheetMutedColor = isAndroidSheet ? sheetChrome.onSurfaceVariant : colors.gold;
-  const skeletonBoneColor = isAndroidSheet ? sheetChrome.surfaceContainer : `${colors.borderSolid}99`;
-
   if (!isOpen) return null;
 
   return (
@@ -814,405 +1362,56 @@ export function BookPickerSheet({
             ref={bookSheetScrollNativeRef}
             simultaneousHandlers={bookSheetPanRef}
           >
-            <GHScrollView
-              ref={bookListScrollRef}
-              key={`${bookSelectorViewMode}-${selectorTestamentTab}`}
-              style={{ flex: 1 }}
-              nestedScrollEnabled={Platform.OS === "android"}
-              contentContainerStyle={{
-                paddingHorizontal: sheetHorizontalPad,
-                paddingBottom: isAndroidSheet ? 16 : 24,
-              }}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              scrollEventThrottle={16}
-              onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
-            >
             {contentReady ? (
-            <View ref={bookListContentRef} collapsable={false}>
-            {bookSelectorViewMode === "grid"
-              ? gridSectionsForPicker.map((section) => {
-                  if (!section.items.length) return null;
-                  return (
-                    <View key={section.id} style={{ marginBottom: 18 }}>
-                      <Text
-                        style={{
-                          fontFamily: "Inter_400Regular",
-                          fontSize: isAndroidSheet ? 12 : 10,
-                          letterSpacing: isAndroidSheet ? 0.5 : 2.2,
-                          color: sheetMutedColor,
-                          marginBottom: 8,
-                          paddingHorizontal: isAndroidSheet ? 0 : 4,
-                        }}
-                      >
-                        {section.label}
-                      </Text>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                        {section.items.map((b, index) => {
-                          const isCurrentBook = b.slug === chapter.bookSlug;
-                          const mr = index % bookGridColumns === bookGridColumns - 1 ? 0 : readerBookGridGap;
-                          return (
-                            <TouchableOpacity
-                              key={b.slug}
-                              ref={isCurrentBook ? currentBookItemRef : undefined}
-                              onPress={() => {
-                                hapticLightImpact();
-                                setPickerBook(b);
-                                setStep("chapters");
-                              }}
-                              style={{
-                                width: readerBookGridCellWResolved,
-                                marginRight: mr,
-                                marginBottom: readerBookGridGap,
-                              }}
-                              activeOpacity={0.75}
-                              accessibilityLabel={`Choose chapter for ${b.name}`}
-                            >
-                              <View
-                                style={{
-                                  borderRadius: isAndroidSheet ? 12 : 20,
-                                  overflow: "hidden",
-                                }}
-                              >
-                                {isCurrentBook && !isAndroidSheet ? (
-                                  <LinearGradient
-                                    colors={rc.translationSelectedGradient}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={{
-                                      paddingVertical: 8,
-                                      paddingHorizontal: 6,
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                    }}
-                                  >
-                                    <Text
-                                      numberOfLines={1}
-                                      style={{
-                                        fontFamily: "Lora_400Regular",
-                                        fontSize: 16,
-                                        color: rc.selectionText,
-                                        textAlign: "center",
-                                      }}
-                                    >
-                                      {b.name}
-                                    </Text>
-                                  </LinearGradient>
-                                ) : (
-                                  <View
-                                    style={{
-                                      paddingVertical: isAndroidSheet ? 10 : 8,
-                                      paddingHorizontal: 6,
-                                      backgroundColor: isAndroidSheet
-                                        ? isCurrentBook
-                                          ? `${colors.gold}33`
-                                          : sheetChrome.surfaceContainer
-                                        : colors.parchment,
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      minHeight: isAndroidSheet ? 44 : undefined,
-                                    }}
-                                  >
-                                    <Text
-                                      numberOfLines={1}
-                                      style={{
-                                        fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular",
-                                        fontSize: isAndroidSheet ? 14 : 16,
-                                        color: isAndroidSheet ? sheetChrome.onSurface : colors.brown800,
-                                        textAlign: "center",
-                                      }}
-                                    >
-                                      {b.name}
-                                    </Text>
-                                  </View>
-                                )}
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  );
-                })
-              : null}
-
-            {bookSelectorViewMode === "az"
-              ? azSortedBooks.map((b) => {
-                  const isCurrentBook = b.slug === chapter.bookSlug;
-                  const rowPad = {
-                    flexDirection: "row" as const,
-                    alignItems: "center" as const,
-                    justifyContent: "space-between" as const,
-                    paddingVertical: isAndroidSheet ? 12 : 8,
-                    paddingHorizontal: isAndroidSheet ? 0 : 12,
-                    minHeight: isAndroidSheet ? 56 : undefined,
-                  };
-                  return (
-                    <TouchableOpacity
-                      key={b.slug}
-                      ref={isCurrentBook ? currentBookItemRef : undefined}
-                      onPress={() => {
-                        hapticLightImpact();
-                        setPickerBook(b);
-                        setStep("chapters");
-                      }}
-                      style={{
-                        marginBottom: isAndroidSheet ? 0 : readerBookGridGap,
-                        borderRadius: isAndroidSheet ? 12 : 20,
-                        overflow: "hidden",
-                        backgroundColor:
-                          isAndroidSheet && isCurrentBook ? sheetChrome.surfaceContainer : "transparent",
-                      }}
-                      activeOpacity={0.75}
-                      accessibilityLabel={`Choose chapter for ${b.name}`}
-                    >
-                      {isCurrentBook && !isAndroidSheet ? (
-                        <LinearGradient
-                          colors={rc.translationSelectedGradient}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={rowPad}
-                        >
-                          <Text
-                            style={{
-                              fontFamily: "Lora_400Regular",
-                              fontSize: 18,
-                              color: rc.selectionText,
-                              flexShrink: 1,
-                            }}
-                          >
-                            {b.name}
-                          </Text>
-                          <View
-                            style={{
-                              borderRadius: 999,
-                              backgroundColor: "rgba(255,255,255,0.12)",
-                              paddingHorizontal: 6,
-                              paddingVertical: 2,
-                            }}
-                          >
-                            <Text
-                              style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.gold }}
-                            >
-                              {b.chapterCount} ch
-                            </Text>
-                          </View>
-                        </LinearGradient>
-                      ) : (
-                        <View
-                          style={[
-                            rowPad,
-                            !isAndroidSheet ? { backgroundColor: colors.parchment } : undefined,
-                          ]}
-                        >
-                          <Text
-                            style={{
-                              fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular",
-                              fontSize: isAndroidSheet ? 16 : 18,
-                              color: isAndroidSheet ? sheetChrome.onSurface : colors.brown800,
-                              flexShrink: 1,
-                            }}
-                          >
-                            {b.name}
-                          </Text>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            <Text
-                              style={{
-                                fontFamily: "Inter_400Regular",
-                                fontSize: isAndroidSheet ? 14 : 11,
-                                color: sheetMutedColor,
-                              }}
-                            >
-                              {b.chapterCount} ch
-                            </Text>
-                            {isAndroidSheet && isCurrentBook ? (
-                              <Ionicons name="checkmark" size={20} color={colors.gold} />
-                            ) : null}
-                          </View>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })
-              : null}
-
-            {bookSelectorViewMode === "testament"
-              ? (selectorTestamentTab === "old"
-                  ? oldTestamentBooks
-                  : newTestamentBooks
-                ).map(
-                  (b) => {
-                    const isCurrentBook = b.slug === chapter.bookSlug;
-                    const genre = BOOK_GENRE_BY_SLUG[b.slug] ?? "Book";
-                    const testamentRowPad = {
-                      flexDirection: "row" as const,
-                      alignItems: "center" as const,
-                      justifyContent: "space-between" as const,
-                      paddingVertical: isAndroidSheet ? 12 : 8,
-                      paddingHorizontal: isAndroidSheet ? 0 : 12,
-                      minHeight: isAndroidSheet ? 56 : undefined,
-                    };
-                    return (
-                      <TouchableOpacity
-                        key={b.slug}
-                        ref={isCurrentBook ? currentBookItemRef : undefined}
-                        onPress={() => {
-                          hapticLightImpact();
-                          setPickerBook(b);
-                          setStep("chapters");
-                        }}
-                        style={{
-                          marginBottom: isAndroidSheet ? 0 : readerBookGridGap,
-                          borderRadius: isAndroidSheet ? 12 : 20,
-                          overflow: "hidden",
-                          backgroundColor:
-                            isAndroidSheet && isCurrentBook ? sheetChrome.surfaceContainer : "transparent",
-                        }}
-                        activeOpacity={0.75}
-                        accessibilityLabel={`Choose chapter for ${b.name}`}
-                      >
-                        {isCurrentBook && !isAndroidSheet ? (
-                            <LinearGradient
-                              colors={rc.translationSelectedGradient}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={testamentRowPad}
-                            >
-                              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
-                                <Text
-                                  numberOfLines={1}
-                                  style={{
-                                    fontFamily: "Lora_400Regular",
-                                    fontSize: 18,
-                                    color: rc.selectionText,
-                                    flexShrink: 1,
-                                  }}
-                                >
-                                  {b.name}
-                                </Text>
-                                <View
-                                  style={{
-                                    borderRadius: 999,
-                                    backgroundColor: "rgba(255,255,255,0.12)",
-                                    paddingHorizontal: 6,
-                                    paddingVertical: 2,
-                                  }}
-                                >
-                                  <Text
-                                    style={{
-                                      fontFamily: "Inter_400Regular",
-                                      fontSize: 10,
-                                      letterSpacing: 0.4,
-                                      color: colors.gold,
-                                    }}
-                                  >
-                                    {genre}
-                                  </Text>
-                                </View>
-                              </View>
-                              <View
-                                style={{
-                                  borderRadius: 999,
-                                  backgroundColor: "rgba(255,255,255,0.12)",
-                                  paddingHorizontal: 6,
-                                  paddingVertical: 2,
-                                }}
-                              >
-                                <Text
-                                  style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.gold }}
-                                >
-                                  {b.chapterCount} ch
-                                </Text>
-                              </View>
-                            </LinearGradient>
-                          ) : (
-                            <View
-                              style={[
-                                testamentRowPad,
-                                !isAndroidSheet ? { backgroundColor: colors.parchment } : undefined,
-                              ]}
-                            >
-                              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
-                                <Text
-                                  numberOfLines={1}
-                                  style={{
-                                    fontFamily: isAndroidSheet ? "Inter_400Regular" : "Lora_400Regular",
-                                    fontSize: isAndroidSheet ? 16 : 18,
-                                    color: isAndroidSheet ? sheetChrome.onSurface : colors.brown800,
-                                    flexShrink: 1,
-                                  }}
-                                >
-                                  {b.name}
-                                </Text>
-                                {!isAndroidSheet ? (
-                                <View
-                                  style={{
-                                    borderRadius: 999,
-                                    backgroundColor: "rgba(0,0,0,0.05)",
-                                    paddingHorizontal: 6,
-                                    paddingVertical: 2,
-                                  }}
-                                >
-                                  <Text
-                                    style={{
-                                      fontFamily: "Inter_400Regular",
-                                      fontSize: 10,
-                                      letterSpacing: 0.4,
-                                      color: colors.gold,
-                                    }}
-                                  >
-                                    {genre}
-                                  </Text>
-                                </View>
-                                ) : null}
-                              </View>
-                              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                                {isAndroidSheet ? (
-                                  <Text
-                                    style={{
-                                      fontFamily: "Inter_400Regular",
-                                      fontSize: 14,
-                                      color: sheetMutedColor,
-                                    }}
-                                  >
-                                    {genre} · {b.chapterCount} ch
-                                  </Text>
-                                ) : (
-                                <View
-                                  style={{
-                                    borderRadius: 999,
-                                    backgroundColor: "rgba(0,0,0,0.05)",
-                                    paddingHorizontal: 6,
-                                    paddingVertical: 2,
-                                  }}
-                                >
-                                  <Text
-                                    style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.gold }}
-                                  >
-                                    {b.chapterCount} ch
-                                  </Text>
-                                </View>
-                                )}
-                                {isAndroidSheet && isCurrentBook ? (
-                                  <Ionicons name="checkmark" size={20} color={colors.gold} />
-                                ) : null}
-                              </View>
-                            </View>
-                          )}
-                      </TouchableOpacity>
-                    );
-                  },
-                )
-              : null}
-            </View>
+              bookSelectorViewMode === "grid" ? (
+                <FlashList
+                  ref={bookGridFlashListRef}
+                  data={bookGridFlashData}
+                  numColumns={BOOK_PICKER_GRID_COLUMNS}
+                  renderItem={renderBookGridItem}
+                  keyExtractor={bookGridKeyExtractor}
+                  getItemType={bookGridItemType}
+                  overrideItemLayout={overrideBookGridItemLayout}
+                  extraData={bookListFlashExtraData}
+                  {...({ estimatedItemSize: isAndroidSheet ? 52 : 44 } as Record<string, unknown>)}
+                  style={{ flex: 1, paddingHorizontal: sheetHorizontalPad }}
+                  contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled={Platform.OS === "android"}
+                  onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
+                  {...pickerFlashListPerfProps}
+                />
+              ) : (
+                <FlashList
+                  ref={bookRowFlashListRef}
+                  key={`${bookSelectorViewMode}-${selectorTestamentTab}`}
+                  data={bookListFlashData}
+                  numColumns={1}
+                  renderItem={
+                    bookSelectorViewMode === "az" ? renderBookAzRow : renderBookTestamentRow
+                  }
+                  keyExtractor={bookRowKeyExtractor}
+                  extraData={bookListFlashExtraData}
+                  {...({ estimatedItemSize: isAndroidSheet ? 56 : 48 } as Record<string, unknown>)}
+                  style={{ flex: 1, paddingHorizontal: sheetHorizontalPad }}
+                  contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled={Platform.OS === "android"}
+                  onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
+                  {...pickerFlashListPerfProps}
+                />
+              )
             ) : (
-              <SheetContentSkeleton
-                boneColor={skeletonBoneColor}
-                rowHeight={isAndroidSheet ? 56 : 44}
-                rows={10}
-              />
+              <View style={{ flex: 1, paddingHorizontal: sheetHorizontalPad }}>
+                <SheetContentSkeleton
+                  boneColor={skeletonBoneColor}
+                  rowHeight={isAndroidSheet ? 56 : 44}
+                  rows={10}
+                />
+              </View>
             )}
-            </GHScrollView>
           </NativeViewGestureHandler>
         </>
       ) : pickerBook ? (
@@ -1266,70 +1465,23 @@ export function BookPickerSheet({
             ref={bookSheetScrollNativeRef}
             simultaneousHandlers={bookSheetPanRef}
           >
-            <GHScrollView
-              style={{ flex: 1 }}
-              nestedScrollEnabled={Platform.OS === "android"}
-              contentContainerStyle={{
-                paddingBottom: 20,
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: readerBookGridGap,
-                width: bookSheetInnerW,
-              }}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              scrollEventThrottle={16}
-              onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
-            >
             {contentReady ? (
-            Array.from({ length: pickerBook.chapterCount }, (_, i) => i + 1).map((chNum) => {
-              const isCurrent =
-                pickerBook.slug === chapter.bookSlug && chNum === chapter.chapterNumber;
-              return (
-                <TouchableOpacity
-                  key={chNum}
-                  onPress={() => {
-                    hapticLightImpact();
-                    onClose();
-                    goToReaderChapter(pickerBook.slug, chNum, resolvedTranslationId);
-                  }}
-                  style={{
-                    width: readerChapterGridCellWResolved,
-                    marginBottom: 0,
-                    borderRadius: isAndroidSheet ? 12 : 12,
-                    paddingVertical: isAndroidSheet ? 12 : 10,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: isAndroidSheet
-                      ? isCurrent
-                        ? `${colors.gold}33`
-                        : sheetChrome.surfaceContainer
-                      : colors.parchment,
-                    borderWidth: isAndroidSheet ? 0 : 1,
-                    borderColor: isCurrent ? colors.brown800 : colors.borderSolid,
-                    minHeight: isAndroidSheet ? 48 : undefined,
-                  }}
-                  activeOpacity={0.75}
-                  accessibilityLabel={`Open ${pickerBook.name} chapter ${chNum}`}
-                >
-                  <Text
-                    style={{
-                      fontFamily: isAndroidSheet ? "Inter_500Medium" : "Inter_500Medium",
-                      fontSize: isAndroidSheet ? 16 : 14,
-                      color: isCurrent
-                        ? isAndroidSheet
-                          ? colors.gold
-                          : colors.gold
-                        : isAndroidSheet
-                          ? sheetChrome.onSurface
-                          : colors.brown800,
-                    }}
-                  >
-                    {chNum}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })
+              <FlashList
+                ref={chapterListFlashListRef}
+                data={chapterGridFlashData}
+                numColumns={readerChapterCols}
+                renderItem={renderChapterGridItem}
+                keyExtractor={chapterGridKeyExtractor}
+                extraData={chapterListFlashExtraData}
+                {...({ estimatedItemSize: isAndroidSheet ? 52 : 44 } as Record<string, unknown>)}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled={Platform.OS === "android"}
+                onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
+                {...pickerFlashListPerfProps}
+              />
             ) : (
               <SheetContentSkeleton
                 variant="grid"
@@ -1339,7 +1491,6 @@ export function BookPickerSheet({
                 gap={readerBookGridGap}
               />
             )}
-            </GHScrollView>
           </NativeViewGestureHandler>
         </View>
       ) : null}
