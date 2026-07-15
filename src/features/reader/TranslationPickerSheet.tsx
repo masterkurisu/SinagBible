@@ -1380,7 +1380,7 @@ export function TranslationPickerSheet({
 
   return (
     <Modal visible={isOpen} transparent animationType="none" statusBarTranslucent onRequestClose={onBackdropPress}>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1 }} pointerEvents="box-none">
         <Animated.View
           style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim, opacity: dropOpacityAnim }]}
           pointerEvents="none"
@@ -1495,6 +1495,7 @@ export function TranslationPickerSheet({
             {isAndroidSheet ? (
               <View pointerEvents="box-none" style={{ flex: 1, justifyContent: "flex-end" }}>
                 <Animated.View
+                  pointerEvents="box-none"
                   style={{
                     width: "100%",
                     maxHeight: Math.min(langSheetMaxHeight, screenHeight * 0.75),

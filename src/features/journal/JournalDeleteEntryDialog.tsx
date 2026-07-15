@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Modal,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -10,6 +8,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { DismissibleDialog } from "@/src/components/m3/DismissibleDialog";
 import { hapticLightImpact } from "@/lib/haptics";
 import { M3Button } from "@/src/components/m3/M3Button";
 import { M3Snackbar } from "@/src/components/m3/M3Snackbar";
@@ -113,28 +112,23 @@ export function JournalDeleteEntryDialog({
   }, []);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={handleDismiss}
-    >
-      <View style={styles.root}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: j.newEntryRouteScrim }]}
-          onPress={handleDismiss}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel delete journal entry"
-        />
-        <View pointerEvents="box-none" style={styles.centerAnchor}>
-          <Animated.View
-            style={{
-              width: dialogMaxW,
-              opacity: opacityAnim,
-              transform: [{ scale: scaleAnim }],
-            }}
-          >
+    <>
+      <DismissibleDialog
+        visible={visible}
+        onClose={handleDismiss}
+        scrimColor={j.newEntryRouteScrim}
+        scrimOpacity={opacityAnim}
+        accessibilityDismissLabel="Cancel delete journal entry"
+        insets={{ top: 0, bottom: 0 }}
+      >
+        <Animated.View
+          pointerEvents="box-none"
+          style={{
+            width: dialogMaxW,
+            opacity: opacityAnim,
+            transform: [{ scale: scaleAnim }],
+          }}
+        >
             <View
               style={[
                 styles.dialogCard,
@@ -206,30 +200,19 @@ export function JournalDeleteEntryDialog({
                 />
               </View>
             </View>
-          </Animated.View>
-        </View>
-
-        <M3Snackbar
-          message="Could not delete. Try again."
-          visible={errorVisible}
-          onDismiss={dismissSnackbar}
-          bottomInset={32}
-        />
-      </View>
-    </Modal>
+        </Animated.View>
+      </DismissibleDialog>
+      <M3Snackbar
+        message="Could not delete. Try again."
+        visible={errorVisible}
+        onDismiss={dismissSnackbar}
+        bottomInset={32}
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  centerAnchor: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
   dialogCard: {
     overflow: "hidden",
     shadowOffset: { width: 0, height: 4 },

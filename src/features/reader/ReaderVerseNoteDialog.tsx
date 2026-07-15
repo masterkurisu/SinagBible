@@ -2,15 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Keyboard,
-  Modal,
   Platform,
-  Pressable,
   StyleSheet,
   View,
   useWindowDimensions,
   type KeyboardEvent,
 } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { DismissibleDialog } from "@/src/components/m3/DismissibleDialog";
 import { hapticLightImpact } from "@/lib/haptics";
 import { M3Button } from "@/src/components/m3/M3Button";
 import { M3OutlinedTextField } from "@/src/components/m3/M3OutlinedTextField";
@@ -113,33 +112,25 @@ export function ReaderVerseNoteDialog({
   }, [onSave]);
 
   return (
-    <Modal visible={isOpen} transparent animationType="none" statusBarTranslucent onRequestClose={handleCancel}>
-      <View style={styles.root}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: rc.denseModalScrim }]}
-          onPress={handleCancel}
-          accessibilityLabel="Dismiss verse note"
-        />
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.anchor,
-            {
-              justifyContent: keyboardOpen ? "flex-end" : "center",
-              paddingTop: Math.max(insets.top, 16),
-              paddingBottom: anchorBottomPad,
-              paddingHorizontal: 24,
-            },
-          ]}
-        >
-          <Animated.View
-            style={{
-              width: dialogMaxW,
-              maxHeight: dialogMaxH,
-              opacity: opacityAnim,
-              transform: [{ scale: scaleAnim }],
-            }}
-          >
+    <DismissibleDialog
+      visible={isOpen}
+      onClose={handleCancel}
+      scrimColor={rc.denseModalScrim}
+      scrimOpacity={opacityAnim}
+      accessibilityDismissLabel="Dismiss verse note"
+      insets={insets}
+      anchorBottomPad={anchorBottomPad}
+      justifyContent={keyboardOpen ? "flex-end" : "center"}
+    >
+      <Animated.View
+        pointerEvents="box-none"
+        style={{
+          width: dialogMaxW,
+          maxHeight: dialogMaxH,
+          opacity: opacityAnim,
+          transform: [{ scale: scaleAnim }],
+        }}
+      >
             <View
               style={[
                 styles.dialogCard,
@@ -190,21 +181,12 @@ export function ReaderVerseNoteDialog({
                 />
               </View>
             </View>
-          </Animated.View>
-        </View>
-      </View>
-    </Modal>
+      </Animated.View>
+    </DismissibleDialog>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  anchor: {
-    flex: 1,
-    alignItems: "center",
-  },
   dialogCard: {
     width: "100%",
     shadowOffset: { width: 0, height: 4 },

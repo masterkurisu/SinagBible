@@ -4,7 +4,6 @@ import {
   Dimensions,
   Easing,
   Linking,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@sinag-bible/ui";
+import { DismissibleModal } from "@/src/components/m3/DismissibleModal";
 import { TERMS_OF_SERVICE_URL } from "@/lib/legal-urls";
 
 const BODY_FONT = "Inter_400Regular" as const;
@@ -76,25 +76,20 @@ export function TermsOfServiceSheet({ visible, onClose }: TermsOfServiceSheetPro
   }, []);
 
   return (
-    <Modal
+    <DismissibleModal
       visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={handleClose}
-      accessibilityViewIsModal
+      onClose={handleClose}
+      scrimColor="rgba(44,36,22,0.52)"
+      accessibilityDismissLabel="Dismiss terms of service"
     >
-      <View style={styles.root}>
-        <Pressable
-          style={styles.backdrop}
-          onPress={handleClose}
-          accessibilityLabel="Dismiss terms of service"
-        />
-        <View
+      <View
+        pointerEvents="box-none"
+        style={[styles.sheetWrap, { paddingBottom: bottomPad, paddingTop: insets.top + 8 }]}
+      >
+        <Animated.View
           pointerEvents="box-none"
-          style={[styles.sheetWrap, { paddingBottom: bottomPad, paddingTop: insets.top + 8 }]}
+          style={[styles.card, { maxHeight: cardMaxH, transform: [{ translateY: slideAnim }] }]}
         >
-          <Animated.View style={[styles.card, { maxHeight: cardMaxH, transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.header}>
               <View style={styles.headerEdge} />
               <Text style={[styles.modalTitle, styles.modalTitleCentered]}>Terms of Use</Text>
@@ -131,17 +126,11 @@ export function TermsOfServiceSheet({ visible, onClose }: TermsOfServiceSheetPro
             </ScrollView>
           </Animated.View>
         </View>
-      </View>
-    </Modal>
+    </DismissibleModal>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(44,36,22,0.52)",
-  },
   sheetWrap: {
     flex: 1,
     justifyContent: "flex-end",

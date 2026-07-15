@@ -455,11 +455,15 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
       ]}
     >
       <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: j.newEntryRouteScrim }]}
+        />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Dismiss new entry"
           onPress={requestClose}
-          style={[StyleSheet.absoluteFill, { backgroundColor: j.newEntryRouteScrim }]}
+          style={StyleSheet.absoluteFill}
         />
       </View>
       <View

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Modal, Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
+import { DismissibleModal } from "@/src/components/m3/DismissibleModal";
 
 type FeatureOnboardingModalProps = {
   visible: boolean;
@@ -13,21 +14,18 @@ export function FeatureOnboardingModal({
   visible,
   children,
   pointerEvents = "auto",
-  animationType = "fade",
 }: FeatureOnboardingModalProps) {
   return (
-    <Modal
+    <DismissibleModal
       visible={visible}
-      transparent
-      animationType={animationType}
-      statusBarTranslucent
+      onClose={() => {}}
+      dismissible={false}
       onRequestClose={() => {}}
-      presentationStyle="overFullScreen"
     >
       <View style={styles.root} pointerEvents={pointerEvents}>
         {children}
       </View>
-    </Modal>
+    </DismissibleModal>
   );
 }
 

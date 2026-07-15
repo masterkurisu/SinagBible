@@ -2,13 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   BackHandler,
-  Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import { DismissibleSideSheet } from "@/src/components/m3/DismissibleSideSheet";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import {
   READER_SETTINGS_MENU_SPRING_CLOSE,
@@ -101,19 +100,15 @@ export function JournalFilterSideSheet({
   if (!sheetMounted) return null;
 
   return (
-    <Modal visible={sheetMounted} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
-      <View style={styles.root} pointerEvents="box-none">
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          accessibilityRole="button"
-          accessibilityLabel="Dismiss filter options"
-          onPress={onClose}
-        >
-          <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, { opacity: scrimOpacity }]} />
-        </Pressable>
-
-        <Animated.View
-          style={[
+    <DismissibleSideSheet
+      visible={sheetMounted}
+      onClose={onClose}
+      scrimOpacity={scrimOpacity}
+      accessibilityDismissLabel="Dismiss filter options"
+      rootStyle={{ alignItems: "flex-end" }}
+    >
+      <Animated.View
+        style={[
             styles.sheet,
             {
               width: sheetWidth,
@@ -154,20 +149,11 @@ export function JournalFilterSideSheet({
             />
           </ScrollView>
         </Animated.View>
-      </View>
-    </Modal>
+    </DismissibleSideSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: "flex-start",
-    alignItems: "flex-end",
-  },
-  scrim: {
-    backgroundColor: "#000000",
-  },
   sheet: {
     position: "absolute",
     top: 0,

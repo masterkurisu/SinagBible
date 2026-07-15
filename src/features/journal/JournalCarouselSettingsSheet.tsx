@@ -284,7 +284,7 @@ export function JournalCarouselSettingsSheet({
       statusBarTranslucent
       onRequestClose={dismissSheet}
     >
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1 }} pointerEvents="box-none">
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={dismissSheet}
@@ -292,6 +292,7 @@ export function JournalCarouselSettingsSheet({
           accessibilityLabel="Dismiss verse carousel settings"
         >
           <Animated.View
+            pointerEvents="none"
             style={[
               StyleSheet.absoluteFill,
               { backgroundColor: "rgba(44, 36, 22, 0.35)" },
@@ -300,7 +301,7 @@ export function JournalCarouselSettingsSheet({
           />
         </Pressable>
         <View pointerEvents="box-none" style={styles.centerWrap}>
-          <Animated.View style={[{ width: sheetMaxW }, animatedStyle]}>
+          <Animated.View pointerEvents="box-none" style={[{ width: sheetMaxW }, animatedStyle]}>
             <View
               style={[
                 styles.sheet,

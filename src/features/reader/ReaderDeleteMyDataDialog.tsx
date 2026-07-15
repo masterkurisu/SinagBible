@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +9,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { DismissibleDialog } from "@/src/components/m3/DismissibleDialog";
 import { hapticLightImpact } from "@/lib/haptics";
 import { M3Button } from "@/src/components/m3/M3Button";
 import { M3Snackbar } from "@/src/components/m3/M3Snackbar";
@@ -139,23 +138,25 @@ export function ReaderDeleteMyDataDialog({
   }, []);
 
   return (
-    <Modal visible={isOpen} transparent animationType="none" statusBarTranslucent onRequestClose={handleDismiss}>
-      <View style={styles.root}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: rc.denseModalScrim }]}
-          onPress={handleDismiss}
-          accessibilityLabel={
-            step === "backup-reminder" ? "Dismiss backup reminder" : "Dismiss delete my data dialog"
-          }
-        />
-        <View pointerEvents="box-none" style={styles.centerAnchor}>
-          <Animated.View
-            style={{
-              width: dialogMaxW,
-              opacity: opacityAnim,
-              transform: [{ scale: scaleAnim }],
-            }}
-          >
+    <>
+      <DismissibleDialog
+        visible={isOpen}
+        onClose={handleDismiss}
+        scrimColor={rc.denseModalScrim}
+        scrimOpacity={opacityAnim}
+        accessibilityDismissLabel={
+          step === "backup-reminder" ? "Dismiss backup reminder" : "Dismiss delete my data dialog"
+        }
+        insets={{ top: 0, bottom: 0 }}
+      >
+        <Animated.View
+          pointerEvents="box-none"
+          style={{
+            width: dialogMaxW,
+            opacity: opacityAnim,
+            transform: [{ scale: scaleAnim }],
+          }}
+        >
             <View
               style={[
                 styles.dialogCard,
@@ -214,17 +215,15 @@ export function ReaderDeleteMyDataDialog({
                 </View>
               )}
             </View>
-          </Animated.View>
-        </View>
-
-        <M3Snackbar
-          message={DELETE_MY_DATA_ERROR_MESSAGE}
-          visible={errorVisible}
-          onDismiss={dismissSnackbar}
-          bottomInset={32}
-        />
-      </View>
-    </Modal>
+        </Animated.View>
+      </DismissibleDialog>
+      <M3Snackbar
+        message={DELETE_MY_DATA_ERROR_MESSAGE}
+        visible={errorVisible}
+        onDismiss={dismissSnackbar}
+        bottomInset={32}
+      />
+    </>
   );
 }
 
@@ -318,15 +317,6 @@ function bodyStyle(scale: number, color: string) {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  centerAnchor: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
   dialogCard: {
     overflow: "hidden",
     shadowOffset: { width: 0, height: 4 },

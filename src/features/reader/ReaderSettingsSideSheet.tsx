@@ -3,12 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   BackHandler,
-  Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import { DismissibleSideSheet } from "@/src/components/m3/DismissibleSideSheet";
 import { MaterialIcons } from "@expo/vector-icons";
 import { BookIcon } from "@/components/icons/BookIcon";
 import { DeleteMyDataIcon } from "@/components/icons/DeleteMyDataIcon";
@@ -182,19 +181,15 @@ export function ReaderSettingsSideSheet({
   const deleteTooltip = getReaderSettingsTooltip("delete-my-data");
 
   return (
-    <Modal visible={sheetMounted} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
-      <View style={styles.root} pointerEvents="box-none" onLayout={onSettingsPanelLayout}>
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          accessibilityRole="button"
-          accessibilityLabel="Dismiss settings"
-          onPress={onClose}
-        >
-          <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, { opacity: scrimOpacity }]} />
-        </Pressable>
-
-        <Animated.View
-          style={[
+    <DismissibleSideSheet
+      visible={sheetMounted}
+      onClose={onClose}
+      scrimOpacity={scrimOpacity}
+      accessibilityDismissLabel="Dismiss settings"
+      onRootLayout={onSettingsPanelLayout}
+    >
+      <Animated.View
+        style={[
             styles.sheet,
             {
               width: sheetWidth,
@@ -270,7 +265,6 @@ export function ReaderSettingsSideSheet({
             />
           </View>
         </Animated.View>
-      </View>
       {tooltip ? (
         <M3RichTooltipOverlay
           visible={tooltipVisible}
@@ -280,19 +274,11 @@ export function ReaderSettingsSideSheet({
           onDismiss={dismissTooltip}
         />
       ) : null}
-    </Modal>
+    </DismissibleSideSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: "flex-start",
-    alignItems: "flex-start",
-  },
-  scrim: {
-    backgroundColor: "#000000",
-  },
   sheet: {
     position: "absolute",
     top: 0,

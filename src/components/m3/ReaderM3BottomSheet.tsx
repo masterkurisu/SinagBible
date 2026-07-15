@@ -2,7 +2,6 @@ import { useEffect, useRef, type ReactNode } from "react";
 import {
   Animated,
   Dimensions,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { DismissibleModal } from "@/src/components/m3/DismissibleModal";
 import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import {
   M3_EMPHASIZED_DECELERATE_EASING,
@@ -38,6 +38,8 @@ export type ReaderM3BottomSheetProps = {
   scrollable?: boolean;
   maxHeightRatio?: number;
   contentPaddingBottom?: number;
+  dismissible?: boolean;
+  onBackdropPress?: () => void;
 };
 
 export function ReaderM3BottomSheet({
@@ -54,6 +56,8 @@ export function ReaderM3BottomSheet({
   scrollable = true,
   maxHeightRatio = 0.82,
   contentPaddingBottom,
+  dismissible = true,
+  onBackdropPress,
 }: ReaderM3BottomSheetProps) {
   const rc = bundle.reader;
   const { width: screenW } = useWindowDimensions();
@@ -110,106 +114,105 @@ export function ReaderM3BottomSheet({
   );
 
   return (
-    <Modal visible={isOpen} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
-      <View style={styles.root}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim }]}
-          onPress={onClose}
-          accessibilityLabel={accessibilityDismissLabel}
-        />
-        <View
+    <DismissibleModal
+      visible={isOpen}
+      onClose={onClose}
+      dismissible={dismissible}
+      onBackdropPress={onBackdropPress}
+      scrimColor={rc.menuScrim}
+      scrimOpacity={sheetOpacityAnim}
+      accessibilityDismissLabel={accessibilityDismissLabel}
+    >
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.sheetAnchor,
+          {
+            justifyContent: useBottomSheet ? "flex-end" : "flex-start",
+            paddingTop: useBottomSheet ? 0 : Math.max(insets.top, 12) + 16,
+            paddingBottom: 0,
+            paddingHorizontal: useBottomSheet ? 0 : 12,
+          },
+        ]}
+      >
+        <Animated.View
           pointerEvents="box-none"
-          style={[
-            styles.sheetAnchor,
-            {
-              justifyContent: useBottomSheet ? "flex-end" : "flex-start",
-              paddingTop: useBottomSheet ? 0 : Math.max(insets.top, 12) + 16,
-              paddingBottom: 0,
-              paddingHorizontal: useBottomSheet ? 0 : 12,
-            },
-          ]}
+          style={{
+            width: sheetMaxW,
+            maxHeight: sheetMaxH,
+            flexShrink: 1,
+            opacity: sheetOpacityAnim,
+            transform: [
+              {
+                translateY: sheetSlideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [slideFrom, 0],
+                }),
+              },
+            ],
+          }}
         >
-          <Animated.View
-            style={{
-              width: sheetMaxW,
-              maxHeight: sheetMaxH,
-              flexShrink: 1,
-              opacity: sheetOpacityAnim,
-              transform: [
-                {
-                  translateY: sheetSlideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [slideFrom, 0],
-                  }),
-                },
-              ],
-            }}
+          <View
+            style={[
+              styles.sheetCard,
+              {
+                backgroundColor: rc.popoverSurface,
+                borderTopLeftRadius: useBottomSheet ? READER_M3_BOTTOM_SHEET_RADIUS_PX : 28,
+                borderTopRightRadius: useBottomSheet ? READER_M3_BOTTOM_SHEET_RADIUS_PX : 28,
+                borderBottomLeftRadius: useBottomSheet ? 0 : 28,
+                borderBottomRightRadius: useBottomSheet ? 0 : 28,
+                shadowColor: rc.popoverShadow,
+                maxHeight: sheetMaxH,
+              },
+            ]}
           >
-            <View
-              style={[
-                styles.sheetCard,
-                {
-                  backgroundColor: rc.popoverSurface,
-                  borderTopLeftRadius: useBottomSheet ? READER_M3_BOTTOM_SHEET_RADIUS_PX : 28,
-                  borderTopRightRadius: useBottomSheet ? READER_M3_BOTTOM_SHEET_RADIUS_PX : 28,
-                  borderBottomLeftRadius: useBottomSheet ? 0 : 28,
-                  borderBottomRightRadius: useBottomSheet ? 0 : 28,
-                  shadowColor: rc.popoverShadow,
-                  maxHeight: sheetMaxH,
-                },
-              ]}
-            >
-              {useBottomSheet ? (
-                <View style={styles.handleRow}>
-                  <View
-                    style={{
-                      width: READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
-                      height: READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
-                      borderRadius: 2,
-                      backgroundColor: READER_M3_OUTLINE_VARIANT,
-                    }}
-                  />
-                </View>
-              ) : null}
-
-              {scrollable ? (
-                <ScrollView
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                  bounces={false}
-                  nestedScrollEnabled
-                  style={{ maxHeight: scrollAreaMaxHeight, flexShrink: 1 }}
-                  contentContainerStyle={{
-                    paddingHorizontal: padH,
-                    paddingTop: useBottomSheet ? 4 * scale : 20 * scale,
-                    paddingBottom: bottomPad,
-                  }}
-                >
-                  {body}
-                </ScrollView>
-              ) : (
+            {useBottomSheet ? (
+              <View style={styles.handleRow}>
                 <View
                   style={{
-                    paddingHorizontal: padH,
-                    paddingTop: useBottomSheet ? 4 * scale : 20 * scale,
-                    paddingBottom: bottomPad,
+                    width: READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
+                    height: READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
+                    borderRadius: 2,
+                    backgroundColor: READER_M3_OUTLINE_VARIANT,
                   }}
-                >
-                  {body}
-                </View>
-              )}
-            </View>
-          </Animated.View>
-        </View>
+                />
+              </View>
+            ) : null}
+
+            {scrollable ? (
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                nestedScrollEnabled
+                style={{ maxHeight: scrollAreaMaxHeight, flexShrink: 1 }}
+                contentContainerStyle={{
+                  paddingHorizontal: padH,
+                  paddingTop: useBottomSheet ? 4 * scale : 20 * scale,
+                  paddingBottom: bottomPad,
+                }}
+              >
+                {body}
+              </ScrollView>
+            ) : (
+              <View
+                style={{
+                  paddingHorizontal: padH,
+                  paddingTop: useBottomSheet ? 4 * scale : 20 * scale,
+                  paddingBottom: bottomPad,
+                }}
+              >
+                {body}
+              </View>
+            )}
+          </View>
+        </Animated.View>
       </View>
-    </Modal>
+    </DismissibleModal>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
   sheetAnchor: {
     flex: 1,
     alignItems: "center",

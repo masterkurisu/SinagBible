@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef } from "react";
 import {
   Animated,
-  Modal,
-  Pressable,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { DismissibleDialog } from "@/src/components/m3/DismissibleDialog";
 import { hapticLightImpact } from "@/lib/haptics";
 import { M3Button } from "@/src/components/m3/M3Button";
 import {
@@ -98,22 +97,18 @@ export function JournalDraftCloseDialog({
   }, [onDiscard]);
 
   return (
-    <Modal
+    <DismissibleDialog
       visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent
+      onClose={handleKeepEditing}
+      onBackdropPress={handleKeepEditing}
       onRequestClose={handleKeepEditing}
+      scrimColor={j.newEntryRouteScrim}
+      scrimOpacity={opacityAnim}
+      accessibilityDismissLabel="Keep editing journal entry"
+      insets={{ top: 0, bottom: 0 }}
     >
-      <View style={styles.root}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: j.newEntryRouteScrim }]}
-          onPress={handleKeepEditing}
-          accessibilityRole="button"
-          accessibilityLabel="Keep editing journal entry"
-        />
-        <View pointerEvents="box-none" style={styles.centerAnchor}>
-          <Animated.View
+      <Animated.View
+        pointerEvents="box-none"
             style={{
               width: dialogMaxW,
               opacity: opacityAnim,
@@ -185,23 +180,12 @@ export function JournalDraftCloseDialog({
                 />
               </View>
             </View>
-          </Animated.View>
-        </View>
-      </View>
-    </Modal>
+      </Animated.View>
+    </DismissibleDialog>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  centerAnchor: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
   dialogCard: {
     overflow: "hidden",
     shadowOffset: { width: 0, height: 4 },

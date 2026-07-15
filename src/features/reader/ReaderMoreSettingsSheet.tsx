@@ -1,23 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
-  Animated,
-  Dimensions,
-  Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { CreditsIcon } from "@/components/icons/CreditsIcon";
 import { KofiSupportBlock } from "@/components/kofi-support-block";
-import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Switch } from "@/components/M3Switch";
+import { ReaderM3BottomSheet } from "@/src/components/m3/ReaderM3BottomSheet";
+import { M3Snackbar } from "@/src/components/m3/M3Snackbar";
 import { saveAppLogsToDevice } from "@/lib/app-logs";
 import { hapticLightImpact } from "@/lib/haptics";
 import { getReaderSheetChrome, useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
@@ -27,22 +23,13 @@ import {
   subscribeHapticsEnabled,
 } from "@/lib/haptics-preference";
 import {
-  M3_EMPHASIZED_DECELERATE_EASING,
-  M3_MOTION_DURATION_SHORT4_MS,
-} from "@/src/components/m3/m3-motion";
-import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
-  READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
-  READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
-  READER_M3_BOTTOM_SHEET_RADIUS_PX,
   READER_M3_LIST_ITEM_HEIGHT_PX,
   READER_M3_LIST_TRAILING_ICON_PX,
   READER_M3_SWITCH_TRACK_HEIGHT_PX,
   READER_M3_SWITCH_TRACK_WIDTH_PX,
 } from "@/src/features/reader/readerSettingsPanelChrome";
-import { M3Snackbar } from "@/src/components/m3/M3Snackbar";
-import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
 
 export type ReaderMoreSettingsSheetProps = {
   isOpen: boolean;
@@ -146,21 +133,14 @@ export function ReaderMoreSettingsSheet({
   settingsMutedTextColor: _settingsMutedTextColor,
 }: ReaderMoreSettingsSheetProps) {
   const colors = bundle.ui;
-  const rc = bundle.reader;
   const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
   const rippleColor = bundle.chrome.androidRipple;
-  const { width: screenW } = useWindowDimensions();
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
   const [logsExportBusy, setLogsExportBusy] = useState(false);
   const [logsSnackbar, setLogsSnackbar] = useState<string | null>(null);
-  const sheetSlideAnim = useRef(new Animated.Value(0)).current;
-  const sheetOpacityAnim = useRef(new Animated.Value(0)).current;
 
   const scale = isTabletReaderLayout ? 1.35 : 1;
   const useBottomSheet = !isTabletReaderLayout;
-  const sheetMaxW = useBottomSheet ? screenW : Math.min(420, screenW - 48);
-  const sheetMaxH = Dimensions.get("window").height * (isTabletReaderLayout ? 0.72 : 0.82);
-  const padH = 24 * scale;
   const trailingIconSize = READER_M3_LIST_TRAILING_ICON_PX * scale;
   const switchScale = scale;
 
@@ -168,30 +148,6 @@ export function ReaderMoreSettingsSheet({
     void loadHapticsEnabledPreference().then(setHapticsEnabledState);
     return subscribeHapticsEnabled(setHapticsEnabledState);
   }, []);
-
-  useEffect(() => {
-    if (!isOpen) {
-      sheetSlideAnim.setValue(0);
-      sheetOpacityAnim.setValue(0);
-      return;
-    }
-    sheetSlideAnim.setValue(0);
-    sheetOpacityAnim.setValue(0);
-    Animated.parallel([
-      Animated.timing(sheetSlideAnim, {
-        toValue: 1,
-        duration: M3_MOTION_DURATION_SHORT4_MS + 80,
-        easing: M3_EMPHASIZED_DECELERATE_EASING,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetOpacityAnim, {
-        toValue: 1,
-        duration: M3_MOTION_DURATION_SHORT4_MS,
-        easing: M3_EMPHASIZED_DECELERATE_EASING,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [isOpen, sheetSlideAnim, sheetOpacityAnim]);
 
   const toggleHaptics = useCallback(() => {
     void (async () => {
@@ -251,186 +207,117 @@ export function ReaderMoreSettingsSheet({
     onSelectCredits();
   }, [onSelectCredits]);
 
-  const slideFrom = useBottomSheet ? 48 : READER_MENU_SLIDE_FROM_PX;
-
   return (
     <>
-    <Modal visible={isOpen} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
-      <View style={styles.root}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim }]}
-          onPress={onClose}
-          accessibilityLabel="Dismiss more settings"
-        />
+      <ReaderM3BottomSheet
+        isOpen={isOpen}
+        onClose={onClose}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
+        title="More"
+        accessibilityDismissLabel="Dismiss more settings"
+        contentPaddingBottom={24 * scale + (useBottomSheet ? insets.bottom : 0)}
+      >
         <View
-          pointerEvents="box-none"
           style={[
-            styles.sheetAnchor,
+            styles.listBlock,
             {
-              justifyContent: useBottomSheet ? "flex-end" : "flex-start",
-              paddingTop: useBottomSheet ? 0 : Math.max(insets.top, 12) + 16,
-              paddingBottom: 0,
-              paddingHorizontal: useBottomSheet ? 0 : 12,
+              marginTop: 12 * scale,
+              borderRadius: 12 * scale,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: sheetChrome.outlineVariant,
+              overflow: "hidden",
             },
           ]}
         >
-          <Animated.View
-            style={{
-              width: sheetMaxW,
-              maxHeight: sheetMaxH,
-              opacity: sheetOpacityAnim,
-              transform: [
-                {
-                  translateY: sheetSlideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [slideFrom, 0],
-                  }),
-                },
-              ],
-            }}
-          >
-            <View
-              style={[
-                styles.sheetCard,
-                {
-                  backgroundColor: rc.popoverSurface,
-                  borderTopLeftRadius: useBottomSheet ? READER_M3_BOTTOM_SHEET_RADIUS_PX : 28,
-                  borderTopRightRadius: useBottomSheet ? READER_M3_BOTTOM_SHEET_RADIUS_PX : 28,
-                  borderBottomLeftRadius: useBottomSheet ? 0 : 28,
-                  borderBottomRightRadius: useBottomSheet ? 0 : 28,
-                  shadowColor: rc.popoverShadow,
-                },
-              ]}
-            >
-              {useBottomSheet ? (
-                <View style={styles.handleRow}>
-                  <View
-                    style={{
-                      width: READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
-                      height: READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
-                      borderRadius: 2,
-                      backgroundColor: sheetChrome.outlineVariant,
-                    }}
-                  />
-                </View>
-              ) : null}
+          <MoreSettingsRow
+            label="Save logs"
+            scale={scale}
+            accessibilityLabel="Save logs"
+            onPress={handleSaveLogsToDevice}
+            disabled={logsExportBusy}
+            busy={logsExportBusy}
+            rippleColor={rippleColor}
+            trailing={
+              <MaterialIcons
+                name="download"
+                size={trailingIconSize}
+                color={sheetChrome.onSurfaceVariant}
+              />
+            }
+          />
 
-              <ScrollView
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                bounces={false}
-                contentContainerStyle={{
-                  paddingHorizontal: padH,
-                  paddingTop: useBottomSheet ? 4 * scale : 20 * scale,
-                  paddingBottom: 24 * scale + (useBottomSheet ? insets.bottom : 0),
-                }}
-              >
-                <M3SettingsSheetTitle title="More" scale={scale} />
+          <MoreSettingsDivider scale={scale} />
 
-                <View
-                  style={[
-                    styles.listBlock,
-                    {
-                      marginTop: 12 * scale,
-                      borderRadius: 12 * scale,
-                      borderWidth: StyleSheet.hairlineWidth,
-                      borderColor: sheetChrome.outlineVariant,
-                      overflow: "hidden",
-                    },
-                  ]}
-                >
-                  <MoreSettingsRow
-                    label="Save logs"
-                    scale={scale}
-                    accessibilityLabel="Save logs"
-                    onPress={handleSaveLogsToDevice}
-                    disabled={logsExportBusy}
-                    busy={logsExportBusy}
-                    rippleColor={rippleColor}
-                    trailing={
-                      <MaterialIcons
-                        name="download"
-                        size={trailingIconSize}
-                        color={sheetChrome.onSurfaceVariant}
-                      />
-                    }
-                  />
+          <MoreSettingsRow
+            label="Haptic feedback"
+            scale={scale}
+            accessibilityLabel="Haptic feedback"
+            trailing={
+              <M3Switch
+                value={hapticsEnabled}
+                onValueChange={toggleHaptics}
+                accessibilityLabel="Haptic feedback"
+                scale={switchScale}
+                trackColorOn={colors.brown800}
+                trackColorOff={sheetChrome.surfaceContainerHigh}
+                trackBorderOff={sheetChrome.onSurfaceVariant}
+                handleColorOn="#FFFFFF"
+                handleColorOff={sheetChrome.onSurfaceVariant}
+              />
+            }
+          />
 
-                  <MoreSettingsDivider scale={scale} />
+          <MoreSettingsDivider scale={scale} />
 
-                  <MoreSettingsRow
-                    label="Haptic feedback"
-                    scale={scale}
-                    accessibilityLabel="Haptic feedback"
-                    trailing={
-                      <M3Switch
-                        value={hapticsEnabled}
-                        onValueChange={toggleHaptics}
-                        accessibilityLabel="Haptic feedback"
-                        scale={switchScale}
-                        trackColorOn={colors.brown800}
-                        trackColorOff={sheetChrome.surfaceContainerHigh}
-                        trackBorderOff={sheetChrome.onSurfaceVariant}
-                        handleColorOn="#FFFFFF"
-                        handleColorOff={sheetChrome.onSurfaceVariant}
-                      />
-                    }
-                  />
+          <MoreSettingsRow
+            label="Credits"
+            scale={scale}
+            accessibilityLabel="Credits"
+            onPress={handleCredits}
+            rippleColor={rippleColor}
+            trailing={
+              <CreditsIcon size={trailingIconSize} color={sheetChrome.onSurfaceVariant} />
+            }
+          />
 
-                  <MoreSettingsDivider scale={scale} />
+          <MoreSettingsDivider scale={scale} />
 
-                  <MoreSettingsRow
-                    label="Credits"
-                    scale={scale}
-                    accessibilityLabel="Credits"
-                    onPress={handleCredits}
-                    rippleColor={rippleColor}
-                    trailing={
-                      <CreditsIcon size={trailingIconSize} color={sheetChrome.onSurfaceVariant} />
-                    }
-                  />
-
-                  <MoreSettingsDivider scale={scale} />
-
-                  <MoreSettingsRow
-                    label="Import / Export"
-                    scale={scale}
-                    accessibilityLabel="Import or export your data"
-                    onPress={handleImportExport}
-                    rippleColor={rippleColor}
-                    trailing={
-                      <MaterialIcons
-                        name="import-export"
-                        size={trailingIconSize}
-                        color={sheetChrome.onSurfaceVariant}
-                      />
-                    }
-                  />
-                </View>
-
-                <View style={{ marginTop: 20 * scale }}>
-                  <KofiSupportBlock
-                    bodyColor={sheetChrome.onSurfaceVariant}
-                    bodyFontSize={READER_M3_BODY_FONT_PX * scale * 0.875}
-                    bodyLineHeight={READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.875}
-                    buttonWidth={168 * scale}
-                  />
-                </View>
-              </ScrollView>
-            </View>
-          </Animated.View>
+          <MoreSettingsRow
+            label="Import / Export"
+            scale={scale}
+            accessibilityLabel="Import or export your data"
+            onPress={handleImportExport}
+            rippleColor={rippleColor}
+            trailing={
+              <MaterialIcons
+                name="import-export"
+                size={trailingIconSize}
+                color={sheetChrome.onSurfaceVariant}
+              />
+            }
+          />
         </View>
-      </View>
-    </Modal>
-    <M3Snackbar
-      message={logsSnackbar ?? ""}
-      visible={logsSnackbar != null}
-      onDismiss={dismissLogsSnackbar}
-      bottomInset={insets.bottom + 16}
-      icon="check-circle"
-      actionLabel="Dismiss"
-      onAction={dismissLogsSnackbar}
-    />
+
+        <View style={{ marginTop: 20 * scale }}>
+          <KofiSupportBlock
+            bodyColor={sheetChrome.onSurfaceVariant}
+            bodyFontSize={READER_M3_BODY_FONT_PX * scale * 0.875}
+            bodyLineHeight={READER_M3_BODY_LINE_HEIGHT_PX * scale * 0.875}
+            buttonWidth={168 * scale}
+          />
+        </View>
+      </ReaderM3BottomSheet>
+      <M3Snackbar
+        message={logsSnackbar ?? ""}
+        visible={logsSnackbar != null}
+        onDismiss={dismissLogsSnackbar}
+        bottomInset={insets.bottom + 16}
+        icon="check-circle"
+        actionLabel="Dismiss"
+        onAction={dismissLogsSnackbar}
+      />
     </>
   );
 }
@@ -445,25 +332,6 @@ function rowLabelStyle(scale: number, color: string) {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  sheetAnchor: {
-    flex: 1,
-    alignItems: "center",
-  },
-  sheetCard: {
-    overflow: "hidden",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  handleRow: {
-    alignItems: "center",
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
   listBlock: {
     width: "100%",
   },
