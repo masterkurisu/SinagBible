@@ -2,6 +2,7 @@ import { formatPassageReference, parsePassageReference } from "@sinag-bible/core
 import { levenshtein, maxFuzzyDistanceForQuery } from "@sinag-bible/core/text-utils";
 import type { LocalJournalEntry } from "@sinag-bible/types";
 import { decodeBasicHtmlEntities } from "@/lib/journal-preview";
+import { getTranslationDisplaySearchTokens } from "@/lib/translation-display-label";
 
 export type JournalSearchableEntry = Pick<
   LocalJournalEntry,
@@ -106,7 +107,7 @@ function buildJournalEntryHaystack(entry: JournalSearchableEntry): string {
       : "";
   const bookSlug = (entry.book ?? "").toLowerCase();
   const chapterStr = String(entry.chapter ?? "");
-  const tr = (entry.bible_translation ?? "").toLowerCase();
+  const tr = getTranslationDisplaySearchTokens(entry.bible_translation).join(" ");
   return `${titleLower} ${body} ${refLine} ${bookSlug} ${chapterStr} ${tr}`;
 }
 

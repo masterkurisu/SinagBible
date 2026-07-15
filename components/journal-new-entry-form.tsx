@@ -55,6 +55,7 @@ import {
   normalizeJournalTranslationId,
   resolveJournalPassageBookSlug,
 } from "@/lib/journal-verse-preview";
+import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
 import { hapticLightImpact, hapticSelection } from "@/lib/haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -873,13 +874,15 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             preview && preview.length > VERSE_PREVIEW_LIMIT
               ? `${preview.slice(0, VERSE_PREVIEW_LIMIT).trimEnd()}...`
               : preview;
-          setPassagePreview(limitedPreview);
-          setPassagePreviewRef(
-            `${chapterData.bookName} ${parsed.chapter}${
+          const refCore = `${chapterData.bookName} ${parsed.chapter}${
               parsed.verseStart != null
                 ? `:${parsed.verseStart}${parsed.verseEnd ? `-${parsed.verseEnd}` : ""}`
                 : ""
-            }`,
+            }`;
+          const translationAbbr = getTranslationDisplayAbbreviation(journalTranslationId);
+          setPassagePreview(limitedPreview);
+          setPassagePreviewRef(
+            translationAbbr ? `${refCore} (${translationAbbr})` : refCore,
           );
           setPassageSuggestion(
             misspelling ? `Did you mean ${misspelling}?` : null,

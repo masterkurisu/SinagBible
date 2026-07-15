@@ -43,6 +43,8 @@ import {
   getJournalVersePreview,
   resolveJournalPassageBookSlug,
 } from "@/lib/journal-verse-preview";
+import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
+import { useTranslationPicker } from "@/lib/use-translation-picker";
 import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboardingLayer";
 import { useJournalDetailOnboarding } from "@/src/features/journal/useJournalDetailOnboarding";
 import type { JournalDetailOnboardingStepId } from "@/src/features/journal/journalDetailOnboardingSteps";
@@ -432,6 +434,12 @@ export default function JournalEntryScreen() {
   const [storageAccessError, setStorageAccessError] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [verseText, setVerseText] = useState<string | null>(null);
+  const { items: translationPickerItems } = useTranslationPicker();
+
+  const bibleTranslationDisplay = useMemo(
+    () => getTranslationDisplayAbbreviation(entry?.bible_translation, translationPickerItems),
+    [entry?.bible_translation, translationPickerItems],
+  );
 
   const detailOnboarding = useJournalDetailOnboarding({
     entryReady: entry != null && !loadError,
@@ -720,7 +728,7 @@ export default function JournalEntryScreen() {
         title: entry.title ?? null,
         dateLine: formatDate(entry.created_at),
         passageLine,
-        bibleTranslation: entry.bible_translation ?? null,
+        bibleTranslation: entry.bible_translation ? bibleTranslationDisplay : null,
         verseText,
         reflectionHtml: entry.content ?? "",
         ui: {
@@ -753,6 +761,7 @@ export default function JournalEntryScreen() {
       }
     }
   }, [
+    bibleTranslationDisplay,
     colors.brown800,
     colors.gold,
     colors.parchmentMid,
@@ -1028,7 +1037,7 @@ export default function JournalEntryScreen() {
                       >
                         <Text style={{ fontFamily: "Lora_700Bold" }}>{passageLine.refBold}</Text>
                         {entry.bible_translation?.trim()
-                          ? ` (${entry.bible_translation.trim()})`
+                          ? ` (${bibleTranslationDisplay})`
                           : ""}
                       </Text>
                     ) : null}

@@ -41,7 +41,6 @@ import Reanimated, {
   useSharedValue,
 } from "react-native-reanimated";
 import {
-  formatTranslationDropdownLabel,
   getExternalApiId,
   getInternalIdFromApiId,
   isTranslationId,
@@ -49,6 +48,7 @@ import {
 } from "@sinag-bible/core/bible-translations";
 import { formatReaderChapterHeading } from "@/lib/reader-chapter-label";
 import { getReaderTranslationLanguageLabel } from "@/lib/reader-translation-language";
+import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
 import { primeReaderChapterFetch } from "@/lib/reader-chapter-load";
 import {
   getReaderChapterNeighbors,
@@ -1385,6 +1385,10 @@ export default function ReaderChapterScreen() {
     readerHeaderTranslationId,
     translationPickerItems,
   );
+  const readerHeaderTranslationLabel = getTranslationDisplayAbbreviation(
+    readerHeaderTranslationId,
+    translationPickerItems,
+  );
 
   const readerChapterPageHeading = (
     <Reanimated.View
@@ -1394,7 +1398,7 @@ export default function ReaderChapterScreen() {
       <Text
         style={[readerFlashListChromeStyles.pageHeadingTranslation, { fontFamily: "Inter_400Regular", color: colors.gold }]}
       >
-        {readerHeaderTranslationId} ({readerHeaderLanguageLabel})
+        {readerHeaderTranslationLabel} ({readerHeaderLanguageLabel})
       </Text>
       <Text
         style={{ fontFamily: "Lora_400Regular", fontSize: 36, lineHeight: 42, color: colors.brown800 }}

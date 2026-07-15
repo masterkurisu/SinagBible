@@ -44,6 +44,8 @@ import {
   takePendingJournalListUpsert,
 } from "@/lib/journal-edit-bridge";
 import { stripHtmlPreview } from "@/lib/journal-preview";
+import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
+import { useTranslationPicker, type TranslationPickerItem } from "@/lib/use-translation-picker";
 import {
   journalTabNewEntryFabBottomPx,
   nativeTabJournalListPaddingBottomPx,
@@ -196,6 +198,7 @@ const JournalListDateHeading = memo(function JournalListDateHeading({ label }: {
 
 type JournalListEntryCardProps = {
   item: MobileJournalListItem;
+  translationPickerItems: readonly TranslationPickerItem[];
   onEntryPress: (id: string) => void;
   onSwipeFavorite: (item: MobileJournalListItem) => void;
   onSwipeDelete: (item: MobileJournalListItem) => void;
@@ -204,6 +207,7 @@ type JournalListEntryCardProps = {
 
 const JournalListEntryCard = memo(function JournalListEntryCard({
   item,
+  translationPickerItems,
   onEntryPress,
   onSwipeFavorite,
   onSwipeDelete,
@@ -231,6 +235,14 @@ const JournalListEntryCard = memo(function JournalListEntryCard({
           })
         : "",
     [item.book, item.chapter, item.verse_start, item.verse_end],
+  );
+
+  const translationLabel = useMemo(
+    () =>
+      item.bible_translation
+        ? getTranslationDisplayAbbreviation(item.bible_translation, translationPickerItems)
+        : "",
+    [item.bible_translation, translationPickerItems],
   );
 
   const title = useMemo(() => item.title?.trim() || passage || "Untitled entry", [item.title, passage]);
@@ -295,7 +307,7 @@ const JournalListEntryCard = memo(function JournalListEntryCard({
                   numberOfLines={1}
                 >
                   {passage}
-                  {item.bible_translation ? ` · ${item.bible_translation}` : ""}
+                  {translationLabel ? ` · ${translationLabel}` : ""}
                 </Text>
               </View>
             ) : null}
@@ -398,6 +410,7 @@ function FabPlusIcon() {
 export default function JournalIndexScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const { items: translationPickerItems } = useTranslationPicker();
   const [hasVisitedJournalTab, setHasVisitedJournalTab] = useState(false);
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -859,6 +872,7 @@ export default function JournalIndexScreen() {
           <View ref={swipeActionsRef} collapsable={false}>
             <JournalListEntryCard
               item={row.item}
+              translationPickerItems={translationPickerItems}
               onEntryPress={handleEntryPress}
               onSwipeFavorite={commitToggleFavorite}
               onSwipeDelete={requestDeleteEntry}
@@ -870,6 +884,7 @@ export default function JournalIndexScreen() {
       return (
         <JournalListEntryCard
           item={row.item}
+          translationPickerItems={translationPickerItems}
           onEntryPress={handleEntryPress}
           onSwipeFavorite={commitToggleFavorite}
           onSwipeDelete={requestDeleteEntry}
@@ -883,6 +898,7 @@ export default function JournalIndexScreen() {
       handleEntryPress,
       journalListScrollGesture,
       requestDeleteEntry,
+      translationPickerItems,
     ],
   );
 
