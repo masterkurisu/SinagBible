@@ -1,19 +1,23 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import {
-  Animated,
   Dimensions,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
   useWindowDimensions,
 } from "react-native";
+import Reanimated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { DismissibleModal } from "@/src/components/m3/DismissibleModal";
 import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import {
-  M3_EMPHASIZED_DECELERATE_EASING,
-  M3_MOTION_DURATION_SHORT4_MS,
+  M3_SCRIM_OPACITY,
+  animateM3EffectsOpacity,
+  animateM3SpatialProgress,
 } from "@/src/components/m3/m3-motion";
 import {
   READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
@@ -61,8 +65,9 @@ export function ReaderM3BottomSheet({
 }: ReaderM3BottomSheetProps) {
   const rc = bundle.reader;
   const { width: screenW } = useWindowDimensions();
-  const sheetSlideAnim = useRef(new Animated.Value(0)).current;
-  const sheetOpacityAnim = useRef(new Animated.Value(0)).current;
+  const slideProgress = useSharedValue(0);
+  const scrimOpacity = useSharedValue(0);
+  const sheetOpacity = useSharedValue(0);
 
   const scale = isTabletReaderLayout ? 1.35 : 1;
   const useBottomSheet = !isTabletReaderLayout;
@@ -73,32 +78,33 @@ export function ReaderM3BottomSheet({
     contentPaddingBottom ?? (useBottomSheet ? Math.max(insets.bottom, 16) * scale : 16 * scale);
   const handleBlockHeight = useBottomSheet ? 12 + 4 + READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX : 0;
   const scrollAreaMaxHeight = Math.max(120, sheetMaxH - handleBlockHeight);
+  const slideFrom = useBottomSheet ? 48 : READER_MENU_SLIDE_FROM_PX;
 
   useEffect(() => {
+    cancelAnimation(slideProgress);
+    cancelAnimation(scrimOpacity);
+    cancelAnimation(sheetOpacity);
+
     if (!isOpen) {
-      sheetSlideAnim.setValue(0);
-      sheetOpacityAnim.setValue(0);
+      slideProgress.value = 0;
+      scrimOpacity.value = 0;
+      sheetOpacity.value = 0;
       return;
     }
-    sheetSlideAnim.setValue(0);
-    sheetOpacityAnim.setValue(0);
-    Animated.parallel([
-      Animated.timing(sheetSlideAnim, {
-        toValue: 1,
-        duration: M3_MOTION_DURATION_SHORT4_MS + 80,
-        easing: M3_EMPHASIZED_DECELERATE_EASING,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetOpacityAnim, {
-        toValue: 1,
-        duration: M3_MOTION_DURATION_SHORT4_MS,
-        easing: M3_EMPHASIZED_DECELERATE_EASING,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [isOpen, sheetOpacityAnim, sheetSlideAnim]);
 
-  const slideFrom = useBottomSheet ? 48 : READER_MENU_SLIDE_FROM_PX;
+    slideProgress.value = 0;
+    scrimOpacity.value = 0;
+    sheetOpacity.value = 0;
+
+    animateM3SpatialProgress(slideProgress, 1, true);
+    animateM3EffectsOpacity(scrimOpacity, M3_SCRIM_OPACITY, true);
+    animateM3EffectsOpacity(sheetOpacity, 1, true);
+  }, [isOpen, scrimOpacity, sheetOpacity, slideProgress]);
+
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: sheetOpacity.value,
+    transform: [{ translateY: slideFrom * (1 - slideProgress.value) }],
+  }));
 
   const body = (
     <>
@@ -119,8 +125,8 @@ export function ReaderM3BottomSheet({
       onClose={onClose}
       dismissible={dismissible}
       onBackdropPress={onBackdropPress}
-      scrimColor={rc.menuScrim}
-      scrimOpacity={sheetOpacityAnim}
+      scrimColor="#000000"
+      scrimOpacity={scrimOpacity}
       accessibilityDismissLabel={accessibilityDismissLabel}
     >
       <View
@@ -135,22 +141,12 @@ export function ReaderM3BottomSheet({
           },
         ]}
       >
-        <Animated.View
+        <Reanimated.View
           pointerEvents="box-none"
-          style={{
-            width: sheetMaxW,
-            maxHeight: sheetMaxH,
-            flexShrink: 1,
-            opacity: sheetOpacityAnim,
-            transform: [
-              {
-                translateY: sheetSlideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [slideFrom, 0],
-                }),
-              },
-            ],
-          }}
+          style={[
+            sheetAnimatedStyle,
+            { width: sheetMaxW, maxHeight: sheetMaxH, flexShrink: 1 },
+          ]}
         >
           <View
             style={[
@@ -206,7 +202,7 @@ export function ReaderM3BottomSheet({
               </View>
             )}
           </View>
-        </Animated.View>
+        </Reanimated.View>
       </View>
     </DismissibleModal>
   );

@@ -1,5 +1,12 @@
 import { Easing } from "react-native";
-import { Easing as ReanimatedEasing } from "react-native-reanimated";
+import {
+  Easing as ReanimatedEasing,
+  runOnJS,
+  withSpring,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
+import { motionTier } from "@/lib/device-capability";
 
 /** M3 emphasized decelerate — elements entering the screen. */
 export const M3_EMPHASIZED_DECELERATE_EASING = Easing.bezier(0.05, 0.7, 0.1, 1);
@@ -115,3 +122,46 @@ export const M3_SPRING_SLOW_EFFECTS: M3SpringConfig = {
   stiffness: 800,
   mass: 1,
 };
+
+/** M3 standard scrim — 32% black (MaterialContainerTransform default). */
+export const M3_SCRIM_OPACITY = 0.32;
+
+const REDUCED_MOTION = motionTier === "reduced";
+
+/** Opacity/color channel — timing with emphasized easing (no spring overshoot). */
+export function animateM3EffectsOpacity(
+  value: SharedValue<number>,
+  target: number,
+  entering: boolean,
+  onComplete?: () => void,
+): void {
+  value.value = withTiming(
+    target,
+    {
+      duration: entering ? M3_CONTAINER_TRANSFORM_ENTER_MS : M3_CONTAINER_TRANSFORM_RETURN_MS,
+      easing: entering ? M3_EMPHASIZED_DECELERATE_REANIMATED : M3_EMPHASIZED_ACCELERATE_REANIMATED,
+    },
+    (finished) => {
+      if (finished && onComplete) {
+        runOnJS(onComplete)();
+      }
+    },
+  );
+}
+
+/** Spatial channel — spring on standard tier, timing on reduced-motion Android. */
+export function animateM3SpatialProgress(
+  value: SharedValue<number>,
+  target: number,
+  entering: boolean,
+): void {
+  if (REDUCED_MOTION) {
+    value.value = withTiming(target, {
+      duration: entering ? M3_CONTAINER_TRANSFORM_ENTER_MS : M3_CONTAINER_TRANSFORM_RETURN_MS,
+      easing: entering ? M3_EMPHASIZED_DECELERATE_REANIMATED : M3_EMPHASIZED_ACCELERATE_REANIMATED,
+    });
+    return;
+  }
+
+  value.value = withSpring(target, M3_SPRING_DEFAULT_SPATIAL);
+}

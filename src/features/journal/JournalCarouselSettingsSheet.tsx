@@ -11,13 +11,15 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import Animated, {
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
-  withTiming,
 } from "react-native-reanimated";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import {
+  M3_SCRIM_OPACITY,
+  animateM3EffectsOpacity,
+  animateM3SpatialProgress,
+} from "@/src/components/m3/m3-motion";
 import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import { M3Switch } from "@/components/M3Switch";
 import { hapticLightImpact, hapticWarning } from "@/lib/haptics";
@@ -106,11 +108,9 @@ export function JournalCarouselSettingsSheet({
 
   const playCloseAnimation = useCallback(
     (done: () => void) => {
-      scale.value = withSpring(0.94, { damping: 20, stiffness: 300 });
-      opacity.value = withTiming(0, { duration: 140 });
-      scrimOpacity.value = withTiming(0, { duration: 140 }, (finished) => {
-        if (finished) runOnJS(done)();
-      });
+      animateM3SpatialProgress(scale, 0.94, false);
+      animateM3EffectsOpacity(opacity, 0, false);
+      animateM3EffectsOpacity(scrimOpacity, 0, false, done);
     },
     [opacity, scale, scrimOpacity],
   );
@@ -138,9 +138,9 @@ export function JournalCarouselSettingsSheet({
   useEffect(() => {
     if (isOpen && !isClosingRef.current) {
       setSheetMounted(true);
-      scale.value = withSpring(1, { damping: 18, stiffness: 280, mass: 0.8 });
-      opacity.value = withTiming(1, { duration: 180 });
-      scrimOpacity.value = withTiming(1, { duration: 180 });
+      animateM3SpatialProgress(scale, 1, true);
+      animateM3EffectsOpacity(opacity, 1, true);
+      animateM3EffectsOpacity(scrimOpacity, M3_SCRIM_OPACITY, true);
       return;
     }
 
@@ -295,7 +295,7 @@ export function JournalCarouselSettingsSheet({
             pointerEvents="none"
             style={[
               StyleSheet.absoluteFill,
-              { backgroundColor: "rgba(44, 36, 22, 0.35)" },
+              { backgroundColor: "#000000" },
               scrimAnimatedStyle,
             ]}
           />
