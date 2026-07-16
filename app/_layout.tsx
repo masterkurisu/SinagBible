@@ -23,6 +23,8 @@ import { initAppLogs } from "@/lib/app-logs";
 import { initCrashReporting } from "@/lib/crash-reporting";
 import { applyPlatformOrientationLock } from "@/lib/apply-platform-orientation-lock";
 import { loadHapticsEnabledPreference } from "@/lib/haptics-preference";
+import { ContainerTransformProvider } from "@/src/components/m3/ContainerTransform";
+import { ContainerTransformHost } from "@/src/components/m3/ContainerTransformHost";
 import { openChapterDb } from "@/lib/chapter-db";
 import { initJournalStorage } from "@/lib/journal-local";
 import { migrateAsyncStorageChapters } from "@/lib/migrate-async-storage";
@@ -222,7 +224,10 @@ export default function RootLayout() {
       */}
       <AppErrorBoundary>
         <MobileAppThemeProvider>
-          <RootLayoutContent />
+          <ContainerTransformProvider>
+            <RootLayoutContent />
+            <ContainerTransformHost />
+          </ContainerTransformProvider>
         </MobileAppThemeProvider>
       </AppErrorBoundary>
     </GestureHandlerRootView>
