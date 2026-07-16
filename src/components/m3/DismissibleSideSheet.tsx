@@ -1,6 +1,5 @@
 import { useCallback, type ReactNode } from "react";
 import {
-  Animated,
   Modal,
   Pressable,
   StyleSheet,
@@ -8,6 +7,10 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import {
+  DismissibleScrimLayer,
+  type ScrimOpacitySource,
+} from "@/src/components/m3/dismissible-scrim-opacity";
 
 export type DismissibleSideSheetProps = {
   visible: boolean;
@@ -16,7 +19,8 @@ export type DismissibleSideSheetProps = {
   dismissible?: boolean;
   onBackdropPress?: () => void;
   onRequestClose?: () => void;
-  scrimOpacity: Animated.Value | Animated.AnimatedInterpolation<number>;
+  /** Scrim opacity — RN Animated or Reanimated SharedValue. */
+  scrimOpacity: ScrimOpacitySource;
   scrimColor?: string;
   accessibilityDismissLabel?: string;
   rootStyle?: StyleProp<ViewStyle>;
@@ -70,10 +74,7 @@ export function DismissibleSideSheet({
             accessibilityLabel={accessibilityDismissLabel}
             onPress={handleBackdropPress}
           >
-            <Animated.View
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor, opacity: scrimOpacity }]}
-            />
+            <DismissibleScrimLayer scrimColor={scrimColor} scrimOpacity={scrimOpacity} />
           </Pressable>
         ) : null}
         {children}

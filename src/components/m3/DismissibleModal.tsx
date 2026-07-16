@@ -1,6 +1,5 @@
 import { useCallback, type ReactNode } from "react";
 import {
-  Animated,
   Modal,
   Pressable,
   StyleSheet,
@@ -8,6 +7,10 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import {
+  DismissibleScrimLayer,
+  type ScrimOpacitySource,
+} from "@/src/components/m3/dismissible-scrim-opacity";
 
 export type DismissibleModalProps = {
   visible: boolean;
@@ -20,8 +23,8 @@ export type DismissibleModalProps = {
   /** Overrides Modal onRequestClose; defaults to backdrop handler when dismissible. */
   onRequestClose?: () => void;
   scrimColor?: string;
-  /** Animated scrim opacity; visual layer only (pointerEvents="none"). */
-  scrimOpacity?: Animated.Value | Animated.AnimatedInterpolation<number>;
+  /** Scrim opacity — RN Animated or Reanimated SharedValue. */
+  scrimOpacity?: ScrimOpacitySource;
   accessibilityDismissLabel?: string;
   contentContainerStyle?: StyleProp<ViewStyle>;
 };
@@ -65,10 +68,7 @@ export function DismissibleModal({
       <View style={styles.root} pointerEvents="box-none">
         {dismissible && scrimColor != null ? (
           scrimOpacity != null ? (
-            <Animated.View
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor, opacity: scrimOpacity }]}
-            />
+            <DismissibleScrimLayer scrimColor={scrimColor} scrimOpacity={scrimOpacity} />
           ) : (
             <View
               pointerEvents="none"
