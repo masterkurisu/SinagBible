@@ -108,7 +108,7 @@ export function ReaderSettingsSideSheet({
   useEffect(() => {
     if (open) setSheetMounted(true);
     slideProgress.stopAnimation();
-    Animated.spring(slideProgress, {
+    Animated.timing(slideProgress, {
       ...(open ? READER_SETTINGS_MENU_SPRING_OPEN : READER_SETTINGS_MENU_SPRING_CLOSE),
       toValue: open ? 1 : 0,
     }).start(({ finished }) => {

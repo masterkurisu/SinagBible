@@ -372,7 +372,7 @@ export default function ReaderChapterScreen() {
       return;
     }
     readerSettingsSlideProgress.stopAnimation();
-    Animated.spring(readerSettingsSlideProgress, {
+    Animated.timing(readerSettingsSlideProgress, {
       ...(toolsMenuOpen ? READER_SETTINGS_MENU_SPRING_OPEN : READER_SETTINGS_MENU_SPRING_CLOSE),
       toValue: toolsMenuOpen ? 1 : 0,
     }).start();
@@ -588,7 +588,7 @@ export default function ReaderChapterScreen() {
       if (shouldClose) {
         closeToolsMenu();
       } else {
-        Animated.spring(readerSettingsSlideProgress, {
+        Animated.timing(readerSettingsSlideProgress, {
           ...READER_SETTINGS_MENU_SPRING_OPEN,
           toValue: 1,
         }).start();
