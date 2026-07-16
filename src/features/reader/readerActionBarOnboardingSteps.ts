@@ -1,4 +1,7 @@
-import { READER_ACTION_BAR_MARK_STEP_DESCRIPTION } from "@/src/features/reader/readerVerseMarksCopy";
+import {
+  READER_ACTION_BAR_MARK_STEP_DESCRIPTION,
+  READER_INLINE_NOTE_LONG_PRESS_EDIT_HINT,
+} from "@/src/features/reader/readerVerseMarksCopy";
 
 export type ReaderActionBarOnboardingStepId =
   | "highlight"
@@ -33,7 +36,7 @@ export const READER_ACTION_BAR_ONBOARDING_STEPS: ReaderActionBarOnboardingStep[]
   {
     id: "note",
     title: "Inline notes",
-    description: "Add inline notes displayed beneath the verse.",
+    description: `Add inline notes displayed beneath the verse. ${READER_INLINE_NOTE_LONG_PRESS_EDIT_HINT}`,
   },
   {
     id: "favorite",

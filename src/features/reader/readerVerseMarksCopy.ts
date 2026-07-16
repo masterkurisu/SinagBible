@@ -27,3 +27,5 @@ export const READER_LONG_PRESS_MARK_HINT =
   "Long press a verse to apply your last mark — highlight or underline.";
 
 export const READER_CLEAR_SELECTION_MARKED_HINT = "Or tap the marked verse again.";
+
+export const READER_INLINE_NOTE_LONG_PRESS_EDIT_HINT = "Long press to edit.";

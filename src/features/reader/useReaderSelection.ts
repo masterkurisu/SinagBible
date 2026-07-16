@@ -179,13 +179,20 @@ export function useReaderSelection({
     [annotations, selectedVerses],
   );
 
+  const openNoteForVerse = useCallback(
+    (verse: number) => {
+      setNoteTargetVerse(verse);
+      setNoteDraft(notes[verse] ?? "");
+      setNoteModalVisible(true);
+    },
+    [notes],
+  );
+
   const openNoteForSelection = useCallback(() => {
     if (selectedVerses.length === 0) return;
     const last = selectedVerses[selectedVerses.length - 1]!;
-    setNoteTargetVerse(last);
-    setNoteDraft(notes[last] ?? "");
-    setNoteModalVisible(true);
-  }, [selectedVerses, notes]);
+    openNoteForVerse(last);
+  }, [selectedVerses, openNoteForVerse]);
 
   const saveNoteFromModal = useCallback(() => {
     const verse = noteTargetVerse;
@@ -224,6 +231,7 @@ export function useReaderSelection({
     removeAnnotationsFromSelection,
     applyAnnotationToSelection,
     openNoteForSelection,
+    openNoteForVerse,
     saveNoteFromModal,
   };
 }

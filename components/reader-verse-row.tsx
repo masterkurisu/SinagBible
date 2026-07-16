@@ -13,6 +13,7 @@ import { isMobileAppDarkThemeId } from "@sinag-bible/tokens";
 import { highlightColors, resolveAnnotationColorHex } from "@sinag-bible/ui";
 import { resolveUnderlineStyle } from "@/src/features/reader/verseAnnotationUnderlineMetrics";
 import { VerseAnnotationUnderlineOverlay } from "@/src/features/reader/VerseAnnotationUnderlineOverlay";
+import { READER_INLINE_NOTE_LONG_PRESS_EDIT_HINT } from "@/src/features/reader/readerVerseMarksCopy";
 
 /** Deep red on parchment / light reader backgrounds */
 const WORDS_OF_JESUS_COLOR = "#C41E1E";
@@ -81,6 +82,7 @@ export type ReaderVerseRowProps = {
   verseTextAlign: ReaderVerseTextAlignProp;
   onVersePress: (verseNum: number) => void;
   onVerseLongPress: (verseNum: number) => void;
+  onNoteLongPress?: (verseNum: number) => void;
   yvpFootnotes?: Record<number, { label: string; body: string }>;
   onYvpFootnotePress?: (noteId: number) => void;
 };
@@ -159,6 +161,7 @@ function ReaderVerseRowInner({
   verseTextAlign,
   onVersePress,
   onVerseLongPress,
+  onNoteLongPress,
   yvpFootnotes,
   onYvpFootnotePress,
 }: ReaderVerseRowProps) {
@@ -261,11 +264,18 @@ function ReaderVerseRowInner({
         </View>
       </Pressable>
       {noteText ? (
-        <View style={[styles.noteContainer, { backgroundColor: noteBelowVerseBackground }]}>
+        <Pressable
+          onLongPress={() => onNoteLongPress?.(verseNum)}
+          delayLongPress={420}
+          style={[styles.noteContainer, { backgroundColor: noteBelowVerseBackground }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Note on verse ${verseNum}`}
+          accessibilityHint={READER_INLINE_NOTE_LONG_PRESS_EDIT_HINT}
+        >
           <Text style={[styles.noteText, { color: bodyTextColor }]}>
             {noteText}
           </Text>
-        </View>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -294,6 +304,7 @@ export const ReaderVerseRow = memo(ReaderVerseRowInner, (prev, next) => {
   if (prev.verseTextAlign !== next.verseTextAlign) return false;
   if (prev.onVersePress !== next.onVersePress) return false;
   if (prev.onVerseLongPress !== next.onVerseLongPress) return false;
+  if (prev.onNoteLongPress !== next.onNoteLongPress) return false;
   if (prev.yvpFootnotes !== next.yvpFootnotes) return false;
   if (prev.onYvpFootnotePress !== next.onYvpFootnotePress) return false;
   return true;

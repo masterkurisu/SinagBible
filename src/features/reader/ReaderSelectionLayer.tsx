@@ -329,6 +329,7 @@ type ReaderVerseFlashRowProps = {
   readerTabletLandscapeTwoColumn: boolean;
   onVersePress: (verseNum: number) => void;
   onVerseLongPress: (verseNum: number) => void;
+  onNoteLongPress: (verseNum: number) => void;
 };
 
 const MemoizedReaderVerseFlashRow = memo(
@@ -340,6 +341,7 @@ const MemoizedReaderVerseFlashRow = memo(
     readerTabletLandscapeTwoColumn,
     onVersePress,
     onVerseLongPress,
+    onNoteLongPress,
   }: ReaderVerseFlashRowProps) => {
     const verseNum = item.verseIndex + 1;
     const twoColumnPaddingStyle =
@@ -369,6 +371,7 @@ const MemoizedReaderVerseFlashRow = memo(
           verseTextAlign={vd.verseTextAlign}
           onVersePress={onVersePress}
           onVerseLongPress={onVerseLongPress}
+          onNoteLongPress={onNoteLongPress}
           yvpFootnotes={vd.yvpFootnotes}
           onYvpFootnotePress={vd.onYvpFootnotePress}
         />
@@ -383,6 +386,7 @@ const MemoizedReaderVerseFlashRow = memo(
     if (prevProps.readerTabletLandscapeTwoColumn !== nextProps.readerTabletLandscapeTwoColumn) return false;
     if (prevProps.onVersePress !== nextProps.onVersePress) return false;
     if (prevProps.onVerseLongPress !== nextProps.onVerseLongPress) return false;
+    if (prevProps.onNoteLongPress !== nextProps.onNoteLongPress) return false;
     if (prevProps.stableVisualData !== nextProps.stableVisualData) return false;
 
     const verseNum = prevProps.item.verseIndex + 1;
@@ -568,6 +572,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     removeAnnotationsFromSelection,
     applyAnnotationToSelection,
     openNoteForSelection,
+    openNoteForVerse,
     saveNoteFromModal,
   } = useReaderSelection({
     chapter,
@@ -685,6 +690,14 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
       }
     },
     [handleVerseLongPress, onboardingStepRef, completeOnboardingInteractionRef],
+  );
+
+  const handleNoteLongPress = useCallback(
+    (verseNum: number) => {
+      hapticLightImpact();
+      openNoteForVerse(verseNum);
+    },
+    [openNoteForVerse],
   );
 
   const dismissSelectionToast = useCallback(() => {
@@ -805,12 +818,14 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
           onVersePress={handleVerseTapForOnboarding}
           onVerseLongPress={handleVerseLongPressForOnboarding}
+          onNoteLongPress={handleNoteLongPress}
         />
       );
     },
     [
       handleVerseTapForOnboarding,
       handleVerseLongPressForOnboarding,
+      handleNoteLongPress,
       readerTabletLandscapeTwoColumn,
     ],
   );
