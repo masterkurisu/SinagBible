@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     borderCurve: "continuous",
   },
   cardHairline: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255, 255, 255, 0.20)",
   },

@@ -13,19 +13,23 @@ import {
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useTabBarSearch } from "@/lib/tab-bar-search-context";
 import Animated, {
-  Easing,
+  cancelAnimation,
   Extrapolation,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
-  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BookSuggestion } from "@sinag-bible/types";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { hapticLightImpact } from "@/lib/haptics";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import {
+  M3_CONTAINER_TRANSFORM_ENTER_MS,
+  M3_CONTAINER_TRANSFORM_RETURN_MS,
+  M3_SCRIM_OPACITY,
+  animateM3SpatialProgress,
+} from "@/src/components/m3/m3-motion";
 import { SearchResultsBody } from "@/src/features/search/SearchResultsBody";
 import { useBibleSearch } from "@/src/features/search/useBibleSearch";
 import { TAB_BAR_SEARCH_FAB_SIZE_PX } from "@/src/features/search/tabBarSearchFabChrome";
@@ -36,7 +40,10 @@ const COLLAPSED_PILL_WIDTH_PX = TAB_BAR_SEARCH_FAB_SIZE_PX;
 const SHEET_HORIZONTAL_INSET_PX = 12;
 const SHEET_GAP_ABOVE_PILL_PX = 8;
 const SHEET_MAX_HEIGHT_RATIO = 0.62;
-const EXPAND_SPRING = { damping: 22, stiffness: 280, mass: 0.85 } as const;
+const FADE_THROUGH_OUTGOING_END = 0.25;
+const FADE_THROUGH_INCOMING_START = 0.25;
+const SHEET_TRANSLATE_FROM_PX = 28;
+const LAYER_UNMOUNT_BUFFER_MS = 50;
 
 /** Bottom-tab search — pill expands above the nav bar; results in a sheet above the pill. */
 export function TabBarSearchLayer() {
@@ -59,23 +66,27 @@ export function TabBarSearchLayer() {
   const sheetMaxHeightPx =
     screenH * SHEET_MAX_HEIGHT_RATIO - SEARCH_PILL_HEIGHT_PX - SHEET_GAP_ABOVE_PILL_PX - pillBottomPx;
 
-  const openProgress = useSharedValue(isOpen ? 1 : 0);
-  const pillWidthProgress = useSharedValue(isOpen ? 1 : 0);
+  const progress = useSharedValue(0);
 
   useEffect(() => {
+    cancelAnimation(progress);
+
     if (isOpen) {
       setLayerMounted(true);
-      openProgress.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
-      pillWidthProgress.value = withSpring(1, EXPAND_SPRING);
-      const id = setTimeout(() => inputRef.current?.focus(), 160);
+      animateM3SpatialProgress(progress, 1, true);
+      const focusDelayMs = Math.round(M3_CONTAINER_TRANSFORM_ENTER_MS * FADE_THROUGH_INCOMING_START);
+      const id = setTimeout(() => inputRef.current?.focus(), focusDelayMs);
       return () => clearTimeout(id);
     }
-    openProgress.value = withTiming(0, { duration: 180, easing: Easing.in(Easing.cubic) });
-    pillWidthProgress.value = withSpring(0, EXPAND_SPRING);
+
+    animateM3SpatialProgress(progress, 0, false);
     Keyboard.dismiss();
-    const id = setTimeout(() => setLayerMounted(false), 200);
+    const id = setTimeout(
+      () => setLayerMounted(false),
+      M3_CONTAINER_TRANSFORM_RETURN_MS + LAYER_UNMOUNT_BUFFER_MS,
+    );
     return () => clearTimeout(id);
-  }, [isOpen, openProgress, pillWidthProgress]);
+  }, [isOpen, progress]);
 
   const dismissSearch = useCallback(() => {
     hapticLightImpact();
@@ -92,31 +103,55 @@ export function TabBarSearchLayer() {
   }, [dismissSearch, isOpen]);
 
   const scrimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(openProgress.value, [0, 1], [0, 0.22], Extrapolation.CLAMP),
+    opacity: interpolate(progress.value, [0, 1], [0, M3_SCRIM_OPACITY], Extrapolation.CLAMP),
   }));
 
   const sheetStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(openProgress.value, [0, 0.35, 1], [0, 0, 1], Extrapolation.CLAMP),
+    opacity: interpolate(
+      progress.value,
+      [FADE_THROUGH_INCOMING_START, 1],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
     transform: [
       {
-        translateY: interpolate(openProgress.value, [0, 1], [28, 0], Extrapolation.CLAMP),
+        translateY: interpolate(
+          progress.value,
+          [0, 1],
+          [SHEET_TRANSLATE_FROM_PX, 0],
+          Extrapolation.CLAMP,
+        ),
       },
     ],
   }));
 
-  const pillStyle = useAnimatedStyle(() => {
-    const width = interpolate(
-      pillWidthProgress.value,
+  const pillStyle = useAnimatedStyle(() => ({
+    width: interpolate(
+      progress.value,
       [0, 1],
       [COLLAPSED_PILL_WIDTH_PX, expandedPillWidthPx],
       Extrapolation.CLAMP,
-    );
-    return {
-      width,
-      alignSelf: "stretch" as const,
-      opacity: interpolate(openProgress.value, [0, 0.2, 1], [0, 1, 1], Extrapolation.CLAMP),
-    };
-  });
+    ),
+    alignSelf: "stretch" as const,
+  }));
+
+  const outgoingIconStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      progress.value,
+      [0, FADE_THROUGH_OUTGOING_END],
+      [1, 0],
+      Extrapolation.CLAMP,
+    ),
+  }));
+
+  const incomingPillContentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      progress.value,
+      [FADE_THROUGH_INCOMING_START, 1],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
+  }));
 
   const onPickBookSuggestion = useCallback(
     (suggestion: BookSuggestion) => {
@@ -179,10 +214,6 @@ export function TabBarSearchLayer() {
           height: SEARCH_PILL_HEIGHT_PX,
           borderRadius: SEARCH_PILL_RADIUS_PX,
           backgroundColor: pillSurfaceColor,
-          flexDirection: "row",
-          alignItems: "center",
-          paddingLeft: 16,
-          paddingRight: 8,
           overflow: "hidden",
           ...(isAndroid
             ? {}
@@ -195,6 +226,18 @@ export function TabBarSearchLayer() {
                 shadowRadius: 6,
                 elevation: 5,
               }),
+        },
+        outgoingIcon: {
+          ...StyleSheet.absoluteFill,
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        incomingPillContent: {
+          flex: 1,
+          flexDirection: "row",
+          alignItems: "center",
+          paddingLeft: 16,
+          paddingRight: 8,
         },
         searchIcon: { marginRight: isAndroid ? 12 : 10 },
         input: {
@@ -244,51 +287,60 @@ export function TabBarSearchLayer() {
 
       <View pointerEvents="box-none" style={styles.dock}>
         <Animated.View style={[styles.pill, pillStyle]}>
-          <MaterialCommunityIcons
-            name="magnify"
-            size={28}
-            color={isAndroid ? s.muted : s.bodyText}
-            style={styles.searchIcon}
-          />
-          <TextInput
-            ref={inputRef}
-            value={search.query}
-            onChangeText={search.onSearchQueryChange}
-            placeholder="Search Bible, references, and journal"
-            placeholderTextColor={s.placeholder}
-            style={styles.input}
-            returnKeyType="search"
-            autoCapitalize="none"
-            autoCorrect={false}
-            selectionColor={s.tint}
-            onSubmitEditing={search.onSubmitSearch}
-          />
-          {showClear ? (
-            <TouchableOpacity
-              onPressIn={() => {
-                search.onClearQuery();
-                Keyboard.dismiss();
-              }}
-              activeOpacity={0.65}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={styles.clearButton}
-              accessibilityLabel="Clear search"
-              accessibilityRole="button"
-            >
-              <MaterialCommunityIcons name="close-circle" size={22} color={s.muted} />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={dismissSearch}
-              activeOpacity={0.65}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={styles.clearButton}
-              accessibilityLabel="Close search"
-              accessibilityRole="button"
-            >
-              <MaterialCommunityIcons name="close" size={22} color={s.muted} />
-            </TouchableOpacity>
-          )}
+          <Animated.View style={[styles.outgoingIcon, outgoingIconStyle]} pointerEvents="none">
+            <MaterialCommunityIcons
+              name="magnify"
+              size={28}
+              color={isAndroid ? s.muted : s.bodyText}
+            />
+          </Animated.View>
+          <Animated.View style={[styles.incomingPillContent, incomingPillContentStyle]}>
+            <MaterialCommunityIcons
+              name="magnify"
+              size={28}
+              color={isAndroid ? s.muted : s.bodyText}
+              style={styles.searchIcon}
+            />
+            <TextInput
+              ref={inputRef}
+              value={search.query}
+              onChangeText={search.onSearchQueryChange}
+              placeholder="Search Bible, references, and journal"
+              placeholderTextColor={s.placeholder}
+              style={styles.input}
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+              selectionColor={s.tint}
+              onSubmitEditing={search.onSubmitSearch}
+            />
+            {showClear ? (
+              <TouchableOpacity
+                onPressIn={() => {
+                  search.onClearQuery();
+                  Keyboard.dismiss();
+                }}
+                activeOpacity={0.65}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.clearButton}
+                accessibilityLabel="Clear search"
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons name="close-circle" size={22} color={s.muted} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={dismissSearch}
+                activeOpacity={0.65}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.clearButton}
+                accessibilityLabel="Close search"
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons name="close" size={22} color={s.muted} />
+              </TouchableOpacity>
+            )}
+          </Animated.View>
         </Animated.View>
       </View>
     </View>
