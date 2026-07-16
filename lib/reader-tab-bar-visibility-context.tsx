@@ -30,10 +30,10 @@ function isReaderChapterRoute(pathname: string | null): boolean {
 
 type ReaderTabBarSlideControllerValue = {
   tabBarSlideProgressSV: SharedValue<number>;
-  /** Hide: overlay only. Native `hidden` is deferred until slide-out completes. */
+  /** Hide: native + slide chrome move together from slide start. */
   onHideSlideBegin: () => void;
   onHideSlideComplete: () => void;
-  /** Show: overlay slides in; native `hidden` cleared only when slide completes. */
+  /** Show: native restores at slide start; FAB rises into the bar in sync. */
   onShowSlideBegin: () => void;
   onShowSlideComplete: () => void;
   updateScrollHiddenState: (hidden: boolean) => void;
@@ -43,7 +43,7 @@ type ReaderTabBarSlideControllerValue = {
 type ReaderTabBarVisibilityContextValue = {
   /** Layout / reader chrome — updates when scroll crosses threshold. */
   scrollHidden: boolean;
-  /** NativeTabs `hidden` — toggled only at rest, after slide animations settle. */
+  /** NativeTabs `hidden` — toggled in sync with slide animation start. */
   nativeTabBarHidden: boolean;
   /** 0–1 tint for the reader settings menu tab bar (Android, tab bar visible only). */
   settingsTabBarTint: number;
@@ -102,24 +102,24 @@ export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNo
   const onHideSlideBegin = useCallback(() => {
     if (Platform.OS !== "android") return;
     setSlideOverlayActive(true);
+    setNativeTabBarHidden(true);
     updateScrollHiddenState(true);
   }, [updateScrollHiddenState]);
 
   const onHideSlideComplete = useCallback(() => {
     if (Platform.OS !== "android") return;
-    setNativeTabBarHidden(true);
     setSlideOverlayActive(false);
   }, []);
 
   const onShowSlideBegin = useCallback(() => {
     if (Platform.OS !== "android") return;
     setSlideOverlayActive(true);
+    setNativeTabBarHidden(false);
     updateScrollHiddenState(false);
   }, [updateScrollHiddenState]);
 
   const onShowSlideComplete = useCallback(() => {
     if (Platform.OS !== "android") return;
-    setNativeTabBarHidden(false);
     setSlideOverlayActive(false);
   }, []);
 

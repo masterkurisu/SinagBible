@@ -11,9 +11,9 @@ export const TAB_BAR_BOTTOM_UNPIN_SCROLL_UP_PX = 96;
 /** Prevents rapid hide/show flapping near thresholds once the JS bridge throttle is gone. */
 export const TAB_BAR_SCROLL_HYSTERESIS_PX = 8;
 
-/** M3 emphasized motion — faster exit, slightly softer enter. */
-export const TAB_BAR_SLIDE_HIDE_MS = 150;
-export const TAB_BAR_SLIDE_SHOW_MS = 200;
+/** M3 emphasized container motion — exit slightly faster than enter. */
+export const TAB_BAR_SLIDE_HIDE_MS = 250;
+export const TAB_BAR_SLIDE_SHOW_MS = 300;
 
 export function evaluateTabBarScrollHidden(
   y: number,

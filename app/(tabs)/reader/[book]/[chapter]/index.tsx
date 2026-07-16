@@ -1286,10 +1286,13 @@ export default function ReaderChapterScreen() {
     flushReaderScrollSideEffects();
   }, [onReaderScrollBeginDrag, onChapterNavArrowsScrollBeginDrag, flushReaderScrollSideEffects]);
 
-  const onReaderScrollEndDragWithChapterNav = useCallback(() => {
-    onChapterNavArrowsScrollEndDrag();
-    flushReaderScrollSideEffects();
-  }, [onChapterNavArrowsScrollEndDrag, flushReaderScrollSideEffects]);
+  const onReaderScrollEndDragWithChapterNav = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      onChapterNavArrowsScrollEndDrag(event);
+      flushReaderScrollSideEffects();
+    },
+    [onChapterNavArrowsScrollEndDrag, flushReaderScrollSideEffects],
+  );
 
   const onReaderMomentumScrollEndWithChapterNav = useCallback(() => {
     onChapterNavArrowsMomentumScrollEnd();

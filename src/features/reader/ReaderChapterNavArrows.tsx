@@ -35,6 +35,8 @@ export const READER_CHAPTER_NAV_ARROW_FADE_MS = 300;
 const READER_CHAPTER_NAV_ARROW_SCROLL_MOTION_THRESHOLD_PX = 6;
 /** Hide arrows after this long without scroll or tap. */
 export const READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS = 1_500;
+/** Velocity (pt/s) above which a fling defers arrow reveal until momentum ends. */
+const READER_CHAPTER_NAV_ARROW_FLING_VELOCITY_PX_S = 50;
 
 type ChapterNavTarget = { slug: string; chapter: number };
 
@@ -245,11 +247,11 @@ export function useReaderChapterNavArrowsVisibility(
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE)).current;
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isScrollingRef = useRef(false);
+  const isUserScrollActiveRef = useRef(false);
   const arrowsShownRef = useRef(false);
   const forceVisibleRef = useRef(forceVisible);
   const lastScrollOffsetRef = useRef(0);
-  const scrollMotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chapterSwipeMotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   forceVisibleRef.current = forceVisible;
 
@@ -260,10 +262,10 @@ export function useReaderChapterNavArrowsVisibility(
     }
   }, []);
 
-  const clearScrollMotionTimer = useCallback(() => {
-    if (scrollMotionTimerRef.current != null) {
-      clearTimeout(scrollMotionTimerRef.current);
-      scrollMotionTimerRef.current = null;
+  const clearChapterSwipeMotionTimer = useCallback(() => {
+    if (chapterSwipeMotionTimerRef.current != null) {
+      clearTimeout(chapterSwipeMotionTimerRef.current);
+      chapterSwipeMotionTimerRef.current = null;
     }
   }, []);
 
@@ -293,7 +295,7 @@ export function useReaderChapterNavArrowsVisibility(
   const scheduleIdleHide = useCallback(() => {
     clearIdleTimer();
     idleTimerRef.current = setTimeout(() => {
-      if (!isScrollingRef.current && !forceVisibleRef.current) {
+      if (!isUserScrollActiveRef.current && !forceVisibleRef.current) {
         animateVisibility(false);
       }
     }, READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS);
@@ -314,12 +316,26 @@ export function useReaderChapterNavArrowsVisibility(
   }, [animateVisibility, enabled, scheduleIdleHide]);
 
   const onScrollBeginDrag = useCallback(() => {
-    isScrollingRef.current = true;
+    isUserScrollActiveRef.current = true;
     hideArrows();
   }, [hideArrows]);
 
-  const onScrollEnd = useCallback(() => {
-    isScrollingRef.current = false;
+  const onScrollEndDrag = useCallback(
+    (event?: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const vy = event?.nativeEvent.velocity?.y ?? 0;
+      const hasMomentum = Math.abs(vy) >= READER_CHAPTER_NAV_ARROW_FLING_VELOCITY_PX_S;
+      if (!hasMomentum) {
+        isUserScrollActiveRef.current = false;
+        if (enabled) {
+          showArrows();
+        }
+      }
+    },
+    [enabled, showArrows],
+  );
+
+  const onMomentumScrollEnd = useCallback(() => {
+    isUserScrollActiveRef.current = false;
     if (enabled) {
       showArrows();
     }
@@ -336,14 +352,8 @@ export function useReaderChapterNavArrowsVisibility(
       if (arrowsShownRef.current) {
         hideArrows();
       }
-      isScrollingRef.current = true;
-      clearScrollMotionTimer();
-      scrollMotionTimerRef.current = setTimeout(() => {
-        isScrollingRef.current = false;
-        showArrows();
-      }, 120);
     },
-    [clearScrollMotionTimer, enabled, hideArrows, showArrows],
+    [enabled, hideArrows],
   );
 
   const revealFromInteraction = useCallback(() => {
@@ -354,14 +364,14 @@ export function useReaderChapterNavArrowsVisibility(
   useEffect(() => {
     if (forceVisible) {
       clearIdleTimer();
-      clearScrollMotionTimer();
+      clearChapterSwipeMotionTimer();
       animateVisibility(true, 1);
       return;
     }
 
     clearIdleTimer();
-    clearScrollMotionTimer();
-    isScrollingRef.current = false;
+    clearChapterSwipeMotionTimer();
+    isUserScrollActiveRef.current = false;
     lastScrollOffsetRef.current = 0;
     if (enabled) {
       animateVisibility(true);
@@ -371,7 +381,7 @@ export function useReaderChapterNavArrowsVisibility(
     }
     return () => {
       clearIdleTimer();
-      clearScrollMotionTimer();
+      clearChapterSwipeMotionTimer();
     };
   }, [
     chapterRouteKey,
@@ -379,27 +389,27 @@ export function useReaderChapterNavArrowsVisibility(
     forceVisible,
     animateVisibility,
     clearIdleTimer,
-    clearScrollMotionTimer,
+    clearChapterSwipeMotionTimer,
     scheduleIdleHide,
   ]);
 
   const hideFromMotion = useCallback(() => {
-    isScrollingRef.current = true;
+    isUserScrollActiveRef.current = true;
     hideArrows();
-    clearScrollMotionTimer();
-    scrollMotionTimerRef.current = setTimeout(() => {
-      isScrollingRef.current = false;
+    clearChapterSwipeMotionTimer();
+    chapterSwipeMotionTimerRef.current = setTimeout(() => {
+      isUserScrollActiveRef.current = false;
       showArrows();
     }, 180);
-  }, [clearScrollMotionTimer, hideArrows, showArrows]);
+  }, [clearChapterSwipeMotionTimer, hideArrows, showArrows]);
 
   return {
     opacityAnim,
     scaleAnim,
     pointerEventsEnabled: enabled,
     onScrollBeginDrag,
-    onScrollEndDrag: onScrollEnd,
-    onMomentumScrollEnd: onScrollEnd,
+    onScrollEndDrag,
+    onMomentumScrollEnd,
     onScroll,
     revealFromInteraction,
     hideFromMotion,

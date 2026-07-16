@@ -128,7 +128,7 @@ export function useReaderTabBarScrollDriver({
         return;
       }
 
-      // Show: slide overlay in (1→0); native unhide deferred until animation settles.
+      // Show: slide overlay up (1→0); native bar is already visible underneath.
       tabBarSlideProgressSV.value = 1;
       runOnJS(onShowSlideBegin)();
       tabBarSlideProgressSV.value = withTiming(

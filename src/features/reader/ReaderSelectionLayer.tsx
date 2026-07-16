@@ -430,7 +430,7 @@ export type ReaderSelectionLayerProps = {
   readerVerseEstimatedItemSize: number;
   onScroll: import("react").ComponentProps<typeof ReaderVerseList>["onScroll"];
   onScrollBeginDrag: () => void;
-  onScrollEndDrag?: () => void;
+  onScrollEndDrag?: (event: import("react-native").NativeSyntheticEvent<import("react-native").NativeScrollEvent>) => void;
   onMomentumScrollEnd?: () => void;
   dismissReaderChromeFromBackgroundPress: () => void;
   verseFlashListDataForList: ReaderVerseFlashItem[];

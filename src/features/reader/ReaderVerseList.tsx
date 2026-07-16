@@ -1,5 +1,5 @@
 import { useCallback, useMemo, type ComponentProps, type ReactNode, type RefObject } from "react";
-import { Animated, Pressable, StyleSheet, type GestureResponderHandlers } from "react-native";
+import { Animated, Pressable, StyleSheet, type GestureResponderHandlers, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import type { FlashListRef, ListRenderItemInfo } from "@shopify/flash-list";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
 import {
@@ -169,7 +169,7 @@ type ReaderVerseListProps = {
   readerVerseEstimatedItemSize: number;
   onScroll: NonNullable<ComponentProps<typeof AnimatedReaderChapterFlashList>["onScroll"]>;
   onScrollBeginDrag: () => void;
-  onScrollEndDrag?: () => void;
+  onScrollEndDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   onMomentumScrollEnd?: () => void;
   dismissReaderChromeFromBackgroundPress: () => void;
   verseFlashListDataForList: ReaderVerseFlashItem[];
