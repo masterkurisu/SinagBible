@@ -277,6 +277,7 @@ const JournalListEntryCard = memo(function JournalListEntryCard({
       {
         backgroundColor: j.cardBackground,
         borderRadius: JOURNAL_TILE_RADIUS_PX,
+        overflow: "hidden",
         ...(favoriteLeftRadii ?? {}),
       },
     ];

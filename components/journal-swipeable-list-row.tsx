@@ -19,6 +19,8 @@ import {
   SWIPE_TRASH_STROKE,
 } from "@/components/journal-swipe-icons";
 import { hapticMediumImpact, hapticWarning } from "@/lib/haptics";
+import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
+import { JOURNAL_M3_ELEVATED_CARD_RADIUS_PX } from "@/src/features/journal/journalCardChrome";
 
 const MAX_DRAG = 110;
 const THRESHOLD = 56;
@@ -58,6 +60,8 @@ export const JournalSwipeableListRow = memo(function JournalSwipeableListRow({
   listScrollGesture,
   pressTargetRef,
 }: Props) {
+  const { bundle } = useMobileAppTheme();
+  const swipeLaneBackground = bundle.journal.listPageBackground;
   const translateX = useSharedValue(0);
   const dragStartX = useSharedValue(0);
   const touchStartX = useSharedValue(0);
@@ -200,12 +204,12 @@ export const JournalSwipeableListRow = memo(function JournalSwipeableListRow({
   return (
     <View style={[styles.shell, shellStyle]}>
       <View style={styles.underlay} pointerEvents="none">
-        <View style={styles.laneNeutral}>
+        <View style={[styles.laneNeutral, { backgroundColor: swipeLaneBackground }]}>
           <Animated.View style={[styles.iconPill, styles.iconPillDelete, deleteIconStyle]}>
             <JournalSwipeTrashIcon size={30} stroke={SWIPE_TRASH_INK} strokeWidth={1.75} />
           </Animated.View>
         </View>
-        <View style={[styles.laneNeutral, styles.laneRight]}>
+        <View style={[styles.laneNeutral, styles.laneRight, { backgroundColor: swipeLaneBackground }]}>
           <Animated.View style={[styles.iconPill, styles.iconPillFavorite, favoriteIconStyle]}>
             <JournalSwipeHeartIcon size={30} stroke={SWIPE_HEART_INK} strokeWidth={2} />
           </Animated.View>
@@ -233,7 +237,7 @@ export const JournalSwipeableListRow = memo(function JournalSwipeableListRow({
 
 const styles = StyleSheet.create({
   shell: {
-    borderRadius: 16,
+    borderRadius: JOURNAL_M3_ELEVATED_CARD_RADIUS_PX,
     overflow: "hidden",
     position: "relative",
   },
@@ -243,7 +247,6 @@ const styles = StyleSheet.create({
   },
   laneNeutral: {
     flex: 1,
-    backgroundColor: "#f2efe8",
     justifyContent: "center",
     paddingLeft: 16,
   },
