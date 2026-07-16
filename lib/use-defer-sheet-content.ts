@@ -11,26 +11,41 @@ import {
  * Call `notifySheetAnimatedIn` from the animation completion callback; a timeout
  * fallback ensures content still mounts if the callback is missed.
  */
+type DeferSheetContentMountOptions = {
+  /** Skip InteractionManager — mount on the next frame after the open animation. */
+  mountOnAnimationEnd?: boolean;
+};
+
 export function useDeferSheetContentMount(
   isOpen: boolean,
   openDurationMs: number = SHEET_OPEN_DURATION_MS,
+  options: DeferSheetContentMountOptions = {},
 ) {
+  const { mountOnAnimationEnd = false } = options;
   const [contentReady, setContentReady] = useState(!DEFER_SHEET_HEAVY_CONTENT);
   const openGenRef = useRef(0);
   const interactionTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(
     null,
   );
 
-  const scheduleMount = useCallback((gen: number) => {
-    interactionTaskRef.current?.cancel();
-    interactionTaskRef.current = InteractionManager.runAfterInteractions(() => {
-      if (openGenRef.current !== gen) return;
-      requestAnimationFrame(() => {
+  const scheduleMount = useCallback(
+    (gen: number) => {
+      interactionTaskRef.current?.cancel();
+      const markReady = () => {
         if (openGenRef.current !== gen) return;
         setContentReady(true);
+      };
+      if (mountOnAnimationEnd) {
+        requestAnimationFrame(markReady);
+        return;
+      }
+      interactionTaskRef.current = InteractionManager.runAfterInteractions(() => {
+        if (openGenRef.current !== gen) return;
+        requestAnimationFrame(markReady);
       });
-    });
-  }, []);
+    },
+    [mountOnAnimationEnd],
+  );
 
   const notifySheetAnimatedIn = useCallback(() => {
     if (!DEFER_SHEET_HEAVY_CONTENT) return;

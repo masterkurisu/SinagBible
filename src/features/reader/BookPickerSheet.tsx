@@ -4,7 +4,6 @@ import {
   BackHandler,
   Dimensions,
   Easing,
-  InteractionManager,
   Modal,
   Platform,
   Pressable,
@@ -16,7 +15,6 @@ import {
   unstable_batchedUpdates,
   useWindowDimensions,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { LinearGradient } from "expo-linear-gradient";
@@ -33,7 +31,6 @@ import { getTestament } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { MenuOptionsIcon } from "@/components/icons/MenuOptionsIcon";
-import { SheetContentSkeleton } from "@/components/sheet-content-skeleton";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import {
   BOOK_PICKER_GRID_COLUMNS,
@@ -42,7 +39,14 @@ import {
   SHEET_OPEN_USE_SPRING,
   SHEET_SCRIM_DURATION_MS,
 } from "@/lib/device-capability";
-import { useDeferSheetContentMount } from "@/lib/use-defer-sheet-content";
+import {
+  getInitialBookSelectorViewPrefs,
+  isBookSelectorViewPrefsCached,
+  loadBookSelectorViewPrefs,
+  persistBookSelectorViewPrefs,
+  type BookSelectorViewMode,
+  type SelectorTestamentTab,
+} from "@/lib/book-selector-view-prefs";
 import { getSelectChapterHeadingForLanguage } from "@/lib/reader-chapter-label";
 import { hapticLightImpact } from "@/lib/haptics";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
@@ -205,8 +209,7 @@ function BookPickerFilterButton({
   );
 }
 
-export type BookSelectorViewMode = "grid" | "az" | "testament";
-export type SelectorTestamentTab = "old" | "new";
+export type { BookSelectorViewMode, SelectorTestamentTab } from "@/lib/book-selector-view-prefs";
 
 /** iOS: render in separate UIWindow; Android: use a Modal so this sheet always layers above header controls. */
 export function ReaderBookSheetWindowOverlay({
@@ -239,16 +242,23 @@ export function ReaderBookSheetWindowOverlay({
   return children;
 }
 
-const BOOK_SELECTOR_VIEW_STORAGE_KEY = "sb:reader:bookSelectorView";
 const BOOK_LIST_SCROLL_TOP_INSET = 40;
 
 type BookPickerGridFlashItem =
   | { kind: "section"; key: string; label: string }
-  | { kind: "book"; key: string; book: BibleBookNavItem };
+  | { kind: "books"; key: string; books: BibleBookNavItem[] };
 
 type BookPickerRowFlashItem = { key: string; book: BibleBookNavItem };
 
-type ChapterPickerFlashItem = { key: string; chapterNumber: number };
+type ChapterPickerFlashItem = { key: string; chapters: number[] };
+
+function chunkPickerRowItems<T>(items: readonly T[], columns: number): T[][] {
+  const rows: T[][] = [];
+  for (let index = 0; index < items.length; index += columns) {
+    rows.push(items.slice(index, index + columns));
+  }
+  return rows;
+}
 
 export type BookPickerSheetProps = {
   isOpen: boolean;
@@ -298,14 +308,21 @@ export function BookPickerSheet({
 }: BookPickerSheetProps) {
   const { bundle } = useMobileAppTheme();
   const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
+  const initialBookSelectorPrefs = getInitialBookSelectorViewPrefs();
   const [step, setStep] = useState<"books" | "chapters">("books");
   const [pickerBook, setPickerBook] = useState<BibleBookNavItem | null>(null);
-  const [bookSelectorViewMode, setBookSelectorViewMode] = useState<BookSelectorViewMode>("testament");
-  const [selectorTestamentTab, setSelectorTestamentTab] = useState<SelectorTestamentTab>("new");
+  const [bookSelectorViewMode, setBookSelectorViewMode] = useState<BookSelectorViewMode>(
+    initialBookSelectorPrefs.mode,
+  );
+  const [selectorTestamentTab, setSelectorTestamentTab] = useState<SelectorTestamentTab>(
+    initialBookSelectorPrefs.testamentTab,
+  );
   const [bookViewMenuOpen, setBookViewMenuOpen] = useState(false);
   const [filterFeedbackNonce, setFilterFeedbackNonce] = useState(0);
   const [bookSheetDismissPanEnabled, setBookSheetDismissPanEnabled] = useState(true);
-  const [bookSelectorStorageReady, setBookSelectorStorageReady] = useState(false);
+  const [bookSelectorPrefsReady, setBookSelectorPrefsReady] = useState(
+    isBookSelectorViewPrefsCached,
+  );
 
   const bookSheetTranslateY = useRef(new Animated.Value(0)).current;
   const dropOpacityAnim = useRef(new Animated.Value(0)).current;
@@ -314,9 +331,14 @@ export function BookPickerSheet({
   const bookSheetPanRef = useRef<PanGestureHandler>(null);
   const bookSheetScrollNativeRef = useRef<NativeViewGestureHandler>(null);
   const bookGridFlashListRef = useRef<FlashListRef<BookPickerGridFlashItem>>(null);
-  const bookRowFlashListRef = useRef<FlashListRef<BookPickerRowFlashItem>>(null);
+  const bookAzFlashListRef = useRef<FlashListRef<BookPickerRowFlashItem>>(null);
+  const bookOldTestamentFlashListRef = useRef<FlashListRef<BookPickerRowFlashItem>>(null);
+  const bookNewTestamentFlashListRef = useRef<FlashListRef<BookPickerRowFlashItem>>(null);
   const chapterListFlashListRef = useRef<FlashListRef<ChapterPickerFlashItem>>(null);
   const bookViewFilterButtonRef = useRef<View>(null);
+  const sheetWasOpenRef = useRef(false);
+  const sheetOpenScrollPendingRef = useRef(false);
+  const scrollBookListToCurrentBookRef = useRef<() => void>(() => {});
 
   const { width: screenW, height: screenH } = useWindowDimensions();
   const isAndroidSheet = Platform.OS === "android";
@@ -325,8 +347,6 @@ export function BookPickerSheet({
   const m3SheetHeight = Math.max(280, screenH - M3_SHEET_TOP_GAP_PX);
   const sheetHorizontalPad = isAndroidSheet ? m3SheetPad : readerBookSheetPad;
   const sheetScreenEdgePad = isAndroidSheet ? 0 : readerBookSheetScreenEdgePad;
-
-  const { contentReady, notifySheetAnimatedIn } = useDeferSheetContentMount(isOpen);
 
   const bookPickerOnboarding = useBookPickerOnboarding({
     isOpen,
@@ -406,35 +426,50 @@ export function BookPickerSheet({
     for (const section of gridSectionsForPicker) {
       if (!section.items.length) continue;
       items.push({ kind: "section", key: `section-${section.id}`, label: section.label });
-      for (const book of section.items) {
-        items.push({ kind: "book", key: book.slug, book });
+      for (const [rowIndex, books] of chunkPickerRowItems(section.items, bookGridColumns).entries()) {
+        items.push({
+          kind: "books",
+          key: `books-${section.id}-${rowIndex}`,
+          books,
+        });
       }
     }
     return items;
-  }, [gridSectionsForPicker]);
+  }, [gridSectionsForPicker, bookGridColumns]);
 
-  const testamentBooksForPicker = useMemo(
-    () => (selectorTestamentTab === "old" ? oldTestamentBooks : newTestamentBooks),
-    [selectorTestamentTab, oldTestamentBooks, newTestamentBooks],
+  const bookAzListFlashData = useMemo(
+    (): BookPickerRowFlashItem[] =>
+      azSortedBooks.map((book) => ({ key: book.slug, book })),
+    [azSortedBooks],
   );
 
-  const bookListFlashData = useMemo((): BookPickerRowFlashItem[] => {
-    const source =
-      bookSelectorViewMode === "az"
-        ? azSortedBooks
-        : bookSelectorViewMode === "testament"
-          ? testamentBooksForPicker
-          : [];
-    return source.map((book) => ({ key: book.slug, book }));
-  }, [azSortedBooks, bookSelectorViewMode, testamentBooksForPicker]);
+  const bookOldTestamentListFlashData = useMemo(
+    (): BookPickerRowFlashItem[] =>
+      oldTestamentBooks.map((book) => ({ key: book.slug, book })),
+    [oldTestamentBooks],
+  );
+
+  const bookNewTestamentListFlashData = useMemo(
+    (): BookPickerRowFlashItem[] =>
+      newTestamentBooks.map((book) => ({ key: book.slug, book })),
+    [newTestamentBooks],
+  );
+
+  const isBookGridView = bookSelectorViewMode === "grid";
+  const isBookAzView = bookSelectorViewMode === "az";
+  const isBookOldTestamentView =
+    bookSelectorViewMode === "testament" && selectorTestamentTab === "old";
+  const isBookNewTestamentView =
+    bookSelectorViewMode === "testament" && selectorTestamentTab === "new";
 
   const chapterGridFlashData = useMemo((): ChapterPickerFlashItem[] => {
     if (!pickerBook) return [];
-    return Array.from({ length: pickerBook.chapterCount }, (_, index) => ({
-      key: String(index + 1),
-      chapterNumber: index + 1,
+    const chapterNumbers = Array.from({ length: pickerBook.chapterCount }, (_, index) => index + 1);
+    return chunkPickerRowItems(chapterNumbers, readerChapterCols).map((chapters, rowIndex) => ({
+      key: `chapters-${rowIndex}`,
+      chapters,
     }));
-  }, [pickerBook]);
+  }, [pickerBook, readerChapterCols]);
 
   const bookListFlashExtraData = useMemo(
     () => ({
@@ -457,9 +492,20 @@ export function BookPickerSheet({
     (bookSheetInnerW - readerBookGridGap * (readerChapterCols - 1)) / readerChapterCols,
   );
 
+  const bookPickerListLayerStyle = useCallback(
+    (visible: boolean) => [
+      StyleSheet.absoluteFill,
+      {
+        paddingHorizontal: sheetHorizontalPad,
+        opacity: visible ? 1 : 0,
+        zIndex: visible ? 1 : 0,
+      },
+    ],
+    [sheetHorizontalPad],
+  );
+
   const sheetTitleColor = isAndroidSheet ? sheetChrome.onSurface : colors.brown800;
   const sheetMutedColor = isAndroidSheet ? sheetChrome.onSurfaceVariant : colors.gold;
-  const skeletonBoneColor = isAndroidSheet ? sheetChrome.surfaceContainer : `${colors.borderSolid}99`;
 
   const openBookChapters = useCallback((book: BibleBookNavItem) => {
     hapticLightImpact();
@@ -467,37 +513,15 @@ export function BookPickerSheet({
     setStep("chapters");
   }, []);
 
-  const renderBookGridItem = useCallback(
-    ({ item }: { item: BookPickerGridFlashItem }) => {
-      if (item.kind === "section") {
-        return (
-          <View style={{ width: "100%", marginBottom: 8, marginTop: item.key.endsWith("-nt") ? 10 : 0 }}>
-            <Text
-              style={{
-                fontFamily: "Inter_400Regular",
-                fontSize: isAndroidSheet ? 12 : 10,
-                letterSpacing: isAndroidSheet ? 0.5 : 2.2,
-                color: sheetMutedColor,
-                paddingHorizontal: isAndroidSheet ? 0 : 4,
-              }}
-            >
-              {item.label}
-            </Text>
-          </View>
-        );
-      }
-
-      const b = item.book;
-      const isCurrentBook = b.slug === chapter.bookSlug;
+  const renderBookGridCell = useCallback(
+    (book: BibleBookNavItem) => {
+      const isCurrentBook = book.slug === chapter.bookSlug;
       return (
         <TouchableOpacity
-          onPress={() => openBookChapters(b)}
-          style={{
-            width: readerBookGridCellWResolved,
-            marginBottom: readerBookGridGap,
-          }}
+          onPress={() => openBookChapters(book)}
+          style={{ width: readerBookGridCellWResolved }}
           activeOpacity={0.75}
-          accessibilityLabel={`Choose chapter for ${b.name}`}
+          accessibilityLabel={`Choose chapter for ${book.name}`}
         >
           <View
             style={{
@@ -526,7 +550,7 @@ export function BookPickerSheet({
                     textAlign: "center",
                   }}
                 >
-                  {b.name}
+                  {book.name}
                 </Text>
               </LinearGradient>
             ) : (
@@ -553,7 +577,7 @@ export function BookPickerSheet({
                     textAlign: "center",
                   }}
                 >
-                  {b.name}
+                  {book.name}
                 </Text>
               </View>
             )}
@@ -571,11 +595,48 @@ export function BookPickerSheet({
       rc.selectionText,
       rc.translationSelectedGradient,
       readerBookGridCellWResolved,
-      readerBookGridGap,
       sheetChrome.onSurface,
       sheetChrome.surfaceContainer,
-      sheetMutedColor,
     ],
+  );
+
+  const renderBookGridRow = useCallback(
+    ({ item }: { item: BookPickerGridFlashItem }) => {
+      if (item.kind === "section") {
+        return (
+          <View style={{ marginBottom: 8, marginTop: item.key.endsWith("-nt") ? 10 : 0 }}>
+            <Text
+              style={{
+                fontFamily: "Inter_400Regular",
+                fontSize: isAndroidSheet ? 12 : 10,
+                letterSpacing: isAndroidSheet ? 0.5 : 2.2,
+                color: sheetMutedColor,
+                paddingHorizontal: isAndroidSheet ? 0 : 4,
+              }}
+            >
+              {item.label}
+            </Text>
+          </View>
+        );
+      }
+
+      if (item.kind !== "books" || item.books.length === 0) return null;
+
+      return (
+        <View
+          style={{
+            flexDirection: "row",
+            gap: readerBookGridGap,
+            marginBottom: readerBookGridGap,
+          }}
+        >
+          {item.books.map((book) => (
+            <View key={book.slug}>{renderBookGridCell(book)}</View>
+          ))}
+        </View>
+      );
+    },
+    [isAndroidSheet, readerBookGridGap, renderBookGridCell, sheetMutedColor],
   );
 
   const renderBookAzRow = useCallback(
@@ -849,51 +910,62 @@ export function BookPickerSheet({
     ],
   );
 
-  const renderChapterGridItem = useCallback(
+  const renderChapterGridRow = useCallback(
     ({ item }: { item: ChapterPickerFlashItem }) => {
       if (!pickerBook) return null;
-      const chNum = item.chapterNumber;
-      const isCurrent = pickerBook.slug === chapter.bookSlug && chNum === chapter.chapterNumber;
       return (
-        <TouchableOpacity
-          onPress={() => {
-            hapticLightImpact();
-            onClose();
-            goToReaderChapter(pickerBook.slug, chNum, resolvedTranslationId);
-          }}
+        <View
           style={{
-            width: readerChapterGridCellWResolved,
+            flexDirection: "row",
+            gap: readerBookGridGap,
             marginBottom: readerBookGridGap,
-            borderRadius: 12,
-            paddingVertical: isAndroidSheet ? 12 : 10,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: isAndroidSheet
-              ? isCurrent
-                ? `${colors.gold}33`
-                : sheetChrome.surfaceContainer
-              : colors.parchment,
-            borderWidth: isAndroidSheet ? 0 : 1,
-            borderColor: isCurrent ? colors.brown800 : colors.borderSolid,
-            minHeight: isAndroidSheet ? 48 : undefined,
           }}
-          activeOpacity={0.75}
-          accessibilityLabel={`Open ${pickerBook.name} chapter ${chNum}`}
         >
-          <Text
-            style={{
-              fontFamily: "Inter_500Medium",
-              fontSize: isAndroidSheet ? 16 : 14,
-              color: isCurrent
-                ? colors.gold
-                : isAndroidSheet
-                  ? sheetChrome.onSurface
-                  : colors.brown800,
-            }}
-          >
-            {chNum}
-          </Text>
-        </TouchableOpacity>
+          {item.chapters.map((chNum) => {
+            const isCurrent = pickerBook.slug === chapter.bookSlug && chNum === chapter.chapterNumber;
+            return (
+              <TouchableOpacity
+                key={chNum}
+                onPress={() => {
+                  hapticLightImpact();
+                  onClose();
+                  goToReaderChapter(pickerBook.slug, chNum, resolvedTranslationId);
+                }}
+                style={{
+                  width: readerChapterGridCellWResolved,
+                  borderRadius: 12,
+                  paddingVertical: isAndroidSheet ? 12 : 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isAndroidSheet
+                    ? isCurrent
+                      ? `${colors.gold}33`
+                      : sheetChrome.surfaceContainer
+                    : colors.parchment,
+                  borderWidth: isAndroidSheet ? 0 : 1,
+                  borderColor: isCurrent ? colors.brown800 : colors.borderSolid,
+                  minHeight: isAndroidSheet ? 48 : undefined,
+                }}
+                activeOpacity={0.75}
+                accessibilityLabel={`Open ${pickerBook.name} chapter ${chNum}`}
+              >
+                <Text
+                  style={{
+                    fontFamily: "Inter_500Medium",
+                    fontSize: isAndroidSheet ? 16 : 14,
+                    color: isCurrent
+                      ? colors.gold
+                      : isAndroidSheet
+                        ? sheetChrome.onSurface
+                        : colors.brown800,
+                  }}
+                >
+                  {chNum}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       );
     },
     [
@@ -915,15 +987,6 @@ export function BookPickerSheet({
     ],
   );
 
-  const overrideBookGridItemLayout = useCallback(
-    (layout: { span?: number }, item: BookPickerGridFlashItem) => {
-      if (item.kind === "section") {
-        layout.span = BOOK_PICKER_GRID_COLUMNS;
-      }
-    },
-    [],
-  );
-
   const bookGridKeyExtractor = useCallback((item: BookPickerGridFlashItem) => item.key, []);
   const bookRowKeyExtractor = useCallback((item: BookPickerRowFlashItem) => item.key, []);
   const chapterGridKeyExtractor = useCallback((item: ChapterPickerFlashItem) => item.key, []);
@@ -932,55 +995,52 @@ export function BookPickerSheet({
   const findCurrentBookFlashIndex = useCallback((): number => {
     if (bookSelectorViewMode === "grid") {
       return bookGridFlashData.findIndex(
-        (item) => item.kind === "book" && item.book.slug === chapter.bookSlug,
+        (item) => item.kind === "books" && item.books.some((book) => book.slug === chapter.bookSlug),
       );
     }
-    return bookListFlashData.findIndex((item) => item.book.slug === chapter.bookSlug);
-  }, [bookGridFlashData, bookListFlashData, bookSelectorViewMode, chapter.bookSlug]);
+    if (bookSelectorViewMode === "az") {
+      return bookAzListFlashData.findIndex((item) => item.book.slug === chapter.bookSlug);
+    }
+    const testamentData =
+      selectorTestamentTab === "old"
+        ? bookOldTestamentListFlashData
+        : bookNewTestamentListFlashData;
+    return testamentData.findIndex((item) => item.book.slug === chapter.bookSlug);
+  }, [
+    bookAzListFlashData,
+    bookGridFlashData,
+    bookNewTestamentListFlashData,
+    bookOldTestamentListFlashData,
+    bookSelectorViewMode,
+    chapter.bookSlug,
+    selectorTestamentTab,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(BOOK_SELECTOR_VIEW_STORAGE_KEY);
-        if (cancelled) return;
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw) as {
-              mode?: BookSelectorViewMode;
-              testamentTab?: SelectorTestamentTab;
-            };
-            unstable_batchedUpdates(() => {
-              if (parsed.mode === "grid" || parsed.mode === "az" || parsed.mode === "testament") {
-                setBookSelectorViewMode(parsed.mode);
-              }
-              if (parsed.testamentTab === "old" || parsed.testamentTab === "new") {
-                setSelectorTestamentTab(parsed.testamentTab);
-              }
-              setBookSelectorStorageReady(true);
-            });
-            return;
-          } catch {
-            // ignore corrupt storage
-          }
-        }
-        if (!cancelled) setBookSelectorStorageReady(true);
-      } catch {
-        if (!cancelled) setBookSelectorStorageReady(true);
-      }
-    })();
+    void loadBookSelectorViewPrefs().then((prefs) => {
+      if (cancelled) return;
+      unstable_batchedUpdates(() => {
+        setBookSelectorViewMode(prefs.mode);
+        setSelectorTestamentTab(prefs.testamentTab);
+        setBookSelectorPrefsReady(true);
+      });
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
   useEffect(() => {
-    if (!bookSelectorStorageReady) return;
-    void AsyncStorage.setItem(
-      BOOK_SELECTOR_VIEW_STORAGE_KEY,
-      JSON.stringify({ mode: bookSelectorViewMode, testamentTab: selectorTestamentTab }),
-    ).catch(() => {});
-  }, [bookSelectorStorageReady, bookSelectorViewMode, selectorTestamentTab]);
+    if (!bookSelectorPrefsReady) return;
+    const timeout = setTimeout(() => {
+      persistBookSelectorViewPrefs({
+        mode: bookSelectorViewMode,
+        testamentTab: selectorTestamentTab,
+      });
+    }, 0);
+    return () => clearTimeout(timeout);
+  }, [bookSelectorPrefsReady, bookSelectorViewMode, selectorTestamentTab]);
 
   const resetPickerState = useCallback(() => {
     setStep("books");
@@ -993,7 +1053,11 @@ export function BookPickerSheet({
     const list =
       bookSelectorViewMode === "grid"
         ? bookGridFlashListRef.current
-        : bookRowFlashListRef.current;
+        : bookSelectorViewMode === "az"
+          ? bookAzFlashListRef.current
+          : selectorTestamentTab === "old"
+            ? bookOldTestamentFlashListRef.current
+            : bookNewTestamentFlashListRef.current;
     const index = findCurrentBookFlashIndex();
     if (!list || index < 0) return;
     try {
@@ -1015,17 +1079,30 @@ export function BookPickerSheet({
         }
       });
     }
-  }, [bookSelectorViewMode, findCurrentBookFlashIndex]);
+  }, [bookSelectorViewMode, findCurrentBookFlashIndex, selectorTestamentTab]);
+
+  scrollBookListToCurrentBookRef.current = scrollBookListToCurrentBook;
 
   useEffect(() => {
     if (!isOpen) {
-      resetPickerState();
+      if (sheetWasOpenRef.current) {
+        resetPickerState();
+      }
+      sheetWasOpenRef.current = false;
       bookSheetClosingRef.current = false;
       bookSheetTranslateY.stopAnimation();
       bookSheetTranslateY.setValue(0);
       dropOpacityAnim.setValue(0);
       return;
     }
+
+    const isSheetOpening = !sheetWasOpenRef.current;
+    sheetWasOpenRef.current = true;
+    if (!isSheetOpening) {
+      return;
+    }
+
+    sheetOpenScrollPendingRef.current = true;
     resetPickerState();
     if (books.some((b) => b.slug === chapter.bookSlug) && bookSelectorViewMode === "testament") {
       setSelectorTestamentTab(getTestament(chapter.bookSlug));
@@ -1046,9 +1123,7 @@ export function BookPickerSheet({
         duration: SHEET_OPEN_DURATION_MS,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) notifySheetAnimatedIn();
-      });
+      }).start();
       return;
     }
     dropOpacityAnim.setValue(1);
@@ -1059,9 +1134,7 @@ export function BookPickerSheet({
         friction: 9,
         tension: 68,
         useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) notifySheetAnimatedIn();
-      });
+      }).start();
       return;
     }
     Animated.timing(bookSheetTranslateY, {
@@ -1069,9 +1142,7 @@ export function BookPickerSheet({
       duration: SHEET_OPEN_DURATION_MS,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) notifySheetAnimatedIn();
-    });
+    }).start();
   }, [
     isOpen,
     bookSheetTranslateY,
@@ -1080,29 +1151,18 @@ export function BookPickerSheet({
     resetPickerState,
     books,
     chapter.bookSlug,
-    bookSelectorViewMode,
-    notifySheetAnimatedIn,
   ]);
 
   useEffect(() => {
-    if (!isOpen || step !== "books" || !contentReady) return;
+    if (!isOpen || step !== "books" || !sheetOpenScrollPendingRef.current) return;
+    sheetOpenScrollPendingRef.current = false;
 
-    const task = InteractionManager.runAfterInteractions(() => {
-      requestAnimationFrame(() => {
-        scrollBookListToCurrentBook();
-      });
-    });
+    const timeout = setTimeout(() => {
+      scrollBookListToCurrentBookRef.current();
+    }, 120);
 
-    return () => task.cancel();
-  }, [
-    isOpen,
-    step,
-    contentReady,
-    bookSelectorViewMode,
-    selectorTestamentTab,
-    chapter.bookSlug,
-    scrollBookListToCurrentBook,
-  ]);
+    return () => clearTimeout(timeout);
+  }, [isOpen, step]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1226,21 +1286,30 @@ export function BookPickerSheet({
   >
     <View
       style={isAndroidSheet ? { flex: 1 } : [StyleSheet.absoluteFill, { zIndex: 9999, elevation: 32 }]}
-      pointerEvents="box-none"
-      accessibilityViewIsModal
+      pointerEvents={isOpen ? "box-none" : "none"}
+      accessibilityViewIsModal={isOpen}
     >
       {isAndroidSheet ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim, opacity: dropOpacityAnim }]}
+        <>
+          <Animated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim, opacity: dropOpacityAnim }]}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss book picker"
+            onPress={() => animateClose(0, 0)}
+            style={StyleSheet.absoluteFill}
+          />
+        </>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss book picker"
+          onPress={() => animateClose(0, 0)}
+          style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim }]}
         />
-      ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss book picker"
-        onPress={() => animateClose(0, 0)}
-        style={[StyleSheet.absoluteFill, isAndroidSheet ? undefined : { backgroundColor: rc.menuScrim }]}
-      />
+      )}
       <View
         pointerEvents="box-none"
         style={isAndroidSheet ? { flex: 1, justifyContent: "flex-end" } : StyleSheet.absoluteFill}
@@ -1362,56 +1431,85 @@ export function BookPickerSheet({
             ref={bookSheetScrollNativeRef}
             simultaneousHandlers={bookSheetPanRef}
           >
-            {contentReady ? (
-              bookSelectorViewMode === "grid" ? (
+            <View style={{ flex: 1, position: "relative" }}>
+              <View
+                style={bookPickerListLayerStyle(isBookGridView)}
+                pointerEvents={isBookGridView ? "auto" : "none"}
+              >
                 <FlashList
                   ref={bookGridFlashListRef}
                   data={bookGridFlashData}
-                  numColumns={BOOK_PICKER_GRID_COLUMNS}
-                  renderItem={renderBookGridItem}
+                  renderItem={renderBookGridRow}
                   keyExtractor={bookGridKeyExtractor}
                   getItemType={bookGridItemType}
-                  overrideItemLayout={overrideBookGridItemLayout}
                   extraData={bookListFlashExtraData}
-                  {...({ estimatedItemSize: isAndroidSheet ? 52 : 44 } as Record<string, unknown>)}
-                  style={{ flex: 1, paddingHorizontal: sheetHorizontalPad }}
+                  style={{ flex: 1 }}
                   contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled={Platform.OS === "android"}
                   onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
                   {...pickerFlashListPerfProps}
-                />
-              ) : (
-                <FlashList
-                  ref={bookRowFlashListRef}
-                  key={`${bookSelectorViewMode}-${selectorTestamentTab}`}
-                  data={bookListFlashData}
-                  numColumns={1}
-                  renderItem={
-                    bookSelectorViewMode === "az" ? renderBookAzRow : renderBookTestamentRow
-                  }
-                  keyExtractor={bookRowKeyExtractor}
-                  extraData={bookListFlashExtraData}
-                  {...({ estimatedItemSize: isAndroidSheet ? 56 : 48 } as Record<string, unknown>)}
-                  style={{ flex: 1, paddingHorizontal: sheetHorizontalPad }}
-                  contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled={Platform.OS === "android"}
-                  onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
-                  {...pickerFlashListPerfProps}
-                />
-              )
-            ) : (
-              <View style={{ flex: 1, paddingHorizontal: sheetHorizontalPad }}>
-                <SheetContentSkeleton
-                  boneColor={skeletonBoneColor}
-                  rowHeight={isAndroidSheet ? 56 : 44}
-                  rows={10}
                 />
               </View>
-            )}
+              <View
+                style={bookPickerListLayerStyle(isBookAzView)}
+                pointerEvents={isBookAzView ? "auto" : "none"}
+              >
+                <FlashList
+                  ref={bookAzFlashListRef}
+                  data={bookAzListFlashData}
+                  renderItem={renderBookAzRow}
+                  keyExtractor={bookRowKeyExtractor}
+                  extraData={bookListFlashExtraData}
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled={Platform.OS === "android"}
+                  onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
+                  {...pickerFlashListPerfProps}
+                />
+              </View>
+              <View
+                style={bookPickerListLayerStyle(isBookOldTestamentView)}
+                pointerEvents={isBookOldTestamentView ? "auto" : "none"}
+              >
+                <FlashList
+                  ref={bookOldTestamentFlashListRef}
+                  data={bookOldTestamentListFlashData}
+                  renderItem={renderBookTestamentRow}
+                  keyExtractor={bookRowKeyExtractor}
+                  extraData={bookListFlashExtraData}
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled={Platform.OS === "android"}
+                  onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
+                  {...pickerFlashListPerfProps}
+                />
+              </View>
+              <View
+                style={bookPickerListLayerStyle(isBookNewTestamentView)}
+                pointerEvents={isBookNewTestamentView ? "auto" : "none"}
+              >
+                <FlashList
+                  ref={bookNewTestamentFlashListRef}
+                  data={bookNewTestamentListFlashData}
+                  renderItem={renderBookTestamentRow}
+                  keyExtractor={bookRowKeyExtractor}
+                  extraData={bookListFlashExtraData}
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled={Platform.OS === "android"}
+                  onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
+                  {...pickerFlashListPerfProps}
+                />
+              </View>
+            </View>
           </NativeViewGestureHandler>
         </>
       ) : pickerBook ? (
@@ -1465,32 +1563,20 @@ export function BookPickerSheet({
             ref={bookSheetScrollNativeRef}
             simultaneousHandlers={bookSheetPanRef}
           >
-            {contentReady ? (
-              <FlashList
-                ref={chapterListFlashListRef}
-                data={chapterGridFlashData}
-                numColumns={readerChapterCols}
-                renderItem={renderChapterGridItem}
-                keyExtractor={chapterGridKeyExtractor}
-                extraData={chapterListFlashExtraData}
-                {...({ estimatedItemSize: isAndroidSheet ? 52 : 44 } as Record<string, unknown>)}
-                style={{ flex: 1 }}
-                contentContainerStyle={{ paddingBottom: 20 }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled={Platform.OS === "android"}
-                onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
-                {...pickerFlashListPerfProps}
-              />
-            ) : (
-              <SheetContentSkeleton
-                variant="grid"
-                boneColor={skeletonBoneColor}
-                columns={readerChapterCols}
-                cellSize={readerChapterGridCellWResolved}
-                gap={readerBookGridGap}
-              />
-            )}
+            <FlashList
+              ref={chapterListFlashListRef}
+              data={chapterGridFlashData}
+              renderItem={renderChapterGridRow}
+              keyExtractor={chapterGridKeyExtractor}
+              extraData={chapterListFlashExtraData}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled={Platform.OS === "android"}
+              onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
+              {...pickerFlashListPerfProps}
+            />
           </NativeViewGestureHandler>
         </View>
       ) : null}

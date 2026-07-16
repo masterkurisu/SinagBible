@@ -5,7 +5,8 @@ import {
 
 /** Shared FlashList perf props for book/translation picker sheets. */
 export const pickerFlashListPerfProps = {
-  drawDistance: PICKER_FLASH_LIST_DRAW_DISTANCE_PX,
+  drawDistance: Math.max(PICKER_FLASH_LIST_DRAW_DISTANCE_PX * 2, 800),
   scrollEventThrottle: PICKER_SCROLL_EVENT_THROTTLE,
-  removeClippedSubviews: true,
+  // Clipping causes visible blank bands while fast-scrolling picker sheets.
+  removeClippedSubviews: false,
 };

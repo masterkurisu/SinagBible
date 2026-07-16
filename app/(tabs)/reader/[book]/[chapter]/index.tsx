@@ -122,6 +122,7 @@ import {
   ReaderMobileSettingsPanel,
   type ReaderToolsDropdown,
 } from "@/src/features/reader/ReaderModals";
+import "@/lib/book-selector-view-prefs";
 import { ReaderFeatureOnboardingLayer } from "@/src/features/reader/ReaderFeatureOnboardingLayer";
 import { useReaderFeatureOnboarding, type ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import { TranslationPickerSheet } from "@/src/features/reader/TranslationPickerSheet";
