@@ -30,11 +30,11 @@ export const READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE = 1;
 /** Scale while fading out. */
 export const READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE = 0.88;
 /** Fade in/out duration when showing or hiding arrows. */
-export const READER_CHAPTER_NAV_ARROW_FADE_MS = 400;
+export const READER_CHAPTER_NAV_ARROW_FADE_MS = 300;
 /** Ignore sub-pixel / layout-settling scroll noise so arrows don't blink at chapter end. */
-const READER_CHAPTER_NAV_ARROW_SCROLL_MOTION_THRESHOLD_PX = 4;
+const READER_CHAPTER_NAV_ARROW_SCROLL_MOTION_THRESHOLD_PX = 6;
 /** Hide arrows after this long without scroll or tap. */
-export const READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS = 2_500;
+export const READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS = 1_500;
 
 type ChapterNavTarget = { slug: string; chapter: number };
 
@@ -73,6 +73,15 @@ function chapterNavArrowScreenInsets(
   };
 }
 
+/** Pin arrows to screen vertical center so tab-bar show/hide does not shift them. */
+function chapterNavArrowScreenTopPx(
+  windowHeight: number,
+  overlayWindowY: number,
+  circlePx: number,
+) {
+  return windowHeight / 2 - overlayWindowY - circlePx / 2;
+}
+
 export function ReaderChapterNavArrows({
   opacityAnim,
   scaleAnim,
@@ -86,9 +95,9 @@ export function ReaderChapterNavArrows({
   prevArrowRef,
   nextArrowRef,
 }: ReaderChapterNavArrowsProps) {
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const overlayRef = useRef<View>(null);
-  const [overlayFrame, setOverlayFrame] = useState({ x: 0, width: 0 });
+  const [overlayFrame, setOverlayFrame] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const circleBg = chapterNavArrowCircleBackground(rc);
   const hitSlop = READER_CHAPTER_NAV_ARROW_HIT_SLOP_PX;
   const leftInset = READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX;
@@ -100,16 +109,16 @@ export function ReaderChapterNavArrows({
   };
 
   const measureOverlayInWindow = useCallback(() => {
-    overlayRef.current?.measureInWindow((x, _y, width) => {
-      if (width > 0) {
-        setOverlayFrame({ x, width });
+    overlayRef.current?.measureInWindow((x, y, width, height) => {
+      if (width > 0 && height > 0) {
+        setOverlayFrame({ x, y, width, height });
       }
     });
   }, []);
 
   useEffect(() => {
     measureOverlayInWindow();
-  }, [measureOverlayInWindow, windowWidth, prevChapter, nextChapter]);
+  }, [measureOverlayInWindow, windowWidth, windowHeight, prevChapter, nextChapter]);
 
   const screenInsets =
     windowWidth > 0 && overlayFrame.width > 0
@@ -121,6 +130,16 @@ export function ReaderChapterNavArrows({
           rightInset,
         )
       : { left: leftInset, right: rightInset };
+
+  const arrowTopPx =
+    windowHeight > 0 && overlayFrame.height > 0
+      ? chapterNavArrowScreenTopPx(windowHeight, overlayFrame.y, circlePx)
+      : null;
+
+  const arrowVerticalStyle =
+    arrowTopPx != null
+      ? { top: arrowTopPx }
+      : { top: "50%" as const, marginTop: -circlePx / 2 };
 
   const renderArrow = (
     direction: "prev" | "next",
@@ -176,7 +195,7 @@ export function ReaderChapterNavArrows({
       {prevChapter ? (
         <Animated.View
           pointerEvents="box-none"
-          style={[styles.sideSlot, { left: screenInsets.left, marginTop: -circlePx / 2 }, arrowMotionStyle]}
+          style={[styles.sideSlot, { left: screenInsets.left }, arrowVerticalStyle, arrowMotionStyle]}
         >
           {renderArrow("prev", onPrev, "Previous chapter", prevArrowRef)}
         </Animated.View>
@@ -184,7 +203,7 @@ export function ReaderChapterNavArrows({
       {nextChapter ? (
         <Animated.View
           pointerEvents="box-none"
-          style={[styles.sideSlot, { right: screenInsets.right, marginTop: -circlePx / 2 }, arrowMotionStyle]}
+          style={[styles.sideSlot, { right: screenInsets.right }, arrowVerticalStyle, arrowMotionStyle]}
         >
           {renderArrow("next", onNext, "Next chapter", nextArrowRef)}
         </Animated.View>
@@ -200,7 +219,6 @@ const styles = StyleSheet.create({
   },
   sideSlot: {
     position: "absolute",
-    top: "50%",
   },
   nextChevronIcon: {
     transform: [{ translateX: 8 }],
