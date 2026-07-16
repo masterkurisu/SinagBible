@@ -29,7 +29,10 @@ import Svg, { Circle, Path } from "react-native-svg";
 import {
   peekPendingJournalDetailEntryFor,
   setPendingJournalEditEntry,
+  clearPendingJournalDetailEntry,
 } from "@/lib/journal-edit-bridge";
+import { requestJournalDetailReverseMorph } from "@/lib/journal-detail-morph-bridge";
+import { READER_INTERNAL_NO_STACK_ANIMATION } from "@/lib/reader-hub-navigation";
 import { resolveJournalEntryRouteId } from "@/lib/journal-route-id";
 import { loadJournalEntryById } from "@/lib/load-journal-entries";
 import type { MobileJournalListItem } from "@/lib/load-journal-entries";
@@ -398,7 +401,11 @@ export default function JournalEntryScreen() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
-  const { id: idParam } = useLocalSearchParams<{ id?: string | string[] }>();
+  const { id: idParam, [READER_INTERNAL_NO_STACK_ANIMATION]: noStackAnimationParam } =
+    useLocalSearchParams<{
+      id?: string | string[];
+      [READER_INTERNAL_NO_STACK_ANIMATION]?: string | string[];
+    }>();
   const id = resolveJournalEntryRouteId(idParam, pathname);
   const { bundle } = useMobileAppTheme();
   const colors = bundle.ui;
@@ -409,6 +416,14 @@ export default function JournalEntryScreen() {
   const journalAndroidTopToolsTopPx = Math.max(insets.top, 8) + 2;
   const journalAndroidAppBarBottomPx =
     journalAndroidTopToolsTopPx + READER_M3_APP_BAR_CONTENT_HEIGHT_PX;
+
+  const bridgedEntryOnMount = useRef(
+    id ? peekPendingJournalDetailEntryFor(id) : null,
+  );
+  const noStackAnimation =
+    noStackAnimationParam === "1" ||
+    (Array.isArray(noStackAnimationParam) && noStackAnimationParam[0] === "1");
+  const enteredWithoutStackAnimation = noStackAnimation || bridgedEntryOnMount.current != null;
 
   const scrollRef = useRef<ScrollView>(null);
   const shareCaptureRef = useRef<View>(null);
@@ -461,6 +476,9 @@ export default function JournalEntryScreen() {
       const bridged = peekPendingJournalDetailEntryFor(id);
       if (bridged) {
         setEntry(bridged);
+        requestAnimationFrame(() => {
+          clearPendingJournalDetailEntry();
+        });
         return () => {
           cancelled = true;
         };
@@ -774,8 +792,11 @@ export default function JournalEntryScreen() {
 
   const handleBack = useCallback(() => {
     hapticLightImpact();
+    if (id) {
+      requestJournalDetailReverseMorph(id);
+    }
     router.back();
-  }, [router]);
+  }, [id, router]);
 
   const journalExportActions =
     entry && !loadError ? (
@@ -902,6 +923,7 @@ export default function JournalEntryScreen() {
       <Stack.Screen
         options={{
           title: "",
+          animation: enteredWithoutStackAnimation ? "none" : undefined,
           headerShown: Platform.OS !== "android",
           headerShadowVisible: false,
           headerBackVisible: false,
@@ -952,7 +974,7 @@ export default function JournalEntryScreen() {
               This entry link is invalid. Go back and try again.
             </Text>
           </View>
-        ) : !entry && !loadError ? (
+        ) : !entry && !loadError && !enteredWithoutStackAnimation ? (
           <View className="flex-1 items-center justify-center gap-2">
             <ActivityIndicator color={colors.brown800} />
             <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: colors.tan200 }}>

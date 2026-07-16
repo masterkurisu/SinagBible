@@ -76,6 +76,10 @@ export type ContainerTransformOpenOptions = {
   backgroundRef?: RefObject<View | null>;
   sourceBorderRadius?: number;
   onClose?: () => void;
+  /** Fired when enter progress reaches 1 (morph settled). */
+  onSettled?: () => void;
+  /** Skip enter animation — overlay starts expanded at progress 1 (reverse-morph handoff). */
+  startExpanded?: boolean;
 };
 
 export type ContainerTransformSession = {
@@ -97,7 +101,9 @@ type ContainerTransformContextValue = {
   scrimOpacity: SharedValue<number>;
   backgroundDim: SharedValue<number>;
   openFrom: (sourceRef: RefObject<View | null>, options: ContainerTransformOpenOptions) => void;
+  openExpanded: (options: Pick<ContainerTransformOpenOptions, "renderExpanded" | "onClose">) => void;
   close: () => void;
+  dismissInstantly: () => void;
   abortToFadeOut: () => void;
 };
 
@@ -205,6 +211,16 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
     onClose?.();
   }, []);
 
+  const dismissInstantly = useCallback(() => {
+    cancelAnimation(progress);
+    cancelAnimation(scrimOpacity);
+    cancelAnimation(backgroundDim);
+    progress.value = 0;
+    scrimOpacity.value = 0;
+    backgroundDim.value = 0;
+    finalizeClose();
+  }, [backgroundDim, finalizeClose, progress, scrimOpacity]);
+
   const runCloseAnimation = useCallback(() => {
     const active = sessionRef.current;
     if (!active || closingRef.current) return;
@@ -239,6 +255,39 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
     runCloseAnimation();
   }, [runCloseAnimation]);
 
+  const openExpanded = useCallback(
+    (options: Pick<ContainerTransformOpenOptions, "renderExpanded" | "onClose">) => {
+      const targetBounds = getDefaultTargetBounds();
+      const spatialSpring = pickContainerTransformSpatialSpring(targetBounds, screenW, screenH);
+      const skipMorph = motionTier === "reduced";
+
+      cancelAnimation(progress);
+      cancelAnimation(scrimOpacity);
+      cancelAnimation(backgroundDim);
+
+      const nextSession: ContainerTransformSession = {
+        sourceRef: { current: null },
+        startBounds: targetBounds,
+        targetBounds,
+        renderSource: null,
+        renderExpanded: options.renderExpanded,
+        backgroundRef: null,
+        onClose: options.onClose,
+        skipMorph,
+        spatialSpring,
+      };
+
+      closingRef.current = false;
+      sessionRef.current = nextSession;
+      setSession(nextSession);
+      setIsOpen(true);
+      progress.value = 1;
+      scrimOpacity.value = M3_SCRIM_OPACITY;
+      backgroundDim.value = 0;
+    },
+    [getDefaultTargetBounds, progress, screenH, screenW, scrimOpacity, backgroundDim],
+  );
+
   const openFrom = useCallback(
     (sourceRef: RefObject<View | null>, options: ContainerTransformOpenOptions) => {
       void (async () => {
@@ -262,6 +311,7 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
           borderRadius: options.sourceBorderRadius ?? DEFAULT_SOURCE_BORDER_RADIUS_PX,
         };
 
+        const onSettled = options.onSettled;
         const nextSession: ContainerTransformSession = {
           sourceRef,
           startBounds,
@@ -278,7 +328,7 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
         cancelAnimation(scrimOpacity);
         cancelAnimation(backgroundDim);
 
-        if (!sessionRef.current) {
+        if (!sessionRef.current && !options.startExpanded) {
           progress.value = 0;
           scrimOpacity.value = 0;
           backgroundDim.value = 0;
@@ -289,7 +339,21 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
         setSession(nextSession);
         setIsOpen(true);
 
-        animateContainerTransformProgress(progress, 1, true, spatialSpring, skipMorph);
+        if (options.startExpanded) {
+          progress.value = 1;
+          scrimOpacity.value = M3_SCRIM_OPACITY;
+          if (options.backgroundRef) {
+            backgroundDim.value = 1;
+          }
+          onSettled?.();
+          return;
+        }
+
+        animateContainerTransformProgress(progress, 1, true, spatialSpring, skipMorph, () => {
+          if (onSettled) {
+            runOnJS(onSettled)();
+          }
+        });
         animateM3EffectsOpacity(scrimOpacity, M3_SCRIM_OPACITY, true);
         if (options.backgroundRef) {
           animateM3EffectsOpacity(backgroundDim, 1, true);
@@ -307,10 +371,12 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
       scrimOpacity,
       backgroundDim,
       openFrom,
+      openExpanded,
       close,
+      dismissInstantly,
       abortToFadeOut,
     }),
-    [abortToFadeOut, backgroundDim, close, isOpen, openFrom, progress, scrimOpacity, session],
+    [abortToFadeOut, backgroundDim, close, dismissInstantly, isOpen, openExpanded, openFrom, progress, scrimOpacity, session],
   );
 
   return (
@@ -321,7 +387,9 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
 export function useContainerTransform(): {
   isOpen: boolean;
   openFrom: (sourceRef: RefObject<View | null>, options: ContainerTransformOpenOptions) => void;
+  openExpanded: (options: Pick<ContainerTransformOpenOptions, "renderExpanded" | "onClose">) => void;
   close: () => void;
+  dismissInstantly: () => void;
 } {
   const ctx = useContext(ContainerTransformContext);
   if (!ctx) {
@@ -330,7 +398,9 @@ export function useContainerTransform(): {
   return {
     isOpen: ctx.isOpen,
     openFrom: ctx.openFrom,
+    openExpanded: ctx.openExpanded,
     close: ctx.close,
+    dismissInstantly: ctx.dismissInstantly,
   };
 }
 

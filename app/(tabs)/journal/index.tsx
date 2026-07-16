@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Alert,
   Keyboard,
   type ListRenderItem,
+  type View as RNView,
 } from "react-native";
 import { FlatList, Gesture, GestureDetector } from "react-native-gesture-handler";
 import type { NativeGesture } from "react-native-gesture-handler";
@@ -41,8 +42,15 @@ import {
 } from "@/lib/journal-local";
 import {
   peekPendingJournalListUpsert,
+  setPendingJournalDetailEntry,
   takePendingJournalListUpsert,
 } from "@/lib/journal-edit-bridge";
+import { takeJournalDetailReverseMorphEntryId } from "@/lib/journal-detail-morph-bridge";
+import { READER_INTERNAL_NO_STACK_ANIMATION } from "@/lib/reader-hub-navigation";
+import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
+import { useContainerTransform } from "@/src/components/m3/ContainerTransform";
+import { JournalEntryDetailPreview } from "@/src/features/journal/JournalEntryDetailPreview";
+import { JournalListEntryTilePreview } from "@/src/features/journal/JournalListEntryTilePreview";
 import { stripHtmlPreview } from "@/lib/journal-preview";
 import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
 import { useTranslationPicker, type TranslationPickerItem } from "@/lib/use-translation-picker";
@@ -199,10 +207,11 @@ const JournalListDateHeading = memo(function JournalListDateHeading({ label }: {
 type JournalListEntryCardProps = {
   item: MobileJournalListItem;
   translationPickerItems: readonly TranslationPickerItem[];
-  onEntryPress: (id: string) => void;
+  onEntryPress: (item: MobileJournalListItem) => void;
   onSwipeFavorite: (item: MobileJournalListItem) => void;
   onSwipeDelete: (item: MobileJournalListItem) => void;
   listScrollGesture?: NativeGesture;
+  pressTargetRef?: RefObject<RNView | null>;
 };
 
 const JournalListEntryCard = memo(function JournalListEntryCard({
@@ -212,6 +221,7 @@ const JournalListEntryCard = memo(function JournalListEntryCard({
   onSwipeFavorite,
   onSwipeDelete,
   listScrollGesture,
+  pressTargetRef,
 }: JournalListEntryCardProps) {
   const { bundle } = useMobileAppTheme();
   const colors = bundle.ui;
@@ -275,12 +285,13 @@ const JournalListEntryCard = memo(function JournalListEntryCard({
   return (
     <JournalSwipeableListRow
       rowKey={item.id}
-      onPress={() => onEntryPress(item.id)}
+      onPress={() => onEntryPress(item)}
       onSwipeFavorite={() => onSwipeFavorite(item)}
       onSwipeDelete={() => onSwipeDelete(item)}
       shellStyle={favoriteLeftRadii ?? undefined}
       cardStyle={entryCardStyle}
       listScrollGesture={listScrollGesture}
+      pressTargetRef={pressTargetRef}
     >
       <View
         className={`py-1.5 pl-4 pr-4 ${pinClass}`}
@@ -409,6 +420,7 @@ function FabPlusIcon() {
 
 export default function JournalIndexScreen() {
   const router = useRouter();
+  const { openFrom, openExpanded, close, dismissInstantly } = useContainerTransform();
   const isFocused = useIsFocused();
   const { items: translationPickerItems } = useTranslationPicker();
   const [hasVisitedJournalTab, setHasVisitedJournalTab] = useState(false);
@@ -433,6 +445,7 @@ export default function JournalIndexScreen() {
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   const [newEntrySheetKey, setNewEntrySheetKey] = useState(0);
   const listRef = useRef<FlatList<JournalRow> | null>(null);
+  const entryRowRefs = useRef(new Map<string, RefObject<RNView | null>>());
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const createFromBibleRef = useRef<View | null>(null);
@@ -815,11 +828,103 @@ export default function JournalIndexScreen() {
     [journalRowOffsets, rows],
   );
 
+  const getEntryRowRef = useCallback((entryId: string): RefObject<RNView | null> => {
+    const map = entryRowRefs.current;
+    let ref = map.get(entryId);
+    if (!ref) {
+      ref = { current: null };
+      map.set(entryId, ref);
+    }
+    return ref;
+  }, []);
+
+  const buildMorphPreviews = useCallback(
+    (item: MobileJournalListItem) => ({
+      renderSource: (
+        <JournalListEntryTilePreview item={item} translationPickerItems={translationPickerItems} />
+      ),
+      renderExpanded: <JournalEntryDetailPreview entry={item} />,
+    }),
+    [translationPickerItems],
+  );
+
   const handleEntryPress = useCallback(
-    (id: string) => {
-      router.push(`/journal/${id}` as never);
+    (item: MobileJournalListItem) => {
+      if (journalOnboarding.tourActive) return;
+      hapticLightImpact();
+      setPendingJournalDetailEntry(item);
+      const rowRef = getEntryRowRef(item.id);
+      const previews = buildMorphPreviews(item);
+      openFrom(rowRef, {
+        ...previews,
+        sourceBorderRadius: JOURNAL_TILE_RADIUS_PX,
+        onSettled: () => {
+          router.push({
+            pathname: "/journal/[id]",
+            params: {
+              id: item.id,
+              [READER_INTERNAL_NO_STACK_ANIMATION]: "1",
+            },
+          } as never);
+          requestAnimationFrame(() => {
+            dismissInstantly();
+          });
+        },
+      });
     },
-    [router],
+    [
+      buildMorphPreviews,
+      dismissInstantly,
+      getEntryRowRef,
+      journalOnboarding.tourActive,
+      openFrom,
+      router,
+    ],
+  );
+
+  const runReverseMorphIfNeeded = useCallback(() => {
+    const reverseId = takeJournalDetailReverseMorphEntryId();
+    if (!reverseId) return;
+
+    const item = entries.find((entry) => entry.id === reverseId);
+    if (!item) return;
+
+    const previews = buildMorphPreviews(item);
+    const rowRef = getEntryRowRef(reverseId);
+
+    void (async () => {
+      const rect = rowRef.current
+        ? await measureOnboardingTarget(rowRef, { waitForInteractions: false, retries: 2 })
+        : null;
+
+      if (!rect) {
+        openExpanded({ renderExpanded: previews.renderExpanded });
+        requestAnimationFrame(() => {
+          close();
+        });
+        return;
+      }
+
+      openFrom(rowRef, {
+        ...previews,
+        sourceBorderRadius: JOURNAL_TILE_RADIUS_PX,
+        startExpanded: true,
+      });
+      requestAnimationFrame(() => {
+        close();
+      });
+    })();
+  }, [buildMorphPreviews, close, entries, getEntryRowRef, openExpanded, openFrom]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const task = InteractionManager.runAfterInteractions(() => {
+        requestAnimationFrame(() => {
+          runReverseMorphIfNeeded();
+        });
+      });
+      return () => task.cancel();
+    }, [runReverseMorphIfNeeded]),
   );
 
   const commitToggleFavorite = useCallback(
@@ -877,6 +982,7 @@ export default function JournalIndexScreen() {
               onSwipeFavorite={commitToggleFavorite}
               onSwipeDelete={requestDeleteEntry}
               listScrollGesture={journalListScrollGesture}
+              pressTargetRef={getEntryRowRef(row.item.id)}
             />
           </View>
         );
@@ -889,12 +995,14 @@ export default function JournalIndexScreen() {
           onSwipeFavorite={commitToggleFavorite}
           onSwipeDelete={requestDeleteEntry}
           listScrollGesture={journalListScrollGesture}
+          pressTargetRef={getEntryRowRef(row.item.id)}
         />
       );
     },
     [
       commitToggleFavorite,
       firstEntryId,
+      getEntryRowRef,
       handleEntryPress,
       journalListScrollGesture,
       requestDeleteEntry,

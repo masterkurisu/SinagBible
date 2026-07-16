@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, type Ref } from "react";
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector, type NativeGesture } from "react-native-gesture-handler";
 import Animated, {
@@ -42,6 +42,8 @@ type Props = {
   rowKey?: string;
   /** FlatList scroll native gesture — required on Android for bidirectional row pans. */
   listScrollGesture?: NativeGesture;
+  /** Morph / measure target — attach with `collapsable={false}`. */
+  pressTargetRef?: Ref<View>;
 };
 
 export const JournalSwipeableListRow = memo(function JournalSwipeableListRow({
@@ -54,6 +56,7 @@ export const JournalSwipeableListRow = memo(function JournalSwipeableListRow({
   shellStyle,
   rowKey,
   listScrollGesture,
+  pressTargetRef,
 }: Props) {
   const translateX = useSharedValue(0);
   const dragStartX = useSharedValue(0);
@@ -211,6 +214,7 @@ export const JournalSwipeableListRow = memo(function JournalSwipeableListRow({
 
       <GestureDetector gesture={gesture}>
         <Animated.View
+          ref={pressTargetRef}
           collapsable={false}
           style={[styles.floatingCard, cardStyle, cardAnimatedStyle]}
         >

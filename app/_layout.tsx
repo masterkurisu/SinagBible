@@ -86,7 +86,7 @@ function ThemedStack() {
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="journal/[id]" options={{ title: "Journal Entry" }} />
+      <Stack.Screen name="journal/[id]" options={{ title: "Journal Entry", animation: "none" }} />
       <Stack.Screen name="journal/new" options={{ title: "New Entry" }} />
       <Stack.Screen name="journal/edit/[id]" options={{ title: "Edit Entry" }} />
     </Stack>
