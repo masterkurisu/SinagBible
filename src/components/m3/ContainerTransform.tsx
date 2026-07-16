@@ -19,13 +19,11 @@ import {
   type SharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { motionTier } from "@/lib/device-capability";
+import { isM3ReducedMotion } from "@/lib/m3-motion-profile-state";
 import {
-  M3_CONTAINER_TRANSFORM_ENTER_MS,
-  M3_CONTAINER_TRANSFORM_RETURN_MS,
   M3_EMPHASIZED_ACCELERATE_REANIMATED,
   M3_EMPHASIZED_DECELERATE_REANIMATED,
-  M3_MOTION_DURATION_SHORT3_MS,
+  M3_REDUCED_MOTION_CROSSFADE_MS,
   M3_SCRIM_OPACITY,
   M3_SPRING_DEFAULT_SPATIAL,
   M3_SPRING_SLOW_SPATIAL,
@@ -154,25 +152,11 @@ export function animateContainerTransformProgress(
     }
   };
 
-  if (skipMorph) {
+  if (skipMorph || isM3ReducedMotion()) {
     value.value = withTiming(
       target,
       {
-        duration: M3_MOTION_DURATION_SHORT3_MS,
-        easing: entering
-          ? M3_EMPHASIZED_DECELERATE_REANIMATED
-          : M3_EMPHASIZED_ACCELERATE_REANIMATED,
-      },
-      finish,
-    );
-    return;
-  }
-
-  if (motionTier === "reduced") {
-    value.value = withTiming(
-      target,
-      {
-        duration: entering ? M3_CONTAINER_TRANSFORM_ENTER_MS : M3_CONTAINER_TRANSFORM_RETURN_MS,
+        duration: M3_REDUCED_MOTION_CROSSFADE_MS,
         easing: entering
           ? M3_EMPHASIZED_DECELERATE_REANIMATED
           : M3_EMPHASIZED_ACCELERATE_REANIMATED,
@@ -259,7 +243,7 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
     (options: Pick<ContainerTransformOpenOptions, "renderExpanded" | "onClose">) => {
       const targetBounds = getDefaultTargetBounds();
       const spatialSpring = pickContainerTransformSpatialSpring(targetBounds, screenW, screenH);
-      const skipMorph = motionTier === "reduced";
+      const skipMorph = isM3ReducedMotion();
 
       cancelAnimation(progress);
       cancelAnimation(scrimOpacity);
@@ -301,7 +285,7 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
 
         const targetBounds = options.targetBounds ?? getDefaultTargetBounds();
         const spatialSpring = pickContainerTransformSpatialSpring(targetBounds, screenW, screenH);
-        const skipMorph = motionTier === "reduced";
+        const skipMorph = isM3ReducedMotion();
 
         const startBounds: ContainerBounds = {
           x: rect.x,

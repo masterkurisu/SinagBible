@@ -2,7 +2,6 @@ import { useCallback, useEffect } from "react";
 import { Platform } from "react-native";
 import {
   cancelAnimation,
-  Easing,
   runOnJS,
   useAnimatedReaction,
   useSharedValue,
@@ -10,14 +9,15 @@ import {
   type SharedValue,
 } from "react-native-reanimated";
 import {
+  M3_EMPHASIZED_ACCELERATE_REANIMATED,
+  M3_EMPHASIZED_DECELERATE_REANIMATED,
+} from "@/src/components/m3/m3-motion";
+import {
   evaluateTabBarScrollHidden,
   TAB_BAR_SLIDE_HIDE_MS,
   TAB_BAR_SLIDE_SHOW_MS,
 } from "@/lib/reader-tab-bar-scroll-worklet";
 import { useReaderTabBarSlideController } from "@/lib/reader-tab-bar-visibility-context";
-
-const M3_EMPHASIZED_ACCELERATE = Easing.bezier(0.3, 0, 0.8, 0.15);
-const M3_EMPHASIZED_DECELERATE = Easing.bezier(0.05, 0.7, 0.1, 1);
 
 /** Snap slide progress + committed state to fully visible (no timing). */
 function snapTabBarSlideToVisible(
@@ -117,7 +117,7 @@ export function useReaderTabBarScrollDriver({
           1,
           {
             duration: TAB_BAR_SLIDE_HIDE_MS,
-            easing: M3_EMPHASIZED_ACCELERATE,
+            easing: M3_EMPHASIZED_ACCELERATE_REANIMATED,
           },
           (finished) => {
             "worklet";
@@ -135,7 +135,7 @@ export function useReaderTabBarScrollDriver({
         0,
         {
           duration: TAB_BAR_SLIDE_SHOW_MS,
-          easing: M3_EMPHASIZED_DECELERATE,
+          easing: M3_EMPHASIZED_DECELERATE_REANIMATED,
         },
         (finished) => {
           "worklet";

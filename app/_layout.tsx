@@ -25,6 +25,7 @@ import { applyPlatformOrientationLock } from "@/lib/apply-platform-orientation-l
 import { loadHapticsEnabledPreference } from "@/lib/haptics-preference";
 import { ContainerTransformProvider } from "@/src/components/m3/ContainerTransform";
 import { ContainerTransformHost } from "@/src/components/m3/ContainerTransformHost";
+import { M3MotionProfileBridge } from "@/lib/use-m3-motion-profile";
 import { openChapterDb } from "@/lib/chapter-db";
 import { initJournalStorage } from "@/lib/journal-local";
 import { migrateAsyncStorageChapters } from "@/lib/migrate-async-storage";
@@ -225,6 +226,7 @@ export default function RootLayout() {
       <AppErrorBoundary>
         <MobileAppThemeProvider>
           <ContainerTransformProvider>
+            <M3MotionProfileBridge />
             <RootLayoutContent />
             <ContainerTransformHost />
           </ContainerTransformProvider>

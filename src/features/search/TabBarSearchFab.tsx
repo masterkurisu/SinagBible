@@ -1,6 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import {
-  Animated,
   Platform,
   Pressable,
   StyleSheet,
@@ -8,10 +7,16 @@ import {
   type ViewStyle,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import Reanimated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { hapticLightImpact } from "@/lib/haptics";
 import { useTabBarSearch } from "@/lib/tab-bar-search-context";
+import { M3_SPRING_FAST_SPATIAL } from "@/src/components/m3/m3-motion";
 import {
   TAB_BAR_SEARCH_FAB_ELEVATION_PX,
   TAB_BAR_SEARCH_FAB_ICON_PX,
@@ -39,8 +44,12 @@ export function TabBarSearchFab({
   const searchTheme = bundle.search;
   const isAndroid = Platform.OS === "android";
 
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scale = useSharedValue(1);
   const [pressed, setPressed] = useState(false);
+
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   const handlePress = useCallback(() => {
     hapticLightImpact();
@@ -53,23 +62,13 @@ export function TabBarSearchFab({
 
   const handlePressIn = useCallback(() => {
     setPressed(true);
-    Animated.spring(scaleAnim, {
-      toValue: 0.94,
-      friction: 8,
-      tension: 320,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+    scale.value = withSpring(0.94, M3_SPRING_FAST_SPATIAL);
+  }, [scale]);
 
   const handlePressOut = useCallback(() => {
     setPressed(false);
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 6,
-      tension: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+    scale.value = withSpring(1, M3_SPRING_FAST_SPATIAL);
+  }, [scale]);
 
   if (isOpen) {
     return null;
@@ -84,7 +83,7 @@ export function TabBarSearchFab({
     : TAB_BAR_SEARCH_FAB_ELEVATION_PX;
 
   return (
-    <Animated.View
+    <Reanimated.View
       pointerEvents={tabBarInteractionHidden ? "none" : "box-none"}
       style={[
         styles.host,
@@ -126,11 +125,11 @@ export function TabBarSearchFab({
             : null,
         ]}
       >
-        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <Reanimated.View style={scaleStyle}>
           <MaterialCommunityIcons name="magnify" size={TAB_BAR_SEARCH_FAB_ICON_PX} color={iconColor} />
-        </Animated.View>
+        </Reanimated.View>
       </Pressable>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 

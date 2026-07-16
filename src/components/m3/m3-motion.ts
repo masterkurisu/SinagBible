@@ -6,7 +6,7 @@ import {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
-import { motionTier } from "@/lib/device-capability";
+import { isM3ReducedMotion } from "@/lib/m3-motion-profile-state";
 
 /** M3 emphasized decelerate — elements entering the screen. */
 export const M3_EMPHASIZED_DECELERATE_EASING = Easing.bezier(0.05, 0.7, 0.1, 1);
@@ -126,7 +126,8 @@ export const M3_SPRING_SLOW_EFFECTS: M3SpringConfig = {
 /** M3 standard scrim — 32% black (MaterialContainerTransform default). */
 export const M3_SCRIM_OPACITY = 0.32;
 
-const REDUCED_MOTION = motionTier === "reduced";
+/** Reduced-motion cross-fade — springs collapse to this timing on low-RAM or OS reduce motion. */
+export const M3_REDUCED_MOTION_CROSSFADE_MS = M3_MOTION_DURATION_SHORT3_MS;
 
 /** Opacity/color channel — timing with emphasized easing (no spring overshoot). */
 export function animateM3EffectsOpacity(
@@ -135,10 +136,15 @@ export function animateM3EffectsOpacity(
   entering: boolean,
   onComplete?: () => void,
 ): void {
+  const reduced = isM3ReducedMotion();
   value.value = withTiming(
     target,
     {
-      duration: entering ? M3_CONTAINER_TRANSFORM_ENTER_MS : M3_CONTAINER_TRANSFORM_RETURN_MS,
+      duration: reduced
+        ? M3_REDUCED_MOTION_CROSSFADE_MS
+        : entering
+          ? M3_CONTAINER_TRANSFORM_ENTER_MS
+          : M3_CONTAINER_TRANSFORM_RETURN_MS,
       easing: entering ? M3_EMPHASIZED_DECELERATE_REANIMATED : M3_EMPHASIZED_ACCELERATE_REANIMATED,
     },
     (finished) => {
@@ -149,19 +155,20 @@ export function animateM3EffectsOpacity(
   );
 }
 
-/** Spatial channel — spring on standard tier, timing on reduced-motion Android. */
+/** Spatial channel — spring on full tier, 150 ms cross-fade on reduced motion. */
 export function animateM3SpatialProgress(
   value: SharedValue<number>,
   target: number,
   entering: boolean,
+  springConfig: M3SpringConfig = M3_SPRING_DEFAULT_SPATIAL,
 ): void {
-  if (REDUCED_MOTION) {
+  if (isM3ReducedMotion()) {
     value.value = withTiming(target, {
-      duration: entering ? M3_CONTAINER_TRANSFORM_ENTER_MS : M3_CONTAINER_TRANSFORM_RETURN_MS,
+      duration: M3_REDUCED_MOTION_CROSSFADE_MS,
       easing: entering ? M3_EMPHASIZED_DECELERATE_REANIMATED : M3_EMPHASIZED_ACCELERATE_REANIMATED,
     });
     return;
   }
 
-  value.value = withSpring(target, M3_SPRING_DEFAULT_SPATIAL);
+  value.value = withSpring(target, springConfig);
 }

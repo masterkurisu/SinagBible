@@ -7,6 +7,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { useEffect } from "react";
+import { M3_SPRING_FAST_SPATIAL } from "@/src/components/m3/m3-motion";
 
 /** M3 switch track (52 × 32 dp). */
 const TRACK_WIDTH = 52;
@@ -14,8 +15,6 @@ const TRACK_HEIGHT = 32;
 const HANDLE_SIZE_OFF = 16;
 const HANDLE_SIZE_ON = 24;
 const TRACK_INSET = 4;
-
-const SPRING = { damping: 22, stiffness: 320, mass: 0.55 };
 
 type M3SwitchProps = {
   value: boolean;
@@ -43,7 +42,7 @@ export function M3Switch({
   const progress = useSharedValue(value ? 1 : 0);
 
   useEffect(() => {
-    progress.value = withSpring(value ? 1 : 0, SPRING);
+    progress.value = withSpring(value ? 1 : 0, M3_SPRING_FAST_SPATIAL);
   }, [progress, value]);
 
   const trackW = TRACK_WIDTH * scale;
