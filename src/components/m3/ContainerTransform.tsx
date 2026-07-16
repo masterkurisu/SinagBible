@@ -74,6 +74,8 @@ export type ContainerTransformOpenOptions = {
   backgroundRef?: RefObject<View | null>;
   sourceBorderRadius?: number;
   onClose?: () => void;
+  /** Fired when `measureInWindow` fails — overlay never opens. */
+  onMeasureFailed?: () => void;
   /** Fired when enter progress reaches 1 (morph settled). */
   onSettled?: () => void;
   /** Skip enter animation — overlay starts expanded at progress 1 (reverse-morph handoff). */
@@ -279,7 +281,7 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
           retries: Platform.OS === "android" ? 4 : 2,
         });
         if (!rect) {
-          options.onClose?.();
+          options.onMeasureFailed?.();
           return;
         }
 

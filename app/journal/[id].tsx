@@ -17,7 +17,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Asset, requestPermissionsAsync } from "expo-media-library";
 import { captureRef } from "react-native-view-shot";
-import { useLocalSearchParams, Stack, useRouter, usePathname } from "expo-router";
+import { useLocalSearchParams, Stack, useRouter, usePathname, useNavigation } from "expo-router";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { formatBookLabel } from "@sinag-bible/core";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
@@ -398,6 +398,7 @@ function renderSavedReflection(contentHtml: string, bodyColor: string): React.Re
 
 export default function JournalEntryScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -792,11 +793,15 @@ export default function JournalEntryScreen() {
 
   const handleBack = useCallback(() => {
     hapticLightImpact();
-    if (id) {
-      requestJournalDetailReverseMorph(id);
-    }
     router.back();
-  }, [id, router]);
+  }, [router]);
+
+  useEffect(() => {
+    if (!id) return;
+    return navigation.addListener("beforeRemove", () => {
+      requestJournalDetailReverseMorph(id);
+    });
+  }, [id, navigation]);
 
   const journalExportActions =
     entry && !loadError ? (

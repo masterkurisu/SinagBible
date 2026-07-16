@@ -848,6 +848,20 @@ export default function JournalIndexScreen() {
     [translationPickerItems],
   );
 
+  const pushJournalDetail = useCallback(
+    (item: MobileJournalListItem) => {
+      setPendingJournalDetailEntry(item);
+      router.push({
+        pathname: "/journal/[id]",
+        params: {
+          id: item.id,
+          [READER_INTERNAL_NO_STACK_ANIMATION]: "1",
+        },
+      } as never);
+    },
+    [router],
+  );
+
   const handleEntryPress = useCallback(
     (item: MobileJournalListItem) => {
       if (journalOnboarding.tourActive) return;
@@ -858,6 +872,9 @@ export default function JournalIndexScreen() {
       openFrom(rowRef, {
         ...previews,
         sourceBorderRadius: JOURNAL_TILE_RADIUS_PX,
+        onMeasureFailed: () => {
+          pushJournalDetail(item);
+        },
         onSettled: () => {
           router.push({
             pathname: "/journal/[id]",
@@ -878,6 +895,7 @@ export default function JournalIndexScreen() {
       getEntryRowRef,
       journalOnboarding.tourActive,
       openFrom,
+      pushJournalDetail,
       router,
     ],
   );
