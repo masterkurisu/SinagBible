@@ -23,12 +23,49 @@ function bookNameFromReference(reference: string, fallback: string): string {
   return trimmed || fallback;
 }
 
+/** Index of the `</span>` that closes the `<span>` opening tag ending at `afterOpenTag`. */
+function findCloseSpanIndex(html: string, afterOpenTag: number): number {
+  let depth = 1;
+  let pos = afterOpenTag;
+  while (pos < html.length && depth > 0) {
+    const nextOpen = html.indexOf("<span", pos);
+    const nextClose = html.indexOf("</span>", pos);
+    if (nextClose === -1) return html.length;
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      depth += 1;
+      pos = nextOpen + 5;
+      continue;
+    }
+    depth -= 1;
+    if (depth === 0) return nextClose;
+    pos = nextClose + "</span>".length;
+  }
+  return html.length;
+}
+
+/** Section headings (`yv-h`) sit between verses in YVP HTML and must not bleed into verse text. */
+function stripYvpSectionHeadings(html: string): string {
+  return html.replace(/<div[^>]*class="[^"]*\byv-h\b[^"]*"[^>]*>[\s\S]*?<\/div>/gi, "");
+}
+
 function parseFootnoteInner(html: string): { label: string; body: string } {
+  const frOpen = /<span[^>]*class="[^"]*\bfr\b[^"]*"[^>]*>/i.exec(html);
+  if (frOpen) {
+    const openEnd = frOpen.index + frOpen[0].length;
+    const closeIndex = findCloseSpanIndex(html, openEnd);
+    const label = stripHtmlTags(html.slice(openEnd, closeIndex)).trim() || "†";
+    const bodyHtml = html.slice(0, frOpen.index) + html.slice(closeIndex + "</span>".length);
+    return {
+      label,
+      body: stripHtmlTags(bodyHtml).replace(/\s+/g, " ").trim(),
+    };
+  }
+
   const labelMatch = html.match(/<span[^>]*class="[^"]*label[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
-  const bodyMatch = html.match(/<span[^>]*class="[^"]*body[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+  const legacyBodyMatch = html.match(/<span[^>]*class="[^"]*body[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
   return {
     label: labelMatch ? stripHtmlTags(labelMatch[1] ?? "") : "†",
-    body: bodyMatch ? stripHtmlTags(bodyMatch[1] ?? "") : stripHtmlTags(html),
+    body: legacyBodyMatch ? stripHtmlTags(legacyBodyMatch[1] ?? "") : stripHtmlTags(html),
   };
 }
 
@@ -37,19 +74,22 @@ function parseVerseInlineFromHtml(
   footnotes: Map<number, YvpFootnoteBody>,
 ): BibleVerseInlineItem[] {
   const items: BibleVerseInlineItem[] = [];
-  const noteRe = /<span[^>]*class="[^"]*yv-n[^"]*"[^>]*>([\s\S]*?)<\/span>/gi;
+  const noteOpenRe = /<span[^>]*class="[^"]*\byv-n\b[^"]*"[^>]*>/gi;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = noteRe.exec(verseHtml)) !== null) {
+  while ((match = noteOpenRe.exec(verseHtml)) !== null) {
     const before = stripHtmlTags(verseHtml.slice(lastIndex, match.index));
     if (before) items.push(before);
 
-    const parsed = parseFootnoteInner(match[1] ?? "");
+    const openTagEnd = match.index + match[0].length;
+    const closeIndex = findCloseSpanIndex(verseHtml, openTagEnd);
+    const parsed = parseFootnoteInner(verseHtml.slice(openTagEnd, closeIndex));
     const noteId = footnotes.size + 1;
     footnotes.set(noteId, parsed);
     items.push({ noteId });
-    lastIndex = match.index + match[0].length;
+    lastIndex = closeIndex + "</span>".length;
+    noteOpenRe.lastIndex = lastIndex;
   }
 
   const tail = stripHtmlTags(verseHtml.slice(lastIndex));
@@ -62,7 +102,7 @@ function parseYvpChapterHtml(
   footnotes: Map<number, YvpFootnoteBody>,
 ): { number: number; text: string; inline: BibleVerseInlineItem[] }[] {
   const verses: { number: number; text: string; inline: BibleVerseInlineItem[] }[] = [];
-  const parts = html.split(/<span class="yv-vlbl">(\d+)<\/span>/);
+  const parts = stripYvpSectionHeadings(html).split(/<span class="yv-vlbl">(\d+)<\/span>/);
 
   for (let i = 1; i < parts.length; i += 2) {
     const num = Number.parseInt(parts[i] ?? "", 10);
