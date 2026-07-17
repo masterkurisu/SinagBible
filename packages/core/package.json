@@ -11,7 +11,8 @@
     "./bible-meta": "./src/bible-meta.ts",
     "./helloao-verse-inline": "./src/helloao-verse-inline.ts",
     "./journal": "./src/journal.ts",
-    "./text-utils": "./src/text-utils.ts"
+    "./text-utils": "./src/text-utils.ts",
+    "./verse-tags": "./src/verse-tags.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

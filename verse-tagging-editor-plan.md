@@ -276,8 +276,8 @@ Phase 4   Bulk backfill + optional search hardening (deferred)
 
 **Exit criteria:**
 
-- [ ] All grammar tests pass
-- [ ] API exported from `@sinag-bible/core`
+- [x] All grammar tests pass
+- [x] API exported from `@sinag-bible/core`
 
 ### Phase 2 — Mention UI + inline notes
 
@@ -409,7 +409,7 @@ export function insertVerseTagAtMention(
 - [x] Search posture (write label at save, ignore at render)
 - [x] Export posture (plain text labels)
 - [x] `htmlToReflectionMarkdown` mapping table implemented and tested *(basic coverage — extend as needed)*
-- [ ] `verse-tags.ts` unit tests passing *(Phase 1 — not started)*
+- [x] `verse-tags.ts` unit tests passing *(Phase 1)*
 
 ---
 
