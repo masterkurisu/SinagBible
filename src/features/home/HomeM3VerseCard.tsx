@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import { CarouselBackgroundImage } from "@/lib/carousel-background-image";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import type { CarouselImageTheme } from "@/lib/carousel-image-themes";
 import { isCarouselLightBackgroundTheme } from "@/lib/carousel-image-themes";
@@ -79,15 +79,7 @@ export function HomeM3VerseCard({
       ) : null}
 
       {showImage ? (
-        <Image
-          source={{ uri: imageUrl! }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          cachePolicy="disk"
-          recyclingKey={imageUrl!}
-          transition={0}
-          accessibilityIgnoresInvertColors
-        />
+        <CarouselBackgroundImage uri={imageUrl!} recyclingKey={imageUrl!} />
       ) : null}
 
       {showPhotoChrome && !isLightBackground ? (

@@ -426,13 +426,17 @@ export async function resolveCarouselBackgroundUrls(
     warmedKeywordSets.add(keywordsKey);
   }
 
-  const prefetchUrls = new Set<string>(Object.values(result));
+  const assignedUrls = Object.values(result);
+  const assignedUrlSet = new Set(assignedUrls);
+  await Promise.all(assignedUrls.map((url) => Image.prefetch(url, "disk")));
+
   for (const keyword of keywords) {
     const pool = await loadKeywordPool(keyword);
-    for (const url of pool.urls) prefetchUrls.add(url);
-  }
-  for (const url of prefetchUrls) {
-    void Image.prefetch(url, "disk");
+    for (const url of pool.urls) {
+      if (!assignedUrlSet.has(url)) {
+        void Image.prefetch(url, "disk");
+      }
+    }
   }
 
   return result;

@@ -37,6 +37,13 @@ import {
   type CarouselImageTheme,
   type JournalCarouselSettings,
 } from "@/lib/journal-carousel-settings";
+import {
+  clearCarouselCardSizes,
+  countCarouselCardSizeOverrides,
+  loadCarouselCardSizes,
+  subscribeCarouselCardSizes,
+  type CarouselCardSize,
+} from "@/lib/journal-carousel-card-sizes";
 import { requestCarouselImageRefresh } from "@/lib/pexels-repository";
 import {
   formatCarouselPassageLabel,
@@ -92,6 +99,7 @@ export function JournalCarouselSettingsSheet({
   const { width: screenW } = useWindowDimensions();
   const [settings, setSettings] = useState<JournalCarouselSettings | null>(null);
   const [favorites, setFavorites] = useState<CarouselVerseRecord[]>([]);
+  const [cardSizeOverrides, setCardSizeOverrides] = useState<Record<string, CarouselCardSize>>({});
   const [imageThemeOpen, setImageThemeOpen] = useState(false);
   const [sheetMounted, setSheetMounted] = useState(isOpen);
   const isClosingRef = useRef(false);
@@ -130,9 +138,15 @@ export function JournalCarouselSettingsSheet({
     }
     void loadJournalCarouselSettings().then(setSettings);
     void loadCarouselFavorites().then(setFavorites);
+    void loadCarouselCardSizes().then(setCardSizeOverrides);
     return subscribeCarouselFavorites(() => {
       void loadCarouselFavorites().then(setFavorites);
     });
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    return subscribeCarouselCardSizes(setCardSizeOverrides);
   }, [isOpen]);
 
   useEffect(() => {
@@ -198,6 +212,11 @@ export function JournalCarouselSettingsSheet({
       defaultCardSize: CAROUSEL_DEFAULT_CARD_SIZE_OPTIONS[nextIndex]!.value,
     });
   }, [patch, settings]);
+
+  const resetAllCardSizes = useCallback(() => {
+    hapticLightImpact();
+    void clearCarouselCardSizes();
+  }, []);
 
   const refreshImages = useCallback(() => {
     hapticLightImpact();
@@ -275,6 +294,7 @@ export function JournalCarouselSettingsSheet({
   const imageThemeLabel = getCarouselImageThemeLabel(settings.imageTheme);
 
   const defaultCardSizeLabel = getCarouselDefaultCardSizeLabel(settings.defaultCardSize);
+  const cardSizeOverrideCount = countCarouselCardSizeOverrides(cardSizeOverrides);
 
   return (
     <Modal
@@ -467,7 +487,8 @@ export function JournalCarouselSettingsSheet({
                 <View>
                   <Text style={[styles.sectionTitle, { color: colors.brown800 }]}>Card layout</Text>
                   <Text style={[styles.sectionDescription, { color: j.subtitleQuote }]}>
-                    Default width for carousel cards. Long-press a card to resize individually.
+                    Default width for all carousel cards. Changing the default resets any cards you
+                    resized individually. Long-press a card to resize one at a time.
                   </Text>
 
                   <Pressable
@@ -485,13 +506,41 @@ export function JournalCarouselSettingsSheet({
                     <View style={styles.rowText}>
                       <Text style={[styles.rowLabel, { color: colors.brown800 }]}>Default card size</Text>
                       <Text style={[styles.rowDescription, { color: j.subtitleQuote }]}>
-                        Applies to all cards unless you set a size per card.
+                        Applies to every card. Changing this clears individual sizes.
                       </Text>
                     </View>
                     <Text style={[styles.intervalValue, { color: j.filterOpenerText }]}>
                       {defaultCardSizeLabel}
                     </Text>
                   </Pressable>
+
+                  {cardSizeOverrideCount > 0 ? (
+                    <Pressable
+                      onPress={resetAllCardSizes}
+                      style={[
+                        styles.intervalRow,
+                        styles.resetCardSizesRow,
+                        {
+                          borderColor: j.panelBorder,
+                          backgroundColor: j.filterOpenerBackground,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Reset ${cardSizeOverrideCount} individual card sizes`}
+                    >
+                      <View style={styles.rowText}>
+                        <Text style={[styles.rowLabel, { color: colors.brown800 }]}>
+                          Reset individual sizes
+                        </Text>
+                        <Text style={[styles.rowDescription, { color: j.subtitleQuote }]}>
+                          {cardSizeOverrideCount === 1
+                            ? "1 card has a custom size."
+                            : `${cardSizeOverrideCount} cards have custom sizes.`}
+                        </Text>
+                      </View>
+                      <MaterialIcons name="restart-alt" size={20} color={j.filterOpenerText} />
+                    </Pressable>
+                  ) : null}
                 </View>
 
                 <View style={[styles.sectionDivider, { backgroundColor: j.panelBorder }]} />
@@ -763,6 +812,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
+  },
+  resetCardSizesRow: {
+    marginTop: 8,
   },
   intervalValue: {
     fontFamily: "Inter_500Medium",

@@ -101,6 +101,21 @@ export function hasCarouselCardSizeOverride(
   return overrides[verseId] != null;
 }
 
+/** Size this card would use with no per-verse override (global default or varied layout). */
+export function getCarouselCardSizeWithoutOverride(
+  verseId: string,
+  layoutIndex: number,
+  defaultCardSize: CarouselDefaultCardSize = DEFAULT_CAROUSEL_DEFAULT_CARD_SIZE,
+): CarouselCardSize {
+  return getEffectiveCarouselCardSize(verseId, layoutIndex, {}, defaultCardSize);
+}
+
+export function countCarouselCardSizeOverrides(
+  overrides: Readonly<Record<string, CarouselCardSize>>,
+): number {
+  return Object.keys(overrides).length;
+}
+
 function normalizeOverrides(raw: unknown): Record<string, CarouselCardSize> {
   if (!raw || typeof raw !== "object") return {};
   const next: Record<string, CarouselCardSize> = {};

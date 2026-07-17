@@ -9,8 +9,8 @@ import {
   type ListRenderItem,
 } from "react-native";
 import { FlatList, Pressable } from "react-native-gesture-handler";
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import { CarouselBackgroundImage } from "@/lib/carousel-background-image";
 import type { CarouselImageTheme } from "@/lib/carousel-image-themes";
 import {
   isCarouselLightBackgroundTheme,
@@ -21,6 +21,7 @@ import { getCarouselCardGradient } from "@/lib/journal-carousel-verses";
 import { useJournalCarouselVerses } from "@/lib/use-journal-carousel-verses";
 import {
   getEffectiveCarouselCardSize,
+  getCarouselCardSizeWithoutOverride,
   hasCarouselCardSizeOverride,
   patchCarouselCardSize,
   removeCarouselCardSize,
@@ -105,15 +106,7 @@ const CarouselCard = memo(function CarouselCard({
         )}
 
         {showImage ? (
-          <Image
-            source={{ uri: imageUrl! }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            cachePolicy="disk"
-            recyclingKey={imageUrl!}
-            transition={0}
-            accessibilityIgnoresInvertColors
-          />
+          <CarouselBackgroundImage uri={imageUrl!} recyclingKey={imageUrl!} />
         ) : null}
 
         {isLightBackground ? null : (
@@ -265,11 +258,27 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
     (size: CarouselCardSize) => {
       if (!menuState) return;
       const item = menuState.item;
+      const cardIndex = displayVerses.findIndex((verse) => verse.id === item.id);
+      if (cardIndex < 0) return;
       closeMenu();
       hapticLightImpact();
+
+      const defaultSize = getCarouselCardSizeWithoutOverride(
+        item.id,
+        cardIndex,
+        settings.defaultCardSize,
+      );
+
+      if (size === defaultSize) {
+        if (hasCarouselCardSizeOverride(item.id, cardSizeOverrides)) {
+          void removeCarouselCardSize(item.id);
+        }
+        return;
+      }
+
       void patchCarouselCardSize(item.id, size);
     },
-    [closeMenu, menuState],
+    [cardSizeOverrides, closeMenu, displayVerses, menuState, settings.defaultCardSize],
   );
 
   const handleResetCardSize = useCallback(() => {
@@ -302,6 +311,15 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
     );
   }, [closeMenu, menuState, removeFavorite]);
 
+  const carouselSizingKey = useMemo(
+    () =>
+      `${settings.defaultCardSize}:${Object.keys(cardSizeOverrides)
+        .sort()
+        .map((id) => `${id}=${cardSizeOverrides[id]}`)
+        .join(",")}`,
+    [cardSizeOverrides, settings.defaultCardSize],
+  );
+
   const renderItem = useMemo<ListRenderItem<CarouselDisplayVerse>>(
     () =>
       ({ item, index }) => (
@@ -330,6 +348,7 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
         <FlatList
           ref={listRef}
           data={displayVerses}
+          extraData={carouselSizingKey}
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           horizontal

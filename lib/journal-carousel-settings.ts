@@ -38,7 +38,7 @@ export type JournalCarouselSettings = {
   imageRefreshInterval: CarouselImageRefreshInterval;
   /** Pexels search theme for carousel backgrounds. */
   imageTheme: CarouselImageTheme;
-  /** Default card width preset — per-verse overrides take precedence. */
+  /** Default card width preset — changing this clears all per-verse overrides. */
   defaultCardSize: CarouselDefaultCardSize;
 };
 
