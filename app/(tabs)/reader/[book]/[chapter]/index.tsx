@@ -145,8 +145,11 @@ import { ReaderYvpFootnoteSheet } from "@/src/features/reader/ReaderYvpFootnoteS
 import type { YvpFootnoteBody } from "@sinag-bible/types";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
 import { useReaderTabBarScrollDriver } from "@/src/features/reader/useReaderTabBarScrollDriver";
+import { TAB_BAR_SLIDE_SHOW_MS } from "@/lib/reader-tab-bar-scroll-worklet";
 
 const READER_FONT_CARD_PADDING_TOP_PX = 12;
+/** Keep tab bar visible through verse deep-link scroll + one slide settle window. */
+const VERSE_DEEP_LINK_TAB_BAR_SETTLE_MS = TAB_BAR_SLIDE_SHOW_MS + 200;
 
 function persistReaderPref(key: string, value: string): void {
   void AsyncStorage.setItem(key, value).catch(() => {
@@ -196,6 +199,10 @@ export default function ReaderChapterScreen() {
     return Number.isFinite(n) && n >= 1 ? n : null;
   }, [verseParam]);
   const pendingScrollVerseRef = useRef<number | null>(null);
+  const verseDeepLinkSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [verseDeepLinkTabBarSuppress, setVerseDeepLinkTabBarSuppress] = useState(
+    () => initialScrollVerse != null,
+  );
   const requestedTranslationRaw = translation?.trim() ?? "";
   // Prefer the internal TranslationId (uppercase) for known translations so the
   // existing core data layer handles them. Fall through to the raw API ID for
@@ -419,6 +426,32 @@ export default function ReaderChapterScreen() {
   useEffect(() => {
     pendingScrollVerseRef.current = initialScrollVerse;
   }, [bookSlug, chapterNumber, requestedTranslationId, initialScrollVerse]);
+
+  const clearVerseDeepLinkSettleTimer = useCallback(() => {
+    if (verseDeepLinkSettleTimerRef.current != null) {
+      clearTimeout(verseDeepLinkSettleTimerRef.current);
+      verseDeepLinkSettleTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleVerseDeepLinkTabBarUnsuppress = useCallback(() => {
+    clearVerseDeepLinkSettleTimer();
+    verseDeepLinkSettleTimerRef.current = setTimeout(() => {
+      verseDeepLinkSettleTimerRef.current = null;
+      setVerseDeepLinkTabBarSuppress(false);
+    }, VERSE_DEEP_LINK_TAB_BAR_SETTLE_MS);
+  }, [clearVerseDeepLinkSettleTimer]);
+
+  useEffect(() => {
+    clearVerseDeepLinkSettleTimer();
+    if (initialScrollVerse != null) {
+      setVerseDeepLinkTabBarSuppress(true);
+    } else {
+      setVerseDeepLinkTabBarSuppress(false);
+    }
+  }, [bookSlug, chapterNumber, initialScrollVerse, clearVerseDeepLinkSettleTimer]);
+
+  useEffect(() => () => clearVerseDeepLinkSettleTimer(), [clearVerseDeepLinkSettleTimer]);
 
   useEffect(() => {
     if (pendingScrollVerseRef.current != null) return;
@@ -1042,6 +1075,7 @@ export default function ReaderChapterScreen() {
         );
         if (didScroll) {
           pendingScrollVerseRef.current = null;
+          scheduleVerseDeepLinkTabBarUnsuppress();
         }
       });
     });
@@ -1054,6 +1088,7 @@ export default function ReaderChapterScreen() {
     chapterNumber,
     initialScrollVerse,
     readerVerseEstimatedItemSize,
+    scheduleVerseDeepLinkTabBarUnsuppress,
   ]);
 
   const readerChapterFlashListFooter = useCallback(() => {
@@ -1233,7 +1268,8 @@ export default function ReaderChapterScreen() {
       noteModalVisible ||
       newEntrySheetOpen) ||
     selectedVerses.length > 0 ||
-    readerFeatureOnboarding.showLayer;
+    readerFeatureOnboarding.showLayer ||
+    verseDeepLinkTabBarSuppress;
 
   const {
     contentHeightSV,

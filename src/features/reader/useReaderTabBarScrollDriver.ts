@@ -24,12 +24,14 @@ function snapTabBarSlideToVisible(
   tabBarSlideProgressSV: SharedValue<number>,
   committedHiddenSV: SharedValue<boolean>,
   bottomPinnedSV: SharedValue<boolean>,
+  slideAnimatingSV: SharedValue<boolean>,
 ) {
   "worklet";
   cancelAnimation(tabBarSlideProgressSV);
   committedHiddenSV.value = false;
   bottomPinnedSV.value = false;
   tabBarSlideProgressSV.value = 0;
+  slideAnimatingSV.value = false;
 }
 
 export function useReaderTabBarScrollDriver({
@@ -61,6 +63,8 @@ export function useReaderTabBarScrollDriver({
   const forceVisibleSV = useSharedValue(forceVisible);
   /** Last hidden state that triggered a slide — gates withTiming inside the worklet. */
   const committedHiddenSV = useSharedValue(false);
+  /** Blocks re-evaluation while a hide/show slide is running — avoids viewport-resize feedback loops. */
+  const slideAnimatingSV = useSharedValue(false);
 
   useEffect(() => {
     enabledSV.value = enabled;
@@ -71,14 +75,24 @@ export function useReaderTabBarScrollDriver({
   }, [forceVisible, forceVisibleSV]);
 
   const applyForcedVisible = useCallback(() => {
-    snapTabBarSlideToVisible(tabBarSlideProgressSV, committedHiddenSV, bottomPinnedSV);
+    snapTabBarSlideToVisible(
+      tabBarSlideProgressSV,
+      committedHiddenSV,
+      bottomPinnedSV,
+      slideAnimatingSV,
+    );
     // readerScrollY and content metrics stay as-is — forceVisibleSV blocks re-hide while overlays are up.
     snapScrollHidden(false);
-  }, [bottomPinnedSV, committedHiddenSV, snapScrollHidden, tabBarSlideProgressSV]);
+  }, [bottomPinnedSV, committedHiddenSV, slideAnimatingSV, snapScrollHidden, tabBarSlideProgressSV]);
 
   const resetOnChapterChange = useCallback(() => {
     readerScrollY.value = 0;
-    snapTabBarSlideToVisible(tabBarSlideProgressSV, committedHiddenSV, bottomPinnedSV);
+    snapTabBarSlideToVisible(
+      tabBarSlideProgressSV,
+      committedHiddenSV,
+      bottomPinnedSV,
+      slideAnimatingSV,
+    );
     contentHeightSV.value = 0;
     viewportHeightSV.value = 0;
     snapScrollHidden(false);
@@ -87,6 +101,7 @@ export function useReaderTabBarScrollDriver({
     committedHiddenSV,
     contentHeightSV,
     readerScrollY,
+    slideAnimatingSV,
     snapScrollHidden,
     tabBarSlideProgressSV,
     viewportHeightSV,
@@ -95,6 +110,7 @@ export function useReaderTabBarScrollDriver({
   useAnimatedReaction(
     () => {
       if (!enabledSV.value || forceVisibleSV.value) return null;
+      if (slideAnimatingSV.value) return null;
       return evaluateTabBarScrollHidden(
         readerScrollY.value,
         contentHeightSV.value,
@@ -109,6 +125,7 @@ export function useReaderTabBarScrollDriver({
 
       committedHiddenSV.value = shouldHide;
       cancelAnimation(tabBarSlideProgressSV);
+      slideAnimatingSV.value = true;
 
       if (shouldHide) {
         tabBarSlideProgressSV.value = 0;
@@ -121,6 +138,7 @@ export function useReaderTabBarScrollDriver({
           },
           (finished) => {
             "worklet";
+            slideAnimatingSV.value = false;
             if (!finished) return;
             runOnJS(onHideSlideComplete)();
           },
@@ -139,12 +157,21 @@ export function useReaderTabBarScrollDriver({
         },
         (finished) => {
           "worklet";
+          slideAnimatingSV.value = false;
           if (!finished) return;
           runOnJS(onShowSlideComplete)();
         },
       );
     },
-    [readerScrollY, contentHeightSV, viewportHeightSV, bottomPinnedSV, enabledSV, forceVisibleSV],
+    [
+      readerScrollY,
+      contentHeightSV,
+      viewportHeightSV,
+      bottomPinnedSV,
+      enabledSV,
+      forceVisibleSV,
+      slideAnimatingSV,
+    ],
   );
 
   useEffect(() => {
