@@ -181,7 +181,6 @@ type ReaderVerseListProps = {
   readerChapterFlashListFooter: () => React.ReactElement | null;
   hasVerseSelection: boolean;
   actionBarBottomPx: number;
-  androidListPaddingBottomHidden?: number;
   onListContentSizeChange?: (width: number, height: number) => void;
   onListLayoutHeight?: (height: number) => void;
   /** Chapter cross-fade — applied on the list shell, not per verse row. */
@@ -207,7 +206,6 @@ export function ReaderVerseList({
   readerChapterFlashListFooter,
   hasVerseSelection,
   actionBarBottomPx,
-  androidListPaddingBottomHidden,
   onListContentSizeChange,
   onListLayoutHeight,
   readerVersesOpacityAnim,
@@ -227,27 +225,16 @@ export function ReaderVerseList({
         paddingBottom: selectionPaddingBottom,
       };
     }
-    // Keep bottom padding stable while the tab bar hides — toggling it relayouts every visible row.
-    if (androidListPaddingBottomHidden != null) {
-      return {
-        flexGrow: 1,
-        paddingLeft: 10,
-        paddingRight: 15,
-        paddingTop: 94,
-        paddingBottom: Math.max(40, androidListPaddingBottomHidden),
-      };
-    }
     return {
       flexGrow: 1,
       paddingLeft: 10,
       paddingRight: 15,
       paddingTop: 94,
-      paddingBottom: 40,
+      paddingBottom: 0,
     };
   }, [
     hasVerseSelection,
     selectionPaddingBottom,
-    androidListPaddingBottomHidden,
   ]);
 
   const renderFlashListHeader = useCallback(

@@ -43,20 +43,8 @@ export function readerAndroidTabBarClearancePx(
   return ANDROID_NATIVE_TAB_BAR_BODY_PX + safeAreaBottom + 12;
 }
 
-/** FlashList bottom padding while reading on Android (tab visible vs hidden). */
-export function readerAndroidListBottomPaddingPx(
-  safeAreaBottom: number,
-  tabBarHidden: boolean,
-  hasVerseSelection: boolean,
-  selectionExtraPx: number,
-): number {
-  if (Platform.OS !== "android") {
-    return hasVerseSelection ? selectionExtraPx : 40;
-  }
-  if (hasVerseSelection) return selectionExtraPx;
-  if (tabBarHidden) return Math.max(safeAreaBottom, 8) + ANDROID_TAB_BAR_HIDDEN_TOUCH_GUARD_PX;
-  return 40;
-}
+/** Gap from chapter footer prev/next buttons to the top of the bottom nav bar. */
+export const READER_CHAPTER_FOOTER_ABOVE_TAB_BAR_PX = 30;
 
 /** Bottom inset so a sheet’s bottom edge sits `gapPx` above the native tab bar. */
 export function nativeTabSheetBottomInsetPx(safeAreaBottom: number, gapPx: number): number {

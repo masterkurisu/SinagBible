@@ -66,7 +66,7 @@ import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import { readerChapterScreenParams } from "@/lib/reader-navigation";
 import {
   readerActionBarBottomPx,
-  readerAndroidListBottomPaddingPx,
+  READER_CHAPTER_FOOTER_ABOVE_TAB_BAR_PX,
 } from "@/lib/native-tab-chrome";
 import { READER_SCROLL_JS_BRIDGE_DELTA_PX } from "@/lib/device-capability";
 import { useReaderTabBarScrollHidden, useRegisterReaderSettingsSlideProgress } from "@/lib/reader-tab-bar-visibility-context";
@@ -1146,7 +1146,7 @@ export default function ReaderChapterScreen() {
         </View>
         <Pressable
           onPress={dismissReaderChromeFromBackgroundPress}
-          style={{ flexGrow: 1, minHeight: Math.max(36, insets.bottom + 46) }}
+          style={{ height: READER_CHAPTER_FOOTER_ABOVE_TAB_BAR_PX }}
           android_ripple={null}
           accessible={false}
         />
@@ -1165,7 +1165,6 @@ export default function ReaderChapterScreen() {
     goToReaderChapter,
     closeToolsMenu,
     dismissReaderChromeFromBackgroundPress,
-    insets.bottom,
   ]);
 
   const readerOverlayOpen =
@@ -1216,11 +1215,6 @@ export default function ReaderChapterScreen() {
 
   const actionBarBottomPxHidden =
     Platform.OS === "android" ? readerActionBarBottomPx(insets.bottom, true) : actionBarBottomPx;
-
-  const androidListPaddingBottomHidden =
-    Platform.OS === "android"
-      ? readerAndroidListBottomPaddingPx(insets.bottom, true, false, 0)
-      : 40;
 
   const readerTabBarScrollHidden = useReaderTabBarScrollHidden();
 
@@ -1696,7 +1690,6 @@ export default function ReaderChapterScreen() {
         actionBarBottomPx={actionBarBottomPx}
         actionBarBottomPxHidden={actionBarBottomPxHidden}
         tabBarScrollHidden={Platform.OS === "android" ? readerTabBarScrollHidden : undefined}
-        androidListPaddingBottomHidden={androidListPaddingBottomHidden}
         onListContentSizeChange={onTabBarContentSizeChange}
         onListLayoutHeight={onTabBarListLayout}
         selectionBannerTopPx={selectionBannerTopPx}

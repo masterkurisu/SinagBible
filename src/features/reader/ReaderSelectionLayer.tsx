@@ -445,7 +445,6 @@ export type ReaderSelectionLayerProps = {
   actionBarBottomPx: number;
   actionBarBottomPxHidden?: number;
   tabBarScrollHidden?: boolean;
-  androidListPaddingBottomHidden?: number;
   onListContentSizeChange?: (width: number, height: number) => void;
   onListLayoutHeight?: (height: number) => void;
   selectionBannerTopPx: number;
@@ -507,7 +506,6 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   actionBarBottomPx,
   actionBarBottomPxHidden,
   tabBarScrollHidden,
-  androidListPaddingBottomHidden,
   onListContentSizeChange,
   onListLayoutHeight,
   selectionBannerTopPx,
@@ -891,7 +889,6 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           readerChapterFlashListFooter={readerChapterFlashListFooter}
           hasVerseSelection={hasVerseSelection}
           actionBarBottomPx={actionBarBottomPx}
-          androidListPaddingBottomHidden={androidListPaddingBottomHidden}
           readerVersesOpacityAnim={readerVersesOpacityAnim}
           onListContentSizeChange={onListContentSizeChange}
           onListLayoutHeight={onListLayoutHeight}
