@@ -553,6 +553,7 @@ bundle,
   verseReference={
     noteTargetVerse != null ? `${chapter.bookName} ${chapter.chapterNumber}:${noteTargetVerse}` : undefined
   }
+  contextTranslationId={resolvedTranslationId}
   bundle={bundle}
   insets={insets}
   isTabletReaderLayout={isTabletReaderLayout}

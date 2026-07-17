@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import type { ListRenderItemInfo } from "@shopify/flash-list";
 import type { VerseAnnotation } from "@sinag-bible/types";
+import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import {
   ReaderCopyIcon,
   ReaderFavoriteIcon,
@@ -378,6 +379,10 @@ type ReaderVerseStableVisualData = {
   readerVerseLineHeight: number;
   readerVerseBodyFontFamily: string;
   verseTextAlign: ReaderVerseTextAlign;
+  translationId: string;
+  bundle: MobileAppThemeBundle;
+  verseTagChipBackground: string;
+  verseTagChipBorder: string;
   yvpFootnotes?: Record<number, { label: string; body: string }>;
   onYvpFootnotePress?: (noteId: number) => void;
 };
@@ -433,6 +438,10 @@ const MemoizedReaderVerseFlashRow = memo(
           onVersePress={onVersePress}
           onVerseLongPress={onVerseLongPress}
           onNoteLongPress={onNoteLongPress}
+          translationId={vd.translationId}
+          bundle={vd.bundle}
+          verseTagChipBackground={vd.verseTagChipBackground}
+          verseTagChipBorder={vd.verseTagChipBorder}
           yvpFootnotes={vd.yvpFootnotes}
           onYvpFootnotePress={vd.onYvpFootnotePress}
         />
@@ -819,6 +828,10 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
       readerVerseLineHeight,
       readerVerseBodyFontFamily,
       verseTextAlign,
+      translationId: resolvedTranslationId,
+      bundle,
+      verseTagChipBackground: colors.parchmentMid,
+      verseTagChipBorder: colors.tan300,
       yvpFootnotes,
       onYvpFootnotePress,
     }),
@@ -829,10 +842,14 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
       rc.verseNumberColor,
       rc.noteBelowVerseBackground,
       colors.brown800,
+      colors.parchmentMid,
+      colors.tan300,
       readerVerseFontSize,
       readerVerseLineHeight,
       readerVerseBodyFontFamily,
       verseTextAlign,
+      resolvedTranslationId,
+      bundle,
       yvpFootnotes,
       onYvpFootnotePress,
     ],

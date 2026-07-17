@@ -19,6 +19,8 @@ import {
   M3_MOTION_DURATION_SHORT4_MS,
 } from "@/src/components/m3/m3-motion";
 import { READER_M3_BOTTOM_SHEET_RADIUS_PX } from "@/src/features/reader/readerSettingsPanelChrome";
+import { useVerseTagMention } from "@/src/features/verse-tags/useVerseTagMention";
+import { VerseTagMentionSheet } from "@/src/features/verse-tags/VerseTagMentionSheet";
 
 export type ReaderVerseNoteDialogProps = {
   isOpen: boolean;
@@ -28,6 +30,7 @@ export type ReaderVerseNoteDialogProps = {
   onChangeNoteDraft: (text: string) => void;
   /** e.g. "Luke 1:5" */
   verseReference?: string;
+  contextTranslationId: string;
   bundle: MobileAppThemeBundle;
   insets: { top: number; bottom: number; left: number; right: number };
   isTabletReaderLayout?: boolean;
@@ -41,6 +44,7 @@ export function ReaderVerseNoteDialog({
   noteDraft,
   onChangeNoteDraft,
   verseReference,
+  contextTranslationId,
   bundle,
   insets,
   isTabletReaderLayout = false,
@@ -51,6 +55,21 @@ export function ReaderVerseNoteDialog({
   const scaleAnim = useRef(new Animated.Value(0.92)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
+  const {
+    mentionOpen,
+    mentionQuery,
+    selection,
+    inputRef,
+    handleChangeText,
+    handleSelectionChange,
+    insertTag,
+    closeMention,
+  } = useVerseTagMention({
+    text: noteDraft,
+    onChangeText: onChangeNoteDraft,
+    contextTranslation: contextTranslationId,
+  });
+
   const scale = isTabletReaderLayout ? 1.15 : 1;
   const dialogMaxW = Math.min(400, screenW - 48);
   const pad = 24 * scale;
@@ -59,6 +78,12 @@ export function ReaderVerseNoteDialog({
   const dialogMaxH = screenH - Math.max(insets.top, 16) - anchorBottomPad - 16;
   const actionAccent = bundle.ui.brown800;
   const surfaceColor = rc.popoverSurface;
+
+  useEffect(() => {
+    if (!isOpen) {
+      closeMention();
+    }
+  }, [closeMention, isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -102,87 +127,105 @@ export function ReaderVerseNoteDialog({
   const handleCancel = useCallback(() => {
     hapticLightImpact();
     Keyboard.dismiss();
+    closeMention();
     onClose();
-  }, [onClose]);
+  }, [closeMention, onClose]);
 
   const handleSave = useCallback(() => {
     hapticLightImpact();
     Keyboard.dismiss();
+    closeMention();
     onSave();
-  }, [onSave]);
+  }, [closeMention, onSave]);
 
   return (
-    <DismissibleDialog
-      visible={isOpen}
-      onClose={handleCancel}
-      scrimColor={rc.denseModalScrim}
-      scrimOpacity={opacityAnim}
-      accessibilityDismissLabel="Dismiss verse note"
-      insets={insets}
-      anchorBottomPad={anchorBottomPad}
-      justifyContent={keyboardOpen ? "flex-end" : "center"}
-    >
-      <Animated.View
-        pointerEvents="box-none"
-        style={{
-          width: dialogMaxW,
-          maxHeight: dialogMaxH,
-          opacity: opacityAnim,
-          transform: [{ scale: scaleAnim }],
-        }}
+    <>
+      <DismissibleDialog
+        visible={isOpen}
+        onClose={handleCancel}
+        scrimColor={rc.denseModalScrim}
+        scrimOpacity={opacityAnim}
+        accessibilityDismissLabel="Dismiss verse note"
+        insets={insets}
+        anchorBottomPad={anchorBottomPad}
+        justifyContent={keyboardOpen ? "flex-end" : "center"}
       >
-            <View
-              style={[
-                styles.dialogCard,
-                {
-                  backgroundColor: surfaceColor,
-                  borderRadius: READER_M3_BOTTOM_SHEET_RADIUS_PX,
-                  shadowColor: rc.popoverShadow,
-                  padding: pad,
-                },
-              ]}
-            >
-              <M3SettingsSheetTitle
-                title="Verse note"
-                subtitle={verseReference}
-                subtitleBold
-                scale={scale}
-                style={{ marginBottom: 16 * scale }}
-              />
+        <Animated.View
+          pointerEvents="box-none"
+          style={{
+            width: dialogMaxW,
+            maxHeight: dialogMaxH,
+            opacity: opacityAnim,
+            transform: [{ scale: scaleAnim }],
+          }}
+        >
+          <View
+            style={[
+              styles.dialogCard,
+              {
+                backgroundColor: surfaceColor,
+                borderRadius: READER_M3_BOTTOM_SHEET_RADIUS_PX,
+                shadowColor: rc.popoverShadow,
+                padding: pad,
+              },
+            ]}
+          >
+            <M3SettingsSheetTitle
+              title="Verse note"
+              subtitle={verseReference}
+              subtitleBold
+              scale={scale}
+              style={{ marginBottom: 16 * scale }}
+            />
 
-              <M3OutlinedTextField
-                label="Note"
-                value={noteDraft}
-                onChangeText={onChangeNoteDraft}
-                surfaceColor={surfaceColor}
+            <M3OutlinedTextField
+              label="Note"
+              value={noteDraft}
+              onChangeText={handleChangeText}
+              onSelectionChange={handleSelectionChange}
+              selection={selection}
+              inputRef={inputRef}
+              surfaceColor={surfaceColor}
+              accentColor={actionAccent}
+              scale={scale}
+              multiline
+              minHeight={120}
+              maxHeight={160}
+            />
+
+            <View style={[styles.actionsBar, { marginTop: 20 * scale, gap: 12 * scale }]}>
+              <M3Button
+                label="Cancel"
+                variant="text"
+                onPress={handleCancel}
+                bundle={bundle}
                 accentColor={actionAccent}
                 scale={scale}
-                multiline
-                minHeight={120}
-                maxHeight={160}
               />
-
-              <View style={[styles.actionsBar, { marginTop: 20 * scale, gap: 12 * scale }]}>
-                <M3Button
-                  label="Cancel"
-                  variant="text"
-                  onPress={handleCancel}
-                  bundle={bundle}
-                  accentColor={actionAccent}
-                  scale={scale}
-                />
-                <M3Button
-                  label="Save"
-                  variant="filled"
-                  onPress={handleSave}
-                  bundle={bundle}
-                  accentColor={actionAccent}
-                  scale={scale}
-                />
-              </View>
+              <M3Button
+                label="Save"
+                variant="filled"
+                onPress={handleSave}
+                bundle={bundle}
+                accentColor={actionAccent}
+                scale={scale}
+              />
             </View>
-      </Animated.View>
-    </DismissibleDialog>
+          </View>
+        </Animated.View>
+      </DismissibleDialog>
+
+      <VerseTagMentionSheet
+        isOpen={mentionOpen}
+        onClose={closeMention}
+        initialQuery={mentionQuery}
+        translationId={contextTranslationId}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
+        onPick={insertTag}
+      />
+    </>
   );
 }
 

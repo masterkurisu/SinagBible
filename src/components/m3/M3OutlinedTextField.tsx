@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from "react-native";
 import { useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
@@ -30,9 +30,17 @@ export type M3OutlinedTextFieldProps = {
   placeholder?: string;
   inputFontFamily?: string;
   style?: ViewStyle;
+  inputRef?: RefObject<TextInput | null>;
 } & Pick<
   TextInputProps,
-  "accessibilityLabel" | "onFocus" | "onBlur" | "returnKeyType" | "onSubmitEditing" | "blurOnSubmit"
+  | "accessibilityLabel"
+  | "onFocus"
+  | "onBlur"
+  | "returnKeyType"
+  | "onSubmitEditing"
+  | "blurOnSubmit"
+  | "onSelectionChange"
+  | "selection"
 >;
 
 /** M3 outlined text field — floating label on the top border. */
@@ -56,6 +64,9 @@ export function M3OutlinedTextField({
   returnKeyType,
   onSubmitEditing,
   blurOnSubmit,
+  onSelectionChange,
+  selection,
+  inputRef,
 }: M3OutlinedTextFieldProps) {
   const sheetChrome = useReaderSheetChrome();
   const [focused, setFocused] = useState(false);
@@ -110,9 +121,12 @@ export function M3OutlinedTextField({
         ) : null}
 
         <TextInput
+          ref={inputRef}
           multiline={multiline}
           value={value}
           onChangeText={onChangeText}
+          onSelectionChange={onSelectionChange}
+          selection={selection}
           placeholder={placeholderText}
           placeholderTextColor={sheetChrome.onSurfaceVariant}
           textAlignVertical={multiline ? "top" : "center"}

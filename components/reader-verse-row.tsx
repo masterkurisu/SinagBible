@@ -14,6 +14,8 @@ import { highlightColors, resolveAnnotationColorHex } from "@sinag-bible/ui";
 import { resolveUnderlineStyle } from "@/src/features/reader/verseAnnotationUnderlineMetrics";
 import { VerseAnnotationUnderlineOverlay } from "@/src/features/reader/VerseAnnotationUnderlineOverlay";
 import { READER_INLINE_NOTE_LONG_PRESS_EDIT_HINT } from "@/src/features/reader/readerVerseMarksCopy";
+import { VerseTaggedText } from "@/src/features/verse-tags/VerseTaggedText";
+import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 
 /** Deep red on parchment / light reader backgrounds */
 const WORDS_OF_JESUS_COLOR = "#C41E1E";
@@ -83,6 +85,10 @@ export type ReaderVerseRowProps = {
   onVersePress: (verseNum: number) => void;
   onVerseLongPress: (verseNum: number) => void;
   onNoteLongPress?: (verseNum: number) => void;
+  translationId: string;
+  bundle: MobileAppThemeBundle;
+  verseTagChipBackground: string;
+  verseTagChipBorder: string;
   yvpFootnotes?: Record<number, { label: string; body: string }>;
   onYvpFootnotePress?: (noteId: number) => void;
 };
@@ -162,6 +168,10 @@ function ReaderVerseRowInner({
   onVersePress,
   onVerseLongPress,
   onNoteLongPress,
+  translationId,
+  bundle,
+  verseTagChipBackground,
+  verseTagChipBorder,
   yvpFootnotes,
   onYvpFootnotePress,
 }: ReaderVerseRowProps) {
@@ -272,9 +282,16 @@ function ReaderVerseRowInner({
           accessibilityLabel={`Note on verse ${verseNum}`}
           accessibilityHint={READER_INLINE_NOTE_LONG_PRESS_EDIT_HINT}
         >
-          <Text style={[styles.noteText, { color: bodyTextColor }]}>
-            {noteText}
-          </Text>
+          <VerseTaggedText
+            text={noteText}
+            textStyle={styles.noteText}
+            textColor={bodyTextColor}
+            chipBackgroundColor={verseTagChipBackground}
+            chipBorderColor={verseTagChipBorder}
+            chipTextColor={bodyTextColor}
+            translationId={translationId}
+            bundle={bundle}
+          />
         </Pressable>
       ) : null}
     </View>
@@ -305,6 +322,10 @@ export const ReaderVerseRow = memo(ReaderVerseRowInner, (prev, next) => {
   if (prev.onVersePress !== next.onVersePress) return false;
   if (prev.onVerseLongPress !== next.onVerseLongPress) return false;
   if (prev.onNoteLongPress !== next.onNoteLongPress) return false;
+  if (prev.translationId !== next.translationId) return false;
+  if (prev.bundle !== next.bundle) return false;
+  if (prev.verseTagChipBackground !== next.verseTagChipBackground) return false;
+  if (prev.verseTagChipBorder !== next.verseTagChipBorder) return false;
   if (prev.yvpFootnotes !== next.yvpFootnotes) return false;
   if (prev.onYvpFootnotePress !== next.onYvpFootnotePress) return false;
   return true;

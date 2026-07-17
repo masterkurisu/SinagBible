@@ -297,6 +297,12 @@ Phase 4   Bulk backfill + optional search hardening (deferred)
 - `src/features/reader/ReaderVerseNoteDialog.tsx`
 - `components/reader-verse-row.tsx`
 
+**Exit criteria:**
+
+- [x] `src/features/verse-tags/` modules implemented
+- [x] `@` mention sheet wired in verse note editor
+- [x] Inline notes render verse tags as tappable chips with tooltip + navigation
+
 ### Phase 2b — Live formatted preview
 
 Raw markdown (`**bold**`, `[@john:3:16]`) in the editor requires a formatted preview nearby.
