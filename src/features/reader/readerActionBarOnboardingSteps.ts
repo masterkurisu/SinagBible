@@ -50,6 +50,18 @@ export const READER_ACTION_BAR_ONBOARDING_STEPS: ReaderActionBarOnboardingStep[]
   },
 ];
 
+const ACTION_BAR_TOOLTIP_BY_ID = new Map(
+  READER_ACTION_BAR_ONBOARDING_STEPS.map((entry) => [entry.id, entry] as const),
+);
+
+export function getReaderActionBarTooltip(
+  id: ReaderActionBarOnboardingStepId,
+): Pick<ReaderActionBarOnboardingStep, "title" | "description"> | null {
+  const entry = ACTION_BAR_TOOLTIP_BY_ID.get(id);
+  if (!entry) return null;
+  return { title: entry.title, description: entry.description };
+}
+
 export const READER_ACTION_BAR_ONBOARDING_STEP_MS = 3000;
 
 /** Left-to-right index of each button in the default action bar (favorite sits before journal). */

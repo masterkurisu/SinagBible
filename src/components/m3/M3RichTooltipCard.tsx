@@ -10,6 +10,9 @@ export type M3RichTooltipCardProps = {
   title: string;
   description: string;
   width?: number;
+  height?: number;
+  paddingTop?: number;
+  paddingBottom?: number;
   backgroundColor?: string;
   titleColor?: string;
   descriptionColor?: string;
@@ -19,6 +22,9 @@ export function M3RichTooltipCard({
   title,
   description,
   width,
+  height,
+  paddingTop,
+  paddingBottom,
   backgroundColor = READER_M3_SURFACE_CONTAINER_HIGH,
   titleColor = READER_M3_ON_SURFACE,
   descriptionColor = READER_M3_ON_SURFACE_VARIANT,
@@ -28,6 +34,9 @@ export function M3RichTooltipCard({
       style={[
         styles.card,
         width != null ? { width } : null,
+        height != null ? { height } : null,
+        paddingTop != null ? { paddingTop } : null,
+        paddingBottom != null ? { paddingBottom } : null,
         { backgroundColor },
       ]}
     >
@@ -62,5 +71,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     letterSpacing: 0.25,
     marginTop: 4,
+    flexShrink: 1,
   },
 });

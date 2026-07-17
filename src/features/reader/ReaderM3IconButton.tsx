@@ -21,7 +21,10 @@ const JIGGLE_OFFSET_PX = 5;
 
 export type ReaderM3IconButtonProps = {
   onPress: () => void;
+  onLongPress?: () => void;
+  delayLongPress?: number;
   accessibilityLabel: string;
+  accessibilityHint?: string;
   accessibilityState?: { expanded?: boolean; selected?: boolean };
   selected?: boolean;
   rippleColor?: string;
@@ -43,7 +46,10 @@ export type ReaderM3IconButtonProps = {
  */
 export function ReaderM3IconButton({
   onPress,
+  onLongPress,
+  delayLongPress = 420,
   accessibilityLabel,
+  accessibilityHint,
   accessibilityState,
   selected = false,
   rippleColor = READER_M3_ICON_BUTTON_RIPPLE,
@@ -173,11 +179,14 @@ export function ReaderM3IconButton({
     >
       <Pressable
         onPress={handlePress}
+        onLongPress={onLongPress}
+        delayLongPress={delayLongPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         hitSlop={hitSlop}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
         accessibilityState={accessibilityState}
         android_ripple={{ color: rippleColor, borderless: true, radius: size / 2 }}
         style={{

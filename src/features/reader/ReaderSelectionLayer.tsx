@@ -7,6 +7,7 @@ import {
   Text,
   View,
   type Animated as AnimatedType,
+  type LayoutRectangle,
 } from "react-native";
 import type { ListRenderItemInfo } from "@shopify/flash-list";
 import type { VerseAnnotation } from "@sinag-bible/types";
@@ -45,6 +46,7 @@ import type { ReaderActionBarOnboardingStepId } from "@/src/features/reader/read
 import {
   READER_ACTION_BAR_ICON_BOX_PX,
   READER_ACTION_BAR_ICON_SIZE_PX,
+  getReaderActionBarTooltip,
 } from "@/src/features/reader/readerActionBarOnboardingSteps";
 import { useReaderActionBarOnboarding } from "@/src/features/reader/useReaderActionBarOnboarding";
 import {
@@ -54,6 +56,11 @@ import {
 import {
   readerM3FloatingToolbarPillStyle,
 } from "@/src/features/reader/readerActionBarChrome";
+import { ReaderActionBarTooltipOverlay } from "@/src/features/reader/ReaderActionBarTooltipOverlay";
+import {
+  READER_M3_ON_SURFACE,
+  READER_M3_ON_SURFACE_VARIANT,
+} from "@/src/features/reader/readerSettingsPanelChrome";
 import type { ReaderOnboardingStep } from "@/src/features/reader/useReaderFeatureOnboarding";
 import type { ReaderVerseTextAlign } from "@/src/features/reader/useReaderPreferences";
 
@@ -133,6 +140,14 @@ type ReaderSelectionActionBarProps = {
   actionBarButtonRefs: Record<ReaderActionBarOnboardingStepId, RefObject<View | null>>;
 };
 
+const ACTION_BAR_TOOLTIP_BACKGROUND = "#FFFFFF";
+
+type ActionBarTooltipState = {
+  anchor: LayoutRectangle;
+  title: string;
+  description: string;
+};
+
 const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
   actionBarBottom,
   colors,
@@ -150,6 +165,21 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
   const sheetChrome = useReaderSheetChrome();
   const journalChrome = bundle.journal;
   const iconMuted = readerActionBarIconColor(rc, sheetChrome.onSurfaceVariant);
+  const actionBarPillRef = useRef<View | null>(null);
+  const [tooltip, setTooltip] = useState<ActionBarTooltipState | null>(null);
+  const showTooltip = useCallback((next: ActionBarTooltipState) => {
+    setTooltip(next);
+  }, []);
+  const dismissTooltip = useCallback(() => {
+    setTooltip(null);
+  }, []);
+  const tooltipVisible = tooltip != null;
+  const studyNotesTooltip = getReaderActionBarTooltip("study-notes");
+  const highlightTooltip = getReaderActionBarTooltip("highlight");
+  const copyTooltip = getReaderActionBarTooltip("copy");
+  const noteTooltip = getReaderActionBarTooltip("note");
+  const favoriteTooltip = getReaderActionBarTooltip("favorite");
+  const journalTooltip = getReaderActionBarTooltip("journal");
   const toolbarPillStyle = useMemo(
     () =>
       readerM3FloatingToolbarPillStyle(
@@ -172,11 +202,14 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
           paddingHorizontal: 16,
         }}
       >
-        <View style={toolbarPillStyle}>
+        <View ref={actionBarPillRef} collapsable={false} style={toolbarPillStyle}>
           <ReaderActionBarIconButton
             onPress={openStudyNotesFromSelection}
             accessibilityLabel="Open study notes for selection"
             buttonRef={actionBarButtonRefs["study-notes"]}
+            tooltipTitle={studyNotesTooltip?.title}
+            tooltipDescription={studyNotesTooltip?.description}
+            onShowTooltip={studyNotesTooltip ? showTooltip : undefined}
           >
             <View
               style={{
@@ -194,6 +227,9 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
             onPress={openAnnotationSheet}
             accessibilityLabel="Highlight or underline"
             buttonRef={actionBarButtonRefs.highlight}
+            tooltipTitle={highlightTooltip?.title}
+            tooltipDescription={highlightTooltip?.description}
+            onShowTooltip={highlightTooltip ? showTooltip : undefined}
           >
             <View
               style={{
@@ -213,6 +249,9 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
             }}
             accessibilityLabel="Copy"
             buttonRef={actionBarButtonRefs.copy}
+            tooltipTitle={copyTooltip?.title}
+            tooltipDescription={copyTooltip?.description}
+            onShowTooltip={copyTooltip ? showTooltip : undefined}
           >
             <View
               style={{
@@ -230,6 +269,9 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
             onPress={openNoteForSelection}
             accessibilityLabel="Note"
             buttonRef={actionBarButtonRefs.note}
+            tooltipTitle={noteTooltip?.title}
+            tooltipDescription={noteTooltip?.description}
+            onShowTooltip={noteTooltip ? showTooltip : undefined}
           >
             <View
               style={{
@@ -251,6 +293,9 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
                 : "Add to journal carousel"
             }
             buttonRef={actionBarButtonRefs.favorite}
+            tooltipTitle={favoriteTooltip?.title}
+            tooltipDescription={favoriteTooltip?.description}
+            onShowTooltip={favoriteTooltip ? showTooltip : undefined}
           >
             <View
               style={{
@@ -276,6 +321,9 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
             }
             rippleColor={journalChrome.fabRipple}
             buttonRef={actionBarButtonRefs.journal}
+            tooltipTitle={journalTooltip?.title}
+            tooltipDescription={journalTooltip?.description}
+            onShowTooltip={journalTooltip ? showTooltip : undefined}
           >
             <View
               style={{
@@ -296,6 +344,19 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
           </ReaderActionBarJournalButton>
         </View>
       </Animated.View>
+      {tooltip ? (
+        <ReaderActionBarTooltipOverlay
+          visible={tooltipVisible}
+          buttonAnchor={tooltip.anchor}
+          actionBarPillRef={actionBarPillRef}
+          title={tooltip.title}
+          description={tooltip.description}
+          onDismiss={dismissTooltip}
+          backgroundColor={ACTION_BAR_TOOLTIP_BACKGROUND}
+          titleColor={READER_M3_ON_SURFACE}
+          descriptionColor={READER_M3_ON_SURFACE_VARIANT}
+        />
+      ) : null}
     </View>
   );
 });
