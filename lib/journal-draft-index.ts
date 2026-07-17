@@ -7,6 +7,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { htmlToReflectionMarkdown } from "@/lib/journal-reflection-html";
 
 export const JOURNAL_DRAFT_INDEX_KEY = "sinagbible_journal_draft_index";
 export const JOURNAL_DRAFT_INDEX_MIGRATED_FLAG = "sinagbible_journal_draft_index_migrated_v1";
@@ -29,7 +30,10 @@ const LEGACY_DRAFT_KEY_CANDIDATES = [
 export type JournalNewEntryDraftPayload = {
   passage: string;
   title: string;
-  reflectionHtml: string;
+  /** Markdown reflection source (Phase 0+). */
+  reflectionMarkdown: string;
+  /** @deprecated Legacy RichEditor HTML draft — migrated on load. */
+  reflectionHtml?: string;
   journalTranslationId: string;
   initialParams?: {
     book?: string;
@@ -137,14 +141,24 @@ export async function loadDefaultJournalDraft(): Promise<JournalNewEntryDraftPay
   const raw = await AsyncStorage.getItem(JOURNAL_DRAFT_CONTENT_KEY);
   if (!isNonEmptyDraftValue(raw)) return null;
   try {
-    const parsed = JSON.parse(raw!) as JournalNewEntryDraftPayload;
-    if (typeof parsed.passage !== "string" || typeof parsed.reflectionHtml !== "string") {
+    const parsed = JSON.parse(raw!) as JournalNewEntryDraftPayload & { reflectionHtml?: string };
+    if (typeof parsed.passage !== "string") return null;
+
+    let reflectionMarkdown = "";
+    if (typeof parsed.reflectionMarkdown === "string") {
+      reflectionMarkdown = parsed.reflectionMarkdown;
+    } else if (typeof parsed.reflectionHtml === "string") {
+      reflectionMarkdown = parsed.reflectionHtml.trim()
+        ? htmlToReflectionMarkdown(parsed.reflectionHtml)
+        : "";
+    } else {
       return null;
     }
+
     return {
       passage: parsed.passage,
       title: typeof parsed.title === "string" ? parsed.title : "",
-      reflectionHtml: parsed.reflectionHtml,
+      reflectionMarkdown,
       journalTranslationId:
         typeof parsed.journalTranslationId === "string" ? parsed.journalTranslationId : "",
       initialParams: parsed.initialParams,

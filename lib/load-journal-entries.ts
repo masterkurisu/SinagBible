@@ -8,6 +8,7 @@ export type MobileJournalListItem = {
   verse_end: number | null;
   bible_translation?: string | null;
   content: string;
+  content_markdown?: string | null;
   created_at: string;
   title?: string | null;
   is_favorite?: boolean;
@@ -21,6 +22,7 @@ function localToListItem(e: {
   verse_end: number | null;
   bible_translation?: string | null;
   content: string;
+  content_markdown?: string | null;
   created_at: string;
   title?: string | null;
   is_favorite?: boolean;
@@ -33,6 +35,7 @@ function localToListItem(e: {
     verse_end: e.verse_end,
     bible_translation: e.bible_translation ?? "KJV",
     content: e.content,
+    content_markdown: e.content_markdown ?? null,
     created_at: e.created_at,
     title: e.title,
     is_favorite: e.is_favorite,

@@ -31,12 +31,21 @@ const INIT_SQL = `
     bible_translation TEXT,
     title TEXT,
     content TEXT NOT NULL,
+    content_markdown TEXT,
     created_at TEXT NOT NULL,
     is_favorite INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_journal_created_at
     ON journal_entries(created_at DESC, id DESC);
 `;
+
+async function migrateJournalSchema(db: SQLite.SQLiteDatabase): Promise<void> {
+  const columns = await db.getAllAsync<{ name: string }>("PRAGMA table_info(journal_entries)");
+  const hasMarkdown = columns.some((col) => col.name === "content_markdown");
+  if (!hasMarkdown) {
+    await db.execAsync("ALTER TABLE journal_entries ADD COLUMN content_markdown TEXT");
+  }
+}
 
 function databaseOpenErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -127,6 +136,7 @@ export function getJournalDb(): Promise<SQLite.SQLiteDatabase> {
 async function openJournalDatabase(): Promise<SQLite.SQLiteDatabase> {
   const db = await SQLite.openDatabaseAsync(DB_NAME);
   await db.execAsync(INIT_SQL);
+  await migrateJournalSchema(db);
   return db;
 }
 
@@ -187,6 +197,7 @@ type JournalRow = {
   bible_translation: string | null;
   title: string | null;
   content: string;
+  content_markdown: string | null;
   created_at: string;
   is_favorite: number;
 };
@@ -201,6 +212,7 @@ function rowToEntry(row: JournalRow): LocalJournalEntry {
     bible_translation: row.bible_translation,
     title: row.title,
     content: row.content,
+    content_markdown: row.content_markdown,
     created_at: row.created_at,
     is_favorite: row.is_favorite === 1,
   };
@@ -216,6 +228,7 @@ function entryToParams(entry: LocalJournalEntry): (string | number | null)[] {
     entry.bible_translation ?? null,
     entry.title ?? null,
     entry.content,
+    entry.content_markdown ?? null,
     entry.created_at,
     entry.is_favorite ? 1 : 0,
   ];
@@ -224,8 +237,8 @@ function entryToParams(entry: LocalJournalEntry): (string | number | null)[] {
 const INSERT_SQL = `
   INSERT OR REPLACE INTO journal_entries
     (id, book, chapter, verse_start, verse_end, bible_translation,
-     title, content, created_at, is_favorite)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     title, content, content_markdown, created_at, is_favorite)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /** Newest-first; ISO-8601 strings sort correctly lexicographically. */

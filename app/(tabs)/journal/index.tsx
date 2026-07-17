@@ -639,7 +639,7 @@ export default function JournalIndexScreen() {
       return () => {
         cancelled = true;
         task.cancel();
-        // Release RichEditor WebViews when leaving the tab (Hermes / native memory).
+        // Dismiss journal new-entry sheet when leaving the tab.
         setNewEntryOpen(false);
       };
     }, [load]),

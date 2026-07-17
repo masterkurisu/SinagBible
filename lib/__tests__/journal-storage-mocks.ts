@@ -9,6 +9,7 @@ type JournalRow = {
   bible_translation: string | null;
   title: string | null;
   content: string;
+  content_markdown: string | null;
   created_at: string;
   is_favorite: number;
 };
@@ -26,8 +27,9 @@ function rowFromParams(params: (string | number | null)[]): JournalRow {
     bible_translation: params[5] as string | null,
     title: params[6] as string | null,
     content: String(params[7]),
-    created_at: String(params[8]),
-    is_favorite: Number(params[9]),
+    content_markdown: (params[8] as string | null) ?? null,
+    created_at: String(params[9]),
+    is_favorite: Number(params[10]),
   };
 }
 

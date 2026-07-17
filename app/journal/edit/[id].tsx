@@ -25,6 +25,7 @@ function toEditDraft(item: MobileJournalListItem): JournalEditDraft {
     id: item.id,
     title: item.title,
     content: item.content,
+    content_markdown: item.content_markdown,
     book: item.book,
     chapter: item.chapter,
     verse_start: item.verse_start,

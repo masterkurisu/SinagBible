@@ -25,6 +25,8 @@ export type LocalJournalEntry = {
   /** Bible translation id frozen when the entry was saved. */
   bible_translation?: string | null;
   content: string;
+  /** Markdown source for the reflection editor; HTML lives in `content`. */
+  content_markdown?: string | null;
   created_at: string;
   title?: string | null;
   is_favorite?: boolean;
