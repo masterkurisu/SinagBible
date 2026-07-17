@@ -128,13 +128,17 @@ function RootLayoutContent() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      try {
-        await Promise.all([openChapterDb(), initJournalStorage()]);
-      } catch (error) {
-        console.warn("journal storage startup failed", error);
-      } finally {
-        if (!cancelled) setChapterDbReady(true);
+      const [chapterResult, journalResult] = await Promise.allSettled([
+        openChapterDb(),
+        initJournalStorage(),
+      ]);
+      if (chapterResult.status === "rejected") {
+        console.warn("chapter database startup failed", chapterResult.reason);
       }
+      if (journalResult.status === "rejected") {
+        console.warn("journal storage startup failed", journalResult.reason);
+      }
+      if (!cancelled) setChapterDbReady(true);
     })();
     return () => {
       cancelled = true;
@@ -204,9 +208,9 @@ function RootLayoutContent() {
 
   return (
     <>
-      {!fontsLoaded || !chapterDbReady ? (
+      {!fontsLoaded || !chapterDbReady || !onboardingStorageReady ? (
         <ScreenLoadingSkeleton lines={5} caption="Loading…" />
-      ) : !onboardingStorageReady ? null : onboardingDone ? (
+      ) : onboardingDone ? (
         <ThemedStack />
       ) : (
         <OnboardingContainer onFinish={finishOnboarding} />

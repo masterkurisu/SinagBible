@@ -74,6 +74,7 @@ import { JournalM3ExpressiveFab } from "@/src/features/journal/JournalM3Expressi
 import {
   JOURNAL_M3_ELEVATED_CARD_RADIUS_PX,
   journalM3ElevatedCardStyle,
+  journalToastChrome,
 } from "@/src/features/journal/journalCardChrome";
 import { JournalCarouselSettingsSheet } from "@/src/features/journal/JournalCarouselSettingsSheet";
 import {
@@ -177,6 +178,9 @@ const emptyShadow = {
 /** Heading row height for list date labels */
 const JOURNAL_LIST_ROW_SEPARATOR_PX = 12;
 const JOURNAL_LIST_HEADING_HEIGHT_PX = 28;
+const JOURNAL_TOAST_VISIBLE_MS = 800;
+const JOURNAL_TOAST_FADE_OUT_MS = 400;
+
 
 /** Fixed tile body height — minHeight alone had no effect because children were always taller. */
 const JOURNAL_TILE_CONTENT_HEIGHT_PX = 108;
@@ -430,6 +434,7 @@ export default function JournalIndexScreen() {
   const { bundle } = useMobileAppTheme();
   const colors = bundle.ui;
   const j = bundle.journal;
+  const toastChrome = useMemo(() => journalToastChrome(bundle), [bundle]);
   const listPadBottom = nativeTabJournalListPaddingBottomPx(0);
   const [entries, setEntries] = useState<MobileJournalListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -594,10 +599,10 @@ export default function JournalIndexScreen() {
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-      Animated.delay(2200),
+      Animated.delay(JOURNAL_TOAST_VISIBLE_MS),
       Animated.timing(toastOpacity, {
         toValue: 0,
-        duration: 220,
+        duration: JOURNAL_TOAST_FADE_OUT_MS,
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }),
@@ -1312,8 +1317,16 @@ export default function JournalIndexScreen() {
               },
             ]}
           >
-            <View style={styles.toastBubble}>
-              <Text style={styles.toastText}>{toast}</Text>
+            <View
+              style={[
+                styles.toastBubble,
+                {
+                  backgroundColor: toastChrome.backgroundColor,
+                  shadowColor: toastChrome.shadowColor,
+                },
+              ]}
+            >
+              <Text style={[styles.toastText, { color: toastChrome.textColor }]}>{toast}</Text>
             </View>
           </Animated.View>
         ) : null}
@@ -1420,8 +1433,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(44, 36, 22, 0.92)",
-    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1431,7 +1442,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     fontSize: 14,
     lineHeight: 20,
-    color: "#f5f2ec",
     textAlign: "center",
     width: "100%",
     ...(Platform.OS === "android" ? { alignSelf: "center" as const } : null),

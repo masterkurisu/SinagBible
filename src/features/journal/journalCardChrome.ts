@@ -1,5 +1,8 @@
 import type { ViewStyle } from "react-native";
-import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import {
+  isMobileAppDarkThemeId,
+  type MobileAppThemeBundle,
+} from "@sinag-bible/tokens";
 
 /** M3 expressive elevated card — medium shape (16dp). */
 export const JOURNAL_M3_ELEVATED_CARD_RADIUS_PX = 16;
@@ -33,5 +36,19 @@ export function journalM3ElevatedCardStyle(
     overflow: "hidden",
     ...journalM3ElevatedCardShadow(bundle.ui.brown800),
     ...(cornerRadii ?? {}),
+  };
+}
+
+/** Inverse floating toast — dark on light themes, light gray on dark themes. */
+export function journalToastChrome(bundle: MobileAppThemeBundle): {
+  backgroundColor: string;
+  textColor: string;
+  shadowColor: string;
+} {
+  const isDark = isMobileAppDarkThemeId(bundle.id);
+  return {
+    backgroundColor: isDark ? bundle.ui.brown900 : bundle.ui.brown800,
+    textColor: isDark ? bundle.ui.parchment : bundle.ui.parchmentMid,
+    shadowColor: bundle.reader.popoverShadow,
   };
 }

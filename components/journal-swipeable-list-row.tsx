@@ -29,7 +29,8 @@ const VELOCITY_OFFSET = 24;
 const PAN_ACTIVATE_PX = 12;
 const PAN_FAIL_VERTICAL_PX = 24;
 const TAP_SLOP_PX = 10;
-const PAN_SPRING = { damping: 12, stiffness: 210 };
+/** Overdamped — snap back without horizontal overshoot past center. */
+const PAN_SPRING = { damping: 47.6, stiffness: 180, mass: 1 };
 
 type Props = {
   children: ReactNode;
@@ -154,7 +155,7 @@ export const JournalSwipeableListRow = memo(function JournalSwipeableListRow({
       .onEnd((event) => {
         const x = translateX.value;
         runOnJS(commitPanEnd)(x, event.velocityX);
-        translateX.value = withSpring(0, PAN_SPRING);
+        translateX.value = withSpring(0, { ...PAN_SPRING, overshootClamping: true });
         dragStartX.value = 0;
         panActive.value = false;
       })

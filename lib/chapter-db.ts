@@ -30,6 +30,27 @@ function escapeSqlString(value: string): string {
   return value.replace(/'/g, "''");
 }
 
+function databaseOpenErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isCorruptDatabaseFileError(error: unknown): boolean {
+  return /file is not a database/i.test(databaseOpenErrorMessage(error));
+}
+
+function isStaleDatabaseHandleError(error: unknown): boolean {
+  const message = databaseOpenErrorMessage(error);
+  return (
+    /NullPointerException/i.test(message) ||
+    /already closed/i.test(message) ||
+    /closed database/i.test(message)
+  );
+}
+
+function isRecoverableChapterDatabaseOpenError(error: unknown): boolean {
+  return isCorruptDatabaseFileError(error) || isStaleDatabaseHandleError(error);
+}
+
 function initSchema(database: SQLiteDatabase): void {
   database.execSync(`
     CREATE TABLE IF NOT EXISTS chapters (
@@ -61,17 +82,22 @@ function initSchema(database: SQLiteDatabase): void {
 function openEncryptedDatabase(encryptionKey: string): SQLiteDatabase {
   const database = openDatabaseSync(DB_NAME);
 
-  // SQLCipher requires the key before any other statement touches encrypted pages.
-  database.execSync(`PRAGMA key = '${escapeSqlString(encryptionKey)}';`);
+  try {
+    // SQLCipher requires the key before any other statement touches encrypted pages.
+    database.execSync(`PRAGMA key = '${escapeSqlString(encryptionKey)}';`);
 
-  // Verify the key unlocks the database (fresh DB accepts any key).
-  database.getFirstSync("SELECT count(*) AS count FROM sqlite_master;");
+    // Verify the key unlocks the database (fresh DB accepts any key).
+    database.getFirstSync("SELECT count(*) AS count FROM sqlite_master;");
 
-  database.execSync("PRAGMA journal_mode = WAL;");
-  database.execSync("PRAGMA synchronous = NORMAL;");
+    database.execSync("PRAGMA journal_mode = WAL;");
+    database.execSync("PRAGMA synchronous = NORMAL;");
 
-  initSchema(database);
-  return database;
+    initSchema(database);
+    return database;
+  } catch (error) {
+    database.closeSync();
+    throw error;
+  }
 }
 
 /**
@@ -83,9 +109,22 @@ export async function openChapterDb(): Promise<SQLiteDatabase> {
   if (openPromise) return openPromise;
 
   openPromise = (async () => {
-    const encryptionKey = await loadOrCreateEncryptionKey();
-    db = openEncryptedDatabase(encryptionKey);
-    return db;
+    let encryptionKey = await loadOrCreateEncryptionKey();
+    try {
+      db = openEncryptedDatabase(encryptionKey);
+      return db;
+    } catch (error) {
+      if (!isRecoverableChapterDatabaseOpenError(error)) throw error;
+
+      if (__DEV__) {
+        console.warn("[chapter-db] recovering chapter database after open failure", error);
+      }
+
+      await deleteChapterDatabase();
+      encryptionKey = await loadOrCreateEncryptionKey();
+      db = openEncryptedDatabase(encryptionKey);
+      return db;
+    }
   })();
 
   try {
