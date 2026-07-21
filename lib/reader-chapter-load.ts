@@ -12,6 +12,7 @@ import { collectPrefetchChapterTargets } from "@/lib/reader-chapter-nav";
 import {
   fetchYvpBookNav,
   fetchYvpChapter,
+  isYvpApiConfigured,
   isYvpTranslationId,
   parseYvpBibleId,
 } from "@/lib/youversion-api";
@@ -37,6 +38,7 @@ export function prefetchTranslationChaptersForReader(
   depth = TRANSLATION_OFFLINE_PREFETCH_DEPTH,
 ): void {
   if (translationId === "KJV") return;
+  if (isYvpTranslationId(translationId) && !isYvpApiConfigured()) return;
 
   primeReaderChapterFetch(translationId, { slug: bookSlug, chapter: chapterNumber }, books);
 
@@ -73,6 +75,7 @@ export function primeReaderChapterFetch(
   books?: BibleBookNavItem[] | null,
 ): void {
   if (!target || translationId === "KJV") return;
+  if (isYvpTranslationId(translationId) && !isYvpApiConfigured()) return;
 
   void fetchReaderChapterContent(translationId, target.slug, target.chapter).catch(() => {
     /* prefetch is best-effort */

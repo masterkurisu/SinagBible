@@ -110,11 +110,34 @@ export function parseYvpBibleId(translationId: string): number | null {
  */
 const YVP_PICKER_LANGUAGE_RANGES = ["en", "fil", "tl", "ceb", "es"] as const;
 
-function getYvpAppKey(): string {
+function getExpoExtra(): { yvpAppKey?: string } | undefined {
+  return (
+    Constants.expoConfig?.extra ??
+    (Constants.manifest2 as { extra?: { yvpAppKey?: string } } | null)?.extra ??
+    (Constants.manifest as { extra?: { yvpAppKey?: string } } | null)?.extra
+  );
+}
+
+function getYvpAppKeyOrNull(): string | null {
   const key =
-    (Constants.expoConfig?.extra as { yvpAppKey?: string } | undefined)?.yvpAppKey ??
+    getExpoExtra()?.yvpAppKey ??
     process.env.EXPO_PUBLIC_YVP_APP_KEY ??
     process.env.YVP_APP_KEY;
+  return key?.trim() || null;
+}
+
+let yvpNotConfiguredWarningLogged = false;
+
+function warnYvpNotConfiguredOnce(): void {
+  if (!__DEV__ || yvpNotConfiguredWarningLogged) return;
+  yvpNotConfiguredWarningLogged = true;
+  console.warn(
+    "[youversion-api] YVP_APP_KEY is not configured — add it to .env.local (see app.config.js). YouVersion translations are unavailable until then.",
+  );
+}
+
+function getYvpAppKey(): string {
+  const key = getYvpAppKeyOrNull();
   if (!key) {
     throw new Error("youversion-api: YVP_APP_KEY is not configured");
   }
@@ -123,12 +146,7 @@ function getYvpAppKey(): string {
 
 /** True when a YouVersion Platform app key is available at runtime. */
 export function isYvpApiConfigured(): boolean {
-  try {
-    getYvpAppKey();
-    return true;
-  } catch {
-    return false;
-  }
+  return getYvpAppKeyOrNull() != null;
 }
 
 function mapYvpBible(record: YvpBibleRecord): YvpBible {
@@ -307,6 +325,11 @@ async function fetchYvpBiblesForLanguageRange(range: string): Promise<YvpBible[]
 
 /** Reader book navigation for a YouVersion Bible id. */
 export function fetchYvpBookNav(bibleId: number): Promise<BibleBookNavItem[]> {
+  if (!isYvpApiConfigured()) {
+    warnYvpNotConfiguredOnce();
+    return Promise.resolve([]);
+  }
+
   const cached = yvpBookNavCache.get(bibleId);
   if (cached) return cached;
 
@@ -361,6 +384,11 @@ export function fetchYvpBookNav(bibleId: number): Promise<BibleBookNavItem[]> {
  * await fetchYvpPassage({ bibleId: 3034, book: "john", chapter: 3, verse: 16 });
  */
 export async function fetchYvpPassage(options: FetchYvpPassageOptions): Promise<YvpPassage> {
+  if (!isYvpApiConfigured()) {
+    warnYvpNotConfiguredOnce();
+    throw new Error("youversion-api: YVP_APP_KEY is not configured");
+  }
+
   const bookUsfm = resolveBookUsfm(options.book);
   const passageId = buildPassageId(bookUsfm, options.chapter, options.verse);
   const format = options.format ?? "text";
@@ -387,6 +415,11 @@ export function fetchYvpChapter(
   bookSlug: string,
   chapterNumber: number,
 ): Promise<BibleChapter> {
+  if (!isYvpApiConfigured()) {
+    warnYvpNotConfiguredOnce();
+    return Promise.reject(new Error("youversion-api: YVP_APP_KEY is not configured"));
+  }
+
   const usfm = getUsfmBookId(bookSlug);
   if (!usfm) {
     return Promise.reject(new Error(`youversion-api: unknown book slug "${bookSlug}"`));

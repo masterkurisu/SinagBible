@@ -4,6 +4,7 @@ import { isDeviceOffline } from "@/lib/network-connectivity";
 import { prefetchTranslationChaptersForReader } from "@/lib/reader-chapter-load";
 import { loadReaderLastPosition, peekReaderLastPosition } from "@/lib/reader-last-position";
 import { parseReaderChapterFromPathname } from "@/lib/reader-navigation";
+import { isYvpApiConfigured, isYvpTranslationId } from "@/lib/youversion-api";
 
 const DEFAULT_PREFETCH_ANCHOR = { bookSlug: "genesis", chapter: 1 };
 
@@ -32,6 +33,7 @@ export async function resolvePrefetchAnchor(
 function shouldPrefetchTranslation(translationId: string): boolean {
   if (translationId === "KJV") return false;
   if (isBundledFeaturedTranslationId(translationId)) return false;
+  if (isYvpTranslationId(translationId) && !isYvpApiConfigured()) return false;
   return true;
 }
 
