@@ -296,26 +296,20 @@ export default function ReaderChapterScreen() {
   const [selectionActivity, setSelectionActivity] = useState<ReaderSelectionActivity>(() => ({
     selectedVerses: [],
     noteModalVisible: false,
-    noteDraft: "",
-    noteTargetVerse: null,
-    saveNoteFromModal: () => {},
-    setNoteModalVisible: () => {},
-    setNoteDraft: () => {},
-    setNoteTargetVerse: () => {},
   }));
   const handleSelectionActivityChange = useCallback((activity: ReaderSelectionActivity) => {
-    setSelectionActivity(activity);
+    setSelectionActivity((prev) => {
+      if (
+        prev.noteModalVisible === activity.noteModalVisible &&
+        prev.selectedVerses.length === activity.selectedVerses.length &&
+        prev.selectedVerses.every((verse, index) => verse === activity.selectedVerses[index])
+      ) {
+        return prev;
+      }
+      return activity;
+    });
   }, []);
-  const {
-    selectedVerses,
-    noteModalVisible,
-    noteDraft,
-    noteTargetVerse,
-    saveNoteFromModal,
-    setNoteModalVisible,
-    setNoteDraft,
-    setNoteTargetVerse,
-  } = selectionActivity;
+  const { selectedVerses, noteModalVisible } = selectionActivity;
   const readerScrollRef = useRef<FlashListRef<ReaderVerseFlashItem> | null>(null);
   /** Drives cross-fade between in-content heading and stack header title (UI-thread scroll). */
   const readerScrollY = useSharedValue(0);
@@ -1834,9 +1828,6 @@ export default function ReaderChapterScreen() {
         insets={insets}
         isTabletReaderLayout={isTabletReaderLayout}
         measureAndSetDropdown={measureAndSetDropdown}
-        noteDraft={noteDraft}
-        noteModalVisible={noteModalVisible}
-        noteTargetVerse={noteTargetVerse}
         rc={rc}
         readerBookGridCellW={readerBookGridCellW}
         readerBookGridGap={readerBookGridGap}
@@ -1851,11 +1842,7 @@ export default function ReaderChapterScreen() {
         readerDropdownTop={readerDropdownTop}
         resolvedTranslationId={resolvedTranslationId}
         translationLanguageLabel={readerHeaderLanguageLabel}
-        saveNoteFromModal={saveNoteFromModal}
         selectedVerses={selectedVerses}
-        setNoteDraft={setNoteDraft}
-        setNoteModalVisible={setNoteModalVisible}
-        setNoteTargetVerse={setNoteTargetVerse}
         setThemeId={setThemeId}
         settingsMutedTextColor={settingsMutedTextColor}
         themesFanRef={themesFanRef}

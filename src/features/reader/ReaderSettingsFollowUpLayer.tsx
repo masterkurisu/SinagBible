@@ -457,9 +457,6 @@ export function ReaderSettingsFollowUpLayer({
         insets={insets}
         isTabletReaderLayout={isTabletReaderLayout}
         measureAndSetDropdown={noopMeasureAndSetDropdown}
-        noteDraft=""
-        noteModalVisible={false}
-        noteTargetVerse={null}
         rc={rc}
         readerBookGridCellW={100}
         readerBookGridGap={8}
@@ -474,11 +471,7 @@ export function ReaderSettingsFollowUpLayer({
         readerDropdownTop={readerDropdownTop}
         resolvedTranslationId={resolvedTranslationForModals}
         translationLanguageLabel={translationLanguageLabel}
-        saveNoteFromModal={() => {}}
         selectedVerses={[]}
-        setNoteDraft={() => {}}
-        setNoteModalVisible={() => {}}
-        setNoteTargetVerse={() => {}}
         setThemeId={setThemeId}
         settingsMutedTextColor={settingsMutedTextColor}
         themesFanRef={followUp.themesFanRef}

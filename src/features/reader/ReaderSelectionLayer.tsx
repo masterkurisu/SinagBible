@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   Animated,
   Platform,
@@ -42,6 +42,7 @@ import {
 import type { ReaderVerseFlashItem } from "@/src/features/reader/useReaderGestures";
 import { useReaderSelection } from "@/src/features/reader/useReaderSelection";
 import { ReaderAnnotationSheet } from "@/src/features/reader/ReaderAnnotationSheet";
+import { ReaderVerseNoteDialog } from "@/src/features/reader/ReaderVerseNoteDialog";
 import { ReaderActionBarOnboardingLayer } from "@/src/features/reader/ReaderActionBarOnboardingLayer";
 import type { ReaderActionBarOnboardingStepId } from "@/src/features/reader/readerActionBarOnboardingSteps";
 import {
@@ -97,12 +98,6 @@ function readerActionBarIconColor(
 export type ReaderSelectionActivity = {
   selectedVerses: number[];
   noteModalVisible: boolean;
-  noteDraft: string;
-  noteTargetVerse: number | null;
-  saveNoteFromModal: () => void;
-  setNoteModalVisible: Dispatch<SetStateAction<boolean>>;
-  setNoteDraft: Dispatch<SetStateAction<string>>;
-  setNoteTargetVerse: Dispatch<SetStateAction<number | null>>;
 };
 
 type ReaderThemeColors = {
@@ -715,24 +710,14 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     onSelectionActivityChange?.({
       selectedVerses,
       noteModalVisible,
-      noteDraft,
-      noteTargetVerse,
-      saveNoteFromModal,
-      setNoteModalVisible,
-      setNoteDraft,
-      setNoteTargetVerse,
     });
-  }, [
-    selectedVerses,
-    noteModalVisible,
-    noteDraft,
-    noteTargetVerse,
-    saveNoteFromModal,
-    setNoteModalVisible,
-    setNoteDraft,
-    setNoteTargetVerse,
-    onSelectionActivityChange,
-  ]);
+  }, [selectedVerses, noteModalVisible, onSelectionActivityChange]);
+
+  const closeNoteModal = useCallback(() => {
+    setNoteModalVisible(false);
+    setNoteTargetVerse(null);
+    setNoteDraft("");
+  }, [setNoteModalVisible, setNoteTargetVerse, setNoteDraft]);
 
   const handleVerseTapForOnboarding = useCallback(
     (verseNum: number) => {
@@ -1102,6 +1087,23 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
         existingAnnotation={selectionHasExistingAnnotation ? annotationSheetInitial : undefined}
         onApply={applyAnnotationToSelection}
         onRemove={removeAnnotationsFromSelection}
+      />
+
+      <ReaderVerseNoteDialog
+        isOpen={noteModalVisible}
+        onClose={closeNoteModal}
+        onSave={saveNoteFromModal}
+        noteDraft={noteDraft}
+        onChangeNoteDraft={setNoteDraft}
+        verseReference={
+          noteTargetVerse != null
+            ? `${chapter.bookName} ${chapter.chapterNumber}:${noteTargetVerse}`
+            : undefined
+        }
+        contextTranslationId={resolvedTranslationId}
+        bundle={bundle}
+        insets={insets}
+        isTabletReaderLayout={isTabletReaderLayout}
       />
 
       {hasVerseSelection ? (

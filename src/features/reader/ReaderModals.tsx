@@ -31,7 +31,6 @@ import { SettingsMoreIcon } from "@/components/icons/SettingsMoreIcon";
 import { ReaderSettingsSideSheet } from "@/src/features/reader/ReaderSettingsSideSheet";
 import { ReaderThemePickerSheet } from "@/src/features/reader/ReaderThemePickerSheet";
 import { ReaderStudyNotesSheet } from "@/src/features/reader/ReaderStudyNotesSheet";
-import { ReaderVerseNoteDialog } from "@/src/features/reader/ReaderVerseNoteDialog";
 import { M3RichTooltipOverlay } from "@/src/components/m3/M3RichTooltipOverlay";
 import {
   getReaderSettingsTooltip,
@@ -419,10 +418,7 @@ export type ReaderModalsProps = {
     ref: React.RefObject<View | null>,
     kind: ReaderToolsDropdown,
   ) => void;
-  noteDraft: string;
-  noteModalVisible: boolean;
   commentaryPanelOpen: boolean;
-  noteTargetVerse: number | null;
   rc: MobileAppThemeBundle["reader"];
   readerBookGridCellW: number;
   readerBookGridGap: number;
@@ -437,11 +433,7 @@ export type ReaderModalsProps = {
   readerDropdownTop: number;
   resolvedTranslationId: string;
   translationLanguageLabel: string;
-  saveNoteFromModal: () => void;
   selectedVerses: number[];
-  setNoteDraft: React.Dispatch<React.SetStateAction<string>>;
-  setNoteModalVisible: React.Dispatch<React.SetStateAction<boolean>>;
-  setNoteTargetVerse: React.Dispatch<React.SetStateAction<number | null>>;
   setThemeId: (id: import("@sinag-bible/tokens").MobileAppThemeId) => void;
   settingsMutedTextColor: string;
   themesFanRef: React.RefObject<View | null>;
@@ -467,9 +459,6 @@ bundle,
     insets,
     isTabletReaderLayout,
     measureAndSetDropdown,
-    noteDraft,
-    noteModalVisible,
-    noteTargetVerse,
     rc,
     readerBookGridCellW,
     readerBookGridGap,
@@ -484,11 +473,7 @@ bundle,
     readerDropdownTop,
     resolvedTranslationId,
     translationLanguageLabel,
-    saveNoteFromModal,
     selectedVerses,
-    setNoteDraft,
-    setNoteModalVisible,
-    setNoteTargetVerse,
     setThemeId,
     settingsMutedTextColor,
     themesFanRef,
@@ -538,25 +523,6 @@ bundle,
   chapter={chapter}
   selectedVerses={selectedVerses}
   settingsMutedTextColor={settingsMutedTextColor}
-/>
-
-<ReaderVerseNoteDialog
-  isOpen={noteModalVisible}
-  onClose={() => {
-    setNoteModalVisible(false);
-    setNoteTargetVerse(null);
-    setNoteDraft("");
-  }}
-  onSave={saveNoteFromModal}
-  noteDraft={noteDraft}
-  onChangeNoteDraft={setNoteDraft}
-  verseReference={
-    noteTargetVerse != null ? `${chapter.bookName} ${chapter.chapterNumber}:${noteTargetVerse}` : undefined
-  }
-  contextTranslationId={resolvedTranslationId}
-  bundle={bundle}
-  insets={insets}
-  isTabletReaderLayout={isTabletReaderLayout}
 />
 
     </>
