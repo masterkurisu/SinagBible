@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
@@ -58,6 +59,9 @@ export function M3ContainedLoadingIndicator({
       -1,
       false,
     );
+    return () => {
+      cancelAnimation(rotation);
+    };
   }, [rotation]);
 
   const animatedStyle = useAnimatedStyle(() => ({

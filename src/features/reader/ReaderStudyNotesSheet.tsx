@@ -17,16 +17,37 @@ async function fetchWithTimeout(
   init?: RequestInit,
   timeoutMs: number = COMMENTARY_REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error("request timeout")), timeoutMs);
-  });
-  try {
-    const response = await Promise.race([fetch(input, init), timeoutPromise]);
-    return response as Response;
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const parentSignal = init?.signal;
+  const onParentAbort = () => controller.abort();
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort();
+    } else {
+      parentSignal.addEventListener("abort", onParentAbort);
+    }
   }
+
+  try {
+    const response = await fetch(input, { ...init, signal: controller.signal });
+    return response;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("commentary request aborted");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    parentSignal?.removeEventListener("abort", onParentAbort);
+  }
+}
+
+function isCommentaryRequestAborted(
+  cancelled: boolean,
+  signal: AbortSignal,
+): boolean {
+  return cancelled || signal.aborted;
 }
 
 type CommentaryApiInlineItem = string | { text?: string; content?: CommentaryApiInlineItem[] };
@@ -120,13 +141,14 @@ export function ReaderStudyNotesSheet({
   useEffect(() => {
     if (!isOpen) return;
     if (commentaryListResolved || commentaryListLoading) return;
+    const abortController = new AbortController();
     let cancelled = false;
     (async () => {
       setCommentaryListLoading(true);
       try {
         const res = await fetchWithTimeout(
           `${COMMENTARY_API_BASE_URL}/available_commentaries.json`,
-          undefined,
+          { signal: abortController.signal },
           COMMENTARY_REQUEST_TIMEOUT_MS,
         );
         if (!res.ok) throw new Error(`commentary list HTTP ${res.status}`);
@@ -142,15 +164,15 @@ export function ReaderStudyNotesSheet({
           .filter((c) => typeof c.id === "string" && typeof c.name === "string")
           .map((c) => ({ id: c.id!.trim(), name: c.name!.trim() }))
           .filter((c) => c.id.length > 0 && c.name.length > 0);
-        if (!cancelled && normalized.length === 0) {
+        if (!isCommentaryRequestAborted(cancelled, abortController.signal) && normalized.length === 0) {
           setCommentaryError("Commentary list unavailable right now.");
         }
       } catch {
-        if (!cancelled) {
+        if (!isCommentaryRequestAborted(cancelled, abortController.signal)) {
           setCommentaryError("Unable to load available commentaries right now.");
         }
       } finally {
-        if (!cancelled) {
+        if (!isCommentaryRequestAborted(cancelled, abortController.signal)) {
           setCommentaryListLoading(false);
           setCommentaryListResolved(true);
         }
@@ -158,6 +180,7 @@ export function ReaderStudyNotesSheet({
     })();
     return () => {
       cancelled = true;
+      abortController.abort();
     };
   }, [isOpen, commentaryListResolved, commentaryListLoading]);
 
@@ -172,6 +195,7 @@ export function ReaderStudyNotesSheet({
 
   useEffect(() => {
     if (!isOpen) return;
+    const abortController = new AbortController();
     let cancelled = false;
     (async () => {
       setCommentaryChapterLoading(true);
@@ -179,17 +203,23 @@ export function ReaderStudyNotesSheet({
       try {
         const commentaryBookId = getUsfmBookId(chapter.bookSlug);
         if (!commentaryBookId) {
-          if (!cancelled) {
+          if (!isCommentaryRequestAborted(cancelled, abortController.signal)) {
             setCommentaryEntries([]);
             setCommentaryError("Study notes are unavailable for this book.");
           }
           return;
         }
         const url = `${COMMENTARY_API_BASE_URL}/c/${encodeURIComponent(selectedCommentary)}/${encodeURIComponent(commentaryBookId)}/${chapter.chapterNumber}.json`;
-        const res = await fetchWithTimeout(url, undefined, COMMENTARY_REQUEST_TIMEOUT_MS);
+        const res = await fetchWithTimeout(
+          url,
+          { signal: abortController.signal },
+          COMMENTARY_REQUEST_TIMEOUT_MS,
+        );
         if (!res.ok) {
           if (res.status === 404) {
-            if (!cancelled) setCommentaryEntries([]);
+            if (!isCommentaryRequestAborted(cancelled, abortController.signal)) {
+              setCommentaryEntries([]);
+            }
             return;
           }
           throw new Error(`commentary chapter HTTP ${res.status}`);
@@ -200,18 +230,23 @@ export function ReaderStudyNotesSheet({
         }
         const raw = (await res.json()) as CommentaryApiChapterResponse;
         const items = Array.isArray(raw.chapter?.content) ? raw.chapter.content : [];
-        if (!cancelled) setCommentaryEntries(items);
+        if (!isCommentaryRequestAborted(cancelled, abortController.signal)) {
+          setCommentaryEntries(items);
+        }
       } catch {
-        if (!cancelled) {
+        if (!isCommentaryRequestAborted(cancelled, abortController.signal)) {
           setCommentaryEntries([]);
           setCommentaryError("Unable to load this commentary chapter.");
         }
       } finally {
-        if (!cancelled) setCommentaryChapterLoading(false);
+        if (!isCommentaryRequestAborted(cancelled, abortController.signal)) {
+          setCommentaryChapterLoading(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
+      abortController.abort();
     };
   }, [isOpen, selectedCommentary, chapter.bookSlug, chapter.chapterNumber]);
 

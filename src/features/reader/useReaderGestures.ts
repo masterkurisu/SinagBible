@@ -19,6 +19,12 @@ export const READER_VERSES_FADE_IN_MS = 320;
 /** Slide-down distance (px) for reader menus at open. */
 export const READER_MENU_SLIDE_FROM_PX = 20;
 
+function stopAnimatedValues(...values: Animated.Value[]): void {
+  for (const value of values) {
+    value.stopAnimation();
+  }
+}
+
 export const noopChapterSwipePan = PanResponder.create({
   onStartShouldSetPanResponder: () => false,
   onMoveShouldSetPanResponder: () => false,
@@ -133,6 +139,7 @@ export function useReaderGestures({
 
   useEffect(() => {
     if (!readerDropdown) {
+      stopAnimatedValues(dropSlideAnim, dropOpacityAnim);
       dropSlideAnim.setValue(0);
       dropOpacityAnim.setValue(0);
       return;
@@ -140,7 +147,7 @@ export function useReaderGestures({
     dropSlideAnim.setValue(0);
     dropOpacityAnim.setValue(0);
 
-    Animated.parallel([
+    const anim = Animated.parallel([
       Animated.timing(dropSlideAnim, {
         toValue: 1,
         duration: 280,
@@ -153,18 +160,24 @@ export function useReaderGestures({
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-    ]).start();
+    ]);
+    anim.start();
+    return () => {
+      anim.stop();
+      stopAnimatedValues(dropSlideAnim, dropOpacityAnim);
+    };
   }, [readerDropdown, dropSlideAnim, dropOpacityAnim]);
 
   useEffect(() => {
     if (!toolsMenuOpen || !settingsMenuAnchor) {
+      stopAnimatedValues(settingsPopupSlideAnim, settingsPopupOpacityAnim);
       settingsPopupSlideAnim.setValue(0);
       settingsPopupOpacityAnim.setValue(0);
       return;
     }
     settingsPopupSlideAnim.setValue(0);
     settingsPopupOpacityAnim.setValue(0);
-    Animated.parallel([
+    const anim = Animated.parallel([
       Animated.timing(settingsPopupSlideAnim, {
         toValue: 1,
         duration: 260,
@@ -177,7 +190,12 @@ export function useReaderGestures({
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-    ]).start();
+    ]);
+    anim.start();
+    return () => {
+      anim.stop();
+      stopAnimatedValues(settingsPopupSlideAnim, settingsPopupOpacityAnim);
+    };
   }, [toolsMenuOpen, settingsMenuAnchor, settingsPopupSlideAnim, settingsPopupOpacityAnim]);
 
   const closeReaderDropdown = useCallback(() => {
@@ -270,12 +288,17 @@ export function useReaderGestures({
     bookSheetClosingRef.current = false;
     bookSheetTranslateY.stopAnimation();
     bookSheetTranslateY.setValue(Dimensions.get("window").height);
-    Animated.spring(bookSheetTranslateY, {
+    const anim = Animated.spring(bookSheetTranslateY, {
       toValue: 0,
       friction: 9,
       tension: 68,
       useNativeDriver: true,
-    }).start();
+    });
+    anim.start();
+    return () => {
+      anim.stop();
+      bookSheetTranslateY.stopAnimation();
+    };
   }, [readerDropdown, bookSheetTranslateY]);
 
   useEffect(() => {
@@ -289,13 +312,14 @@ export function useReaderGestures({
 
   useEffect(() => {
     if (!fontSettingsSheetOpen) {
+      stopAnimatedValues(fontSettingsPopupSlideAnim, fontSettingsPopupOpacityAnim);
       fontSettingsPopupSlideAnim.setValue(0);
       fontSettingsPopupOpacityAnim.setValue(0);
       return;
     }
     fontSettingsPopupSlideAnim.setValue(0);
     fontSettingsPopupOpacityAnim.setValue(0);
-    Animated.parallel([
+    const anim = Animated.parallel([
       Animated.timing(fontSettingsPopupSlideAnim, {
         toValue: 1,
         duration: 280,
@@ -308,7 +332,12 @@ export function useReaderGestures({
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-    ]).start();
+    ]);
+    anim.start();
+    return () => {
+      anim.stop();
+      stopAnimatedValues(fontSettingsPopupSlideAnim, fontSettingsPopupOpacityAnim);
+    };
   }, [fontSettingsSheetOpen, fontSettingsPopupSlideAnim, fontSettingsPopupOpacityAnim]);
 
   useEffect(() => {
@@ -319,19 +348,26 @@ export function useReaderGestures({
       return;
     }
 
+    let fadeAnim: Animated.CompositeAnimation | null = null;
     if (readerVersesHadDesyncRef.current) {
       readerVersesHadDesyncRef.current = false;
       readerVersesOpacityAnim.stopAnimation();
       readerVersesOpacityAnim.setValue(0);
-      Animated.timing(readerVersesOpacityAnim, {
+      fadeAnim = Animated.timing(readerVersesOpacityAnim, {
         toValue: 1,
         duration: READER_VERSES_FADE_IN_MS,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
-      }).start();
+      });
+      fadeAnim.start();
     } else {
       readerVersesOpacityAnim.setValue(1);
     }
+
+    return () => {
+      fadeAnim?.stop();
+      readerVersesOpacityAnim.stopAnimation();
+    };
   }, [isReaderContentCurrent, readerVersesOpacityAnim]);
 
   const chapterSwipePan = useMemo(() => {

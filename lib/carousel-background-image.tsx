@@ -19,9 +19,16 @@ type CarouselBackgroundImageProps = {
  */
 export function CarouselBackgroundImage({ uri, recyclingKey }: CarouselBackgroundImageProps) {
   const opacity = useRef(new Animated.Value(0)).current;
+  const fadeAnimRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     opacity.setValue(0);
+    fadeAnimRef.current?.stop();
+    fadeAnimRef.current = null;
+    return () => {
+      fadeAnimRef.current?.stop();
+      fadeAnimRef.current = null;
+    };
   }, [opacity, uri]);
 
   return (
@@ -34,11 +41,18 @@ export function CarouselBackgroundImage({ uri, recyclingKey }: CarouselBackgroun
         recyclingKey={recyclingKey ?? uri}
         transition={0}
         onDisplay={() => {
-          Animated.timing(opacity, {
+          fadeAnimRef.current?.stop();
+          const anim = Animated.timing(opacity, {
             toValue: 1,
             duration: CAROUSEL_PHOTO_CROSSFADE_MS,
             useNativeDriver: true,
-          }).start();
+          });
+          fadeAnimRef.current = anim;
+          anim.start(({ finished }) => {
+            if (finished && fadeAnimRef.current === anim) {
+              fadeAnimRef.current = null;
+            }
+          });
         }}
         accessibilityIgnoresInvertColors
       />

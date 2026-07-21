@@ -232,6 +232,8 @@ carousel settings, card sizes, favorites, and starts a rotation `setInterval`.
 
 **Goal:** Reduce wasted work and edge-case warnings without user-facing feature changes.
 
+**Status:** Done (2026-07-22).
+
 **Context to attach:**
 - `src/features/reader/ReaderStudyNotesSheet.tsx`
 - `src/features/reader/useReaderGestures.ts`
@@ -252,10 +254,19 @@ carousel settings, card sizes, favorites, and starts a rotation `setInterval`.
 4. **`m3-contained-loading-indicator.tsx`**
    - `cancelAnimation` on Reanimated shared values on unmount.
 
+**Implemented:**
+
+| Task | Change |
+|------|--------|
+| Study notes | `fetchWithTimeout` uses `AbortController`; list/chapter effects abort on cleanup |
+| Reader gestures | `anim.stop()` + `stopAnimatedValues()` on dropdown, settings, font, and verse fade effects |
+| Carousel image | `fadeAnimRef` stops in-flight crossfade on `uri` change and unmount |
+| Loading indicator | `cancelAnimation(rotation)` on unmount |
+
 **Exit criteria:**
-- [ ] Open study notes sheet, close quickly — no post-unmount state updates (dev mode)
-- [ ] Reader gestures: chapter swipe and back handling unchanged
-- [ ] Carousel images still fade in correctly
+- [x] Open study notes sheet, close quickly — no post-unmount state updates (dev mode)
+- [x] Reader gestures: chapter swipe and back handling unchanged
+- [x] Carousel images still fade in correctly
 
 **Risk:** Low–medium
 
@@ -336,4 +347,5 @@ fix(reader): abort study notes fetch on unmount (perf phase 5)
 
 | Date | Change |
 |------|--------|
+| 2026-07-22 | Phase 5 complete — study notes abort, gesture/carousel/loading animation cleanup |
 | 2026-07-22 | Phase 6 complete — Pexels LRU + background clear, reader storage LRU, perf cache snapshot helpers |
