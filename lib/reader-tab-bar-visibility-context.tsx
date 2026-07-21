@@ -40,37 +40,110 @@ type ReaderTabBarSlideControllerValue = {
   snapScrollHidden: (hidden: boolean) => void;
 };
 
-type ReaderTabBarVisibilityContextValue = {
+type ReaderTabBarScrollContextValue = {
   /** Layout / reader chrome — updates when scroll crosses threshold. */
   scrollHidden: boolean;
   /** NativeTabs `hidden` — toggled in sync with slide animation start. */
   nativeTabBarHidden: boolean;
-  /** 0–1 tint for the reader settings menu tab bar (Android, tab bar visible only). */
-  settingsTabBarTint: number;
-  /** Reader settings menu slide (0 = closed, 1 = open) when on the chapter screen. */
-  settingsSlideProgress: Animated.Value | null;
   /** 0 = tab bar shown, 1 = slid down off-screen — snapped for list padding. */
   hideProgress: Animated.Value;
   /** @deprecated Scroll driver owns slide animation on the UI thread. */
   setScrollHidden: (hidden: boolean) => void;
   /** Instant reset — chapter changes, route leave (no slide animation). */
   snapScrollHidden: (hidden: boolean) => void;
+};
+
+type ReaderTabBarSettingsTintContextValue = {
+  /** 0–1 tint for the reader settings menu tab bar (Android, tab bar visible only). */
+  settingsTabBarTint: number;
+};
+
+type ReaderTabBarSettingsRegistrationContextValue = {
   registerReaderSettingsSlideProgress: (progress: Animated.Value | null) => void;
 };
 
 const ReaderTabBarSlideControllerContext = createContext<ReaderTabBarSlideControllerValue | null>(
   null,
 );
-const ReaderTabBarVisibilityContext = createContext<ReaderTabBarVisibilityContextValue | null>(
+const ReaderTabBarScrollContext = createContext<ReaderTabBarScrollContextValue | null>(null);
+const ReaderTabBarSettingsTintContext = createContext<ReaderTabBarSettingsTintContextValue | null>(
   null,
 );
+const ReaderTabBarSettingsRegistrationContext =
+  createContext<ReaderTabBarSettingsRegistrationContextValue | null>(null);
+
+type ReaderTabBarSettingsChromeHostProps = {
+  scrollHidden: boolean;
+  nativeTabBarHidden: boolean;
+  slideOverlayActive: boolean;
+  tabBarSlideProgressSV: SharedValue<number>;
+};
+
+/**
+ * Sibling overlay for settings-menu tab bar tint. Tint state lives here so chapter
+ * scroll consumers are not in an ancestor that re-renders every animation frame.
+ */
+function ReaderTabBarSettingsChromeHost({
+  scrollHidden,
+  nativeTabBarHidden,
+  slideOverlayActive,
+  tabBarSlideProgressSV,
+}: ReaderTabBarSettingsChromeHostProps) {
+  const [settingsSlideProgress, setSettingsSlideProgress] = useState<Animated.Value | null>(null);
+  const [settingsTabBarTint, setSettingsTabBarTint] = useState(0);
+
+  const registerReaderSettingsSlideProgress = useCallback((progress: Animated.Value | null) => {
+    setSettingsSlideProgress(progress);
+  }, []);
+
+  useEffect(() => {
+    if (scrollHidden || settingsSlideProgress == null) {
+      setSettingsTabBarTint(0);
+      return;
+    }
+
+    const syncTint = (value: number) => {
+      setSettingsTabBarTint(value);
+    };
+
+    const listenerId = settingsSlideProgress.addListener(({ value }) => {
+      syncTint(value);
+    });
+
+    settingsSlideProgress.stopAnimation(syncTint);
+
+    return () => {
+      settingsSlideProgress.removeListener(listenerId);
+      setSettingsTabBarTint(0);
+    };
+  }, [scrollHidden, settingsSlideProgress]);
+
+  const registrationValue = useMemo(
+    () => ({ registerReaderSettingsSlideProgress }),
+    [registerReaderSettingsSlideProgress],
+  );
+
+  const tintValue = useMemo(() => ({ settingsTabBarTint }), [settingsTabBarTint]);
+
+  return (
+    <ReaderTabBarSettingsRegistrationContext.Provider value={registrationValue}>
+      <ReaderTabBarSettingsTintContext.Provider value={tintValue}>
+        <ReaderBottomNavSlideChrome
+          tabBarSlideProgressSV={tabBarSlideProgressSV}
+          slideOverlayActive={slideOverlayActive}
+          nativeTabBarHidden={nativeTabBarHidden}
+          settingsTabBarTint={settingsTabBarTint}
+          tabBarInteractionHidden={scrollHidden}
+        />
+      </ReaderTabBarSettingsTintContext.Provider>
+    </ReaderTabBarSettingsRegistrationContext.Provider>
+  );
+}
 
 export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [scrollHidden, setScrollHiddenState] = useState(false);
   const [nativeTabBarHidden, setNativeTabBarHidden] = useState(false);
-  const [settingsSlideProgress, setSettingsSlideProgress] = useState<Animated.Value | null>(null);
-  const [settingsTabBarTint, setSettingsTabBarTint] = useState(0);
   const hideProgress = useRef(new Animated.Value(0)).current;
   const tabBarSlideProgressSV = useSharedValue(0);
   const scrollHiddenRef = useRef(false);
@@ -140,32 +213,6 @@ export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNo
     }
   }, [pathname, snapScrollHidden]);
 
-  const registerReaderSettingsSlideProgress = useCallback((progress: Animated.Value | null) => {
-    setSettingsSlideProgress(progress);
-  }, []);
-
-  useEffect(() => {
-    if (scrollHidden || settingsSlideProgress == null) {
-      setSettingsTabBarTint(0);
-      return;
-    }
-
-    const syncTint = (value: number) => {
-      setSettingsTabBarTint(value);
-    };
-
-    const listenerId = settingsSlideProgress.addListener(({ value }) => {
-      syncTint(value);
-    });
-
-    settingsSlideProgress.stopAnimation(syncTint);
-
-    return () => {
-      settingsSlideProgress.removeListener(listenerId);
-      setSettingsTabBarTint(0);
-    };
-  }, [scrollHidden, settingsSlideProgress]);
-
   const slideController = useMemo(
     () => ({
       tabBarSlideProgressSV,
@@ -187,43 +234,30 @@ export function ReaderTabBarVisibilityProvider({ children }: { children: ReactNo
     ],
   );
 
-  const value = useMemo(
+  const scrollValue = useMemo(
     () => ({
       scrollHidden,
       nativeTabBarHidden,
-      settingsTabBarTint,
-      settingsSlideProgress,
       hideProgress,
       setScrollHidden,
       snapScrollHidden,
-      registerReaderSettingsSlideProgress,
     }),
-    [
-      scrollHidden,
-      nativeTabBarHidden,
-      settingsTabBarTint,
-      settingsSlideProgress,
-      hideProgress,
-      setScrollHidden,
-      snapScrollHidden,
-      registerReaderSettingsSlideProgress,
-    ],
+    [scrollHidden, nativeTabBarHidden, hideProgress, setScrollHidden, snapScrollHidden],
   );
 
   return (
     <ReaderTabBarSlideControllerContext.Provider value={slideController}>
-      <ReaderTabBarVisibilityContext.Provider value={value}>
+      <ReaderTabBarScrollContext.Provider value={scrollValue}>
         <View style={{ flex: 1 }}>
           {children}
-          <ReaderBottomNavSlideChrome
-            tabBarSlideProgressSV={tabBarSlideProgressSV}
-            slideOverlayActive={slideOverlayActive}
+          <ReaderTabBarSettingsChromeHost
+            scrollHidden={scrollHidden}
             nativeTabBarHidden={nativeTabBarHidden}
-            settingsTabBarTint={settingsTabBarTint}
-            tabBarInteractionHidden={scrollHidden}
+            slideOverlayActive={slideOverlayActive}
+            tabBarSlideProgressSV={tabBarSlideProgressSV}
           />
         </View>
-      </ReaderTabBarVisibilityContext.Provider>
+      </ReaderTabBarScrollContext.Provider>
     </ReaderTabBarSlideControllerContext.Provider>
   );
 }
@@ -236,8 +270,8 @@ export function useReaderTabBarSlideController(): ReaderTabBarSlideControllerVal
   return ctx;
 }
 
-function useReaderTabBarVisibilityContext(): ReaderTabBarVisibilityContextValue {
-  const ctx = useContext(ReaderTabBarVisibilityContext);
+function useReaderTabBarScrollContext(): ReaderTabBarScrollContextValue {
+  const ctx = useContext(ReaderTabBarScrollContext);
   if (ctx == null) {
     throw new Error("ReaderTabBarVisibilityProvider is missing from the tree");
   }
@@ -245,36 +279,36 @@ function useReaderTabBarVisibilityContext(): ReaderTabBarVisibilityContextValue 
 }
 
 export function useReaderTabBarScrollHidden(): boolean {
-  return useReaderTabBarVisibilityContext().scrollHidden;
+  return useReaderTabBarScrollContext().scrollHidden;
 }
 
 export function useReaderNativeTabBarHidden(): boolean {
-  return useReaderTabBarVisibilityContext().nativeTabBarHidden;
+  return useReaderTabBarScrollContext().nativeTabBarHidden;
 }
 
 export function useReaderSettingsTabBarTint(): number {
-  const ctx = useContext(ReaderTabBarVisibilityContext);
+  const ctx = useContext(ReaderTabBarSettingsTintContext);
   return ctx?.settingsTabBarTint ?? 0;
 }
 
 export function useReaderTabBarHideProgress(): Animated.Value {
-  return useReaderTabBarVisibilityContext().hideProgress;
+  return useReaderTabBarScrollContext().hideProgress;
 }
 
 export function useSetReaderTabBarScrollHidden(): (hidden: boolean) => void {
-  return useReaderTabBarVisibilityContext().setScrollHidden;
+  return useReaderTabBarScrollContext().setScrollHidden;
 }
 
 export function useSnapReaderTabBarScrollHidden(): (hidden: boolean) => void {
-  return useReaderTabBarVisibilityContext().snapScrollHidden;
+  return useReaderTabBarScrollContext().snapScrollHidden;
 }
 
 export function useRegisterReaderSettingsSlideProgress(
   slideProgress: Animated.Value,
   enabled = true,
 ): void {
-  const ctx = useContext(ReaderTabBarVisibilityContext);
-  const register = ctx?.registerReaderSettingsSlideProgress;
+  const register = useContext(ReaderTabBarSettingsRegistrationContext)
+    ?.registerReaderSettingsSlideProgress;
 
   useEffect(() => {
     if (!enabled) {
