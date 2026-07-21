@@ -96,17 +96,31 @@ export type ReaderVerseRowProps = {
 function renderVerseBodyInline(
   items: BibleVerseInlineItem[],
   wordsOfJesusColor: string,
+  verseBodyTypography: Pick<
+    ReaderVerseRowProps,
+    "readerVerseFontSize" | "readerVerseLineHeight" | "readerVerseBodyFontFamily"
+  >,
   yvpFootnotes?: Record<number, { label: string; body: string }>,
   onYvpFootnotePress?: (noteId: number) => void,
 ) {
+  const nestedTextStyle = {
+    fontFamily: verseBodyTypography.readerVerseBodyFontFamily,
+    fontSize: verseBodyTypography.readerVerseFontSize,
+    lineHeight: verseBodyTypography.readerVerseLineHeight,
+  } as const;
+
   return items.map((item, idx) => {
     const key = `seg-${idx}`;
     if (typeof item === "string") {
-      return <Text key={key}>{item}</Text>;
+      return (
+        <Text key={key} style={nestedTextStyle}>
+          {item}
+        </Text>
+      );
     }
     if ("lineBreak" in item && item.lineBreak === true) {
       return (
-        <Text key={key}>
+        <Text key={key} style={nestedTextStyle}>
           {"\n"}
         </Text>
       );
@@ -129,7 +143,7 @@ function renderVerseBodyInline(
     }
     if ("heading" in item && typeof item.heading === "string") {
       return (
-        <Text key={key} style={styles.inlineHeading}>
+        <Text key={key} style={[styles.inlineHeading, nestedTextStyle]}>
           {item.heading}
         </Text>
       );
@@ -137,12 +151,16 @@ function renderVerseBodyInline(
     if ("text" in item && typeof item.text === "string") {
       if (item.wordsOfJesus === true) {
         return (
-          <Text key={key} style={{ color: wordsOfJesusColor }}>
+          <Text key={key} style={[nestedTextStyle, { color: wordsOfJesusColor }]}>
             {item.text}
           </Text>
         );
       }
-      return <Text key={key}>{item.text}</Text>;
+      return (
+        <Text key={key} style={nestedTextStyle}>
+          {item.text}
+        </Text>
+      );
     }
     return null;
   });
@@ -257,6 +275,11 @@ function ReaderVerseRowInner({
               ? renderVerseBodyInline(
                   verseInlineContent,
                   wordsOfJesusInk,
+                  {
+                    readerVerseFontSize,
+                    readerVerseLineHeight,
+                    readerVerseBodyFontFamily,
+                  },
                   yvpFootnotes,
                   onYvpFootnotePress,
                 )

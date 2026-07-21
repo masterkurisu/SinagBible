@@ -1677,6 +1677,7 @@ export default function ReaderChapterScreen() {
         readerScrollRef={readerScrollRef}
         chapterSwipePanHandlers={chapterSwipePanHandlers}
         readerVerseEstimatedItemSize={readerVerseEstimatedItemSize}
+        readerListContentKey={readerChapterScrollKey}
         onScroll={onReaderScroll}
         onScrollBeginDrag={onReaderScrollBeginDragWithChapterNav}
         onScrollEndDrag={onReaderScrollEndDragWithChapterNav}

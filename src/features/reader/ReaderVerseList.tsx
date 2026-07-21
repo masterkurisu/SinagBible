@@ -167,6 +167,10 @@ type ReaderVerseListProps = {
   readerScrollRef: RefObject<import("@shopify/flash-list").FlashListRef<ReaderVerseFlashItem> | null>;
   chapterSwipePanHandlers: GestureResponderHandlers;
   readerVerseEstimatedItemSize: number;
+  /** Book:chapter:translation — remounts the list when chapter content changes. */
+  readerListContentKey: string;
+  readerVerseFontSize: number;
+  readerVerseLineHeight: number;
   onScroll: NonNullable<ComponentProps<typeof AnimatedReaderChapterFlashList>["onScroll"]>;
   onScrollBeginDrag: () => void;
   onScrollEndDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
@@ -192,6 +196,9 @@ export function ReaderVerseList({
   readerScrollRef,
   chapterSwipePanHandlers,
   readerVerseEstimatedItemSize,
+  readerListContentKey,
+  readerVerseFontSize,
+  readerVerseLineHeight,
   onScroll,
   onScrollBeginDrag,
   onScrollEndDrag,
@@ -210,7 +217,17 @@ export function ReaderVerseList({
   onListLayoutHeight,
   readerVersesOpacityAnim,
 }: ReaderVerseListProps) {
-  const readerVerseFlashGetItemType = useCallback((item: ReaderVerseFlashItem) => item.kind, []);
+  const readerVerseFlashGetItemType = useCallback(
+    (item: ReaderVerseFlashItem) => {
+      if (item.kind === "empty") return "empty";
+      return `verse-fs${Math.round(readerVerseFontSize * 10)}-lh${Math.round(readerVerseLineHeight * 10)}`;
+    },
+    [readerVerseFontSize, readerVerseLineHeight],
+  );
+
+  const readerFlashListLayoutKey = readerTabletLandscapeTwoColumn
+    ? `${readerListContentKey}:2col`
+    : `${readerListContentKey}:1col`;
 
   const selectionPaddingBottom =
     actionBarBottomPx + READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX;
@@ -257,7 +274,7 @@ export function ReaderVerseList({
 
   const flashList = (
     <AnimatedReaderChapterFlashList
-      key={readerTabletLandscapeTwoColumn ? "reader-verse-2col" : "reader-verse-1col"}
+      key={readerFlashListLayoutKey}
       ref={readerScrollRef}
       {...chapterSwipePanHandlers}
       {...({ estimatedItemSize: readerVerseEstimatedItemSize } as Record<string, unknown>)}
