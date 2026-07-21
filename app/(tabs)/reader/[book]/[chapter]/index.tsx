@@ -255,6 +255,7 @@ export default function ReaderChapterScreen() {
   const [readerDataImportPicking, setReaderDataImportPicking] = useState(false);
   const [commentaryPanelOpen, setCommentaryPanelOpen] = useState(false);
   const mobileSettingsFollowUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sheetFollowUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fontSettingsSheetOpen, setFontSettingsSheetOpen] = useState(false);
   const [moreSettingsSheetOpen, setMoreSettingsSheetOpen] = useState(false);
   const [deleteMyDataDialogOpen, setDeleteMyDataDialogOpen] = useState(false);
@@ -478,6 +479,32 @@ export default function ReaderChapterScreen() {
     [clearMobileSettingsFollowUp],
   );
 
+  const clearSheetFollowUpTimeout = useCallback(() => {
+    if (sheetFollowUpTimeoutRef.current != null) {
+      clearTimeout(sheetFollowUpTimeoutRef.current);
+      sheetFollowUpTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleSheetFollowUp = useCallback(
+    (fn: () => void, delayMs = 0) => {
+      clearSheetFollowUpTimeout();
+      sheetFollowUpTimeoutRef.current = setTimeout(() => {
+        sheetFollowUpTimeoutRef.current = null;
+        fn();
+      }, delayMs);
+    },
+    [clearSheetFollowUpTimeout],
+  );
+
+  useEffect(
+    () => () => {
+      clearMobileSettingsFollowUp();
+      clearSheetFollowUpTimeout();
+    },
+    [clearMobileSettingsFollowUp, clearSheetFollowUpTimeout],
+  );
+
   const closeToolsMenu = useCallback(() => {
     clearMobileSettingsFollowUp();
     setToolsMenuOpen(false);
@@ -536,31 +563,31 @@ export default function ReaderChapterScreen() {
 
   const openCreditsFromMoreSheet = useCallback(() => {
     closeMoreSettingsPopup();
-    setTimeout(() => {
+    scheduleSheetFollowUp(() => {
       setReaderCreditsOpen(true);
-    }, 0);
-  }, [closeMoreSettingsPopup]);
+    });
+  }, [closeMoreSettingsPopup, scheduleSheetFollowUp]);
 
   const openChangelogsFromMoreSheet = useCallback(() => {
     closeMoreSettingsPopup();
-    setTimeout(() => {
+    scheduleSheetFollowUp(() => {
       setReaderChangelogsOpen(true);
-    }, 0);
-  }, [closeMoreSettingsPopup]);
+    });
+  }, [closeMoreSettingsPopup, scheduleSheetFollowUp]);
 
   const openDataBackupFromMoreSheet = useCallback(() => {
     closeMoreSettingsPopup();
-    setTimeout(() => {
+    scheduleSheetFollowUp(() => {
       setDataBackupSheetOpen(true);
-    }, 0);
-  }, [closeMoreSettingsPopup]);
+    });
+  }, [closeMoreSettingsPopup, scheduleSheetFollowUp]);
 
   const openDataBackupFromDeleteReminder = useCallback(() => {
     closeDeleteMyDataDialog();
-    setTimeout(() => {
+    scheduleSheetFollowUp(() => {
       setDataBackupSheetOpen(true);
-    }, 0);
-  }, [closeDeleteMyDataDialog]);
+    });
+  }, [closeDeleteMyDataDialog, scheduleSheetFollowUp]);
 
   const openMobileReaderThemesFromMenu = useCallback(() => {
     closeToolsMenu();
@@ -600,17 +627,17 @@ export default function ReaderChapterScreen() {
   /** Close credits first so only one RN `Modal` is active; avoids stacking quirks and nested-Text press issues. */
   const openPrivacyPolicyFromCredits = useCallback(() => {
     setReaderCreditsOpen(false);
-    setTimeout(() => {
+    scheduleSheetFollowUp(() => {
       setReaderPrivacyPolicyOpen(true);
-    }, 0);
-  }, []);
+    });
+  }, [scheduleSheetFollowUp]);
 
   const openTermsFromCredits = useCallback(() => {
     setReaderCreditsOpen(false);
-    setTimeout(() => {
+    scheduleSheetFollowUp(() => {
       setReaderTermsOpen(true);
-    }, 0);
-  }, []);
+    });
+  }, [scheduleSheetFollowUp]);
 
   const readerSettingsMenuPanResponder = useMemo(() => {
     if (!isTabletReaderLayout) return PanResponder.create({});

@@ -320,6 +320,16 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   );
   const [activeFormField, setActiveFormField] = useState<JournalFormActiveField>(null);
   const activeFormFieldRef = useRef<JournalFormActiveField>(null);
+  const formFollowUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearFormFollowUpTimeout = useCallback(() => {
+    if (formFollowUpTimeoutRef.current != null) {
+      clearTimeout(formFollowUpTimeoutRef.current);
+      formFollowUpTimeoutRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearFormFollowUpTimeout(), [clearFormFollowUpTimeout]);
 
   const markActiveFormField = (field: JournalFormActiveField) => {
     activeFormFieldRef.current = field;
@@ -327,7 +337,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   };
 
   const releaseActiveFormField = (field: Exclude<JournalFormActiveField, null>) => {
-    setTimeout(() => {
+    clearFormFollowUpTimeout();
+    formFollowUpTimeoutRef.current = setTimeout(() => {
+      formFollowUpTimeoutRef.current = null;
       if (activeFormFieldRef.current === field) markActiveFormField(null);
     }, 0);
   };
@@ -593,7 +605,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     setReflectionFullscreenOpen(true);
     reflectionInputRef.current?.blur();
     Keyboard.dismiss();
-    setTimeout(() => {
+    clearFormFollowUpTimeout();
+    formFollowUpTimeoutRef.current = setTimeout(() => {
+      formFollowUpTimeoutRef.current = null;
       suppressReflectionBlurRef.current = false;
       fullscreenReflectionInputRef.current?.focus();
     }, 120);

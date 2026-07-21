@@ -452,6 +452,16 @@ export default function JournalIndexScreen() {
   const [newEntrySheetKey, setNewEntrySheetKey] = useState(0);
   const listRef = useRef<FlatList<JournalRow> | null>(null);
   const entryRowRefs = useRef(new Map<string, RefObject<RNView | null>>());
+
+  const pruneEntryRowRefs = useCallback((activeEntryIds: ReadonlySet<string>) => {
+    const map = entryRowRefs.current;
+    for (const entryId of map.keys()) {
+      if (!activeEntryIds.has(entryId)) {
+        map.delete(entryId);
+      }
+    }
+  }, []);
+
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const createFromBibleRef = useRef<View | null>(null);
@@ -568,6 +578,7 @@ export default function JournalIndexScreen() {
   const load = useCallback(async () => {
     try {
       const rows = mergePendingListUpsert(await loadJournalListItems());
+      pruneEntryRowRefs(new Set(rows.map((entry) => entry.id)));
       setEntries(rows);
     } catch (e) {
       if (__DEV__) {
@@ -579,7 +590,7 @@ export default function JournalIndexScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [mergePendingListUpsert]);
+  }, [mergePendingListUpsert, pruneEntryRowRefs]);
 
   const showJournalToast = useCallback((message: string) => {
     toastAnimRef.current?.stop();
@@ -978,8 +989,10 @@ export default function JournalIndexScreen() {
 
   const confirmDeleteEntry = useCallback(async () => {
     if (!deleteDialogEntry) return;
-    await deleteLocalEntry(deleteDialogEntry.id);
-    setEntries((prev) => prev.filter((e) => e.id !== deleteDialogEntry.id));
+    const deletedId = deleteDialogEntry.id;
+    await deleteLocalEntry(deletedId);
+    entryRowRefs.current.delete(deletedId);
+    setEntries((prev) => prev.filter((e) => e.id !== deletedId));
     showJournalToast("Entry deleted");
   }, [deleteDialogEntry, showJournalToast]);
 

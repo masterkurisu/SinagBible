@@ -82,6 +82,33 @@ export function useReaderSettingsFollowUpState({
   const dropOpacityAnim = useRef(new Animated.Value(0)).current;
   const themesFanRef = useRef<View | null>(null);
   const translationFanRef = useRef<View | null>(null);
+  const sheetFollowUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSheetFollowUpTimeout = useCallback(() => {
+    if (sheetFollowUpTimeoutRef.current != null) {
+      clearTimeout(sheetFollowUpTimeoutRef.current);
+      sheetFollowUpTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleSheetFollowUp = useCallback(
+    (fn: () => void, delayMs = 0) => {
+      clearSheetFollowUpTimeout();
+      sheetFollowUpTimeoutRef.current = setTimeout(() => {
+        sheetFollowUpTimeoutRef.current = null;
+        fn();
+      }, delayMs);
+    },
+    [clearSheetFollowUpTimeout],
+  );
+
+  useEffect(
+    () => () => {
+      clearMobileSettingsFollowUp();
+      clearSheetFollowUpTimeout();
+    },
+    [clearMobileSettingsFollowUp, clearSheetFollowUpTimeout],
+  );
 
   const closeReaderDropdown = useCallback(() => {
     clearMobileSettingsFollowUp();
@@ -161,41 +188,45 @@ export function useReaderSettingsFollowUpState({
 
   const openCreditsFromMoreSheet = useCallback(() => {
     closeMoreSettingsPopup();
-    setTimeout(() => {
+    scheduleSheetFollowUp(() => {
       setReaderCreditsOpen(true);
-    }, 0);
-  }, [closeMoreSettingsPopup]);
+    });
+  }, [closeMoreSettingsPopup, scheduleSheetFollowUp]);
 
   const openChangelogsFromMoreSheet = useCallback(() => {
     closeMoreSettingsPopup();
-    setTimeout(() => {
+    scheduleSheetFollowUp(() => {
       setReaderChangelogsOpen(true);
-    }, 0);
-  }, [closeMoreSettingsPopup]);
+    });
+  }, [closeMoreSettingsPopup, scheduleSheetFollowUp]);
 
   const openDataBackupFromMoreSheet = useCallback(() => {
     closeMoreSettingsPopup();
-    setTimeout(() => {
+    scheduleSheetFollowUp(() => {
       setDataBackupSheetOpen(true);
-    }, 0);
-  }, [closeMoreSettingsPopup]);
+    });
+  }, [closeMoreSettingsPopup, scheduleSheetFollowUp]);
 
   const openDataBackupFromDeleteReminder = useCallback(() => {
     closeDeleteMyDataDialog();
-    setTimeout(() => {
+    scheduleSheetFollowUp(() => {
       setDataBackupSheetOpen(true);
-    }, 0);
-  }, [closeDeleteMyDataDialog]);
+    });
+  }, [closeDeleteMyDataDialog, scheduleSheetFollowUp]);
 
   const openPrivacyPolicyFromCredits = useCallback(() => {
     setReaderCreditsOpen(false);
-    setTimeout(() => setReaderPrivacyPolicyOpen(true), 0);
-  }, []);
+    scheduleSheetFollowUp(() => {
+      setReaderPrivacyPolicyOpen(true);
+    });
+  }, [scheduleSheetFollowUp]);
 
   const openTermsFromCredits = useCallback(() => {
     setReaderCreditsOpen(false);
-    setTimeout(() => setReaderTermsOpen(true), 0);
-  }, []);
+    scheduleSheetFollowUp(() => {
+      setReaderTermsOpen(true);
+    });
+  }, [scheduleSheetFollowUp]);
 
   const openDeleteMyDataConfirmFromMenu = useCallback(
     (_onNavigate: (href: Href) => void) => {
