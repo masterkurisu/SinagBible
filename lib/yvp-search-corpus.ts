@@ -114,3 +114,8 @@ export function warmYvpSearchTranslationContext(bibleId: number): void {
     /* warm-up is best-effort */
   });
 }
+
+/** Dev/diagnostic — current YVP search corpus cache entry count. */
+export function getYvpSearchContextCacheSize(): number {
+  return yvpSearchContextCache.size;
+}

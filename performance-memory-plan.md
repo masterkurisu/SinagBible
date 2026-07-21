@@ -265,6 +265,8 @@ carousel settings, card sizes, favorites, and starts a rotation `setInterval`.
 
 **Goal:** Address remaining low-priority items and add guardrails for regressions.
 
+**Status:** Done (2026-07-22).
+
 **Tasks (pick as needed):**
 
 1. **Pexels session cache cap** — `lib/pexels-repository.ts` `sessionCardUrlByVerseId` / `sessionResolvedByVersesKey` max size or clear on app background.
@@ -272,11 +274,18 @@ carousel settings, card sizes, favorites, and starts a rotation `setInterval`.
 3. **Container transform context** — audit `src/components/m3/ContainerTransform.tsx` re-renders during journal morph; split only if profiling warrants it.
 4. **Dev-only memory helpers** — optional `__DEV__` log for cache sizes (search, pexels, chapter storage) behind a flag.
 
-**Exit criteria:**
-- [ ] Documented decisions for anything deferred
-- [ ] No mandatory user-facing changes
+**Implemented:**
 
-**Risk:** Low
+| Task | Decision |
+|------|----------|
+| Pexels | LRU caps (128 card URLs, 24 resolved keys) + `clearPexelsSessionCaches()` on app background |
+| Reader chapter storage | LRU cap of 80 entries in `use-reader-storage.ts` |
+| Container transform | **Deferred** — single context kept; comment added; split only if morph profiling shows issues |
+| Dev helpers | `lib/perf-cache-snapshot.ts` — `getPerfCacheSnapshot()`, `logPerfCacheSnapshot()`; opt-in log on background via `global.__SINAG_LOG_PERF_CACHES__ = true` |
+
+**Exit criteria:**
+- [x] Documented decisions for anything deferred
+- [x] No mandatory user-facing changes
 
 ---
 
@@ -327,4 +336,4 @@ fix(reader): abort study notes fetch on unmount (perf phase 5)
 
 | Date | Change |
 |------|--------|
-| 2026-07-22 | Initial plan from full-project performance & memory audit |
+| 2026-07-22 | Phase 6 complete — Pexels LRU + background clear, reader storage LRU, perf cache snapshot helpers |

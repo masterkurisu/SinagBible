@@ -31,6 +31,8 @@ import { initJournalStorage } from "@/lib/journal-local";
 import { migrateAsyncStorageChapters } from "@/lib/migrate-async-storage";
 import { fetchChapterRemoteConfig } from "@/lib/chapter-remote-config";
 import { reconcileWithRemoteConfig } from "@/lib/chapter-store";
+import { clearPexelsSessionCaches } from "@/lib/pexels-repository";
+import { maybeLogPerfCacheSnapshotOnBackground } from "@/lib/perf-cache-snapshot";
 import {
   FEATURE_ONBOARDING_FORCE_ALL,
   resetAllFeatureOnboardingStorage,
@@ -166,6 +168,9 @@ function RootLayoutContent() {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") {
         runChapterRemoteReconcile();
+      } else if (nextState === "background") {
+        clearPexelsSessionCaches();
+        maybeLogPerfCacheSnapshotOnBackground();
       }
     });
 

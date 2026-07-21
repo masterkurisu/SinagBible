@@ -10,6 +10,7 @@ import {
 } from "@sinag-bible/types";
 import { saveReaderLastPosition } from "@/lib/reader-last-position";
 import { registerReaderDataImportReload } from "@/lib/reader-data-import-sync";
+import { LruMap } from "@sinag-bible/core/lru-map";
 
 const ANNOTATIONS_STORAGE_KEY_PREFIX = "sb:reader:highlights:";
 const NOTES_STORAGE_KEY_PREFIX = "sb:reader:notes:";
@@ -36,7 +37,9 @@ const EMPTY_CHAPTER_STORAGE: ChapterStorageSnapshot = {
   notes: {},
 };
 
-const chapterStorageCache = new Map<string, ChapterStorageSnapshot>();
+/** Soft cap for in-memory annotation/note snapshots during long reading sessions. */
+const CHAPTER_STORAGE_CACHE_MAX = 80;
+const chapterStorageCache = new LruMap<string, ChapterStorageSnapshot>(CHAPTER_STORAGE_CACHE_MAX);
 const chapterStorageLoadPromises = new Map<string, Promise<ChapterStorageSnapshot>>();
 
 function parseAnnotations(raw: string | null | undefined): Record<number, VerseAnnotation> {
@@ -308,6 +311,11 @@ function chapterExportKey(bookSlug: string, chapter: number, translationId: stri
 export function clearReaderChapterStorageCache(): void {
   chapterStorageCache.clear();
   chapterStorageLoadPromises.clear();
+}
+
+/** Dev/diagnostic — current in-memory chapter storage entry count. */
+export function getReaderChapterStorageCacheSize(): number {
+  return chapterStorageCache.size;
 }
 
 /** Loads every persisted annotation and note chapter from AsyncStorage. */

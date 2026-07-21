@@ -362,6 +362,8 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
       dismissInstantly,
       abortToFadeOut,
     }),
+    // Single context is intentional: only ContainerTransformHost + journal morph consume
+    // internals during animation; split deferred unless profiling shows broad re-renders.
     [abortToFadeOut, backgroundDim, close, dismissInstantly, isOpen, openExpanded, openFrom, progress, scrimOpacity, session],
   );
 

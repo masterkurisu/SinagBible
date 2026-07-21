@@ -194,6 +194,11 @@ export async function fetchHelloaoCompleteTranslationData(apiId: string): Promis
   return p;
 }
 
+/** Dev/diagnostic — current HelloAO complete.json cache entry count. */
+export function getHelloaoCompleteDataCacheSize(): number {
+  return helloaoCompleteDataCache.size;
+}
+
 /** Book navigation for any loaded translation dataset (KJV-aligned slugs when canon matches). */
 export async function buildBookNavForTranslationData(
   data: TranslationData,

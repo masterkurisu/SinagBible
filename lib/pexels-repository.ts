@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
+import { LruMap } from "@sinag-bible/core/lru-map";
 import {
   getPexelsKeywordsForImageTheme,
   getPexelsSearchKeywordForImageTheme,
@@ -34,8 +35,13 @@ type CarouselVerseRef = {
 };
 
 const pendingPoolFetches = new Map<string, Promise<string[]>>();
-const sessionCardUrlByVerseId = new Map<string, string>();
-const sessionResolvedByVersesKey = new Map<string, Record<string, string>>();
+/** In-memory URL assignments — bounded; disk + session clear on app background. */
+const PEXELS_SESSION_CARD_URL_MAX = 128;
+const PEXELS_SESSION_RESOLVED_MAX = 24;
+const sessionCardUrlByVerseId = new LruMap<string, string>(PEXELS_SESSION_CARD_URL_MAX);
+const sessionResolvedByVersesKey = new LruMap<string, Record<string, string>>(
+  PEXELS_SESSION_RESOLVED_MAX,
+);
 const warmedKeywordSets = new Set<string>();
 const imageRefreshListeners = new Set<(urlsByVerseId: Record<string, string>) => void>();
 const verseConsumers = new Map<number, readonly CarouselVerseRef[]>();
@@ -541,4 +547,21 @@ async function warmCarouselImagePoolFromKeywords(
     stagnantRounds = after > before ? 0 : stagnantRounds + 1;
     keywordIndex += 1;
   }
+}
+
+/** Clears in-memory carousel URL caches (e.g. when the app backgrounds). */
+export function clearPexelsSessionCaches(): void {
+  sessionCardUrlByVerseId.clear();
+  sessionResolvedByVersesKey.clear();
+}
+
+/** Dev/diagnostic — current Pexels session cache sizes. */
+export function getPexelsSessionCacheSizes(): {
+  cardUrls: number;
+  resolvedKeys: number;
+} {
+  return {
+    cardUrls: sessionCardUrlByVerseId.size,
+    resolvedKeys: sessionResolvedByVersesKey.size,
+  };
 }

@@ -73,6 +73,11 @@ export function evictVagueKeywordIndex(id: string): void {
   indexByTranslation.delete(id);
 }
 
+/** Dev/diagnostic — number of cached keyword indexes. */
+export function getVagueKeywordIndexCacheSize(): number {
+  return indexByTranslation.size;
+}
+
 /**
  * Whole-word hits first; when none exist and the query is long enough, include words
  * that start with the query (e.g. "test" → testify, testimony) in canonical order.
