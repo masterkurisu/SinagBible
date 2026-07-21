@@ -68,6 +68,11 @@ export function getOrBuildVagueKeywordIndex(
   return index;
 }
 
+/** Drop a cached inverted index when its translation corpus is evicted from memory. */
+export function evictVagueKeywordIndex(id: string): void {
+  indexByTranslation.delete(id);
+}
+
 /**
  * Whole-word hits first; when none exist and the query is long enough, include words
  * that start with the query (e.g. "test" → testify, testimony) in canonical order.

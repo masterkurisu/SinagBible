@@ -13,7 +13,9 @@
     "./journal": "./src/journal.ts",
     "./reference-aliases": "./src/reference-aliases.ts",
     "./text-utils": "./src/text-utils.ts",
-    "./verse-tags": "./src/verse-tags.ts"
+    "./verse-tags": "./src/verse-tags.ts",
+    "./lru-map": "./src/lru-map.ts",
+    "./vague-keyword-index": "./src/vague-keyword-index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

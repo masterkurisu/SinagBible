@@ -20,7 +20,9 @@ import {
   keywordHasPopularVerses,
 } from "./search-keyword-popular";
 import { levenshtein } from "./text-utils";
+import { LruMap } from "./lru-map";
 import {
+  evictVagueKeywordIndex,
   getOrBuildVagueKeywordIndex,
   lookupKeywordVerseRefs,
   type VagueKeywordVerseRef,
@@ -150,7 +152,13 @@ function loadTranslationData(id: TranslationId): Promise<TranslationData> {
   return p;
 }
 
-const helloaoCompleteDataCache = new Map<string, Promise<TranslationData>>();
+const helloaoCompleteDataCache = new LruMap<string, Promise<TranslationData>>(3);
+const dynamicBookNavPromiseCache = new Map<string, Promise<BibleBookNavItem[]>>();
+
+function evictHelloaoSearchCaches(cacheKey: string): void {
+  dynamicBookNavPromiseCache.delete(cacheKey);
+  evictVagueKeywordIndex(cacheKey);
+}
 
 /**
  * Load full translation text from helloao.org `complete.json` (or bundled data when the id
@@ -182,11 +190,9 @@ export async function fetchHelloaoCompleteTranslationData(apiId: string): Promis
     return convertApiResponseToTranslationData(json);
   })();
 
-  helloaoCompleteDataCache.set(cacheKey, p);
+  helloaoCompleteDataCache.set(cacheKey, p, evictHelloaoSearchCaches);
   return p;
 }
-
-const dynamicBookNavPromiseCache = new Map<string, Promise<BibleBookNavItem[]>>();
 
 /** Book navigation for any loaded translation dataset (KJV-aligned slugs when canon matches). */
 export async function buildBookNavForTranslationData(

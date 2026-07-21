@@ -1,5 +1,7 @@
 import type { SearchTranslationContext } from "@sinag-bible/core/bible-translations";
 import { buildBookNavForTranslationData } from "@sinag-bible/core/bible-translations";
+import { evictVagueKeywordIndex } from "@sinag-bible/core/vague-keyword-index";
+import { LruMap } from "@sinag-bible/core/lru-map";
 import type { KJVData } from "@sinag-bible/types";
 import {
   fetchYvpBookNav,
@@ -9,7 +11,10 @@ import {
 
 type TranslationData = KJVData;
 
-const yvpSearchContextCache = new Map<number, Promise<SearchTranslationContext>>();
+const YVP_SEARCH_CONTEXT_CACHE_MAX = 2;
+const yvpSearchContextCache = new LruMap<number, Promise<SearchTranslationContext>>(
+  YVP_SEARCH_CONTEXT_CACHE_MAX,
+);
 const yvpSearchContextBuilds = new Map<number, Promise<SearchTranslationContext>>();
 /** Keep low — YouVersion rate-limits bulk passage fetches (HTTP 429). */
 const YVP_SEARCH_CORPUS_CONCURRENCY = 2;
@@ -17,6 +22,10 @@ const YVP_SEARCH_CORPUS_REQUEST_DELAY_MS = 200;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function evictYvpSearchCaches(bibleId: number): void {
+  evictVagueKeywordIndex(formatYvpTranslationId(bibleId));
 }
 
 async function runPool<T>(
@@ -88,7 +97,7 @@ export function getYvpSearchTranslationContext(bibleId: number): Promise<SearchT
   if (!inflight) {
     inflight = buildYvpSearchTranslationContext(bibleId)
       .then((ctx) => {
-        yvpSearchContextCache.set(bibleId, Promise.resolve(ctx));
+        yvpSearchContextCache.set(bibleId, Promise.resolve(ctx), evictYvpSearchCaches);
         return ctx;
       })
       .finally(() => {
