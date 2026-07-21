@@ -33,7 +33,7 @@ import {
   buildCarouselVerseFromSelection,
   selectionMatchesCarouselRecord,
 } from "@/lib/journal-carousel-verses";
-import { useJournalCarouselVerses } from "@/lib/use-journal-carousel-verses";
+import { useCarouselFavorites } from "@/lib/use-journal-carousel-verses";
 import { ReaderVerseRow } from "@/components/reader-verse-row";
 import {
   ReaderVerseList,
@@ -653,7 +653,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   const { bundle } = useMobileAppTheme();
   const insets = useSafeAreaInsets();
 
-  const { favorites, toggleFavorite } = useJournalCarouselVerses();
+  const { favorites, toggleFavorite } = useCarouselFavorites();
   const [favoriteToastVisible, setFavoriteToastVisible] = useState(false);
   const [favoriteToastAdded, setFavoriteToastAdded] = useState(true);
 

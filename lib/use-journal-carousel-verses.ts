@@ -31,6 +31,45 @@ function favoritesEqual(a: CarouselVerseRecord[], b: CarouselVerseRecord[]): boo
   return true;
 }
 
+/** Favorites list + toggle only — for reader selection without carousel rotation/settings. */
+export function useCarouselFavorites() {
+  const [favorites, setFavorites] = useState<CarouselVerseRecord[]>([]);
+
+  const reloadFavorites = useCallback(async () => {
+    const items = await loadCarouselFavorites();
+    setFavorites((prev) => (favoritesEqual(prev, items) ? prev : items));
+    return items;
+  }, []);
+
+  useEffect(() => {
+    void reloadFavorites();
+  }, [reloadFavorites]);
+
+  useEffect(() => {
+    return subscribeCarouselFavorites(() => {
+      void reloadFavorites();
+    });
+  }, [reloadFavorites]);
+
+  const toggleFavorite = useCallback(async (record: CarouselVerseRecord) => {
+    const { favorites: next, added } = await toggleCarouselFavorite(record);
+    setFavorites(next);
+    return added;
+  }, []);
+
+  const removeFavorite = useCallback(async (id: string) => {
+    const next = await removeCarouselFavorite(id);
+    setFavorites(next);
+  }, []);
+
+  return {
+    favorites,
+    toggleFavorite,
+    removeFavorite,
+    reloadFavorites,
+  };
+}
+
 function settingsEqual(a: JournalCarouselSettings, b: JournalCarouselSettings): boolean {
   return (
     a.randomize === b.randomize &&
@@ -58,35 +97,27 @@ function cardSizeOverridesEqual(
 }
 
 export function useJournalCarouselVerses() {
-  const [favorites, setFavorites] = useState<CarouselVerseRecord[]>([]);
+  const { favorites, toggleFavorite, removeFavorite, reloadFavorites } = useCarouselFavorites();
   const [settings, setSettings] = useState<JournalCarouselSettings>(DEFAULT_JOURNAL_CAROUSEL_SETTINGS);
   const [cardSizeOverrides, setCardSizeOverrides] = useState<Record<string, CarouselCardSize>>({});
   const [rotationOffset, setRotationOffset] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
-    const [items, nextSettings, overrides] = await Promise.all([
-      loadCarouselFavorites(),
+    const [, nextSettings, overrides] = await Promise.all([
+      reloadFavorites(),
       loadJournalCarouselSettings(),
       loadCarouselCardSizes(),
     ]);
-    setFavorites((prev) => (favoritesEqual(prev, items) ? prev : items));
     setSettings((prev) => (settingsEqual(prev, nextSettings) ? prev : nextSettings));
     setCardSizeOverrides((prev) =>
       cardSizeOverridesEqual(prev, overrides) ? prev : overrides,
     );
     setLoaded(true);
-    return items;
-  }, []);
+  }, [reloadFavorites]);
 
   useEffect(() => {
     void reload();
-  }, [reload]);
-
-  useEffect(() => {
-    return subscribeCarouselFavorites(() => {
-      void reload();
-    });
   }, [reload]);
 
   useEffect(() => {
@@ -108,17 +139,6 @@ export function useJournalCarouselVerses() {
     }, ms);
     return () => clearInterval(timer);
   }, [favorites.length, settings]);
-
-  const toggleFavorite = useCallback(async (record: CarouselVerseRecord) => {
-    const { favorites: next, added } = await toggleCarouselFavorite(record);
-    setFavorites(next);
-    return added;
-  }, []);
-
-  const removeFavorite = useCallback(async (id: string) => {
-    const next = await removeCarouselFavorite(id);
-    setFavorites(next);
-  }, []);
 
   const displayVerses = useMemo<CarouselDisplayVerse[]>(
     () => buildCarouselDisplayVerses(favorites, settings, rotationOffset, cardSizeOverrides),
