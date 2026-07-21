@@ -35,6 +35,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
   const [bookSuggestion, setBookSuggestion] = useState<BookSuggestion | null>(null);
   const [nearbyBooks, setNearbyBooks] = useState<BookSuggestion[]>([]);
   const [pending, setPending] = useState(false);
+  const [debouncing, setDebouncing] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [recentQueries, setRecentQueries] = useState<string[]>([]);
   const [searchTranslationId, setSearchTranslationId] = useState<string>(translationFromPeek);
@@ -97,8 +98,15 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
   const scheduleDebouncedSearch = useCallback(
     (q: string) => {
       flushDebouncedSearch();
+      const trimmed = q.trim();
+      if (!trimmed) {
+        setDebouncing(false);
+        return;
+      }
+      setDebouncing(true);
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null;
+        setDebouncing(false);
         void runSearchInternal(q);
       }, DEBOUNCE_MS);
     },
@@ -154,6 +162,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
       setNearbyBooks([]);
       setSearchError(null);
       setPending(false);
+      setDebouncing(false);
       return;
     }
   }, [enabled, flushDebouncedSearch]);
@@ -212,6 +221,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     if (!q) return;
     recordNextRef.current = true;
     flushDebouncedSearch();
+    setDebouncing(false);
     void runSearchInternal(q);
   }, [query, flushDebouncedSearch, runSearchInternal]);
 
@@ -221,6 +231,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
       skipNextDebounceRef.current = true;
       setQuery(q);
       flushDebouncedSearch();
+      setDebouncing(false);
       void runSearchInternal(q);
     },
     [flushDebouncedSearch, runSearchInternal],
@@ -236,6 +247,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     setNearbyBooks([]);
     setSearchError(null);
     setPending(false);
+    setDebouncing(false);
   }, [flushDebouncedSearch]);
 
   const onRemoveRecent = useCallback(async (q: string) => {
@@ -287,8 +299,10 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     }
     return sections;
   }, [journalResults, verseResults]);
-  const showSearchSkeleton = pending && searchSections.length === 0;
-  const noMatches = hasQuery && !pending && journalResults.length === 0 && verseResults.length === 0;
+  const isSearching = debouncing || pending;
+  const showSearchLoading = isSearching && searchSections.length === 0;
+  const noMatches =
+    hasQuery && !isSearching && journalResults.length === 0 && verseResults.length === 0;
   const showBookSuggestionBanner =
     bookSuggestion != null && bookSuggestion.distance > 0 && verseResults.length > 0;
   const emptyNearbyBooks = useMemo(
@@ -313,7 +327,8 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     onRemoveRecent,
     runImmediateSearch,
     pending,
-    showSearchSkeleton,
+    isSearching,
+    showSearchLoading,
     searchError,
     showEmptyState,
     noMatches,

@@ -13,7 +13,7 @@ import {
 import { type Href, Link } from "expo-router";
 import type { BookSuggestion, LocalJournalEntry, SearchResult } from "@sinag-bible/types";
 import { formatPassageReference } from "@sinag-bible/core";
-import { ScreenLoadingSkeleton } from "@/components/loading-skeleton";
+import { M3ContainedLoadingIndicator } from "@/components/m3-contained-loading-indicator";
 import { RecentSvgrepoIcon } from "@/components/icons/RecentSvgrepoIcon";
 import { formatBookSuggestionChipLabel } from "@/lib/book-genre-display";
 import { stripHtmlPreview } from "@/lib/journal-preview";
@@ -207,18 +207,26 @@ function createSearchBodyStyles(s: MobileAppThemeBundle["search"]) {
     bodyScrollGrow: { flexGrow: 1 },
     bodyTapDismiss: { flex: 1, justifyContent: "flex-start" },
     tapToDismissFiller: { flexGrow: 1, minHeight: 80, alignSelf: "stretch" },
-    searchPendingSkeleton: {
+    searchPendingCenter: {
       flex: 1,
-      paddingTop: 12,
+      alignItems: "center",
       justifyContent: "flex-start",
+      paddingTop: 28,
+      gap: 16,
     },
-    biblePendingHint: {
-      marginTop: 8,
-      marginBottom: 16,
-      textAlign: "center",
-      fontFamily: "Inter_400Regular",
-      fontSize: 13,
+    searchLoadingLabel: {
+      fontFamily: "Inter_500Medium",
+      fontSize: 14,
+      lineHeight: 20,
       color: s.muted,
+      textAlign: "center",
+    },
+    searchPendingInline: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      paddingVertical: 12,
     },
     emptyScrollContent: { paddingTop: 4 },
     scroll: { flex: 1 },
@@ -267,10 +275,21 @@ export function SearchResultsBody({
       </View>
     ) : null;
 
-  if (search.showSearchSkeleton) {
+  if (search.showSearchLoading) {
     return (
       <Pressable style={styles.bodyTapDismiss} onPress={Keyboard.dismiss}>
-        <ScreenLoadingSkeleton lines={6} caption="Searching…" style={styles.searchPendingSkeleton} />
+        <View
+          style={styles.searchPendingCenter}
+          accessibilityLabel="Searching"
+          accessibilityState={{ busy: true }}
+        >
+          <M3ContainedLoadingIndicator
+            size={44}
+            color={s.tint}
+            containerColor={bundle.chrome.androidIndicator}
+          />
+          <Text style={styles.searchLoadingLabel}>Searching…</Text>
+        </View>
       </Pressable>
     );
   }
@@ -382,7 +401,14 @@ export function SearchResultsBody({
       ListFooterComponent={
         <>
           {search.pending ? (
-            <Text style={styles.biblePendingHint}>Searching Bible…</Text>
+            <View style={styles.searchPendingInline}>
+              <M3ContainedLoadingIndicator
+                size={28}
+                color={s.tint}
+                containerColor={bundle.chrome.androidIndicator}
+              />
+              <Text style={styles.searchLoadingLabel}>Searching Bible…</Text>
+            </View>
           ) : null}
           <Pressable style={styles.tapToDismissFiller} onPress={Keyboard.dismiss} accessibilityRole="none" />
         </>
