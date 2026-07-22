@@ -25,6 +25,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useReaderStorage } from "@/lib/use-reader-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router/react-navigation";
 import type { FlashListRef } from "@shopify/flash-list";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type {
@@ -269,6 +270,18 @@ export default function ReaderChapterScreen() {
   const selectionBannerAnchorRef = useRef<View | null>(null);
   const selectionBannerLiveRef = useRef<View | null>(null);
   const clearVerseSelectionRef = useRef<(() => void) | null>(null);
+  const dismissVerseSelection = useCallback(() => {
+    clearVerseSelectionRef.current?.();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        dismissVerseSelection();
+      };
+    }, [dismissVerseSelection]),
+  );
+
   const headerToolsGroupRef = useRef<View | null>(null);
   const chapterNavPrevArrowRef = useRef<View | null>(null);
   const chapterNavNextArrowRef = useRef<View | null>(null);
@@ -542,11 +555,12 @@ export default function ReaderChapterScreen() {
 
   const openReaderFontSettingsFromAppBar = useCallback(() => {
     hapticLightImpact();
+    dismissVerseSelection();
     setToolsMenuOpen(false);
     setReaderDropdown(null);
     setDropdownAnchor(null);
     setFontSettingsSheetOpen(true);
-  }, []);
+  }, [dismissVerseSelection]);
 
   const openMobileReaderMoreFromMenu = useCallback(() => {
     closeToolsMenu();
@@ -749,12 +763,13 @@ export default function ReaderChapterScreen() {
 
   const openBookTools = useCallback(() => {
     hapticLightImpact();
+    dismissVerseSelection();
     setToolsMenuOpen(false);
     setFontSettingsSheetOpen(false);
     setMoreSettingsSheetOpen(false);
     setBookSheetExitAnimationStarted(false);
     measureAndSetDropdown(bookFanRef, "book");
-  }, [measureAndSetDropdown]);
+  }, [dismissVerseSelection, measureAndSetDropdown]);
 
   useEffect(() => {
     if (!readerDropdown) {
@@ -791,6 +806,7 @@ export default function ReaderChapterScreen() {
         setDropdownAnchor(null);
         return false;
       }
+      dismissVerseSelection();
       clearMobileSettingsFollowUp();
       setFontSettingsSheetOpen(false);
       setMoreSettingsSheetOpen(false);
@@ -799,7 +815,7 @@ export default function ReaderChapterScreen() {
       setDropdownAnchor(null);
       return true;
     });
-  }, [clearMobileSettingsFollowUp]);
+  }, [clearMobileSettingsFollowUp, dismissVerseSelection]);
 
   const closeReaderDropdown = useCallback(() => {
     clearMobileSettingsFollowUp();

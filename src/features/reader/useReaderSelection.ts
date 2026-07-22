@@ -56,6 +56,14 @@ export function useReaderSelection({
     setSelectedVerseNumbers(new Set());
   }, []);
 
+  const dismissVerseSelectionMode = useCallback(() => {
+    setSelectedVerseNumbers(new Set());
+    setNoteModalVisible(false);
+    setNoteTargetVerse(null);
+    setNoteDraft("");
+    setAnnotationSheetOpen(false);
+  }, []);
+
   const toggleVerseSelection = useCallback(
     (verseNumber: number) => {
       if (toolsMenuOpen) closeToolsMenu();
@@ -223,6 +231,7 @@ export function useReaderSelection({
     copyToastVisible,
     setCopyToastVisible,
     clearVerseSelection,
+    dismissVerseSelectionMode,
     toggleVerseSelection,
     handleVerseTap,
     handleVerseLongPress,

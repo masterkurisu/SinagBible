@@ -625,6 +625,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     selectionHasExistingAnnotation,
     copyToastVisible,
     clearVerseSelection,
+    dismissVerseSelectionMode,
     toggleVerseSelection,
     handleVerseTap,
     handleVerseLongPress,
@@ -702,9 +703,9 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
 
   useEffect(() => {
     if (clearVerseSelectionRef) {
-      clearVerseSelectionRef.current = clearVerseSelection;
+      clearVerseSelectionRef.current = dismissVerseSelectionMode;
     }
-  }, [clearVerseSelection, clearVerseSelectionRef]);
+  }, [dismissVerseSelectionMode, clearVerseSelectionRef]);
 
   useEffect(() => {
     onSelectionActivityChange?.({
