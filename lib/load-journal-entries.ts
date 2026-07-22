@@ -34,7 +34,7 @@ function localToListItem(e: {
     verse_start: e.verse_start,
     verse_end: e.verse_end,
     bible_translation: e.bible_translation ?? "KJV",
-    content: e.content,
+    content: typeof e.content === "string" ? e.content : "",
     content_markdown: e.content_markdown ?? null,
     created_at: e.created_at,
     title: e.title,

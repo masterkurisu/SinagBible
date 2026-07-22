@@ -4,9 +4,42 @@ All notable changes to Sinag Bible, organized by version.
 
 ---
 
-## 1.0.0.9
+## 1.0.0.10
 
-`5f2f75df` → `0e3e2ae5` (25 commits)
+### New features & UI
+- **M3 motion system** — shared spring and duration tokens (`m3-motion.ts`); M3 springs for bottom sheets; dual scrim API for modal shells; settings menu spring tokens; reduced-motion support and token audit
+- **Container transform** — reusable `ContainerTransform` overlay + host; M3 container-transform choreography for search expand/collapse; journal list → entry detail morph transition with detail preview bridge
+- **Verse tags** — inline `@verse` mentions in reader notes with mention sheet, chips, preview tooltip, and tap-to-open in reader; core verse-tags grammar parser + unit tests
+- **Journal reflection editor** — unified on native markdown (removed `react-native-pell-rich-editor` dependency)
+- **Long-press tooltips & haptics** — action bar, inline notes, and journal tiles
+- **Verse carousel** — card sizes synced with carousel settings; improved image fetch
+- **Reader** — page turn button animation and position adjusted
+
+### Fixes
+- NIV footnotes leaking into verse text (audited other YouVersion translations)
+- Search showed "no results" while still loading
+- Verse line spacing
+- Journal tiles white corners in dark themes
+- Navbar closing/opening race
+- Bottom chapter padding
+
+### Performance & memory
+- **Phased performance plan** (phases 0–5):
+  - Timeout cleanup and journal `entryRowRefs` pruning on unmount/delete
+  - Note draft state kept local to selection layer (fewer reader re-renders while typing)
+  - Split tab bar scroll and settings tint into separate contexts
+  - Lightweight carousel-favorites hook on reader screen
+  - LRU caps on HelloAO and YVP translation search caches
+  - Async abort guards and animation cleanup on unmount
+- Session cache caps + dev cache snapshot helpers
+- Book select performance improvements
+
+### Other
+- Dev environment migrated from Mac to PC
+
+---
+
+## 1.0.0.9
 
 ### New features & UI
 - **Changelog viewer** — in-app changelog sheet in More menu, bundled from `CHANGELOG.md`

@@ -149,8 +149,9 @@ export function animateContainerTransformProgress(
   onComplete?: () => void,
 ): void {
   const finish = (finished?: boolean) => {
+    "worklet";
     if (finished !== false && onComplete) {
-      onComplete();
+      runOnJS(onComplete)();
     }
   };
 
@@ -182,6 +183,15 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
   const [session, setSession] = useState<ContainerTransformSession | null>(null);
   const sessionRef = useRef<ContainerTransformSession | null>(null);
   const closingRef = useRef(false);
+  const enterCompleteRef = useRef<(() => void) | undefined>(undefined);
+  /** Bumps when a morph is cancelled — stale `openFrom` measure results are ignored. */
+  const openGenerationRef = useRef(0);
+
+  const invokeEnterComplete = useCallback(() => {
+    const onComplete = enterCompleteRef.current;
+    enterCompleteRef.current = undefined;
+    onComplete?.();
+  }, []);
 
   const getDefaultTargetBounds = useCallback(
     () => defaultContainerTransformTargetBounds(screenW, screenH, insets),
@@ -198,6 +208,8 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
   }, []);
 
   const dismissInstantly = useCallback(() => {
+    openGenerationRef.current += 1;
+    enterCompleteRef.current = undefined;
     cancelAnimation(progress);
     cancelAnimation(scrimOpacity);
     cancelAnimation(backgroundDim);
@@ -227,9 +239,7 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
       false,
       active.spatialSpring,
       active.skipMorph,
-      () => {
-        runOnJS(finalizeClose)();
-      },
+      finalizeClose,
     );
   }, [backgroundDim, finalizeClose, progress, scrimOpacity]);
 
@@ -276,10 +286,18 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
 
   const openFrom = useCallback(
     (sourceRef: RefObject<View | null>, options: ContainerTransformOpenOptions) => {
+      if (sessionRef.current) {
+        dismissInstantly();
+      }
+      const generation = ++openGenerationRef.current;
+
       void (async () => {
         const rect = await measureOnboardingTarget(sourceRef, {
           retries: Platform.OS === "android" ? 4 : 2,
         });
+        if (generation !== openGenerationRef.current) {
+          return;
+        }
         if (!rect) {
           options.onMeasureFailed?.();
           return;
@@ -335,18 +353,22 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
           return;
         }
 
-        animateContainerTransformProgress(progress, 1, true, spatialSpring, skipMorph, () => {
-          if (onSettled) {
-            runOnJS(onSettled)();
-          }
-        });
+        enterCompleteRef.current = onSettled;
+        animateContainerTransformProgress(
+          progress,
+          1,
+          true,
+          spatialSpring,
+          skipMorph,
+          invokeEnterComplete,
+        );
         animateM3EffectsOpacity(scrimOpacity, M3_SCRIM_OPACITY, true);
         if (options.backgroundRef) {
           animateM3EffectsOpacity(backgroundDim, 1, true);
         }
       })();
     },
-    [backgroundDim, getDefaultTargetBounds, progress, screenH, screenW, scrimOpacity],
+    [backgroundDim, dismissInstantly, getDefaultTargetBounds, invokeEnterComplete, progress, screenH, screenW, scrimOpacity],
   );
 
   const value = useMemo(

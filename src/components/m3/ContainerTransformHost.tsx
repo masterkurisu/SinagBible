@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import {
   BackHandler,
   Modal,
@@ -10,53 +10,63 @@ import Reanimated, {
   Extrapolation,
   interpolate,
   useAnimatedStyle,
+  useSharedValue,
 } from "react-native-reanimated";
 import {
   FADE_THROUGH_INCOMING_START,
   FADE_THROUGH_OUTGOING_END,
   useContainerTransformInternals,
-  type ContainerBounds,
 } from "@/src/components/m3/ContainerTransform";
-
-function interpolateBounds(
-  progress: number,
-  start: ContainerBounds,
-  end: ContainerBounds,
-  skipMorph: boolean,
-): ContainerBounds {
-  if (skipMorph) {
-    return end;
-  }
-  return {
-    x: interpolate(progress, [0, 1], [start.x, end.x], Extrapolation.CLAMP),
-    y: interpolate(progress, [0, 1], [start.y, end.y], Extrapolation.CLAMP),
-    width: interpolate(progress, [0, 1], [start.width, end.width], Extrapolation.CLAMP),
-    height: interpolate(progress, [0, 1], [start.height, end.height], Extrapolation.CLAMP),
-    borderRadius: interpolate(
-      progress,
-      [0, 1],
-      [start.borderRadius, end.borderRadius],
-      Extrapolation.CLAMP,
-    ),
-  };
-}
 
 /** Renders the morph overlay — mount once as a sibling to navigation content. */
 export function ContainerTransformHost() {
-  const { isOpen, session, progress, scrimOpacity, close, abortToFadeOut } =
-    useContainerTransformInternals();
+  const { isOpen, session, progress, scrimOpacity, close } = useContainerTransformInternals();
 
-  useEffect(() => {
-    if (!isOpen || !session) return;
+  const morphActive = useSharedValue(0);
+  const morphSkip = useSharedValue(0);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  const startW = useSharedValue(0);
+  const startH = useSharedValue(0);
+  const startR = useSharedValue(0);
+  const targetX = useSharedValue(0);
+  const targetY = useSharedValue(0);
+  const targetW = useSharedValue(0);
+  const targetH = useSharedValue(0);
+  const targetR = useSharedValue(0);
 
-    const intervalId = setInterval(() => {
-      if (!session.sourceRef.current) {
-        abortToFadeOut();
-      }
-    }, 100);
-
-    return () => clearInterval(intervalId);
-  }, [abortToFadeOut, isOpen, session]);
+  useLayoutEffect(() => {
+    if (!session) {
+      morphActive.value = 0;
+      return;
+    }
+    morphActive.value = 1;
+    morphSkip.value = session.skipMorph ? 1 : 0;
+    startX.value = session.startBounds.x;
+    startY.value = session.startBounds.y;
+    startW.value = session.startBounds.width;
+    startH.value = session.startBounds.height;
+    startR.value = session.startBounds.borderRadius;
+    targetX.value = session.targetBounds.x;
+    targetY.value = session.targetBounds.y;
+    targetW.value = session.targetBounds.width;
+    targetH.value = session.targetBounds.height;
+    targetR.value = session.targetBounds.borderRadius;
+  }, [
+    morphActive,
+    morphSkip,
+    session,
+    startH,
+    startR,
+    startW,
+    startX,
+    startY,
+    targetH,
+    targetR,
+    targetW,
+    targetX,
+    targetY,
+  ]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -68,22 +78,29 @@ export function ContainerTransformHost() {
   }, [close, isOpen]);
 
   const shellStyle = useAnimatedStyle(() => {
-    if (!session) {
+    "worklet";
+    if (morphActive.value === 0) {
       return { opacity: 0 };
     }
-    const bounds = interpolateBounds(
-      progress.value,
-      session.startBounds,
-      session.targetBounds,
-      session.skipMorph,
-    );
+    const p = progress.value;
+    if (morphSkip.value === 1) {
+      return {
+        position: "absolute" as const,
+        left: targetX.value,
+        top: targetY.value,
+        width: targetW.value,
+        height: targetH.value,
+        borderRadius: targetR.value,
+        overflow: "hidden" as const,
+      };
+    }
     return {
       position: "absolute" as const,
-      left: bounds.x,
-      top: bounds.y,
-      width: bounds.width,
-      height: bounds.height,
-      borderRadius: bounds.borderRadius,
+      left: interpolate(p, [0, 1], [startX.value, targetX.value], Extrapolation.CLAMP),
+      top: interpolate(p, [0, 1], [startY.value, targetY.value], Extrapolation.CLAMP),
+      width: interpolate(p, [0, 1], [startW.value, targetW.value], Extrapolation.CLAMP),
+      height: interpolate(p, [0, 1], [startH.value, targetH.value], Extrapolation.CLAMP),
+      borderRadius: interpolate(p, [0, 1], [startR.value, targetR.value], Extrapolation.CLAMP),
       overflow: "hidden" as const,
     };
   });

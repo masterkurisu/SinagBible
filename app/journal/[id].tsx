@@ -280,10 +280,14 @@ function renderInlineHtml(input: string): React.ReactNode[] {
   return nodes;
 }
 
-function renderSavedReflection(contentHtml: string, bodyColor: string): React.ReactNode[] {
-  const blocks = contentHtml.match(/<(p|div|ul|ol)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
-  if (blocks.length === 0 && contentHtml.trim()) {
-    const forInline = contentHtml
+function renderSavedReflection(
+  contentHtml: string | null | undefined,
+  bodyColor: string,
+): React.ReactNode[] {
+  const html = typeof contentHtml === "string" ? contentHtml : "";
+  const blocks = html.match(/<(p|div|ul|ol)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
+  if (blocks.length === 0 && html.trim()) {
+    const forInline = html
       .replace(/<\/?p\b[^>]*>/gi, "\n")
       .replace(/<\/?div\b[^>]*>/gi, "\n")
       .trim();
@@ -446,6 +450,7 @@ export default function JournalEntryScreen() {
   const translateAnim = useRef(new Animated.Value(6)).current;
 
   const [entry, setEntry] = useState<MobileJournalListItem | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [storageAccessError, setStorageAccessError] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -471,12 +476,14 @@ export default function JournalEntryScreen() {
     useCallback(() => {
       if (!id) return;
       let cancelled = false;
+      setIsLoading(true);
       setLoadError(false);
       setStorageAccessError(false);
 
       const bridged = peekPendingJournalDetailEntryFor(id);
       if (bridged) {
         setEntry(bridged);
+        setIsLoading(false);
         requestAnimationFrame(() => {
           clearPendingJournalDetailEntry();
         });
@@ -485,6 +492,7 @@ export default function JournalEntryScreen() {
         };
       }
 
+      setEntry(null);
       void (async () => {
         try {
           const row = await loadJournalEntryById(id);
@@ -499,6 +507,8 @@ export default function JournalEntryScreen() {
           setEntry(null);
           setStorageAccessError(true);
           setLoadError(true);
+        } finally {
+          if (!cancelled) setIsLoading(false);
         }
       })();
       return () => {
@@ -598,7 +608,29 @@ export default function JournalEntryScreen() {
     });
   }, [entry]);
 
-  const renderedBody = entry ? renderSavedReflection(entry.content, colors.brown800) : null;
+  const renderedBody = useMemo(() => {
+    if (!entry) return null;
+    try {
+      return renderSavedReflection(entry.content, colors.brown800);
+    } catch (e) {
+      if (__DEV__) {
+        console.error(e);
+      }
+      return [
+        <Text
+          key="reflection-fallback"
+          className="text-[17px] leading-8 mb-2"
+          style={{ fontFamily: "Lora_400Regular", color: colors.brown800 }}
+        >
+          {decodeHtmlEntities(
+            typeof entry.content === "string"
+              ? entry.content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
+              : "",
+          )}
+        </Text>,
+      ];
+    }
+  }, [colors.brown800, entry]);
 
   const confirmDelete = () => {
     if (!entry || !id) return;
@@ -979,7 +1011,7 @@ export default function JournalEntryScreen() {
               This entry link is invalid. Go back and try again.
             </Text>
           </View>
-        ) : !entry && !loadError && !enteredWithoutStackAnimation ? (
+        ) : isLoading && !entry ? (
           <View className="flex-1 items-center justify-center gap-2">
             <ActivityIndicator color={colors.brown800} />
             <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: colors.tan200 }}>

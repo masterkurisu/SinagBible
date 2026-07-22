@@ -425,7 +425,7 @@ function FabPlusIcon() {
 
 export default function JournalIndexScreen() {
   const router = useRouter();
-  const { openFrom, openExpanded, close, dismissInstantly } = useContainerTransform();
+  const { isOpen, openFrom, close, dismissInstantly } = useContainerTransform();
   const isFocused = useIsFocused();
   const { items: translationPickerItems } = useTranslationPicker();
   const [hasVisitedJournalTab, setHasVisitedJournalTab] = useState(false);
@@ -883,23 +883,20 @@ export default function JournalIndexScreen() {
     (item: MobileJournalListItem) => {
       if (journalOnboarding.tourActive) return;
       hapticLightImpact();
-      setPendingJournalDetailEntry(item);
+      if (isOpen) {
+        dismissInstantly();
+      }
       const rowRef = getEntryRowRef(item.id);
       const previews = buildMorphPreviews(item);
+      // Navigate immediately — bridged entry paints detail while morph overlay finishes.
+      pushJournalDetail(item);
       openFrom(rowRef, {
         ...previews,
         sourceBorderRadius: JOURNAL_TILE_RADIUS_PX,
         onMeasureFailed: () => {
-          pushJournalDetail(item);
+          dismissInstantly();
         },
         onSettled: () => {
-          router.push({
-            pathname: "/journal/[id]",
-            params: {
-              id: item.id,
-              [READER_INTERNAL_NO_STACK_ANIMATION]: "1",
-            },
-          } as never);
           requestAnimationFrame(() => {
             dismissInstantly();
           });
@@ -910,19 +907,25 @@ export default function JournalIndexScreen() {
       buildMorphPreviews,
       dismissInstantly,
       getEntryRowRef,
+      isOpen,
       journalOnboarding.tourActive,
       openFrom,
       pushJournalDetail,
-      router,
     ],
   );
 
   const runReverseMorphIfNeeded = useCallback(() => {
     const reverseId = takeJournalDetailReverseMorphEntryId();
-    if (!reverseId) return;
+    if (!reverseId) {
+      dismissInstantly();
+      return;
+    }
 
     const item = entries.find((entry) => entry.id === reverseId);
-    if (!item) return;
+    if (!item) {
+      dismissInstantly();
+      return;
+    }
 
     const previews = buildMorphPreviews(item);
     const rowRef = getEntryRowRef(reverseId);
@@ -933,10 +936,7 @@ export default function JournalIndexScreen() {
         : null;
 
       if (!rect) {
-        openExpanded({ renderExpanded: previews.renderExpanded });
-        requestAnimationFrame(() => {
-          close();
-        });
+        dismissInstantly();
         return;
       }
 
@@ -944,12 +944,12 @@ export default function JournalIndexScreen() {
         ...previews,
         sourceBorderRadius: JOURNAL_TILE_RADIUS_PX,
         startExpanded: true,
-      });
-      requestAnimationFrame(() => {
-        close();
+        onSettled: () => {
+          close();
+        },
       });
     })();
-  }, [buildMorphPreviews, close, entries, getEntryRowRef, openExpanded, openFrom]);
+  }, [buildMorphPreviews, close, dismissInstantly, entries, getEntryRowRef, openFrom]);
 
   useFocusEffect(
     useCallback(() => {

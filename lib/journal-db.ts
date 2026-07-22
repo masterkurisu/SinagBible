@@ -205,13 +205,13 @@ type JournalRow = {
 function rowToEntry(row: JournalRow): LocalJournalEntry {
   return {
     id: row.id,
-    book: row.book,
-    chapter: row.chapter,
+    book: row.book ?? "",
+    chapter: Number.isFinite(row.chapter) ? row.chapter : 0,
     verse_start: row.verse_start,
     verse_end: row.verse_end,
     bible_translation: row.bible_translation,
     title: row.title,
-    content: row.content,
+    content: typeof row.content === "string" ? row.content : "",
     content_markdown: row.content_markdown,
     created_at: row.created_at,
     is_favorite: row.is_favorite === 1,
@@ -303,6 +303,19 @@ export function migrateJournalBlobIfNeeded(): Promise<void> {
   return migrationPromise;
 }
 
+function normalizeLegacyJournalEntry(entry: LocalJournalEntry): LocalJournalEntry {
+  return {
+    ...entry,
+    book: typeof entry.book === "string" ? entry.book : "",
+    chapter: Number.isFinite(entry.chapter) ? entry.chapter : 0,
+    content: typeof entry.content === "string" ? entry.content : "<p></p>",
+    created_at:
+      typeof entry.created_at === "string" && entry.created_at.trim()
+        ? entry.created_at
+        : new Date().toISOString(),
+  };
+}
+
 async function runJournalBlobMigration(): Promise<void> {
   const flag = await AsyncStorage.getItem(MIGRATION_FLAG_KEY);
   if (flag === "true") return;
@@ -329,9 +342,9 @@ async function runJournalBlobMigration(): Promise<void> {
   }
 
   const entries = Array.isArray(parsed)
-    ? (parsed as LocalJournalEntry[]).filter(
-        (e) => e && typeof e.id === "string" && e.id.startsWith("local-"),
-      )
+    ? (parsed as LocalJournalEntry[])
+        .filter((e) => e && typeof e.id === "string" && e.id.startsWith("local-"))
+        .map(normalizeLegacyJournalEntry)
     : [];
 
   if (entries.length > 0) {
