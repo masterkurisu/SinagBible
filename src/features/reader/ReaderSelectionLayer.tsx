@@ -34,6 +34,7 @@ import {
   selectionMatchesCarouselRecord,
 } from "@/lib/journal-carousel-verses";
 import { useCarouselFavorites } from "@/lib/use-journal-carousel-verses";
+import type { TranslationPickerItem } from "@/lib/use-translation-picker";
 import { ReaderVerseRow } from "@/components/reader-verse-row";
 import {
   ReaderVerseList,
@@ -479,6 +480,7 @@ export type ReaderSelectionLayerProps = {
   bookSlug: string | undefined;
   chapterNumber: number;
   requestedTranslationId: string;
+  translationPickerItems?: readonly TranslationPickerItem[];
   toolsMenuOpen: boolean;
   closeToolsMenu: () => void;
   isTabletReaderLayout?: boolean;
@@ -542,6 +544,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   bookSlug,
   chapterNumber,
   requestedTranslationId,
+  translationPickerItems,
   toolsMenuOpen,
   closeToolsMenu,
   isTabletReaderLayout = false,
@@ -647,6 +650,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     bookSlug,
     chapterNumber,
     requestedTranslationId,
+    translationPickerItems,
     toolsMenuOpen,
     closeToolsMenu,
   });

@@ -11,6 +11,8 @@ import {
   loadReaderAnnotationPrefs,
   persistReaderAnnotationPrefs,
 } from "@/lib/reader-annotation-prefs";
+import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
+import type { TranslationPickerItem } from "@/lib/use-translation-picker";
 
 export function useReaderSelection({
   chapter,
@@ -23,6 +25,7 @@ export function useReaderSelection({
   bookSlug,
   chapterNumber,
   requestedTranslationId,
+  translationPickerItems,
   toolsMenuOpen,
   closeToolsMenu,
 }: {
@@ -36,6 +39,7 @@ export function useReaderSelection({
   bookSlug: string | undefined;
   chapterNumber: number;
   requestedTranslationId: string;
+  translationPickerItems?: readonly TranslationPickerItem[];
   toolsMenuOpen: boolean;
   closeToolsMenu: () => void;
 }) {
@@ -131,7 +135,8 @@ export function useReaderSelection({
     const tid = resolvedTranslationId;
     if (!ch || !tid || selectedVerses.length === 0) return;
     const refBase = formatSelectedReference(ch.bookName, ch.chapterNumber, selectedVerses);
-    const refLine = `${refBase} (${tid})`;
+    const translationAbbr = getTranslationDisplayAbbreviation(tid, translationPickerItems);
+    const refLine = translationAbbr ? `${refBase} (${translationAbbr})` : refBase;
     const text = selectedVerses
       .map((n) => ch.verses[n - 1])
       .filter(Boolean)
@@ -144,7 +149,7 @@ export function useReaderSelection({
     } catch {
       Alert.alert("Copy failed", "Could not copy to the clipboard.");
     }
-  }, [chapter, resolvedTranslationId, selectedVerses, clearVerseSelection]);
+  }, [chapter, resolvedTranslationId, selectedVerses, translationPickerItems, clearVerseSelection]);
 
   const openAnnotationSheet = useCallback(() => {
     if (selectedVerses.length === 0) return;

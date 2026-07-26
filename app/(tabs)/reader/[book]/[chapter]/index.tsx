@@ -119,6 +119,11 @@ import {
   useReaderChapterNavArrowsVisibility,
 } from "@/src/features/reader/ReaderChapterNavArrows";
 import {
+  ReaderScrollToTopFab,
+  READER_SCROLL_TO_TOP_FAB_BOTTOM_EDGE_INSET_PX,
+  useReaderScrollToTopFabVisibility,
+} from "@/src/features/reader/ReaderScrollToTopFab";
+import {
   ReaderModals,
   ReaderMobileSettingsPanel,
   type ReaderToolsDropdown,
@@ -1287,6 +1292,12 @@ export default function ReaderChapterScreen() {
   onboardingStepRef.current = readerFeatureOnboarding.currentStep;
   completeOnboardingInteractionRef.current = readerFeatureOnboarding.completeInteractionStep;
 
+  const scrollToTopFabEnabled =
+    !chapterNavArrowsOverlayOpen &&
+    selectedVerses.length === 0 &&
+    !readerFeatureOnboarding.showLayer &&
+    resolvedTranslationId === requestedTranslationId;
+
   const tabBarAutoHideForceVisible =
     (fontSettingsSheetOpen ||
       moreSettingsSheetOpen ||
@@ -1329,18 +1340,75 @@ export default function ReaderChapterScreen() {
     readerFeatureOnboarding.forceChapterNavArrowsVisible,
   );
 
-  const onReaderScrollSideEffects = useCallback(
+  const {
+    opacityAnim: scrollToTopFabOpacityAnim,
+    scaleAnim: scrollToTopFabScaleAnim,
+    pointerEventsEnabled: scrollToTopFabPointerEventsEnabled,
+    onScrollBeginDrag: onScrollToTopFabScrollBeginDrag,
+    onScrollEndDrag: onScrollToTopFabScrollEndDrag,
+    onMomentumScrollEnd: onScrollToTopFabMomentumScrollEnd,
+    onScrollBridge: onScrollToTopFabBridge,
+    hideFab: hideScrollToTopFab,
+    onFabPressIn: onScrollToTopFabPressIn,
+    onFabPressOut: onScrollToTopFabPressOut,
+    syncFromScrollOffset: syncScrollToTopFabFromOffset,
+  } = useReaderScrollToTopFabVisibility(chapterNavRouteKey, scrollToTopFabEnabled);
+
+  useEffect(() => {
+    if (!scrollToTopFabEnabled) return;
+    let cancelled = false;
+    const syncFabWithCurrentScroll = () => {
+      if (cancelled) return;
+      const y = Math.max(latestScrollMetricsRef.current.y, readerScrollY.value);
+      syncScrollToTopFabFromOffset(y, { revealWhenIdle: true });
+    };
+    syncFabWithCurrentScroll();
+    const frame = requestAnimationFrame(syncFabWithCurrentScroll);
+    const timeout = setTimeout(syncFabWithCurrentScroll, 150);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      clearTimeout(timeout);
+    };
+  }, [scrollToTopFabEnabled, chapterNavRouteKey, syncScrollToTopFabFromOffset, readerScrollY]);
+
+  const publishReaderScrollMetrics = useCallback(
     (y: number, contentHeight: number, viewportHeight: number) => {
       latestScrollMetricsRef.current = { y, contentHeight, viewportHeight };
+      lastScrollBridgeY.value = y;
       const nativeEvent = {
         contentOffset: { y, x: 0 },
         contentSize: { height: contentHeight, width: 0 },
         layoutMeasurement: { height: viewportHeight, width: 0 },
       } as NativeScrollEvent;
       onChapterNavArrowsScroll({ nativeEvent } as NativeSyntheticEvent<NativeScrollEvent>);
+      onScrollToTopFabBridge(y);
     },
-    [onChapterNavArrowsScroll],
+    [lastScrollBridgeY, onChapterNavArrowsScroll, onScrollToTopFabBridge],
   );
+
+  const onReaderScrollSideEffects = useCallback(
+    (y: number, contentHeight: number, viewportHeight: number) => {
+      publishReaderScrollMetrics(y, contentHeight, viewportHeight);
+    },
+    [publishReaderScrollMetrics],
+  );
+
+  const scrollReaderToTop = useCallback(() => {
+    readerScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
+    readerScrollY.value = 0;
+    lastScrollBridgeY.value = 0;
+    const { contentHeight, viewportHeight } = latestScrollMetricsRef.current;
+    syncScrollToTopFabFromOffset(0);
+    onReaderScrollSideEffects(0, contentHeight, viewportHeight);
+    hideScrollToTopFab();
+  }, [
+    readerScrollY,
+    lastScrollBridgeY,
+    syncScrollToTopFabFromOffset,
+    onReaderScrollSideEffects,
+    hideScrollToTopFab,
+  ]);
 
   const flushReaderScrollSideEffects = useCallback(() => {
     const { y, contentHeight, viewportHeight } = latestScrollMetricsRef.current;
@@ -1351,21 +1419,45 @@ export default function ReaderChapterScreen() {
   const onReaderScrollBeginDragWithChapterNav = useCallback(() => {
     onReaderScrollBeginDrag();
     onChapterNavArrowsScrollBeginDrag();
+    onScrollToTopFabScrollBeginDrag();
     flushReaderScrollSideEffects();
-  }, [onReaderScrollBeginDrag, onChapterNavArrowsScrollBeginDrag, flushReaderScrollSideEffects]);
+  }, [
+    onReaderScrollBeginDrag,
+    onChapterNavArrowsScrollBeginDrag,
+    onScrollToTopFabScrollBeginDrag,
+    flushReaderScrollSideEffects,
+  ]);
 
   const onReaderScrollEndDragWithChapterNav = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      publishReaderScrollMetrics(
+        contentOffset.y,
+        contentSize.height,
+        layoutMeasurement.height,
+      );
       onChapterNavArrowsScrollEndDrag(event);
-      flushReaderScrollSideEffects();
+      onScrollToTopFabScrollEndDrag(event);
     },
-    [onChapterNavArrowsScrollEndDrag, flushReaderScrollSideEffects],
+    [
+      publishReaderScrollMetrics,
+      onChapterNavArrowsScrollEndDrag,
+      onScrollToTopFabScrollEndDrag,
+    ],
   );
 
   const onReaderMomentumScrollEndWithChapterNav = useCallback(() => {
+    const y = readerScrollY.value;
+    const { contentHeight, viewportHeight } = latestScrollMetricsRef.current;
+    publishReaderScrollMetrics(y, contentHeight, viewportHeight);
     onChapterNavArrowsMomentumScrollEnd();
-    flushReaderScrollSideEffects();
-  }, [onChapterNavArrowsMomentumScrollEnd, flushReaderScrollSideEffects]);
+    onScrollToTopFabMomentumScrollEnd();
+  }, [
+    readerScrollY,
+    publishReaderScrollMetrics,
+    onChapterNavArrowsMomentumScrollEnd,
+    onScrollToTopFabMomentumScrollEnd,
+  ]);
 
   const onReaderScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -1701,6 +1793,7 @@ export default function ReaderChapterScreen() {
         bookSlug={bookSlug}
         chapterNumber={chapterNumber}
         requestedTranslationId={requestedTranslationId}
+        translationPickerItems={translationPickerItems}
         toolsMenuOpen={toolsMenuOpen}
         closeToolsMenu={closeToolsMenu}
         isTabletReaderLayout={isTabletReaderLayout}
@@ -1781,6 +1874,20 @@ export default function ReaderChapterScreen() {
         rc={rc}
         prevArrowRef={chapterNavPrevArrowRef}
         nextArrowRef={chapterNavNextArrowRef}
+      />
+
+      <ReaderScrollToTopFab
+        opacityAnim={scrollToTopFabOpacityAnim}
+        scaleAnim={scrollToTopFabScaleAnim}
+        pointerEventsEnabled={scrollToTopFabPointerEventsEnabled}
+        onPress={scrollReaderToTop}
+        onPressIn={onScrollToTopFabPressIn}
+        onPressOut={onScrollToTopFabPressOut}
+        colors={colors}
+        buttonBackgroundColor={rc.popoverSurface}
+        shadowColor={rc.popoverShadow}
+        rippleColor={bundle.journal.fabRipple}
+        bottomInsetPx={READER_SCROLL_TO_TOP_FAB_BOTTOM_EDGE_INSET_PX}
       />
 
       {Platform.OS === "android" ? (
