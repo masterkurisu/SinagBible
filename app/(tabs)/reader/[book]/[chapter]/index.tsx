@@ -1370,7 +1370,7 @@ export default function ReaderChapterScreen() {
       cancelAnimationFrame(frame);
       clearTimeout(timeout);
     };
-  }, [scrollToTopFabEnabled, chapterNavRouteKey, syncScrollToTopFabFromOffset, readerScrollY]);
+  }, [scrollToTopFabEnabled, chapterNavRouteKey, syncScrollToTopFabFromOffset]);
 
   const publishReaderScrollMetrics = useCallback(
     (y: number, contentHeight: number, viewportHeight: number) => {

@@ -8,7 +8,8 @@ import {
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-} from "react-native";import { Pressable } from "react-native-gesture-handler";
+} from "react-native";
+import { Pressable } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { hapticLightImpact } from "@/lib/haptics";
 import {
@@ -18,10 +19,10 @@ import {
   READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE,
 } from "@/src/features/reader/ReaderChapterNavArrows";
 
-/** Tap target diameter for the back-to-top control (50% larger than the initial 56px draft). */
-export const READER_SCROLL_TO_TOP_FAB_CIRCLE_PX = 84;
+/** Tap target diameter for the back-to-top control. */
+export const READER_SCROLL_TO_TOP_FAB_CIRCLE_PX = 59;
 /** Chevron glyph size inside the circle. */
-export const READER_SCROLL_TO_TOP_FAB_ICON_PX = 42;
+export const READER_SCROLL_TO_TOP_FAB_ICON_PX = 29;
 /** Distance from the right edge of the reader content. */
 export const READER_SCROLL_TO_TOP_FAB_RIGHT_EDGE_INSET_PX = 20;
 /** Distance from the bottom edge of the reader content (above tab bar). */
@@ -68,91 +69,78 @@ export function ReaderScrollToTopFab({
 }: ReaderScrollToTopFabProps) {
   const circlePx = READER_SCROLL_TO_TOP_FAB_CIRCLE_PX;
   const hitSlop = READER_SCROLL_TO_TOP_FAB_HIT_SLOP_PX;
-  const pressScaleAnim = useRef(new Animated.Value(1)).current;
+  const circleRadius = circlePx / 2;
   const visibilityMotionStyle = {
     opacity: opacityAnim,
     transform: [{ scale: scaleAnim }],
+  };
+  const circleChromeStyle = {
+    backgroundColor: buttonBackgroundColor,
+    ...Platform.select({
+      ios: {
+        shadowColor,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.14,
+        shadowRadius: 6,
+      },
+      android: {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: "rgba(0,0,0,0.08)",
+      },
+      default: {},
+    }),
   };
 
   const handlePressIn = useCallback(() => {
     onPressIn();
     hapticLightImpact();
-    Animated.spring(pressScaleAnim, {
-      toValue: 0.92,
-      friction: 8,
-      tension: 320,
-      useNativeDriver: true,
-    }).start();
-  }, [onPressIn, pressScaleAnim]);
+  }, [onPressIn]);
 
   const handlePressOut = useCallback(() => {
     onPressOut();
-    Animated.spring(pressScaleAnim, {
-      toValue: 1,
-      friction: 6,
-      tension: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [onPressOut, pressScaleAnim]);
+  }, [onPressOut]);
 
   const handlePress = useCallback(() => {
     onPress();
   }, [onPress]);
 
-  const circleFaceStyle = [
-    styles.circleFace,
-    {
-      backgroundColor: buttonBackgroundColor,
-      ...Platform.select({
-        ios: {
-          shadowColor,
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.14,
-          shadowRadius: 6,
-        },
-        android: { elevation: 4 },
-        default: {},
-      }),
-    },
-  ];
-
-  const pressable = (
-    <>
-      <View pointerEvents="none" style={circleFaceStyle} />
-      {Platform.OS === "android" ? (
-        <Pressable
-          onPress={handlePress}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          hitSlop={{ top: hitSlop, bottom: hitSlop, left: hitSlop, right: hitSlop }}
-          accessibilityRole="button"
-          accessibilityLabel="Back to top"
-          android_ripple={{
-            color: rippleColor ?? "rgba(0,0,0,0.12)",
-            borderless: true,
-            radius: circlePx / 2,
-          }}
-          style={styles.circlePressable}
-        >
-          <Ionicons name="chevron-up" size={READER_SCROLL_TO_TOP_FAB_ICON_PX} color={colors.brown800} />
-        </Pressable>
-      ) : (
-        <TouchableOpacity
-          onPress={handlePress}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          delayPressIn={0}
-          hitSlop={{ top: hitSlop, bottom: hitSlop, left: hitSlop, right: hitSlop }}
-          accessibilityRole="button"
-          accessibilityLabel="Back to top"
-          activeOpacity={1}
-          style={styles.circlePressable}
-        >
-          <Ionicons name="chevron-up" size={READER_SCROLL_TO_TOP_FAB_ICON_PX} color={colors.brown800} />
-        </TouchableOpacity>
-      )}
-    </>
-  );
+  const pressable =
+    Platform.OS === "android" ? (
+      <Pressable
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        hitSlop={{ top: hitSlop, bottom: hitSlop, left: hitSlop, right: hitSlop }}
+        accessibilityRole="button"
+        accessibilityLabel="Back to top"
+        android_ripple={{
+          color: rippleColor ?? "rgba(0,0,0,0.12)",
+          borderless: false,
+          radius: circleRadius,
+        }}
+        style={({ pressed }) => [
+          styles.circlePressable,
+          circleChromeStyle,
+          { opacity: pressed ? 0.82 : 1 },
+        ]}
+      >
+        <Ionicons name="chevron-up" size={READER_SCROLL_TO_TOP_FAB_ICON_PX} color={colors.brown800} />
+      </Pressable>
+    ) : (
+      <TouchableOpacity
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        delayPressIn={0}
+        hitSlop={{ top: hitSlop, bottom: hitSlop, left: hitSlop, right: hitSlop }}
+        accessibilityRole="button"
+        accessibilityLabel="Back to top"
+        activeOpacity={0.82}
+        style={[styles.circlePressable, circleChromeStyle]}
+      >
+        <Ionicons name="chevron-up" size={READER_SCROLL_TO_TOP_FAB_ICON_PX} color={colors.brown800} />
+      </TouchableOpacity>
+    );
 
   return (
     <View
@@ -172,13 +160,9 @@ export function ReaderScrollToTopFab({
           visibilityMotionStyle,
         ]}
       >
-        <Animated.View
-          style={[styles.circle, { transform: [{ scale: pressScaleAnim }] }]}
-        >
-          <View ref={fabRef} collapsable={false} style={StyleSheet.absoluteFill}>
-            {pressable}
-          </View>
-        </Animated.View>
+        <View ref={fabRef} collapsable={false} style={styles.circle}>
+          {pressable}
+        </View>
       </Animated.View>
     </View>
   );
@@ -299,22 +283,32 @@ export function useReaderScrollToTopFabVisibility(chapterRouteKey: string, enabl
     (y: number) => {
       if (!enabled) return;
       const prevY = lastScrollOffsetRef.current;
-      syncFromScrollOffset(y);
-      const moved = Math.abs(y - prevY) > READER_SCROLL_TO_TOP_FAB_SCROLL_MOTION_THRESHOLD_PX;
+      const scrolledPastThreshold = y >= READER_SCROLL_TO_TOP_FAB_SHOW_THRESHOLD_PX;
+      scrolledPastThresholdRef.current = scrolledPastThreshold;
       lastScrollOffsetRef.current = y;
+
+      if (!scrolledPastThreshold) {
+        hideFab();
+        setTouchTargetActive(false);
+        return;
+      }
+
+      const moved = Math.abs(y - prevY) > READER_SCROLL_TO_TOP_FAB_SCROLL_MOTION_THRESHOLD_PX;
       if (moved && fabShownRef.current && !isPressingRef.current && isUserScrollActiveRef.current) {
         hideFab();
         return;
       }
+
       if (
         !isUserScrollActiveRef.current &&
         !isPressingRef.current &&
-        scrolledPastThresholdRef.current
+        scrolledPastThreshold &&
+        !fabShownRef.current
       ) {
         showFab();
       }
     },
-    [enabled, hideFab, showFab, syncFromScrollOffset],
+    [enabled, hideFab, showFab],
   );
 
   const onScroll = useCallback(
@@ -418,10 +412,8 @@ const styles = StyleSheet.create({
   circle: {
     width: READER_SCROLL_TO_TOP_FAB_CIRCLE_PX,
     height: READER_SCROLL_TO_TOP_FAB_CIRCLE_PX,
-  },
-  circleFace: {
-    ...StyleSheet.absoluteFill,
     borderRadius: READER_SCROLL_TO_TOP_FAB_CIRCLE_PX / 2,
+    overflow: "hidden",
   },
   circlePressable: {
     width: READER_SCROLL_TO_TOP_FAB_CIRCLE_PX,
@@ -429,5 +421,6 @@ const styles = StyleSheet.create({
     borderRadius: READER_SCROLL_TO_TOP_FAB_CIRCLE_PX / 2,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
 });
