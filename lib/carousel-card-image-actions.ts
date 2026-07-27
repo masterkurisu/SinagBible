@@ -59,7 +59,7 @@ export async function saveCarouselCardImage(ref: RefObject<View | null>): Promis
   await withCapturedPng(ref, async (uri) => {
     const perm =
       Platform.OS === "android"
-        ? await requestPermissionsAsync(false, ["photo"])
+        ? await requestPermissionsAsync(true)
         : await requestPermissionsAsync();
     if (!perm.granted) {
       Alert.alert(

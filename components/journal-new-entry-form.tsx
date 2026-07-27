@@ -737,10 +737,12 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const attachReflectionImage = async () => {
     hapticLightImpact();
     try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert("Permission needed", "Allow photo library access to attach images.");
-        return;
+      if (Platform.OS !== "android") {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert("Permission needed", "Allow photo library access to attach images.");
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,

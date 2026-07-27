@@ -717,7 +717,7 @@ export default function JournalEntryScreen() {
     try {
       const perm =
         Platform.OS === "android"
-          ? await requestPermissionsAsync(false, ["photo"])
+          ? await requestPermissionsAsync(true)
           : await requestPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
