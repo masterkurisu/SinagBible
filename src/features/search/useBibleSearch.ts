@@ -180,30 +180,28 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
 
     flushDebouncedSearch();
     recordNextRef.current = false;
-    let cancelled = false;
+    const requestId = ++latestSearchRequestIdRef.current;
     void (async () => {
       setPending(true);
       setSearchError(null);
       try {
         const outcome = await getSearchResultsForReaderTranslation(searchTranslationId, q);
-        if (cancelled) return;
+        if (requestId !== latestSearchRequestIdRef.current) return;
         setVerseResults(outcome.results);
         setBookSuggestion(outcome.bookSuggestion);
         setNearbyBooks(outcome.nearbyBooks);
       } catch {
-        if (!cancelled) {
-          setVerseResults([]);
-          setBookSuggestion(null);
-          setNearbyBooks([]);
-          setSearchError("Search is unavailable right now. Please try again.");
-        }
+        if (requestId !== latestSearchRequestIdRef.current) return;
+        setVerseResults([]);
+        setBookSuggestion(null);
+        setNearbyBooks([]);
+        setSearchError("Search is unavailable right now. Please try again.");
       } finally {
-        if (!cancelled) setPending(false);
+        if (requestId === latestSearchRequestIdRef.current) {
+          setPending(false);
+        }
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [enabled, searchTranslationId, flushDebouncedSearch]);
 
   useEffect(() => {

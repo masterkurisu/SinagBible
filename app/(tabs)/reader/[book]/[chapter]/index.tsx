@@ -146,7 +146,6 @@ import { ReaderFontSettingsSheet } from "@/src/features/reader/ReaderFontSetting
 import { ReaderMoreSettingsSheet } from "@/src/features/reader/ReaderMoreSettingsSheet";
 import { readerSettingsSideSheetWidthPx, READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useReaderChapter } from "@/src/features/reader/useReaderChapter";
-import { ReaderYvpAttributionFooter } from "@/src/features/reader/ReaderYvpAttributionFooter";
 import { ReaderYvpFootnoteSheet } from "@/src/features/reader/ReaderYvpFootnoteSheet";
 import type { YvpFootnoteBody } from "@sinag-bible/types";
 import { useReaderPreferences } from "@/src/features/reader/useReaderPreferences";
@@ -234,7 +233,6 @@ export default function ReaderChapterScreen() {
     chapter,
     books,
     resolvedTranslationId,
-    yvpAttribution,
     isContentSynced,
     isLoading: readerChapterLoading,
     error: readerChapterError,
@@ -1138,13 +1136,6 @@ export default function ReaderChapterScreen() {
     const { prevChapter, nextChapter } = chapterNav;
     return (
       <Animated.View style={{ opacity: readerVersesOpacityAnim }}>
-        {yvpAttribution ? (
-          <ReaderYvpAttributionFooter
-            attribution={yvpAttribution}
-            textColor={colors.tan300}
-            linkColor={colors.brown800}
-          />
-        ) : null}
         <View style={readerFlashListChromeStyles.footerNavRow}>
           {prevChapter ? (
             <TouchableOpacity
@@ -1199,7 +1190,6 @@ export default function ReaderChapterScreen() {
     requestedTranslationId,
     readerVersesOpacityAnim,
     chapterNav,
-    yvpAttribution,
     colors.parchmentDark,
     colors.brown800,
     resolvedTranslationId,

@@ -13,12 +13,8 @@ import {
 import { canonicalTranslationId } from "@/lib/canonical-translation-id";
 import { isChapterDbOpen } from "@/lib/chapter-db";
 import { getChapterSync, hasChapterSync, getTranslationMetaSync } from "@/lib/chapter-store";
-import {
-  loadYvpTranslationAttribution,
-  type YvpTranslationAttribution,
-} from "@/lib/yvp-translation-attribution";
 import { yvpPassageToBibleChapter } from "@/lib/yvp-chapter-payload";
-import { isYvpTranslationId, type YvpPassage } from "@/lib/youversion-api";
+import { type YvpPassage } from "@/lib/youversion-api";
 import {
   fetchReaderChapterContent,
   primeReaderChapterFetch,
@@ -119,9 +115,6 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
   const readerPayloadRef = useRef(readerPayload);
   readerPayloadRef.current = readerPayload;
   const [error, setError] = useState<ReaderChapterError | null>(null);
-  const [yvpAttribution, setYvpAttribution] = useState<YvpTranslationAttribution | null>(() =>
-    loadYvpTranslationAttribution(translationId),
-  );
 
   const syncedPayload =
     readerPayload && payloadMatchesRoute(readerPayload, translationId, bookSlug, chapterNumber)
@@ -183,9 +176,6 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
         }
 
         setReaderPayload({ resolvedTranslationId: resolvedTranslation, books, chapter });
-        if (isYvpTranslationId(resolvedTranslation)) {
-          setYvpAttribution(loadYvpTranslationAttribution(resolvedTranslation));
-        }
       } catch {
         if (!cancelled) {
           if (
@@ -219,14 +209,6 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
       task.cancel();
     };
   }, [translationId, bookSlug, chapterNumber]);
-
-  useEffect(() => {
-    if (!isYvpTranslationId(translationId)) {
-      setYvpAttribution(null);
-      return;
-    }
-    setYvpAttribution(loadYvpTranslationAttribution(translationId));
-  }, [translationId]);
 
   const kjvInlineEnrichmentKey =
     readerPayload?.resolvedTranslationId === "KJV" &&
@@ -302,7 +284,6 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
     chapter,
     books,
     resolvedTranslationId,
-    yvpAttribution,
     isContentSynced,
     isLoading,
     error,
