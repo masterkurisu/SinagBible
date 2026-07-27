@@ -55,22 +55,37 @@ export async function shareCarouselCardImage(
   });
 }
 
-export async function saveCarouselCardImage(ref: RefObject<View | null>): Promise<void> {
-  await withCapturedPng(ref, async (uri) => {
-    const perm =
-      Platform.OS === "android"
-        ? await requestPermissionsAsync(true)
-        : await requestPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert(
-        "Photos access needed",
-        "Allow photo library access in Settings to save carousel images.",
-      );
+async function saveImageWithoutBroadMediaAccess(uri: string, dialogTitle: string): Promise<void> {
+  // Android: avoid MediaLibrary read permissions (READ_MEDIA_IMAGES / VIDEO).
+  // Use the system share sheet so the user can save to Photos without broad access.
+  if (Platform.OS === "android") {
+    if (!(await Sharing.isAvailableAsync())) {
+      Alert.alert("Could not save", "Sharing is not available on this device.");
       return;
     }
+    await Sharing.shareAsync(uri, {
+      mimeType: "image/png",
+      dialogTitle,
+    });
+    return;
+  }
+
+  const perm = await requestPermissionsAsync();
+  if (!perm.granted) {
+    Alert.alert(
+      "Photos access needed",
+      "Allow photo library access in Settings to save images.",
+    );
+    return;
+  }
+  await Asset.create(uri);
+  Alert.alert("Saved", "The image was saved to your photo library.");
+}
+
+export async function saveCarouselCardImage(ref: RefObject<View | null>): Promise<void> {
+  await withCapturedPng(ref, async (uri) => {
     try {
-      await Asset.create(uri);
-      Alert.alert("Saved", "The image was saved to your photo library.");
+      await saveImageWithoutBroadMediaAccess(uri, "Save carousel image");
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e ?? "");
       const isExpoGoAndroidMediaLibraryPermissionError =
@@ -81,10 +96,6 @@ export async function saveCarouselCardImage(ref: RefObject<View | null>): Promis
           mimeType: "image/png",
           dialogTitle: "Save carousel image",
         });
-        Alert.alert(
-          "Save via share sheet",
-          "Expo Go on Android cannot save directly. Use your share sheet to save the image.",
-        );
         return;
       }
       Alert.alert("Could not save", "Something went wrong. Try again.");

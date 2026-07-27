@@ -737,7 +737,10 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const attachReflectionImage = async () => {
     hapticLightImpact();
     try {
-      if (Platform.OS !== "android") {
+      // Android: expo-image-picker uses the system Photo Picker (PickVisualMedia).
+      // Do not request READ_MEDIA_* — Google Play rejects apps that declare those
+      // permissions when a system picker is sufficient.
+      if (Platform.OS === "ios") {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
           Alert.alert("Permission needed", "Allow photo library access to attach images.");
@@ -745,8 +748,10 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"],
         quality: 0.85,
+        // Prefer the system picker path; no editing UI that might need extra access.
+        allowsEditing: false,
       });
       if (result.canceled || !result.assets[0]?.uri) return;
       const manipulated = await ImageManipulator.manipulateAsync(

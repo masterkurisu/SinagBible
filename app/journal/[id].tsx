@@ -715,20 +715,32 @@ export default function JournalEntryScreen() {
     setExportAction("save");
     let capturedUri: string | null = null;
     try {
-      const perm =
-        Platform.OS === "android"
-          ? await requestPermissionsAsync(true)
-          : await requestPermissionsAsync();
+      capturedUri = await captureEntryPngUri();
+      if (!capturedUri) {
+        Alert.alert("Could not save", "Unable to create an image of this entry.");
+        return;
+      }
+
+      // Android: do not request READ_MEDIA_* / MediaLibrary read access.
+      // Share sheet lets the user save to Photos without broad gallery permission.
+      if (Platform.OS === "android") {
+        if (!(await Sharing.isAvailableAsync())) {
+          Alert.alert("Could not save", "Sharing is not available on this device.");
+          return;
+        }
+        await Sharing.shareAsync(capturedUri, {
+          mimeType: "image/png",
+          dialogTitle: "Save journal image",
+        });
+        return;
+      }
+
+      const perm = await requestPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
           "Photos access needed",
           "Allow photo library access in Settings to save journal images.",
         );
-        return;
-      }
-      capturedUri = await captureEntryPngUri();
-      if (!capturedUri) {
-        Alert.alert("Could not save", "Unable to create an image of this entry.");
         return;
       }
       await Asset.create(capturedUri);
@@ -742,7 +754,9 @@ export default function JournalEntryScreen() {
         Platform.OS === "android" &&
         /expo go can no longer provide full access to the media library/i.test(errorMessage);
       if (isExpoGoAndroidMediaLibraryPermissionError) {
-        capturedUri = await captureEntryPngUri();
+        if (!capturedUri) {
+          capturedUri = await captureEntryPngUri();
+        }
         if (!capturedUri) {
           Alert.alert("Could not save", "Unable to create an image of this entry.");
           return;
@@ -755,10 +769,6 @@ export default function JournalEntryScreen() {
           mimeType: "image/png",
           dialogTitle: "Save journal image",
         });
-        Alert.alert(
-          "Use Share to Save",
-          "Expo Go on Android cannot save directly to Photos. Use the share sheet to save the image.",
-        );
         return;
       }
       Alert.alert("Could not save", "Something went wrong. Try again.");
