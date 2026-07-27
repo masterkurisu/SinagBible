@@ -4,6 +4,24 @@ All notable changes to Sinag Bible, organized by version.
 
 ---
 
+## 1.0.0 - Public Release
+
+### New features & UI
+- **Study notes** — HelloAO commentary API integration; study-notes action shows a badge when commentary exists for the selected verses; refactored study notes sheet
+- **Back to top FAB** — reader scroll-to-top button with idle fade, fling-aware reveal, and haptic feedback
+- **Verse copy** — clipboard copy includes the correct translation abbreviation with the reference
+
+### Fixes
+- **Search** — YouVersion translations (NIV, etc.) now show verse text from the active translation instead of KJV keyword hits
+- **Reader selection** — verse selection clears when leaving the reader tab or interacting with the app bar
+- **Journal container transform** — entry detail morph transition crash fixes; safer reflection HTML rendering and loading state
+
+### Infrastructure
+- Metro config — monorepo watch folders, pnpm resolution, and block `node_modules` markdown from TreeFS reload crashes
+- pnpm workspace configuration updates
+
+---
+
 ## 1.0.0.10
 
 ### New features & UI
