@@ -13,6 +13,20 @@ if (!config.resolver.assetExts.includes("md")) {
 }
 config.resolver.sourceExts = config.resolver.sourceExts.filter((ext) => ext !== "md");
 
+// pnpm + Metro TreeFS: indexing `.md` inside `node_modules` (README.md, etc.) crashes TreeFS on reload.
+const nodeModulesMarkdownBlockList = /node_modules[/\\].*\.md$/;
+const existingBlockList = config.resolver.blockList;
+if (existingBlockList instanceof RegExp) {
+  config.resolver.blockList = new RegExp(
+    `${existingBlockList.source}|${nodeModulesMarkdownBlockList.source}`,
+    existingBlockList.flags,
+  );
+} else if (Array.isArray(existingBlockList)) {
+  config.resolver.blockList = [...existingBlockList, nodeModulesMarkdownBlockList];
+} else {
+  config.resolver.blockList = nodeModulesMarkdownBlockList;
+}
+
 // Watch the monorepo in addition to Expo defaults
 config.watchFolders = Array.from(
   new Set([...(config.watchFolders ?? []), workspaceRoot]),

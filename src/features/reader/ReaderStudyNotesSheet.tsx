@@ -6,77 +6,18 @@ import type { BibleChapter } from "@sinag-bible/types";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { ReaderM3BottomSheet } from "@/src/components/m3/ReaderM3BottomSheet";
 import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
-
-const COMMENTARY_STORAGE_KEY = "selectedCommentary";
-const COMMENTARY_DEFAULT_ID = "tyndale";
-const COMMENTARY_API_BASE_URL = "https://bible.helloao.org/api";
-const COMMENTARY_REQUEST_TIMEOUT_MS = 10000;
-
-async function fetchWithTimeout(
-  input: RequestInfo | URL,
-  init?: RequestInit,
-  timeoutMs: number = COMMENTARY_REQUEST_TIMEOUT_MS,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  const parentSignal = init?.signal;
-  const onParentAbort = () => controller.abort();
-  if (parentSignal) {
-    if (parentSignal.aborted) {
-      controller.abort();
-    } else {
-      parentSignal.addEventListener("abort", onParentAbort);
-    }
-  }
-
-  try {
-    const response = await fetch(input, { ...init, signal: controller.signal });
-    return response;
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("commentary request aborted");
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-    parentSignal?.removeEventListener("abort", onParentAbort);
-  }
-}
-
-function isCommentaryRequestAborted(
-  cancelled: boolean,
-  signal: AbortSignal,
-): boolean {
-  return cancelled || signal.aborted;
-}
-
-type CommentaryApiInlineItem = string | { text?: string; content?: CommentaryApiInlineItem[] };
-type CommentaryApiChapterItem =
-  | { type: "heading"; content?: CommentaryApiInlineItem[] }
-  | { type: "verse"; number?: number; content?: CommentaryApiInlineItem[] }
-  | { type: "line_break" }
-  | { type: "hebrew_subtitle"; content?: CommentaryApiInlineItem[] }
-  | { type: string; content?: CommentaryApiInlineItem[]; number?: number };
-
-type CommentaryApiChapterResponse = {
-  chapter?: {
-    content?: CommentaryApiChapterItem[];
-  };
-};
-
-function flattenCommentaryInline(items: CommentaryApiInlineItem[] | undefined): string {
-  if (!items || items.length === 0) return "";
-  return items
-    .map((item) => {
-      if (typeof item === "string") return item;
-      if (typeof item.text === "string") return item.text;
-      if (Array.isArray(item.content)) return flattenCommentaryInline(item.content);
-      return "";
-    })
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+import {
+  COMMENTARY_API_BASE_URL,
+  COMMENTARY_DEFAULT_ID,
+  COMMENTARY_REQUEST_TIMEOUT_MS,
+  COMMENTARY_STORAGE_KEY,
+  type CommentaryApiChapterItem,
+  filterCommentaryEntriesForVerses,
+  flattenCommentaryInline,
+  fetchCommentaryChapterEntries,
+  fetchWithTimeout,
+  isCommentaryRequestAborted,
+} from "@/lib/commentary-api";
 
 export type ReaderStudyNotesSheetProps = {
   isOpen: boolean;
@@ -209,27 +150,12 @@ export function ReaderStudyNotesSheet({
           }
           return;
         }
-        const url = `${COMMENTARY_API_BASE_URL}/c/${encodeURIComponent(selectedCommentary)}/${encodeURIComponent(commentaryBookId)}/${chapter.chapterNumber}.json`;
-        const res = await fetchWithTimeout(
-          url,
-          { signal: abortController.signal },
-          COMMENTARY_REQUEST_TIMEOUT_MS,
+        const items = await fetchCommentaryChapterEntries(
+          selectedCommentary,
+          chapter.bookSlug,
+          chapter.chapterNumber,
+          abortController.signal,
         );
-        if (!res.ok) {
-          if (res.status === 404) {
-            if (!isCommentaryRequestAborted(cancelled, abortController.signal)) {
-              setCommentaryEntries([]);
-            }
-            return;
-          }
-          throw new Error(`commentary chapter HTTP ${res.status}`);
-        }
-        const contentType = res.headers.get("content-type") ?? "";
-        if (!contentType.toLowerCase().includes("application/json")) {
-          throw new Error("commentary chapter unexpected content-type");
-        }
-        const raw = (await res.json()) as CommentaryApiChapterResponse;
-        const items = Array.isArray(raw.chapter?.content) ? raw.chapter.content : [];
         if (!isCommentaryRequestAborted(cancelled, abortController.signal)) {
           setCommentaryEntries(items);
         }
@@ -250,38 +176,10 @@ export function ReaderStudyNotesSheet({
     };
   }, [isOpen, selectedCommentary, chapter.bookSlug, chapter.chapterNumber]);
 
-  const filteredCommentaryEntries = useMemo(() => {
-    if (selectedVerses.length === 0) return commentaryEntries;
-    const selectedSet = new Set(selectedVerses);
-    const output: CommentaryApiChapterItem[] = [];
-    let pendingHeading: CommentaryApiChapterItem | null = null;
-    let previousWasSelectedVerse = false;
-    for (const entry of commentaryEntries) {
-      if (entry.type === "heading" || entry.type === "hebrew_subtitle") {
-        pendingHeading = entry;
-        previousWasSelectedVerse = false;
-        continue;
-      }
-      if (entry.type === "verse") {
-        const selected = typeof entry.number === "number" && selectedSet.has(entry.number);
-        if (selected) {
-          if (pendingHeading) {
-            output.push(pendingHeading);
-            pendingHeading = null;
-          }
-          output.push(entry);
-        }
-        previousWasSelectedVerse = selected;
-        continue;
-      }
-      if (entry.type === "line_break") {
-        if (previousWasSelectedVerse) output.push(entry);
-        continue;
-      }
-      if (previousWasSelectedVerse) output.push(entry);
-    }
-    return output;
-  }, [commentaryEntries, selectedVerses]);
+  const filteredCommentaryEntries = useMemo(
+    () => filterCommentaryEntriesForVerses(commentaryEntries, selectedVerses),
+    [commentaryEntries, selectedVerses],
+  );
 
   const selectedVerseFeedbackLabel = useMemo(() => {
     if (selectedVerses.length === 0) return null;

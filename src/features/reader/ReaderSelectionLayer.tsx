@@ -60,6 +60,7 @@ import {
   readerM3FloatingToolbarPillStyle,
 } from "@/src/features/reader/readerActionBarChrome";
 import { ReaderActionBarTooltipOverlay } from "@/src/features/reader/ReaderActionBarTooltipOverlay";
+import { useStudyNotesAvailability } from "@/src/features/reader/useStudyNotesAvailability";
 import {
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
@@ -129,6 +130,7 @@ type ReaderSelectionActionBarProps = {
   toggleFavoriteFromSelection: () => void;
   selectionIsFavorited: boolean;
   openJournalFromSelection: () => void;
+  studyNotesAvailable: boolean;
   actionBarButtonRefs: Record<ReaderActionBarOnboardingStepId, RefObject<View | null>>;
 };
 
@@ -151,10 +153,12 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
   toggleFavoriteFromSelection,
   selectionIsFavorited,
   openJournalFromSelection,
+  studyNotesAvailable,
   actionBarButtonRefs,
 }: ReaderSelectionActionBarProps) {
   const { bundle } = useMobileAppTheme();
   const sheetChrome = useReaderSheetChrome();
+  const studyNotesBadgeColor = bundle.chrome.tabTint;
   const journalChrome = bundle.journal;
   const iconMuted = readerActionBarIconColor(rc, sheetChrome.onSurfaceVariant);
   const actionBarPillRef = useRef<View | null>(null);
@@ -197,7 +201,11 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
         <View ref={actionBarPillRef} collapsable={false} style={toolbarPillStyle}>
           <ReaderActionBarIconButton
             onPress={openStudyNotesFromSelection}
-            accessibilityLabel="Open study notes for selection"
+            accessibilityLabel={
+              studyNotesAvailable
+                ? "Open study notes for selection (notes available)"
+                : "Open study notes for selection"
+            }
             buttonRef={actionBarButtonRefs["study-notes"]}
             tooltipTitle={studyNotesTooltip?.title}
             tooltipDescription={studyNotesTooltip?.description}
@@ -213,6 +221,22 @@ const ReaderSelectionActionBar = memo(function ReaderSelectionActionBar({
               }}
             >
               <StudyNotesBookmarkIcon color={iconMuted} size={READER_ACTION_BAR_ICON_SIZE_PX} />
+              {studyNotesAvailable ? (
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    right: 0,
+                    width: 12.4,
+                    height: 12.4,
+                    borderRadius: 7.2,
+                    backgroundColor: studyNotesBadgeColor,
+                    borderWidth: 2,
+                    borderColor: sheetChrome.surfaceContainerHigh,
+                  }}
+                />
+              ) : null}
             </View>
           </ReaderActionBarIconButton>
           <ReaderActionBarIconButton
@@ -676,6 +700,12 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     [bookSlug, chapterNumber, favorites, selectedVerses],
   );
 
+  const { hasStudyNotes: studyNotesAvailable } = useStudyNotesAvailability(
+    bookSlug,
+    chapterNumber,
+    selectedVerses,
+  );
+
   const toggleFavoriteFromSelection = useCallback(() => {
     if (selectedVerses.length === 0 || !chapter || !resolvedTranslationId || !bookSlug) return;
     const record = buildCarouselVerseFromSelection({
@@ -1072,6 +1102,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           toggleFavoriteFromSelection={toggleFavoriteFromSelection}
           selectionIsFavorited={selectionIsFavorited}
           openJournalFromSelection={openJournalFromSelection}
+          studyNotesAvailable={studyNotesAvailable}
           actionBarButtonRefs={actionBarButtonRefs}
         />
       ) : null}
