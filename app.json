@@ -119,7 +119,15 @@
         }
       ],
       "expo-secure-store",
-      "./plugins/with-android-photo-picker-permissions.js"
+      "./plugins/with-android-photo-picker-permissions.js",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
