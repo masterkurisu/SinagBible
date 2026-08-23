@@ -1747,18 +1747,21 @@ export default function ReaderChapterScreen() {
     onSelectDeleteMyData: openDeleteMyDataConfirmFromMenu,
     panelBackgroundColor: rc.sceneSurface,
     rippleColor: Platform.OS === "android" ? androidAppBarRipple : undefined,
+    /** Match the journal settings panel everywhere — always the M3 side sheet, never the tablet slide-aside panel. */
+    forceSideSheet: true,
   };
+  const readerSettingsUsesTabletSlidePanel = false;
 
   return (
     <View style={{ flex: 1, backgroundColor: rc.sceneSurface, overflow: "visible" }}>
       <ReaderMobileSettingsPanel {...readerSettingsPanelProps} />
       <Animated.View
-        {...(isTabletReaderLayout && toolsMenuOpen ? readerSettingsMenuPanResponder.panHandlers : {})}
-        pointerEvents={isTabletReaderLayout && toolsMenuOpen ? "box-none" : "auto"}
+        {...(readerSettingsUsesTabletSlidePanel && toolsMenuOpen ? readerSettingsMenuPanResponder.panHandlers : {})}
+        pointerEvents={readerSettingsUsesTabletSlidePanel && toolsMenuOpen ? "box-none" : "auto"}
         style={{
           flex: 1,
           backgroundColor: rc.sceneSurface,
-          ...(isTabletReaderLayout
+          ...(readerSettingsUsesTabletSlidePanel
             ? { transform: [{ translateX: readerMobileSettingsSlideTranslateX }] }
             : null),
           zIndex: 1,

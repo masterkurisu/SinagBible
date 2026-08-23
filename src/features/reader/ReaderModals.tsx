@@ -81,8 +81,9 @@ export type ReaderMobileSettingsPanelProps = {
   rippleColor?: string;
   onSettingsPanelLayout?: () => void;
   /**
-   * Use the M3 side sheet even on tablet/fold. Required on screens that do not slide
-   * content over the always-mounted tablet settings panel (journal).
+   * Use the M3 side sheet even on tablet/fold, instead of the legacy tablet slide-aside
+   * panel. Reader and journal both force this so the settings panel looks identical
+   * everywhere.
    */
   forceSideSheet?: boolean;
 };

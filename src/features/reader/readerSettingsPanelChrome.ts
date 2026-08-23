@@ -31,9 +31,9 @@ export function readerSettingsSideSheetWidthPx(screenWidth: number): number {
 }
 
 /**
- * Phone uses an M3 side sheet. The tablet/fold reader uses a full-width panel behind
- * sliding content. Screens that do not slide (journal) must force the side sheet —
- * otherwise the always-mounted tablet panel shows through (unfolded Fold, large tablets).
+ * Phone uses an M3 side sheet. The legacy tablet/fold panel (full-width, behind sliding
+ * content) is opt-in only — reader and journal both force the side sheet so the settings
+ * panel looks identical everywhere, regardless of screen size.
  */
 export function shouldPresentReaderSettingsAsSideSheet(
   isTabletReaderLayout: boolean,
