@@ -43,6 +43,7 @@ import {
   READER_M3_ERROR,
   READER_M3_ERROR_CONTAINER,
   READER_M3_ON_ERROR_CONTAINER,
+  shouldPresentReaderSettingsAsSideSheet,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { readerSettingsDeleteMyDataPanelBottomPx } from "@/lib/native-tab-chrome";
 import { hapticLightImpact, hapticSoftPop } from "@/lib/haptics";
@@ -79,6 +80,11 @@ export type ReaderMobileSettingsPanelProps = {
   /** Theme-aware M3 ripple for settings destinations (Android). */
   rippleColor?: string;
   onSettingsPanelLayout?: () => void;
+  /**
+   * Use the M3 side sheet even on tablet/fold. Required on screens that do not slide
+   * content over the always-mounted tablet settings panel (journal).
+   */
+  forceSideSheet?: boolean;
 };
 
 const SETTINGS_MENU_ICON_SIZE = 26;
@@ -107,7 +113,7 @@ const READER_MOBILE_SETTINGS_MENU_ROW = {
 
 /** Phone: M3 side sheet. Tablet: full-width settings panel behind sliding content. */
 export function ReaderMobileSettingsPanel(props: ReaderMobileSettingsPanelProps) {
-  if (!props.isTabletReaderLayout) {
+  if (shouldPresentReaderSettingsAsSideSheet(props.isTabletReaderLayout, props.forceSideSheet)) {
     return (
       <ReaderSettingsSideSheet
         open={props.toolsMenuOpen}

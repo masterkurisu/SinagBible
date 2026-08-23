@@ -30,6 +30,18 @@ export function readerSettingsSideSheetWidthPx(screenWidth: number): number {
   return Math.max(240, Math.min(320, Math.max(280, Math.round(screenWidth * 0.84)) - 40));
 }
 
+/**
+ * Phone uses an M3 side sheet. The tablet/fold reader uses a full-width panel behind
+ * sliding content. Screens that do not slide (journal) must force the side sheet —
+ * otherwise the always-mounted tablet panel shows through (unfolded Fold, large tablets).
+ */
+export function shouldPresentReaderSettingsAsSideSheet(
+  isTabletReaderLayout: boolean,
+  forceSideSheet = false,
+): boolean {
+  return forceSideSheet || !isTabletReaderLayout;
+}
+
 export const READER_M3_ON_SURFACE = "#1C1B1F";
 export const READER_M3_ON_SURFACE_VARIANT = "#49454F";
 export const READER_M3_SURFACE_CONTAINER = "#F3EDF7";

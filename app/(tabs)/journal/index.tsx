@@ -652,8 +652,9 @@ export default function JournalIndexScreen() {
         task.cancel();
         // Dismiss journal new-entry sheet when leaving the tab.
         setNewEntryOpen(false);
+        settingsMenu.closeToolsMenu();
       };
-    }, [load]),
+    }, [load, settingsMenu.closeToolsMenu]),
   );
 
   const onRefresh = useCallback(() => {
@@ -1207,6 +1208,7 @@ export default function JournalIndexScreen() {
           hideTranslationAndStudyNotes
           onSelectVerseCarousel={openCarouselSettings}
           panelBackgroundColor={j.listPageBackground}
+          forceSideSheetSettings
         />
       ) : null}
 
@@ -1228,6 +1230,7 @@ export default function JournalIndexScreen() {
         style={{
           flex: 1,
           zIndex: 0,
+          backgroundColor: bundle.journal.listPageBackground,
         }}
       >
         <GestureDetector gesture={journalListScrollGesture}>

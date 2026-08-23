@@ -50,6 +50,11 @@ type ReaderSettingsFollowUpLayerProps = {
   onSelectVerseCarousel?: () => void;
   /** Theme page background for the settings side sheet. */
   panelBackgroundColor: string;
+  /**
+   * Journal and similar screens have no slide-to-reveal layer. Force the M3 side sheet
+   * on tablet/fold so the always-mounted reader settings panel cannot show through.
+   */
+  forceSideSheetSettings?: boolean;
 };
 
 export function useReaderSettingsFollowUpState({
@@ -331,6 +336,7 @@ export function ReaderSettingsFollowUpLayer({
   hideTranslationAndStudyNotes = false,
   onSelectVerseCarousel,
   panelBackgroundColor,
+  forceSideSheetSettings = false,
   followUp,
   onSettingsPanelLayout,
 }: ReaderSettingsFollowUpLayerProps & {
@@ -415,12 +421,14 @@ export function ReaderSettingsFollowUpLayer({
       panelBackgroundColor,
       rippleColor,
       onSettingsPanelLayout,
+      forceSideSheet: forceSideSheetSettings,
     }),
     [
       followUp,
       hideTranslationAndStudyNotes,
       onSelectVerseCarousel,
       closeToolsMenu,
+      forceSideSheetSettings,
       insets,
       isTabletReaderLayout,
       onNavigate,
