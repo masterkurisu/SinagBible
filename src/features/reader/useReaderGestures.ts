@@ -5,11 +5,9 @@ import Reanimated from "react-native-reanimated";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
 import type { TranslationId } from "@sinag-bible/core/bible-translations";
-import type { BibleVerseInlineItem } from "@sinag-bible/types";
+import type { ReaderVerseFlashItem } from "./readerVerseFlashListData";
 
-export type ReaderVerseFlashItem =
-  | { kind: "verse"; verseIndex: number; verseText: string; verseInlineContent?: BibleVerseInlineItem[] }
-  | { kind: "empty"; side: "left" | "right"; row: number };
+export type { ReaderVerseFlashItem } from "./readerVerseFlashListData";
 
 type ChapterNavTarget = { slug: string; chapter: number };
 

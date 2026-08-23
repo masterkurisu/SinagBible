@@ -73,6 +73,10 @@ const readerVerseListStyles = StyleSheet.create({
     alignSelf: "stretch",
     width: "100%",
   },
+  emptyColumnCell: {
+    height: 0,
+    overflow: "hidden",
+  },
   leftColumnPadding: {
     paddingRight: READER_TABLET_TWO_COLUMN_GAP / 2,
   },
@@ -900,7 +904,15 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
               ? readerVerseListStyles.leftColumnPadding
               : readerVerseListStyles.rightColumnPadding
             : null;
-        return <View style={[readerVerseListStyles.flashItemBase, twoColumnPaddingStyle]} />;
+        return (
+          <View
+            style={[
+              readerVerseListStyles.flashItemBase,
+              readerVerseListStyles.emptyColumnCell,
+              twoColumnPaddingStyle,
+            ]}
+          />
+        );
       }
       return (
         <MemoizedReaderVerseFlashRow
