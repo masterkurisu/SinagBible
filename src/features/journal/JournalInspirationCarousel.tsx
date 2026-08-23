@@ -22,6 +22,7 @@ import { useJournalCarouselVerses } from "@/lib/use-journal-carousel-verses";
 import {
   getEffectiveCarouselCardSize,
   getCarouselCardSizeWithoutOverride,
+  getCarouselSizingBaseWidth,
   hasCarouselCardSizeOverride,
   patchCarouselCardSize,
   removeCarouselCardSize,
@@ -156,9 +157,11 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
   const [menuState, setMenuState] = useState<MenuState | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
 
+  const sizingBaseWidth = useMemo(() => getCarouselSizingBaseWidth(windowWidth), [windowWidth]);
+
   const cardWidths = useMemo(
-    () => displayVerses.map((verse) => Math.round(windowWidth * verse.widthRatio)),
-    [displayVerses, windowWidth],
+    () => displayVerses.map((verse) => Math.round(sizingBaseWidth * verse.widthRatio)),
+    [displayVerses, sizingBaseWidth],
   );
 
   const carouselHeight = useMemo(() => {

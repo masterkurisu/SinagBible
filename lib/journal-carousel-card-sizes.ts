@@ -14,6 +14,19 @@ export const CAROUSEL_CARD_SIZE_RATIOS: Record<CarouselCardSize, number> = {
   large: 0.78,
 };
 
+/**
+ * Reference width (dp) the size ratios above are tuned for (a typical large phone).
+ * On wider windows (tablets, unfolded foldables, landscape, split-screen) we clamp the
+ * width used for the ratio math to this value so cards stay a consistent, readable size
+ * instead of growing linearly with the window — see `getCarouselSizingBaseWidth`.
+ */
+export const CAROUSEL_SIZING_REFERENCE_WIDTH_PX = 480;
+
+/** Width (dp) to use for `width * ratio` card-size math, clamped for large/tablet windows. */
+export function getCarouselSizingBaseWidth(windowWidth: number): number {
+  return Math.min(windowWidth, CAROUSEL_SIZING_REFERENCE_WIDTH_PX);
+}
+
 /** Original index-based varied layout sizes (matches WIDTH_RATIOS order). */
 const VARIED_LAYOUT_CARD_SIZES: readonly CarouselCardSize[] = ["small", "large", "medium"];
 
