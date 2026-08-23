@@ -9,7 +9,7 @@
     "dev:usb": "adb reverse tcp:8081 tcp:8081 && APP_VARIANT=development expo start --dev-client --localhost",
     "build": "tsc --noEmit",
     "android": "APP_VARIANT=development expo run:android --app-id com.sinagbible.app.dev",
-    "android:usb": "adb reverse tcp:8081 tcp:8081 && adb shell am start -n com.sinagbible.app.dev/com.sinagbible.app.MainActivity -a android.intent.action.VIEW -d 'sinagbible-dev://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081'",
+    "android:usb": "adb reverse tcp:8081 tcp:8081 && adb shell am start -n com.sinagbible.app.dev/com.sinagbible.app.dev.MainActivity -a android.intent.action.VIEW -d 'sinagbible-dev://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081'",
     "ios": "APP_VARIANT=development expo run:ios",
     "export": "expo export",
     "lint": "eslint .",

@@ -1,5 +1,13 @@
-import { useCallback, useMemo } from "react";
-import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import {
+  type LayoutChangeEvent,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import {
   mobileAppThemePickerOptions,
@@ -44,13 +52,34 @@ export function ReaderThemePickerSheet({
   const useBottomSheet = !isTabletReaderLayout;
   const sheetMaxW = useBottomSheet ? screenW : Math.min(420, screenW - 48);
   const padH = 24 * scale;
-  const columns = 3;
   const rowGap = 24 * scale;
   const colGap = 16 * scale;
-  const contentW = sheetMaxW - padH * 2;
+
+  /**
+   * Measure the grid's actual rendered width instead of trusting the sheet's
+   * computed width alone: unusual aspect ratios (foldables, split-screen,
+   * rotation) can make the assumed screen-width-minus-padding math diverge
+   * from what the row container really gets, which is what broke the layout
+   * on wide/narrow devices. The column count and cell sizing are then derived
+   * from that measured width so the grid stays consistent on any shape.
+   */
+  const [measuredW, setMeasuredW] = useState(0);
+  const fallbackContentW = sheetMaxW - padH * 2;
+  const contentW = measuredW > 0 ? measuredW : fallbackContentW;
+  const minCellW = 84 * scale;
+  const maxColumns = Math.min(4, mobileAppThemePickerOptions.length);
+  const columns = Math.max(
+    2,
+    Math.min(maxColumns, Math.floor((contentW + colGap) / (minCellW + colGap)) || 2),
+  );
   const cellW = (contentW - colGap * (columns - 1)) / columns;
   const circleSize = Math.min(64 * scale, cellW - 8 * scale);
   const ringSize = circleSize + 8 * scale;
+
+  const handleGridLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextWidth = event.nativeEvent.layout.width;
+    setMeasuredW((prev) => (Math.abs(prev - nextWidth) > 0.5 ? nextWidth : prev));
+  }, []);
 
   const handleSelectTheme = useCallback(
     (id: MobileAppThemeId) => {
@@ -75,7 +104,7 @@ export function ReaderThemePickerSheet({
         useBottomSheet ? Math.max(insets.bottom, 16) * scale : 16 * scale
       }
     >
-      <View style={[styles.grid, { marginBottom: 8 * scale }]}>
+      <View style={[styles.grid, { marginBottom: 8 * scale }]} onLayout={handleGridLayout}>
         {mobileAppThemePickerOptions.map((opt, index) => {
           const selected = opt.id === themeId;
           const col = index % columns;
