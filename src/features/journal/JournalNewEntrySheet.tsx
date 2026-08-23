@@ -229,15 +229,8 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
   ]);
 
   const sheetFormChromePx = materialBottomSheet ? 52 : 42;
+  /** Absolute ceiling for the sheet height when the keyboard is closed. */
   const sheetMaxHeightPx = layout.heightPx;
-  const sheetHeightPx = useMemo(() => {
-    if (preferredContentHeightPx == null) {
-      const initial = SHEET_INITIAL_CONTENT_ESTIMATE_PX + sheetFormChromePx;
-      return Math.max(SHEET_MIN_HEIGHT_PX, Math.min(sheetMaxHeightPx, initial));
-    }
-    const desired = preferredContentHeightPx + sheetFormChromePx;
-    return Math.max(SHEET_MIN_HEIGHT_PX, Math.min(sheetMaxHeightPx, desired));
-  }, [preferredContentHeightPx, sheetFormChromePx, sheetMaxHeightPx]);
 
   const onSheetPreferredHeightChange = useCallback((contentHeightPx: number) => {
     setPreferredContentHeightPx((prev) => {
@@ -246,40 +239,46 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
     });
   }, []);
 
-  const maxAllowedSheetHeightPx = Math.max(
-    SHEET_MIN_HEIGHT_PX,
-    windowHeight - sheetTopClearancePx - layout.bottomPx,
-  );
-  const resolvedSheetHeightPx = Math.min(sheetHeightPx, maxAllowedSheetHeightPx);
-
-  const sheetAtMaxCapacity = useMemo(() => {
-    if (preferredContentHeightPx == null) return false;
-    return preferredContentHeightPx + sheetFormChromePx >= sheetMaxHeightPx - 2;
+  /** Sheet height with the keyboard closed — sized to fit measured content, capped by the screen. */
+  const naturalHeightPx = useMemo(() => {
+    const desired =
+      preferredContentHeightPx == null
+        ? SHEET_INITIAL_CONTENT_ESTIMATE_PX + sheetFormChromePx
+        : preferredContentHeightPx + sheetFormChromePx;
+    return Math.max(SHEET_MIN_HEIGHT_PX, Math.min(sheetMaxHeightPx, desired));
   }, [preferredContentHeightPx, sheetFormChromePx, sheetMaxHeightPx]);
 
-  /** Keep form height stable while the keyboard is open — layout reflow steals TextInput/WebView focus. */
-  const formContentScrollMaxHeightPx = resolvedSheetHeightPx - sheetFormChromePx;
-
-  const keyboardBottomInsetPx =
-    sheetAtMaxCapacity && keyboardHeight > 0 ? keyboardHeight : 0;
+  const naturalTopPx = windowHeight - layout.bottomPx - naturalHeightPx;
 
   /**
-   * Lift the sheet with translateY so layout dimensions stay fixed (non-max sheets).
-   * Max-capacity sheets are already top-pinned — shrink via bottom inset instead.
+   * Final on-screen geometry, recomputed from scratch whenever the keyboard height changes so the
+   * sheet always fits between the top clearance and the keyboard — on every device size/orientation.
+   *
+   * Preference order:
+   * 1. Keep the sheet's natural top position and just shrink its height above the keyboard.
+   * 2. If that would make the sheet too small to use, let it grow upward (toward the top clearance)
+   *    instead, down to a workable minimum. The form's own internal scroll view (see
+   *    `journal-new-entry-form.tsx`) takes over from there so every field stays reachable.
    */
-  const keyboardLiftPx = useMemo(() => {
-    if (keyboardHeight <= 0 || sheetAtMaxCapacity) return 0;
-    const sheetTopY = windowHeight - layout.bottomPx - resolvedSheetHeightPx;
-    const maxLift = Math.max(0, sheetTopY - sheetTopClearancePx);
-    return Math.min(keyboardHeight, maxLift);
-  }, [
-    keyboardHeight,
-    sheetAtMaxCapacity,
-    windowHeight,
-    layout.bottomPx,
-    resolvedSheetHeightPx,
-    sheetTopClearancePx,
-  ]);
+  const { cardTopPx, cardHeightPx } = useMemo(() => {
+    const bottomWithKeyboardPx = layout.bottomPx + keyboardHeight;
+    if (keyboardHeight <= 0) {
+      return { cardTopPx: naturalTopPx, cardHeightPx: naturalHeightPx };
+    }
+    const heightAtNaturalTopPx = windowHeight - naturalTopPx - bottomWithKeyboardPx;
+    if (heightAtNaturalTopPx >= SHEET_MIN_HEIGHT_PX) {
+      return { cardTopPx: naturalTopPx, cardHeightPx: heightAtNaturalTopPx };
+    }
+    const availableHeightPx = Math.max(
+      SHEET_MIN_HEIGHT_PX,
+      windowHeight - sheetTopClearancePx - bottomWithKeyboardPx,
+    );
+    const topPx = Math.max(sheetTopClearancePx, windowHeight - bottomWithKeyboardPx - availableHeightPx);
+    return { cardTopPx: topPx, cardHeightPx: availableHeightPx };
+  }, [keyboardHeight, layout.bottomPx, naturalHeightPx, naturalTopPx, sheetTopClearancePx, windowHeight]);
+
+  /** Form content area (minus the sheet's own drag-handle/padding chrome). */
+  const formContentScrollMaxHeightPx = cardHeightPx - sheetFormChromePx;
 
   const finishClose = useCallback(() => {
     closingRef.current = false;
@@ -472,23 +471,15 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
           position: "absolute",
           left: layout.leftPx,
           width: layout.widthPx,
-          ...(sheetAtMaxCapacity
-            ? {
-                top: sheetTopClearancePx,
-                bottom: layout.bottomPx + keyboardBottomInsetPx,
-              }
-            : {
-                bottom: layout.bottomPx,
-                height: resolvedSheetHeightPx,
-                maxHeight: maxAllowedSheetHeightPx,
-              }),
+          top: cardTopPx,
+          height: cardHeightPx,
         }}
       >
         <View
           pointerEvents="box-none"
           style={{
             flex: 1,
-            transform: [{ translateY: dragOffsetY - keyboardLiftPx }],
+            transform: [{ translateY: dragOffsetY }],
           }}
         >
           <View style={styles.sheetKeyboardView}>
@@ -535,7 +526,6 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
                   initialParams={initialParams}
                   contentScrollMaxHeight={formContentScrollMaxHeightPx}
                   onSheetPreferredHeightChange={onSheetPreferredHeightChange}
-                  sheetKeyboardLiftPx={materialBottomSheet ? keyboardLiftPx : undefined}
                   contentHorizontalPadding={10}
                   readerNewEntryScrollable={variant === "reader"}
                   readerCardBottomLiftPx={formReaderBottomLiftPx}

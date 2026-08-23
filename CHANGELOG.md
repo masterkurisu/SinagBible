@@ -3,6 +3,9 @@
 All notable changes to Sinag Bible, organized by version.
 
 ---
+## 1.0.1
+
+
 
 ## 1.0.0 - Public Release
 
@@ -22,7 +25,7 @@ All notable changes to Sinag Bible, organized by version.
 
 ---
 
-## 1.0.0.10
+## 1.0.0.10 - Pre Release
 
 ### New features & UI
 - **M3 motion system** — shared spring and duration tokens (`m3-motion.ts`); M3 springs for bottom sheets; dual scrim API for modal shells; settings menu spring tokens; reduced-motion support and token audit

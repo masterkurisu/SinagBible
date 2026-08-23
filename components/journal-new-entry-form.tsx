@@ -161,11 +161,6 @@ type Props = {
    * can grow or shrink the sheet card to fit.
    */
   onSheetPreferredHeightChange?: (contentHeightPx: number) => void;
-  /**
-   * Bottom sheet only: parent lifts the card above the keyboard (px translated). When defined, the
-   * form positions the reflection toolbar in sheet-local coordinates instead of screen keyboard inset.
-   */
-  sheetKeyboardLiftPx?: number;
   /** Notify parent whether the form currently has unsaved typed content. */
   onDirtyChange?: (dirty: boolean) => void;
   /** Hide the large “New/Edit Entry” heading (e.g. when the stack header already shows the title). */
@@ -200,7 +195,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     onAfterSave,
     contentScrollMaxHeight,
     onSheetPreferredHeightChange,
-    sheetKeyboardLiftPx,
     onDirtyChange,
     hideFormScreenTitle = false,
     contentHorizontalPadding,
@@ -504,9 +498,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   }, []);
 
   useEffect(() => {
-    if (!isPhoneSheetForm || keyboardHeight <= 0 || activeFormField !== "reflection") return;
+    if (contentScrollMaxHeight == null || keyboardHeight <= 0 || activeFormField !== "reflection") return;
     sheetFormScrollRef.current?.scrollToEnd({ animated: false });
-  }, [keyboardHeight, activeFormField, isPhoneSheetForm]);
+  }, [keyboardHeight, activeFormField, contentScrollMaxHeight]);
 
   useEffect(() => {
     if (!saveToastMessage) {
@@ -900,7 +894,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     showReflectionFloatingToolbar,
     keyboardHeight,
     reflectionFullscreenOpen,
-    sheetKeyboardLiftPx,
     contentScrollMaxHeight,
     measureReflectionToolbarBottomPx,
   ]);
@@ -1507,37 +1500,30 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                 paddingRight: padRight,
               }}
             >
-              {sheetNeedsScroll ? (
-                <ScrollView
-                  ref={sheetFormScrollRef}
-                  style={{ flex: 1, minHeight: 0 }}
-                  contentContainerStyle={{ paddingBottom: 8 }}
-                  keyboardShouldPersistTaps="handled"
-                  keyboardDismissMode={FORM_SCROLL_KEYBOARD_DISMISS_MODE}
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator
+              {/*
+                Always a ScrollView (never swapped for a plain View) so toggling `sheetNeedsScroll`
+                — e.g. when the sheet shrinks above the keyboard — never remounts this subtree and
+                steals focus from the reflection TextInput mid-typing.
+              */}
+              <ScrollView
+                ref={sheetFormScrollRef}
+                style={{ flex: 1, minHeight: 0 }}
+                contentContainerStyle={sheetNeedsScroll ? { paddingBottom: 8 } : { flexGrow: 1 }}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={FORM_SCROLL_KEYBOARD_DISMISS_MODE}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={sheetNeedsScroll}
+                scrollEnabled={sheetNeedsScroll}
+              >
+                <View
+                  className="gap-2.5 pb-0"
+                  style={{ flexShrink: 0 }}
+                  onLayout={onTopFieldsLayout}
                 >
-                  <View
-                    className="gap-2.5 pb-0"
-                    style={{ flexShrink: 0 }}
-                    onLayout={onTopFieldsLayout}
-                  >
-                    {formLeadingSections}
-                  </View>
-                  {formReflectionSection}
-                </ScrollView>
-              ) : (
-                <View style={{ flex: 1, minHeight: 0 }}>
-                  <View
-                    className="gap-2.5 pb-0"
-                    style={{ flexShrink: 0 }}
-                    onLayout={onTopFieldsLayout}
-                  >
-                    {formLeadingSections}
-                  </View>
-                  {formReflectionSection}
+                  {formLeadingSections}
                 </View>
-              )}
+                {formReflectionSection}
+              </ScrollView>
             </View>
             <View
               style={{
