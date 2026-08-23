@@ -5,3 +5,10 @@ allowBuilds:
   '@sentry/cli': true
   esbuild: true
   unrs-resolver: true
+# expensify-common (peer of @expensify/react-native-live-markdown) depends on
+# Expensify's git fork of simply-deferred. pnpm 11 blocks exotic subdeps by
+# default; pin the public npm package so the spike install can resolve.
+overrides:
+  simply-deferred: 3.0.0
+patchedDependencies:
+  html-entities@2.5.3: patches/html-entities@2.5.3.patch
