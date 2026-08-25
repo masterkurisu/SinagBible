@@ -186,12 +186,13 @@ export default function ReaderChapterScreen() {
     setFontScale: setFontSizeScalePersisted,
     setLineSpacingScale: setLineSpacingScalePersisted,
     setVerseTextAlign: setVerseTextAlignPersisted,
+    setVerseLayout: setVerseLayoutPersisted,
     setThemeId,
     readerVerseFontSize,
     readerVerseLineHeight,
     readerVerseBodyFontFamily,
   } = useReaderPreferences();
-  const { fontScale: fontSizeScale, fontFamilyId: readerVerseBodyFontId, lineSpacingScale, verseTextAlign, themeId } =
+  const { fontScale: fontSizeScale, fontFamilyId: readerVerseBodyFontId, lineSpacingScale, verseTextAlign, verseLayout, themeId } =
     prefs;
   const colors = bundle.ui;
   const rc = bundle.reader;
@@ -1076,8 +1077,9 @@ export default function ReaderChapterScreen() {
       readerTabletLandscapeTwoColumn,
       readerTwoColumnSplitIndex,
       chapter.verseInlineContent,
+      verseLayout,
     );
-  }, [chapter, readerTabletLandscapeTwoColumn, readerTwoColumnSplitIndex]);
+  }, [chapter, readerTabletLandscapeTwoColumn, readerTwoColumnSplitIndex, verseLayout]);
 
   const verseFlashListDataForList = useMemo(
     () => (isTranslationSwitching ? [] : verseFlashListData),
@@ -1939,6 +1941,8 @@ export default function ReaderChapterScreen() {
         setLineSpacingScalePersisted={setLineSpacingScalePersisted}
         verseTextAlign={verseTextAlign}
         setVerseTextAlignPersisted={setVerseTextAlignPersisted}
+        verseLayout={verseLayout}
+        setVerseLayoutPersisted={setVerseLayoutPersisted}
         readerVerseBodyFontId={readerVerseBodyFontId}
         setReaderVerseBodyFontIdPersisted={setReaderVerseBodyFontIdPersisted}
         settingsMutedTextColor={settingsMutedTextColor}

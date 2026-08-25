@@ -1,7 +1,14 @@
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
 
+export type ReaderVerseFlashVerse = {
+  verseIndex: number;
+  verseText: string;
+  verseInlineContent?: BibleVerseInlineItem[];
+};
+
 export type ReaderVerseFlashItem =
-  | { kind: "verse"; verseIndex: number; verseText: string; verseInlineContent?: BibleVerseInlineItem[] }
+  | ({ kind: "verse" } & ReaderVerseFlashVerse)
+  | { kind: "paragraph"; verses: ReaderVerseFlashVerse[] }
   | { kind: "empty"; side: "left" | "right"; row: number };
 
 /**
@@ -29,18 +36,51 @@ function verseFlashInlineAt(
   return row && row.length > 0 ? [...row] : undefined;
 }
 
+function verseFlashAt(
+  verses: readonly string[],
+  verseInlineContent: readonly BibleVerseInlineItem[][] | undefined,
+  verseIndex: number,
+): ReaderVerseFlashVerse {
+  return {
+    verseIndex,
+    verseText: verses[verseIndex] ?? "",
+    verseInlineContent: verseFlashInlineAt(verseInlineContent, verseIndex),
+  };
+}
+
 export function buildReaderVerseFlashListData(
   verses: readonly string[],
   twoColumn: boolean,
   splitIndex: number,
   verseInlineContent?: readonly BibleVerseInlineItem[][] | undefined,
+  verseLayout: "line-by-line" | "paragraph" = "line-by-line",
 ): ReaderVerseFlashItem[] {
+  if (verseLayout === "paragraph") {
+    if (verses.length === 0) return [];
+    if (!twoColumn) {
+      return [
+        {
+          kind: "paragraph",
+          verses: verses.map((_, i) => verseFlashAt(verses, verseInlineContent, i)),
+        },
+      ];
+    }
+    const left = verses
+      .slice(0, splitIndex)
+      .map((_, i) => verseFlashAt(verses, verseInlineContent, i));
+    const right = verses
+      .slice(splitIndex)
+      .map((_, i) => verseFlashAt(verses, verseInlineContent, splitIndex + i));
+    const out: ReaderVerseFlashItem[] = [];
+    if (left.length > 0) out.push({ kind: "paragraph", verses: left });
+    if (right.length > 0) out.push({ kind: "paragraph", verses: right });
+    return out;
+  }
+
   if (!twoColumn) {
-    return verses.map((text, i) => ({
+    return verses.map((_, i) => ({
       kind: "verse" as const,
-      verseIndex: i,
-      verseText: text,
-      verseInlineContent: verseFlashInlineAt(verseInlineContent, i),
+      ...verseFlashAt(verses, verseInlineContent, i),
     }));
   }
   const leftLen = splitIndex;
@@ -79,9 +119,13 @@ export function findFlashListIndexForVerseNumber(
   verseNumber: number,
 ): number | null {
   const targetIndex = verseNumber - 1;
-  const idx = items.findIndex(
-    (item) => item.kind === "verse" && item.verseIndex === targetIndex,
-  );
+  const idx = items.findIndex((item) => {
+    if (item.kind === "verse") return item.verseIndex === targetIndex;
+    if (item.kind === "paragraph") {
+      return item.verses.some((verse) => verse.verseIndex === targetIndex);
+    }
+    return false;
+  });
   return idx >= 0 ? idx : null;
 }
 

@@ -57,18 +57,27 @@ export function scrollReaderFlashListToVerseCentered(
   if (listIndex == null || listRef == null) return false;
 
   const animated = options?.animated ?? true;
+  const item = items[listIndex];
+  const indexInParagraph =
+    item?.kind === "paragraph"
+      ? Math.max(0, item.verses.findIndex((verse) => verse.verseIndex === verseNumber - 1))
+      : 0;
+  const viewOffset =
+    item?.kind === "paragraph" ? indexInParagraph * estimatedItemSize : 0;
+  const viewPosition = item?.kind === "paragraph" ? 0 : 0.5;
+
   void listRef
     .scrollToIndex({
       index: listIndex,
       animated,
-      viewPosition: 0.5,
+      viewPosition,
+      viewOffset: item?.kind === "paragraph" ? -viewOffset : 0,
     })
     .catch(() => {
       const viewportHeight = listRef.getWindowSize().height;
-      const offset = Math.max(
-        0,
-        listIndex * estimatedItemSize - viewportHeight / 2 + estimatedItemSize / 2,
-      );
+      const itemStart = listIndex * estimatedItemSize;
+      const targetY = itemStart + viewOffset;
+      const offset = Math.max(0, targetY - viewportHeight / 2 + estimatedItemSize / 2);
       listRef.scrollToOffset({ offset, animated });
     });
   return true;
@@ -132,14 +141,17 @@ export function ReaderVerseList({
   const readerVerseFlashGetItemType = useCallback(
     (item: ReaderVerseFlashItem) => {
       if (item.kind === "empty") return "empty";
+      if (item.kind === "paragraph") {
+        return `paragraph-fs${Math.round(readerVerseFontSize * 10)}-lh${Math.round(readerVerseLineHeight * 10)}`;
+      }
       return `verse-fs${Math.round(readerVerseFontSize * 10)}-lh${Math.round(readerVerseLineHeight * 10)}`;
     },
     [readerVerseFontSize, readerVerseLineHeight],
   );
 
   const readerFlashListLayoutKey = readerTabletLandscapeTwoColumn
-    ? `${readerListContentKey}:2col-masonry`
-    : `${readerListContentKey}:1col`;
+    ? `${readerListContentKey}:2col-masonry:${verseFlashListDataForList[0]?.kind ?? "verse"}`
+    : `${readerListContentKey}:1col:${verseFlashListDataForList[0]?.kind ?? "verse"}`;
 
   const selectionPaddingBottom =
     actionBarBottomPx + READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX;
@@ -186,12 +198,20 @@ export function ReaderVerseList({
 
   const columnLayout = readerVerseFlashListColumnProps(readerTabletLandscapeTwoColumn);
 
+  const estimatedItemSize =
+    verseFlashListDataForList[0]?.kind === "paragraph"
+      ? Math.max(
+          readerVerseEstimatedItemSize,
+          readerVerseEstimatedItemSize * (verseFlashListDataForList[0].verses.length || 1),
+        )
+      : readerVerseEstimatedItemSize;
+
   const flashList = (
     <AnimatedReaderChapterFlashList
       key={readerFlashListLayoutKey}
       ref={readerScrollRef}
       {...chapterSwipePanHandlers}
-      {...({ estimatedItemSize: readerVerseEstimatedItemSize } as Record<string, unknown>)}
+      {...({ estimatedItemSize } as Record<string, unknown>)}
       style={listStyle}
       scrollEventThrottle={READER_SCROLL_EVENT_THROTTLE}
       drawDistance={READER_FLASH_LIST_DRAW_DISTANCE_PX}

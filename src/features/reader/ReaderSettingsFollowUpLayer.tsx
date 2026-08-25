@@ -351,9 +351,10 @@ export function ReaderSettingsFollowUpLayer({
     setFontScale: setFontSizeScalePersisted,
     setLineSpacingScale: setLineSpacingScalePersisted,
     setVerseTextAlign: setVerseTextAlignPersisted,
+    setVerseLayout: setVerseLayoutPersisted,
     setThemeId,
   } = useReaderPreferences();
-  const { fontScale: fontSizeScale, fontFamilyId: readerVerseBodyFontId, lineSpacingScale, verseTextAlign, themeId } =
+  const { fontScale: fontSizeScale, fontFamilyId: readerVerseBodyFontId, lineSpacingScale, verseTextAlign, verseLayout, themeId } =
     prefs;
   const { items: translationPickerItems } = useTranslationPicker();
   const { favoriteTranslationIds, toggleFavoriteTranslation } = useFavoriteTranslations();
@@ -513,6 +514,8 @@ export function ReaderSettingsFollowUpLayer({
         setLineSpacingScalePersisted={setLineSpacingScalePersisted}
         verseTextAlign={verseTextAlign}
         setVerseTextAlignPersisted={setVerseTextAlignPersisted}
+        verseLayout={verseLayout}
+        setVerseLayoutPersisted={setVerseLayoutPersisted}
         readerVerseBodyFontId={readerVerseBodyFontId}
         setReaderVerseBodyFontIdPersisted={setReaderVerseBodyFontIdPersisted}
         settingsMutedTextColor={settingsMutedTextColor}

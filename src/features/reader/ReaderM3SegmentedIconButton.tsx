@@ -1,5 +1,5 @@
-import { type ReactNode } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Fragment, type ReactNode } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
@@ -8,7 +8,8 @@ import {
 
 export type ReaderM3SegmentedIconOption<T extends string> = {
   value: T;
-  renderIcon: (selected: boolean) => ReactNode;
+  renderIcon?: (selected: boolean) => ReactNode;
+  label?: string;
   accessibilityLabel: string;
 };
 
@@ -34,6 +35,7 @@ export function ReaderM3SegmentedIconButton<T extends string>({
   const sheetChrome = getReaderSheetChrome(bundle);
   const height = READER_M3_SEGMENTED_BUTTON_HEIGHT_PX * scale;
   const radius = 20 * scale;
+  const hasTextLabels = options.some((option) => option.label);
 
   return (
     <View
@@ -50,27 +52,57 @@ export function ReaderM3SegmentedIconButton<T extends string>({
         const selected = opt.value === value;
         const isFirst = index === 0;
         const isLast = index === options.length - 1;
+        const showDivider = index > 0 && hasTextLabels;
         return (
-          <Pressable
-            key={opt.value}
-            onPress={() => onChange(opt.value)}
-            accessibilityRole="button"
-            accessibilityLabel={opt.accessibilityLabel}
-            accessibilityState={{ selected }}
-            android_ripple={Platform.OS === "android" ? { color: rippleColor } : undefined}
-            style={[
-              styles.segment,
-              {
-                backgroundColor: selected ? sheetChrome.secondaryContainer : "transparent",
-                borderTopLeftRadius: isFirst ? radius - 1 : 0,
-                borderBottomLeftRadius: isFirst ? radius - 1 : 0,
-                borderTopRightRadius: isLast ? radius - 1 : 0,
-                borderBottomRightRadius: isLast ? radius - 1 : 0,
-              },
-            ]}
-          >
-            <View style={styles.iconWrap}>{opt.renderIcon(selected)}</View>
-          </Pressable>
+          <Fragment key={opt.value}>
+            {showDivider ? (
+              <View
+                style={{
+                  width: StyleSheet.hairlineWidth,
+                  alignSelf: "stretch",
+                  marginVertical: 8 * scale,
+                  backgroundColor: sheetChrome.outlineVariant,
+                }}
+              />
+            ) : null}
+            <Pressable
+              onPress={() => onChange(opt.value)}
+              accessibilityRole="button"
+              accessibilityLabel={opt.accessibilityLabel}
+              accessibilityState={{ selected }}
+              android_ripple={Platform.OS === "android" ? { color: rippleColor } : undefined}
+              style={[
+                styles.segment,
+                {
+                  backgroundColor: selected ? sheetChrome.secondaryContainer : "transparent",
+                  borderTopLeftRadius: isFirst ? radius - 1 : 0,
+                  borderBottomLeftRadius: isFirst ? radius - 1 : 0,
+                  borderTopRightRadius: isLast ? radius - 1 : 0,
+                  borderBottomRightRadius: isLast ? radius - 1 : 0,
+                },
+              ]}
+            >
+              {opt.renderIcon ? (
+                <View style={styles.iconWrap}>{opt.renderIcon(selected)}</View>
+              ) : null}
+              {opt.label ? (
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: selected ? "Inter_600SemiBold" : "Inter_500Medium",
+                    fontSize: 13 * scale,
+                    lineHeight: 18 * scale,
+                    letterSpacing: 0.1,
+                    color: readerM3SegmentedIconColor(selected, bundle),
+                    textAlign: "center",
+                    paddingHorizontal: 8 * scale,
+                  }}
+                >
+                  {opt.label}
+                </Text>
+              ) : null}
+            </Pressable>
+          </Fragment>
         );
       })}
     </View>

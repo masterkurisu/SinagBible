@@ -17,14 +17,21 @@ import { hapticLightImpact } from "@/lib/haptics";
 const READER_FONT_SCALE_STORAGE_KEY = "sb:reader:fontScale";
 const READER_LINE_SPACING_STORAGE_KEY = "sb:reader:lineSpacingScale";
 const READER_TEXT_ALIGN_STORAGE_KEY = "sb:reader:verseTextAlign";
+const READER_VERSE_LAYOUT_STORAGE_KEY = "sb:reader:verseLayout";
 
 export type ReaderVerseTextAlign = "left" | "right" | "center" | "justify";
+export type ReaderVerseLayout = "line-by-line" | "paragraph";
 
 const READER_VERSE_TEXT_ALIGN_OPTIONS: readonly ReaderVerseTextAlign[] = [
   "left",
   "right",
   "center",
   "justify",
+] as const;
+
+const READER_VERSE_LAYOUT_OPTIONS: readonly ReaderVerseLayout[] = [
+  "line-by-line",
+  "paragraph",
 ] as const;
 
 const FONT_SCALE_MIN = 0.5;
@@ -36,6 +43,7 @@ const READER_PREF_STORAGE_KEYS = [
   READER_FONT_SCALE_STORAGE_KEY,
   READER_LINE_SPACING_STORAGE_KEY,
   READER_TEXT_ALIGN_STORAGE_KEY,
+  READER_VERSE_LAYOUT_STORAGE_KEY,
   READER_VERSE_BODY_FONT_STORAGE_KEY,
 ] as const;
 
@@ -43,6 +51,7 @@ type CachedReaderPrefs = {
   fontScale: number;
   lineSpacingScale: number;
   verseTextAlign: ReaderVerseTextAlign;
+  verseLayout: ReaderVerseLayout;
   fontFamilyId: ReaderVerseBodyFontId;
 };
 
@@ -50,6 +59,7 @@ const DEFAULT_CACHED_READER_PREFS: CachedReaderPrefs = {
   fontScale: 1,
   lineSpacingScale: 1,
   verseTextAlign: "justify",
+  verseLayout: "line-by-line",
   fontFamilyId: DEFAULT_READER_VERSE_BODY_FONT_ID,
 };
 
@@ -79,6 +89,11 @@ function parseReaderPrefsFromPairs(pairs: readonly [string, string | null][]): C
   const rawTextAlign = valuesByKey.get(READER_TEXT_ALIGN_STORAGE_KEY);
   if (rawTextAlign && isReaderVerseTextAlign(rawTextAlign)) {
     next.verseTextAlign = rawTextAlign;
+  }
+
+  const rawVerseLayout = valuesByKey.get(READER_VERSE_LAYOUT_STORAGE_KEY);
+  if (rawVerseLayout && isReaderVerseLayout(rawVerseLayout)) {
+    next.verseLayout = rawVerseLayout;
   }
 
   const rawFontFamily = valuesByKey.get(READER_VERSE_BODY_FONT_STORAGE_KEY);
@@ -131,6 +146,10 @@ function isReaderVerseTextAlign(raw: string): raw is ReaderVerseTextAlign {
   return (READER_VERSE_TEXT_ALIGN_OPTIONS as readonly string[]).includes(raw);
 }
 
+function isReaderVerseLayout(raw: string): raw is ReaderVerseLayout {
+  return (READER_VERSE_LAYOUT_OPTIONS as readonly string[]).includes(raw);
+}
+
 function persistReaderPref(key: string, value: string): void {
   void AsyncStorage.setItem(key, value).catch(() => {
     /* ignore storage write errors */
@@ -142,6 +161,7 @@ export type ReaderPreferences = {
   fontScale: number;
   lineSpacingScale: number;
   verseTextAlign: ReaderVerseTextAlign;
+  verseLayout: ReaderVerseLayout;
   themeId: MobileAppThemeId;
 };
 
@@ -156,6 +176,8 @@ export function useReaderPreferences() {
   const lineSpacingUserTouchedRef = useRef(false);
   const [verseTextAlign, setVerseTextAlignState] = useState<ReaderVerseTextAlign>(initialPrefs.verseTextAlign);
   const verseTextAlignUserTouchedRef = useRef(false);
+  const [verseLayout, setVerseLayoutState] = useState<ReaderVerseLayout>(initialPrefs.verseLayout);
+  const verseLayoutUserTouchedRef = useRef(false);
   const [fontFamilyId, setFontFamilyIdState] = useState<ReaderVerseBodyFontId>(initialPrefs.fontFamilyId);
   const fontFamilyUserTouchedRef = useRef(false);
 
@@ -163,6 +185,7 @@ export function useReaderPreferences() {
     fontScaleUserTouchedRef.current = false;
     lineSpacingUserTouchedRef.current = false;
     verseTextAlignUserTouchedRef.current = false;
+    verseLayoutUserTouchedRef.current = false;
     fontFamilyUserTouchedRef.current = false;
 
     let cancelled = false;
@@ -172,6 +195,7 @@ export function useReaderPreferences() {
         if (!fontScaleUserTouchedRef.current) setFontScaleState(prefs.fontScale);
         if (!lineSpacingUserTouchedRef.current) setLineSpacingScaleState(prefs.lineSpacingScale);
         if (!verseTextAlignUserTouchedRef.current) setVerseTextAlignState(prefs.verseTextAlign);
+        if (!verseLayoutUserTouchedRef.current) setVerseLayoutState(prefs.verseLayout);
         if (!fontFamilyUserTouchedRef.current) setFontFamilyIdState(prefs.fontFamilyId);
       });
     });
@@ -211,6 +235,14 @@ export function useReaderPreferences() {
     persistReaderPref(READER_TEXT_ALIGN_STORAGE_KEY, a);
   }, []);
 
+  const setVerseLayout = useCallback((layout: ReaderVerseLayout) => {
+    hapticLightImpact();
+    verseLayoutUserTouchedRef.current = true;
+    setVerseLayoutState(layout);
+    patchCachedReaderPrefs({ verseLayout: layout });
+    persistReaderPref(READER_VERSE_LAYOUT_STORAGE_KEY, layout);
+  }, []);
+
   const setFontFamily = useCallback((id: ReaderVerseBodyFontId) => {
     fontFamilyUserTouchedRef.current = true;
     setFontFamilyIdState(id);
@@ -224,9 +256,10 @@ export function useReaderPreferences() {
       fontScale,
       lineSpacingScale,
       verseTextAlign,
+      verseLayout,
       themeId,
     }),
-    [fontFamilyId, fontScale, lineSpacingScale, verseTextAlign, themeId],
+    [fontFamilyId, fontScale, lineSpacingScale, verseTextAlign, verseLayout, themeId],
   );
 
   const readerVerseFontSize = 16 * fontScale;
@@ -246,6 +279,7 @@ export function useReaderPreferences() {
     setFontScale,
     setLineSpacingScale,
     setVerseTextAlign,
+    setVerseLayout,
     setThemeId,
     readerVerseFontSize,
     readerVerseLineHeight,

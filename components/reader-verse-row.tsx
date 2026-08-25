@@ -93,7 +93,7 @@ export type ReaderVerseRowProps = {
   onYvpFootnotePress?: (noteId: number) => void;
 };
 
-function renderVerseBodyInline(
+export function renderVerseBodyInline(
   items: BibleVerseInlineItem[],
   wordsOfJesusColor: string,
   verseBodyTypography: Pick<
@@ -102,6 +102,7 @@ function renderVerseBodyInline(
   >,
   yvpFootnotes?: Record<number, { label: string; body: string }>,
   onYvpFootnotePress?: (noteId: number) => void,
+  breakBeforeHeadings = false,
 ) {
   const nestedTextStyle = {
     fontFamily: verseBodyTypography.readerVerseBodyFontFamily,
@@ -144,7 +145,7 @@ function renderVerseBodyInline(
     if ("heading" in item && typeof item.heading === "string") {
       return (
         <Text key={key} style={[styles.inlineHeading, nestedTextStyle]}>
-          {item.heading}
+          {breakBeforeHeadings ? `\n${item.heading}\n` : item.heading}
         </Text>
       );
     }

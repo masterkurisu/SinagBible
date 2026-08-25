@@ -34,9 +34,31 @@ describe("buildReaderVerseFlashListData", () => {
     ]);
   });
 
+  it("groups all verses into one wrapping block in paragraph layout", () => {
+    const items = buildReaderVerseFlashListData(["a", "bb", "ccc"], false, 2, undefined, "paragraph");
+    expect(items).toEqual([
+      {
+        kind: "paragraph",
+        verses: [
+          { verseIndex: 0, verseText: "a", verseInlineContent: undefined },
+          { verseIndex: 1, verseText: "bb", verseInlineContent: undefined },
+          { verseIndex: 2, verseText: "ccc", verseInlineContent: undefined },
+        ],
+      },
+    ]);
+  });
+
+  it("splits paragraph layout into two column blocks", () => {
+    const items = buildReaderVerseFlashListData(["v1", "v2", "v3", "v4", "v5"], true, 3, undefined, "paragraph");
+    expect(items.map((item) => (item.kind === "paragraph" ? item.verses.map((v) => v.verseIndex) : item.kind))).toEqual([
+      [0, 1, 2],
+      [3, 4],
+    ]);
+  });
+
   it("interleaves left then right so sequential masonry keeps newspaper order", () => {
     const items = buildReaderVerseFlashListData(["v1", "v2", "v3", "v4", "v5"], true, 3);
-    expect(items.map((item) => (item.kind === "verse" ? item.verseIndex : item.side))).toEqual([
+    expect(items.map((item) => (item.kind === "verse" ? item.verseIndex : item.kind === "empty" ? item.side : item.kind))).toEqual([
       0,
       3,
       1,
@@ -48,7 +70,7 @@ describe("buildReaderVerseFlashListData", () => {
 
   it("pads the left column when the right column is longer", () => {
     const items = buildReaderVerseFlashListData(["v1", "v2", "v3", "v4", "v5"], true, 2);
-    expect(items.map((item) => (item.kind === "verse" ? item.verseIndex : `${item.side}:${item.row}`))).toEqual([
+    expect(items.map((item) => (item.kind === "verse" ? item.verseIndex : item.kind === "empty" ? `${item.side}:${item.row}` : item.kind))).toEqual([
       0,
       2,
       1,
@@ -63,6 +85,12 @@ describe("findFlashListIndexForVerseNumber", () => {
   it("finds a right-column verse in the interleaved list", () => {
     const items = buildReaderVerseFlashListData(["v1", "v2", "v3", "v4"], true, 2);
     expect(findFlashListIndexForVerseNumber(items, 4)).toBe(3);
+  });
+
+  it("finds a verse inside a paragraph block", () => {
+    const items = buildReaderVerseFlashListData(["v1", "v2", "v3", "v4"], true, 2, undefined, "paragraph");
+    expect(findFlashListIndexForVerseNumber(items, 1)).toBe(0);
+    expect(findFlashListIndexForVerseNumber(items, 4)).toBe(1);
   });
 });
 

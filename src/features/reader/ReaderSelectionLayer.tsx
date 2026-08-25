@@ -36,6 +36,7 @@ import {
 import { useCarouselFavorites } from "@/lib/use-journal-carousel-verses";
 import type { TranslationPickerItem } from "@/lib/use-translation-picker";
 import { ReaderVerseRow } from "@/components/reader-verse-row";
+import { ReaderVerseParagraphBlock } from "@/components/reader-verse-paragraph-block";
 import {
   ReaderVerseList,
   READER_TABLET_TWO_COLUMN_GAP,
@@ -417,6 +418,17 @@ type ReaderVerseFlashRowProps = {
   onNoteLongPress: (verseNum: number) => void;
 };
 
+type ReaderParagraphFlashRowProps = {
+  item: Extract<ReaderVerseFlashItem, { kind: "paragraph" }>;
+  index: number;
+  interactionData: ReaderVerseInteractionData;
+  stableVisualData: ReaderVerseStableVisualData;
+  readerTabletLandscapeTwoColumn: boolean;
+  onVersePress: (verseNum: number) => void;
+  onVerseLongPress: (verseNum: number) => void;
+  onNoteLongPress: (verseNum: number) => void;
+};
+
 const MemoizedReaderVerseFlashRow = memo(
   ({
     item,
@@ -488,6 +500,87 @@ const MemoizedReaderVerseFlashRow = memo(
     const prevNote = prevProps.interactionData.notes[verseNum]?.trim();
     const nextNote = nextProps.interactionData.notes[verseNum]?.trim();
     if (prevNote !== nextNote) return false;
+    return true;
+  },
+);
+
+const MemoizedReaderParagraphFlashRow = memo(
+  ({
+    item,
+    index,
+    interactionData,
+    stableVisualData: vd,
+    readerTabletLandscapeTwoColumn,
+    onVersePress,
+    onVerseLongPress,
+    onNoteLongPress,
+  }: ReaderParagraphFlashRowProps) => {
+    const twoColumnPaddingStyle =
+      readerTabletLandscapeTwoColumn
+        ? index % 2 === 0
+          ? readerVerseListStyles.leftColumnPadding
+          : readerVerseListStyles.rightColumnPadding
+        : null;
+    return (
+      <View style={[readerVerseListStyles.flashItemBase, twoColumnPaddingStyle]}>
+        <ReaderVerseParagraphBlock
+          verses={item.verses}
+          selectedVerseNumbers={interactionData.selectedVerseNumbers}
+          annotations={interactionData.annotations}
+          notes={interactionData.notes}
+          themeId={vd.themeId}
+          selectionBackground={vd.selectionBackground}
+          selectionText={vd.selectionText}
+          verseNumberColor={vd.verseNumberColor}
+          noteBelowVerseBackground={vd.noteBelowVerseBackground}
+          bodyTextColor={vd.bodyTextColor}
+          readerVerseFontSize={vd.readerVerseFontSize}
+          readerVerseLineHeight={vd.readerVerseLineHeight}
+          readerVerseBodyFontFamily={vd.readerVerseBodyFontFamily}
+          verseTextAlign={vd.verseTextAlign}
+          onVersePress={onVersePress}
+          onVerseLongPress={onVerseLongPress}
+          onNoteLongPress={onNoteLongPress}
+          translationId={vd.translationId}
+          bundle={vd.bundle}
+          verseTagChipBackground={vd.verseTagChipBackground}
+          verseTagChipBorder={vd.verseTagChipBorder}
+          yvpFootnotes={vd.yvpFootnotes}
+          onYvpFootnotePress={vd.onYvpFootnotePress}
+        />
+      </View>
+    );
+  },
+  (prevProps, nextProps) => {
+    if (prevProps.item.verses !== nextProps.item.verses) {
+      if (prevProps.item.verses.length !== nextProps.item.verses.length) return false;
+      for (let i = 0; i < prevProps.item.verses.length; i++) {
+        const prevVerse = prevProps.item.verses[i];
+        const nextVerse = nextProps.item.verses[i];
+        if (prevVerse?.verseIndex !== nextVerse?.verseIndex) return false;
+        if (prevVerse?.verseText !== nextVerse?.verseText) return false;
+        if (prevVerse?.verseInlineContent !== nextVerse?.verseInlineContent) return false;
+      }
+    }
+    if (prevProps.index !== nextProps.index) return false;
+    if (prevProps.readerTabletLandscapeTwoColumn !== nextProps.readerTabletLandscapeTwoColumn) return false;
+    if (prevProps.onVersePress !== nextProps.onVersePress) return false;
+    if (prevProps.onVerseLongPress !== nextProps.onVerseLongPress) return false;
+    if (prevProps.onNoteLongPress !== nextProps.onNoteLongPress) return false;
+    if (prevProps.stableVisualData !== nextProps.stableVisualData) return false;
+
+    for (const verse of nextProps.item.verses) {
+      const verseNum = verse.verseIndex + 1;
+      const prevSelected = prevProps.interactionData.selectedVerseNumbers.has(verseNum);
+      const nextSelected = nextProps.interactionData.selectedVerseNumbers.has(verseNum);
+      if (prevSelected !== nextSelected) return false;
+      if (prevProps.interactionData.annotations[verseNum] !== nextProps.interactionData.annotations[verseNum]) {
+        return false;
+      }
+      const prevNote = prevProps.interactionData.notes[verseNum]?.trim();
+      const nextNote = nextProps.interactionData.notes[verseNum]?.trim();
+      if (prevNote !== nextNote) return false;
+    }
     return true;
   },
 );
@@ -914,6 +1007,20 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           />
         );
       }
+      if (item.kind === "paragraph") {
+        return (
+          <MemoizedReaderParagraphFlashRow
+            item={item}
+            index={index}
+            interactionData={flashExtra.interactionData}
+            stableVisualData={flashExtra.stableVisualData}
+            readerTabletLandscapeTwoColumn={readerTabletLandscapeTwoColumn}
+            onVersePress={handleVerseTapForOnboarding}
+            onVerseLongPress={handleVerseLongPressForOnboarding}
+            onNoteLongPress={handleNoteLongPress}
+          />
+        );
+      }
       return (
         <MemoizedReaderVerseFlashRow
           item={item}
@@ -938,6 +1045,11 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   const readerVerseFlashKeyExtractor = useCallback(
     (item: ReaderVerseFlashItem) => {
       if (item.kind === "verse") return `${readerListContentKey}:v-${item.verseIndex}`;
+      if (item.kind === "paragraph") {
+        const start = item.verses[0]?.verseIndex ?? 0;
+        const end = item.verses[item.verses.length - 1]?.verseIndex ?? start;
+        return `${readerListContentKey}:p-${start}-${end}`;
+      }
       return `${readerListContentKey}:e-${item.side}-${item.row}`;
     },
     [readerListContentKey],

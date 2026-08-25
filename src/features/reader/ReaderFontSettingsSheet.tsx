@@ -23,6 +23,7 @@ import {
   ReaderM3SegmentedIconButton,
   readerM3SegmentedIconColor,
 } from "@/src/features/reader/ReaderM3SegmentedIconButton";
+import type { ReaderVerseLayout, ReaderVerseTextAlign } from "@/src/features/reader/useReaderPreferences";
 import {
   READER_M3_LABEL_FONT_PX,
   READER_M3_LABEL_LETTER_SPACING,
@@ -32,7 +33,13 @@ import {
   READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
-type ReaderVerseTextAlign = "left" | "right" | "center" | "justify";
+const VERSE_LAYOUT_OPTIONS: readonly {
+  value: ReaderVerseLayout;
+  label: string;
+}[] = [
+  { value: "line-by-line", label: "Line by Line" },
+  { value: "paragraph", label: "Paragraph" },
+];
 
 const FONT_SCALE_MIN = 0.5;
 const FONT_SCALE_MAX = 3;
@@ -66,6 +73,8 @@ export type ReaderFontSettingsSheetProps = {
   setLineSpacingScalePersisted: (v: number) => void;
   verseTextAlign: ReaderVerseTextAlign;
   setVerseTextAlignPersisted: (a: ReaderVerseTextAlign) => void;
+  verseLayout: ReaderVerseLayout;
+  setVerseLayoutPersisted: (layout: ReaderVerseLayout) => void;
   readerVerseBodyFontId: ReaderVerseBodyFontId;
   setReaderVerseBodyFontIdPersisted: (id: ReaderVerseBodyFontId) => void;
   settingsMutedTextColor: string;
@@ -83,6 +92,8 @@ export function ReaderFontSettingsSheet({
   setLineSpacingScalePersisted,
   verseTextAlign,
   setVerseTextAlignPersisted,
+  verseLayout,
+  setVerseLayoutPersisted,
   readerVerseBodyFontId,
   setReaderVerseBodyFontIdPersisted,
   settingsMutedTextColor: _settingsMutedTextColor,
@@ -311,7 +322,7 @@ export function ReaderFontSettingsSheet({
         />
       </View>
 
-      <View style={{ gap: 8 * scale }}>
+      <View style={{ marginBottom: sectionGap, gap: 8 * scale }}>
         <Text style={labelStyle(scale, sheetChrome.onSurfaceVariant)}>Alignment</Text>
         <ReaderM3SegmentedIconButton
           options={segmentedOptions}
@@ -320,6 +331,21 @@ export function ReaderFontSettingsSheet({
             hapticLightImpact();
             setVerseTextAlignPersisted(align);
           }}
+          bundle={bundle}
+          scale={scale}
+        />
+      </View>
+
+      <View style={{ gap: 8 * scale }}>
+        <Text style={labelStyle(scale, sheetChrome.onSurfaceVariant)}>Verse Layout</Text>
+        <ReaderM3SegmentedIconButton
+          options={VERSE_LAYOUT_OPTIONS.map(({ value, label }) => ({
+            value,
+            label,
+            accessibilityLabel: label,
+          }))}
+          value={verseLayout}
+          onChange={setVerseLayoutPersisted}
           bundle={bundle}
           scale={scale}
         />
