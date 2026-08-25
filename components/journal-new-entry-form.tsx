@@ -1,13 +1,11 @@
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   Alert,
   Animated,
   Easing,
   Modal,
-  Pressable,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -16,7 +14,10 @@ import {
   useWindowDimensions,
   type KeyboardEvent,
   type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
+import { MarkdownTextInput } from "@expensify/react-native-live-markdown";
 import { useRouter } from "expo-router";
 import {
   forwardRef,
@@ -26,10 +27,12 @@ import {
   useRef,
   useState,
   useCallback,
+  type ComponentRef,
   type RefObject,
 } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
+import { Image } from "expo-image";
 import {
   parsePassageReference,
   formatPassageReference,
@@ -43,12 +46,20 @@ import {
 } from "@/lib/journal-local";
 import { resolveReflectionMarkdownForEdit } from "@/lib/journal-reflection-edit";
 import {
-  insertLinePrefix,
-  insertTextAtSelection,
+  applyReflectionToolbarAction,
+  continueListOnNewline,
+  insertReflectionImageToken,
+  listReflectionImageIds,
   reflectionMarkdownHasContent,
-  wrapMarkdownMarker,
+  type ReflectionMarkdownEditResult,
   type ReflectionTextSelection,
+  type ReflectionToolbarFormatAction,
 } from "@/lib/journal-reflection-markdown-edit";
+import { parseReflectionLiveMarkdown } from "@/lib/journal-reflection-live-markdown-parser";
+import {
+  createReflectionLiveMarkdownInputStyle,
+  createReflectionLiveMarkdownStyle,
+} from "@/lib/journal-reflection-live-markdown-style";
 import {
   clearDefaultJournalDraft,
   DEFAULT_JOURNAL_DRAFT_ID,
@@ -75,10 +86,13 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   ReflectionBoldIcon,
   ReflectionBulletedListIcon,
+  ReflectionChecklistIcon,
   ReflectionFullscreenIcon,
+  ReflectionHeadingIcon,
   ReflectionImageIcon,
   ReflectionKeyboardHideIcon,
   ReflectionItalicIcon,
+  ReflectionLinkIcon,
   ReflectionNumberedListIcon,
 } from "@/components/journal-reflection-toolbar-icons";
 import { isTabletLayout, TABLET_NEW_ENTRY_MAX_WIDTH_PX } from "@/lib/tablet-layout";
@@ -116,8 +130,6 @@ const SHEET_REFLECTION_CHROME_PX = 30;
  * Reader new-entry modal only: matches reader sheet `bottom` lift — save row `paddingBottom` trim.
  */
 const READER_NEW_ENTRY_CARD_BOTTOM_LIFT_PX = 50;
-const REFLECTION_FIELD_FONT_SIZE = 17;
-const REFLECTION_FIELD_LINE_HEIGHT = 28;
 
 /** Light text on save / primary gradient buttons */
 const SAVE_BUTTON_LABEL_COLOR = "#f5e9d6";
@@ -285,8 +297,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const editReflectionBaselineRef = useRef(initialReflectionState.markdown);
   const reflectionUndoStackRef = useRef<string[]>([]);
   const draftHydrationDoneRef = useRef(editDraft != null);
-  const reflectionInputRef = useRef<TextInput>(null);
-  const fullscreenReflectionInputRef = useRef<TextInput>(null);
+  const reflectionInputRef = useRef<ComponentRef<typeof MarkdownTextInput>>(null);
+  const fullscreenReflectionInputRef = useRef<ComponentRef<typeof MarkdownTextInput>>(null);
   const sheetFormScrollRef = useRef<ScrollView>(null);
   const toolbarAnchorRef = useRef<View>(null);
   const fullscreenToolbarAnchorRef = useRef<View>(null);
@@ -298,6 +310,24 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   });
   const reflectionSelectionRef = useRef(reflectionSelection);
   reflectionSelectionRef.current = reflectionSelection;
+  /**
+   * One-shot cursor nudge: RN's TextInput isn't given a permanently-controlled `selection` prop
+   * (that breaks IME/autocorrect on Android), so after a *programmatic* edit (toolbar action,
+   * list auto-continue, undo) we set this to push the native cursor to the right spot, then
+   * clear it as soon as the input reports a selection back.
+   */
+  const [reflectionSelectionOverride, setReflectionSelectionOverride] =
+    useState<ReflectionTextSelection | null>(null);
+  /**
+   * Frozen caret captured on toolbar `onPressIn`. Tapping a control outside
+   * `MarkdownTextInput` can fire a blur-driven `onSelectionChange` (often `{0,0}`)
+   * before `onPress`, which would otherwise insert markers at the start of the
+   * document. Image attach also needs this snapshot because the picker blurs the
+   * field before we insert the token.
+   */
+  const toolbarPressSelectionRef = useRef<ReflectionTextSelection | null>(null);
+  const typingUndoBaselineRef = useRef<string | null>(null);
+  const typingUndoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saving, setSaving] = useState(false);
   const [passagePreview, setPassagePreview] = useState<string | null>(null);
   const [passagePreviewRef, setPassagePreviewRef] = useState<string | null>(null);
@@ -367,23 +397,66 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const getActiveReflectionInput = () =>
     reflectionFullscreenOpen ? fullscreenReflectionInputRef.current : reflectionInputRef.current;
 
-  const pushReflectionUndo = useCallback(() => {
+  const pushReflectionUndoValue = useCallback((value: string) => {
     const stack = reflectionUndoStackRef.current;
-    const current = reflectionMarkdownRef.current;
-    if (stack[stack.length - 1] === current) return;
-    stack.push(current);
+    if (stack[stack.length - 1] === value) return;
+    stack.push(value);
     if (stack.length > 50) stack.shift();
   }, []);
 
-  const applyReflectionMarkdownEdit = useCallback(
-    (next: { text: string; selection: ReflectionTextSelection }) => {
+  const pushReflectionUndo = useCallback(() => {
+    pushReflectionUndoValue(reflectionMarkdownRef.current);
+  }, [pushReflectionUndoValue]);
+
+  /**
+   * Typing itself now creates undo checkpoints, not just toolbar/image actions: after ~700ms of
+   * no typing, whatever the text was *before* the current burst of keystrokes gets pushed onto
+   * the undo stack, so Undo can revert a whole sentence/paragraph you just typed — similar to how
+   * Notes/Word batch undo by pause-in-typing rather than by keystroke.
+   */
+  const flushTypingUndoCheckpoint = useCallback(() => {
+    if (typingUndoTimerRef.current != null) {
+      clearTimeout(typingUndoTimerRef.current);
+      typingUndoTimerRef.current = null;
+    }
+    const baseline = typingUndoBaselineRef.current;
+    typingUndoBaselineRef.current = null;
+    if (baseline == null) return;
+    pushReflectionUndoValue(baseline);
+  }, [pushReflectionUndoValue]);
+
+  const scheduleReflectionUndoCheckpoint = useCallback(
+    (prevValue: string) => {
+      if (typingUndoBaselineRef.current == null) {
+        typingUndoBaselineRef.current = prevValue;
+      }
+      if (typingUndoTimerRef.current != null) clearTimeout(typingUndoTimerRef.current);
+      typingUndoTimerRef.current = setTimeout(() => {
+        typingUndoTimerRef.current = null;
+        flushTypingUndoCheckpoint();
+      }, 700);
+    },
+    [flushTypingUndoCheckpoint],
+  );
+
+  useEffect(
+    () => () => {
+      if (typingUndoTimerRef.current != null) clearTimeout(typingUndoTimerRef.current);
+    },
+    [],
+  );
+
+  const applyReflectionEdit = useCallback(
+    (next: ReflectionMarkdownEditResult) => {
+      flushTypingUndoCheckpoint();
       pushReflectionUndo();
       reflectionMarkdownRef.current = next.text;
       setReflectionMarkdown(next.text);
-      setReflectionSelection(next.selection);
       reflectionSelectionRef.current = next.selection;
+      setReflectionSelection(next.selection);
+      setReflectionSelectionOverride(next.selection);
     },
-    [pushReflectionUndo],
+    [flushTypingUndoCheckpoint, pushReflectionUndo],
   );
 
   useEffect(() => {
@@ -394,32 +467,62 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     reflectionImagesRef.current = resolved.images;
     setReflectionImages(resolved.images);
     reflectionUndoStackRef.current = [];
+    const cursor = resolved.markdown.length;
+    const sel = { start: cursor, end: cursor };
+    reflectionSelectionRef.current = sel;
+    setReflectionSelection(sel);
+    setReflectionSelectionOverride(null);
+    typingUndoBaselineRef.current = null;
+    if (typingUndoTimerRef.current != null) {
+      clearTimeout(typingUndoTimerRef.current);
+      typingUndoTimerRef.current = null;
+    }
   }, [editDraft?.id, editDraft?.content, editDraft?.content_markdown]);
 
   const reflectionInputStyle = useMemo(
-    () => ({
-      fontFamily: "Lora_400Regular" as const,
-      fontSize: REFLECTION_FIELD_FONT_SIZE,
-      lineHeight: REFLECTION_FIELD_LINE_HEIGHT,
-      color: colors.brown800,
-      textAlignVertical: "top" as const,
-      padding: 0,
-    }),
+    () => createReflectionLiveMarkdownInputStyle(colors.brown800),
     [colors.brown800],
   );
-
-  const onReflectionMarkdownChange = useCallback((text: string) => {
-    markActiveFormField("reflection");
-    const t = Date.now();
-    if (t - reflectionTypingHapticLastRef.current >= 48) {
-      reflectionTypingHapticLastRef.current = t;
-      hapticSelection();
-    }
-    reflectionMarkdownRef.current = text;
-    setReflectionMarkdown(text);
-  }, []);
+  const reflectionMarkdownStyle = useMemo(
+    () =>
+      createReflectionLiveMarkdownStyle({
+        gold: colors.gold,
+        tan100: colors.tan100,
+        brown800: colors.brown800,
+      }),
+    [colors.gold, colors.tan100, colors.brown800],
+  );
 
   const reflectionTypingHapticLastRef = useRef(0);
+
+  const onReflectionMarkdownChange = useCallback(
+    (text: string) => {
+      markActiveFormField("reflection");
+      const t = Date.now();
+      if (t - reflectionTypingHapticLastRef.current >= 48) {
+        reflectionTypingHapticLastRef.current = t;
+        hapticSelection();
+      }
+      const prev = reflectionMarkdownRef.current;
+      scheduleReflectionUndoCheckpoint(prev);
+
+      // Enter at the end of a "- "/"1. "/"- [ ] " line continues the list on the new line (or, on
+      // an empty item, exits it) instead of leaving the user to type the prefix by hand each time.
+      const continued = continueListOnNewline(prev, text);
+      if (continued) {
+        reflectionMarkdownRef.current = continued.text;
+        setReflectionMarkdown(continued.text);
+        reflectionSelectionRef.current = continued.selection;
+        setReflectionSelection(continued.selection);
+        setReflectionSelectionOverride(continued.selection);
+        return;
+      }
+
+      reflectionMarkdownRef.current = text;
+      setReflectionMarkdown(text);
+    },
+    [scheduleReflectionUndoCheckpoint],
+  );
 
   const hasReflectionInput = reflectionMarkdownHasContent(reflectionMarkdown);
   const hasDraftInput = passage.trim().length > 0 || title.trim().length > 0 || hasReflectionInput;
@@ -566,6 +669,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   };
 
   const onReflectionEditorBlur = () => {
+    flushTypingUndoCheckpoint();
     if (suppressReflectionBlurRef.current || reflectionFullscreenOpen) return;
     if (keyboardHeight > 0) return;
     releaseActiveFormField("reflection");
@@ -728,8 +832,31 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     };
   }, [journalTranslationId, passage]);
 
+  const snapshotReflectionSelectionForToolbar = () => {
+    toolbarPressSelectionRef.current = reflectionSelectionRef.current;
+  };
+
+  const releaseToolbarSelectionSnapshot = () => {
+    toolbarPressSelectionRef.current = null;
+  };
+
+  const applyToolbarAction = (action: ReflectionToolbarFormatAction) => {
+    hapticLightImpact();
+    const selection = toolbarPressSelectionRef.current ?? reflectionSelectionRef.current;
+    releaseToolbarSelectionSnapshot();
+    applyReflectionEdit(
+      applyReflectionToolbarAction(reflectionMarkdownRef.current, selection, action),
+    );
+    // Focus after the edit so a pre-apply focus() cannot clobber the caret we just used.
+    requestAnimationFrame(() => getActiveReflectionInput()?.focus());
+  };
+
   const attachReflectionImage = async () => {
     hapticLightImpact();
+    const selection = toolbarPressSelectionRef.current ?? reflectionSelectionRef.current;
+    if (toolbarPressSelectionRef.current == null) {
+      toolbarPressSelectionRef.current = selection;
+    }
     try {
       // Android: expo-image-picker uses the system Photo Picker (PickVisualMedia).
       // Do not request READ_MEDIA_* — Google Play rejects apps that declare those
@@ -737,6 +864,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       if (Platform.OS === "ios") {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
+          releaseToolbarSelectionSnapshot();
           Alert.alert("Permission needed", "Allow photo library access to attach images.");
           return;
         }
@@ -747,13 +875,17 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         // Prefer the system picker path; no editing UI that might need extra access.
         allowsEditing: false,
       });
-      if (result.canceled || !result.assets[0]?.uri) return;
+      if (result.canceled || !result.assets[0]?.uri) {
+        releaseToolbarSelectionSnapshot();
+        return;
+      }
       const manipulated = await ImageManipulator.manipulateAsync(
         result.assets[0].uri,
         [{ resize: { width: 800 } }],
         { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
       );
       if (!manipulated.base64) {
+        releaseToolbarSelectionSnapshot();
         Alert.alert("Could not read image", "Try another photo.");
         return;
       }
@@ -763,12 +895,16 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       reflectionImagesRef.current = nextImages;
       setReflectionImages(nextImages);
 
-      const token = `\n[image:${imageId}]\n`;
-      const selection = reflectionSelectionRef.current;
-      const inserted = insertTextAtSelection(reflectionMarkdownRef.current, selection, token);
-      applyReflectionMarkdownEdit(inserted);
-      getActiveReflectionInput()?.focus();
+      const inserted = insertReflectionImageToken(
+        reflectionMarkdownRef.current,
+        selection,
+        imageId,
+      );
+      releaseToolbarSelectionSnapshot();
+      applyReflectionEdit(inserted);
+      requestAnimationFrame(() => getActiveReflectionInput()?.focus());
     } catch (e) {
+      releaseToolbarSelectionSnapshot();
       if (__DEV__) {
         console.error(e);
       }
@@ -778,48 +914,22 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const undoReflection = () => {
     hapticLightImpact();
+    if (typingUndoTimerRef.current != null) {
+      clearTimeout(typingUndoTimerRef.current);
+      typingUndoTimerRef.current = null;
+    }
+    typingUndoBaselineRef.current = null;
     const stack = reflectionUndoStackRef.current;
     const previous = stack.pop();
     if (previous == null) return;
     reflectionMarkdownRef.current = previous;
     setReflectionMarkdown(previous);
-    getActiveReflectionInput()?.focus();
-  };
-
-  const applyReflectionBold = () => {
-    hapticLightImpact();
-    getActiveReflectionInput()?.focus();
-    applyReflectionMarkdownEdit(
-      wrapMarkdownMarker(
-        reflectionMarkdownRef.current,
-        reflectionSelectionRef.current,
-        "**",
-      ),
-    );
-  };
-
-  const applyReflectionItalic = () => {
-    hapticLightImpact();
-    getActiveReflectionInput()?.focus();
-    applyReflectionMarkdownEdit(
-      wrapMarkdownMarker(reflectionMarkdownRef.current, reflectionSelectionRef.current, "_"),
-    );
-  };
-
-  const applyReflectionBulletList = () => {
-    hapticLightImpact();
-    getActiveReflectionInput()?.focus();
-    applyReflectionMarkdownEdit(
-      insertLinePrefix(reflectionMarkdownRef.current, reflectionSelectionRef.current, "- "),
-    );
-  };
-
-  const applyReflectionNumberedList = () => {
-    hapticLightImpact();
-    getActiveReflectionInput()?.focus();
-    applyReflectionMarkdownEdit(
-      insertLinePrefix(reflectionMarkdownRef.current, reflectionSelectionRef.current, "1. "),
-    );
+    const cursor = previous.length;
+    const sel = { start: cursor, end: cursor };
+    reflectionSelectionRef.current = sel;
+    setReflectionSelection(sel);
+    setReflectionSelectionOverride(sel);
+    requestAnimationFrame(() => getActiveReflectionInput()?.focus());
   };
 
   const finishSave = (newEntryId?: string, savedEntry?: MobileJournalListItem) => {
@@ -1142,69 +1252,111 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const renderReflectionFloatingToolbar = () => (
     <View style={floatingToolbarPillStyle}>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Undo"
-        onPress={undoReflection}
-        activeOpacity={0.85}
-        style={floatingToolbarIconButtonStyle}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="always"
+        contentContainerStyle={{ flexDirection: "row", alignItems: "center" }}
       >
-        <Ionicons name="arrow-undo" size={20} color={toolbarIconColor} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Bold"
-        onPress={applyReflectionBold}
-        activeOpacity={0.85}
-        style={floatingToolbarIconButtonStyle}
-      >
-        <ReflectionBoldIcon size={18} color={toolbarIconColor} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Italic"
-        onPress={applyReflectionItalic}
-        activeOpacity={0.85}
-        style={floatingToolbarIconButtonStyle}
-      >
-        <ReflectionItalicIcon size={18} color={toolbarIconColor} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Bulleted list"
-        onPress={applyReflectionBulletList}
-        activeOpacity={0.85}
-        style={floatingToolbarIconButtonStyle}
-      >
-        <ReflectionBulletedListIcon size={18} color={toolbarIconColor} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Numbered list"
-        onPress={applyReflectionNumberedList}
-        activeOpacity={0.85}
-        style={floatingToolbarIconButtonStyle}
-      >
-        <ReflectionNumberedListIcon size={18} color={toolbarIconColor} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Attach image"
-        onPress={() => void attachReflectionImage()}
-        activeOpacity={0.85}
-        style={floatingToolbarIconButtonStyle}
-      >
-        <ReflectionImageIcon size={18} color={toolbarIconColor} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Hide keyboard"
-        onPress={dismissJournalKeyboard}
-        activeOpacity={0.85}
-        style={floatingToolbarIconButtonStyle}
-      >
-        <ReflectionKeyboardHideIcon size={20} color={toolbarIconColor} />
-      </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Undo"
+          onPress={undoReflection}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <Ionicons name="arrow-undo" size={20} color={toolbarIconColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Bold"
+          onPressIn={snapshotReflectionSelectionForToolbar}
+          onPress={() => applyToolbarAction("bold")}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <ReflectionBoldIcon size={18} color={toolbarIconColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Italic"
+          onPressIn={snapshotReflectionSelectionForToolbar}
+          onPress={() => applyToolbarAction("italic")}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <ReflectionItalicIcon size={18} color={toolbarIconColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Heading"
+          onPressIn={snapshotReflectionSelectionForToolbar}
+          onPress={() => applyToolbarAction("heading")}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <ReflectionHeadingIcon size={18} color={toolbarIconColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Bulleted list"
+          onPressIn={snapshotReflectionSelectionForToolbar}
+          onPress={() => applyToolbarAction("bullet")}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <ReflectionBulletedListIcon size={18} color={toolbarIconColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Numbered list"
+          onPressIn={snapshotReflectionSelectionForToolbar}
+          onPress={() => applyToolbarAction("numbered")}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <ReflectionNumberedListIcon size={18} color={toolbarIconColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Checklist"
+          onPressIn={snapshotReflectionSelectionForToolbar}
+          onPress={() => applyToolbarAction("checklist")}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <ReflectionChecklistIcon size={18} color={toolbarIconColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Link"
+          onPressIn={snapshotReflectionSelectionForToolbar}
+          onPress={() => applyToolbarAction("link")}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <ReflectionLinkIcon size={18} color={toolbarIconColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Attach image"
+          onPressIn={snapshotReflectionSelectionForToolbar}
+          onPress={() => void attachReflectionImage()}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <ReflectionImageIcon size={18} color={toolbarIconColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Hide keyboard"
+          onPress={dismissJournalKeyboard}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <ReflectionKeyboardHideIcon size={20} color={toolbarIconColor} />
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   );
 
@@ -1312,34 +1464,70 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     </>
   );
 
-  const renderReflectionTextInput = (
-    inputRef: RefObject<TextInput | null>,
-    layoutStyle: typeof reflectionInputLayoutStyle,
-  ) => (
-    <TextInput
-      ref={inputRef}
-      multiline
-      value={reflectionMarkdown}
-      onChangeText={onReflectionMarkdownChange}
-      onSelectionChange={(e) => {
-        const next = e.nativeEvent.selection;
-        setReflectionSelection(next);
-        reflectionSelectionRef.current = next;
-      }}
-      onFocus={onReflectionEditorFocus}
-      onBlur={onReflectionEditorBlur}
-      style={[
-        reflectionInputStyle,
-        layoutStyle,
-        {
-          minHeight: sheetFormLayout ? 120 : 200,
-        },
-      ]}
-      placeholder=""
-      placeholderTextColor={colors.tan200}
-      scrollEnabled
-    />
-  );
+  /**
+   * One live `MarkdownTextInput` for the whole reflection document — natively self-scrolling,
+   * no per-block swap. Nested `ScrollView` around this field previously broke scrolling because
+   * a multiline input captures drag for text selection.
+   */
+  const renderReflectionInput = (
+    inputRef: RefObject<ComponentRef<typeof MarkdownTextInput> | null>,
+    layoutStyle: StyleProp<ViewStyle>,
+  ) => {
+    const imageIds = listReflectionImageIds(reflectionMarkdown).filter((id) => reflectionImages[id]);
+    return (
+      <View style={[{ minHeight: sheetFormLayout ? 120 : 200 }, layoutStyle]}>
+        <MarkdownTextInput
+          ref={inputRef}
+          multiline
+          value={reflectionMarkdown}
+          onChangeText={onReflectionMarkdownChange}
+          parser={parseReflectionLiveMarkdown}
+          markdownStyle={reflectionMarkdownStyle}
+          selection={reflectionSelectionOverride ?? undefined}
+          onSelectionChange={(e) => {
+            // Ignore blur-driven resets while a toolbar press is in flight.
+            if (toolbarPressSelectionRef.current != null) return;
+            const next = e.nativeEvent.selection;
+            setReflectionSelection(next);
+            reflectionSelectionRef.current = next;
+            if (reflectionSelectionOverride != null) setReflectionSelectionOverride(null);
+          }}
+          onFocus={onReflectionEditorFocus}
+          onBlur={onReflectionEditorBlur}
+          style={[reflectionInputStyle, { flex: 1, minHeight: 0 }]}
+          placeholder="Write your reflection…"
+          placeholderTextColor={colors.tan200}
+          scrollEnabled
+          autoCorrect
+          spellCheck
+        />
+        {imageIds.length > 0 ? (
+          <ScrollView
+            horizontal
+            keyboardShouldPersistTaps="handled"
+            showsHorizontalScrollIndicator={false}
+            style={{ flexGrow: 0, marginTop: 8 }}
+            contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+          >
+            {imageIds.map((id, index) => (
+              <Image
+                key={`${id}-${index}`}
+                source={{ uri: reflectionImages[id] }}
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 8,
+                  backgroundColor: "rgba(255,255,255,0.35)",
+                }}
+                contentFit="cover"
+                accessibilityLabel="Attached reflection image"
+              />
+            ))}
+          </ScrollView>
+        ) : null}
+      </View>
+    );
+  };
 
   const formReflectionSection = (
     <View style={[reflectionShellStyle, { marginTop: 5 }]}>
@@ -1382,18 +1570,11 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             style={[reflectionParchmentStyle, { backgroundColor: colors.parchmentDark }]}
           >
             <View style={reflectionInnerPadStyle}>
-              {renderReflectionTextInput(reflectionInputRef, reflectionInputLayoutStyle)}
+              {renderReflectionInput(reflectionInputRef, reflectionInputLayoutStyle)}
             </View>
           </View>
         </View>
     </View>
-  );
-
-  const formFields = (
-    <>
-      {formLeadingSections}
-      {formReflectionSection}
-    </>
   );
 
   const saveRowPaddingBottom = sheetFormLayout
@@ -1624,14 +1805,16 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             >
               Reflection
             </Text>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Done writing reflection"
-              onPress={() => void closeReflectionFullscreen()}
-              activeOpacity={0.85}
-            >
-              <Text style={{ fontFamily: "Inter_500Medium", fontSize: 16, color: colors.brown800 }}>Done</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Done writing reflection"
+                onPress={() => void closeReflectionFullscreen()}
+                activeOpacity={0.85}
+              >
+                <Text style={{ fontFamily: "Inter_500Medium", fontSize: 16, color: colors.brown800 }}>Done</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <View
             style={{
@@ -1651,35 +1834,17 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                   backgroundColor: colors.parchmentDark,
                 }}
               >
-                <TextInput
-                  ref={fullscreenReflectionInputRef}
-                  multiline
-                  value={reflectionMarkdown}
-                  onChangeText={onReflectionMarkdownChange}
-                  onSelectionChange={(e) => {
-                    const next = e.nativeEvent.selection;
-                    setReflectionSelection(next);
-                    reflectionSelectionRef.current = next;
-                  }}
-                  onFocus={onReflectionEditorFocus}
-                  onBlur={onReflectionEditorBlur}
-                  style={[
-                    reflectionInputStyle,
-                    {
-                      flex: 1,
-                      minHeight: 0,
-                      alignSelf: "stretch",
-                      width: "100%",
-                      paddingHorizontal: 8,
-                      paddingTop: 16,
-                      paddingBottom: 19,
-                    },
-                  ]}
-                  placeholder=""
-                  placeholderTextColor={colors.tan200}
-                  scrollEnabled
-                  autoFocus
-                />
+                {renderReflectionInput(fullscreenReflectionInputRef, {
+                  flex: 1,
+                  minHeight: 0,
+                  alignSelf: "stretch",
+                  width: "100%",
+                  borderRadius: 0,
+                  backgroundColor: colors.parchmentDark,
+                  paddingHorizontal: 8,
+                  paddingTop: 16,
+                  paddingBottom: 19,
+                })}
               </View>
             </View>
           </View>

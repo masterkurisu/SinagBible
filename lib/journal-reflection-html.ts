@@ -86,23 +86,39 @@ function inlineHtmlToMarkdown(fragment: string): string {
     s = s.replace(/<em>([\s\S]*?)<\/em>/gi, "_$1_");
     if (s === prev) break;
   }
+  // Links: `<a href="URL">text</a>` -> `[text](URL)`. Must run before the generic tag strip.
+  s = s.replace(/<a\s+href=(["'])([^"']*)\1[^>]*>([\s\S]*?)<\/a>/gi, (_full, _q, href, text) => {
+    const cleanText = String(text).replace(/<[^>]+>/g, "").trim();
+    return `[${cleanText || href}](${href})`;
+  });
   s = s.replace(/<\/?(?:p|div|span|font|u)\b[^>]*>/gi, "");
   s = s.replace(/<[^>]+>/g, "");
   return decodeHtmlEntities(s);
 }
 
-function blockInnerHtml(block: string, tag: "p" | "div" | "ul" | "ol"): string {
+function blockInnerHtml(block: string, tag: "p" | "div" | "ul" | "ol" | "h1" | "h2"): string {
   const open = new RegExp(`^<${tag}\\b[^>]*>`, "i");
   const close = new RegExp(`<\\/${tag}>$`, "i");
   return block.replace(open, "").replace(close, "");
 }
 
+/** Strip a checkbox glyph (☑/☐/✓/✔) that journal-local.ts embeds directly into checklist HTML. */
+function stripChecklistGlyph(markdown: string): string {
+  return markdown.replace(/^[☐☑✓✔]\s*/, "");
+}
+
 function convertListBlock(block: string, ordered: boolean, imageMap: Record<string, string>): string {
-  const items = Array.from(block.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi));
+  const isChecklist = /^<ul\b[^>]*\bdata-checklist=["']true["']/i.test(block);
+  const items = Array.from(block.matchAll(/<li([^>]*)>([\s\S]*?)<\/li>/gi));
   return items
     .map((li, index) => {
-      const body = replaceImgTagsWithTokens(li[1] ?? "", imageMap);
-      const markdown = inlineHtmlToMarkdown(body).trim();
+      const attrs = li[1] ?? "";
+      const body = replaceImgTagsWithTokens(li[2] ?? "", imageMap);
+      const markdown = stripChecklistGlyph(inlineHtmlToMarkdown(body).trim());
+      if (isChecklist) {
+        const checked = /data-checked=["']true["']/i.test(attrs);
+        return `- [${checked ? "x" : " "}] ${markdown}`;
+      }
       const prefix = ordered ? `${index + 1}. ` : "- ";
       return `${prefix}${markdown}`;
     })
@@ -131,7 +147,7 @@ export function htmlToReflectionMarkdown(
     .replace(/<(\/?)i(\s[^>]*)?>/gi, "<$1em$2>");
 
   const blocks =
-    normalized.match(/<(p|div|ul|ol)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
+    normalized.match(/<(p|div|ul|ol|h1|h2)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
 
   if (blocks.length === 0) {
     return convertParagraphBlock(normalized, imageMap).trim();
@@ -145,6 +161,14 @@ export function htmlToReflectionMarkdown(
     }
     if (/^<ol\b/i.test(block)) {
       parts.push(convertListBlock(block, true, imageMap));
+      continue;
+    }
+    if (/^<h1\b/i.test(block)) {
+      parts.push(`# ${inlineHtmlToMarkdown(blockInnerHtml(block, "h1")).trim()}`);
+      continue;
+    }
+    if (/^<h2\b/i.test(block)) {
+      parts.push(`## ${inlineHtmlToMarkdown(blockInnerHtml(block, "h2")).trim()}`);
       continue;
     }
     const tag = /^<div\b/i.test(block) ? "div" : "p";

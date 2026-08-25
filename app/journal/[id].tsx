@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Platform,
   useWindowDimensions,
+  Linking,
 } from "react-native";
 import { Image } from "expo-image";
 import * as FileSystem from "expo-file-system";
@@ -171,6 +172,9 @@ function buildJournalPdfHtml(opts: {
   .reflection img { max-width: 100%; height: auto; border-radius: 8px; }
   .reflection ul, .reflection ol { margin: 0 0 10px; padding-left: 1.25em; }
   .reflection li { margin-bottom: 4px; }
+  .reflection h1 { font-family: Lora, Georgia, serif; font-weight: 400; font-size: 26px; margin: 16px 0 8px; }
+  .reflection h2 { font-family: Lora, Georgia, serif; font-weight: 700; font-size: 20px; margin: 14px 0 6px; }
+  .reflection a { color: ${ui.brown800}; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -226,13 +230,15 @@ function normalizeStyleSpansForInline(html: string): string {
   return s;
 }
 
-function renderInlineHtml(input: string): React.ReactNode[] {
+function renderInlineHtml(input: string, linkColor = "#8B7E6A"): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   const styleStack: Array<"strong" | "em"> = [];
+  const hrefStack: string[] = [];
   const normalized = normalizeStyleSpansForInline(input)
     .replace(/<(\/?)b(\s[^>]*)?>/gi, "<$1strong$2>")
     .replace(/<(\/?)i(\s[^>]*)?>/gi, "<$1em$2>");
-  const tokenRegex = /<\/?strong(?:\s[^>]*)?>|<\/?em(?:\s[^>]*)?>|<br\s*\/?>/gi;
+  const tokenRegex =
+    /<a\s+href=(["'])([^"']*)\1[^>]*>|<\/a>|<\/?strong(?:\s[^>]*)?>|<\/?em(?:\s[^>]*)?>|<br\s*\/?>/gi;
   let last = 0;
   let part = 0;
 
@@ -244,8 +250,24 @@ function renderInlineHtml(input: string): React.ReactNode[] {
     if (hasStrong && hasEm) fontFamily = "Lora_700Bold_Italic";
     else if (hasStrong) fontFamily = "Lora_700Bold";
     else if (hasEm) fontFamily = "Lora_400Regular_Italic";
+    const href = hrefStack[hrefStack.length - 1];
     nodes.push(
-      <Text key={`t-${part++}`} style={{ fontFamily }}>
+      <Text
+        key={`t-${part++}`}
+        style={
+          href
+            ? { fontFamily, color: linkColor, textDecorationLine: "underline" as const }
+            : { fontFamily }
+        }
+        {...(href
+          ? {
+              suppressHighlighting: true,
+              onPress: () => {
+                void Linking.openURL(href).catch(() => {});
+              },
+            }
+          : null)}
+      >
         {decodeHtmlEntities(text)}
       </Text>,
     );
@@ -258,7 +280,11 @@ function renderInlineHtml(input: string): React.ReactNode[] {
       .replace(/<\/?(?:p|div|span|font|u)\b[^>]*>/gi, "");
     pushText(raw);
     const tok = match[0] ?? "";
-    if (/^<strong\b/i.test(tok)) styleStack.push("strong");
+    if (/^<a\b/i.test(tok)) {
+      hrefStack.push(decodeHtmlEntities(match[2] ?? ""));
+    } else if (/^<\/a>/i.test(tok)) {
+      hrefStack.pop();
+    } else if (/^<strong\b/i.test(tok)) styleStack.push("strong");
     else if (/^<\/strong\b/i.test(tok)) {
       const i = styleStack.lastIndexOf("strong");
       if (i >= 0) styleStack.splice(i, 1);
@@ -283,9 +309,10 @@ function renderInlineHtml(input: string): React.ReactNode[] {
 function renderSavedReflection(
   contentHtml: string | null | undefined,
   bodyColor: string,
+  linkColor = "#8B7E6A",
 ): React.ReactNode[] {
   const html = typeof contentHtml === "string" ? contentHtml : "";
-  const blocks = html.match(/<(p|div|ul|ol)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
+  const blocks = html.match(/<(p|div|ul|ol|h1|h2)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
   if (blocks.length === 0 && html.trim()) {
     const forInline = html
       .replace(/<\/?p\b[^>]*>/gi, "\n")
@@ -297,7 +324,7 @@ function renderSavedReflection(
         className="text-[17px] leading-8 mb-2"
         style={{ fontFamily: "Lora_400Regular", color: bodyColor }}
       >
-        {renderInlineHtml(forInline)}
+        {renderInlineHtml(forInline, linkColor)}
       </Text>,
     ];
   }
@@ -311,10 +338,14 @@ function renderSavedReflection(
 
   const appendListNodes = (listBlock: string, keyPrefix: string) => {
     const ordered = /^<ol\b/i.test(listBlock);
-    const listItems = Array.from(listBlock.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi));
+    const checklist = /^<ul\b[^>]*\bdata-checklist=["']true["']/i.test(listBlock);
+    const listItems = Array.from(listBlock.matchAll(/<li([^>]*)>([\s\S]*?)<\/li>/gi));
     listItems.forEach((li, j) => {
-      const marker = ordered ? `${j + 1}. ` : "\u2022 ";
-      const body = normalizeListItemBody(li[1] ?? "");
+      const attrs = li[1] ?? "";
+      const checked = checklist && /data-checked=["']true["']/i.test(attrs);
+      // Checklist glyphs (\u2610/\u2611) are embedded directly in the saved HTML text, so no marker here.
+      const marker = checklist ? "" : ordered ? `${j + 1}. ` : "\u2022 ";
+      const body = normalizeListItemBody(li[2] ?? "");
       nodes.push(
         <Text
           key={`${keyPrefix}-${j}`}
@@ -323,16 +354,60 @@ function renderSavedReflection(
             fontFamily: "Lora_400Regular",
             marginBottom: j < listItems.length - 1 ? 4 : 0,
             color: bodyColor,
+            opacity: checked ? 0.6 : 1,
+            textDecorationLine: checked ? "line-through" : "none",
           }}
         >
           {marker}
-          {renderInlineHtml(body)}
+          {renderInlineHtml(body, linkColor)}
         </Text>,
       );
     });
   };
 
   blocks.forEach((block, i) => {
+    if (/^<h1\b/i.test(block)) {
+      const body = block.replace(/^<h1[^>]*>/i, "").replace(/<\/h1>$/i, "");
+      const plain = decodeHtmlEntities(body.replace(/<[^>]*>/g, "").trim());
+      if (!plain) return;
+      nodes.push(
+        <Text
+          key={`h1-${i}`}
+          style={{
+            fontFamily: "Lora_400Regular",
+            fontSize: 26,
+            lineHeight: 32,
+            marginTop: i === 0 ? 0 : 10,
+            marginBottom: 6,
+            color: bodyColor,
+          }}
+        >
+          {renderInlineHtml(body, linkColor)}
+        </Text>,
+      );
+      return;
+    }
+    if (/^<h2\b/i.test(block)) {
+      const body = block.replace(/^<h2[^>]*>/i, "").replace(/<\/h2>$/i, "");
+      const plain = decodeHtmlEntities(body.replace(/<[^>]*>/g, "").trim());
+      if (!plain) return;
+      nodes.push(
+        <Text
+          key={`h2-${i}`}
+          style={{
+            fontFamily: "Lora_700Bold",
+            fontSize: 20,
+            lineHeight: 27,
+            marginTop: i === 0 ? 0 : 8,
+            marginBottom: 4,
+            color: bodyColor,
+          }}
+        >
+          {renderInlineHtml(body, linkColor)}
+        </Text>,
+      );
+      return;
+    }
     if (/^<(?:p|div)\b/i.test(block)) {
       const imgMatch = /<img\b[^>]*src="([^"]+)"[^>]*>/i.exec(block);
       if (imgMatch?.[1]) {
@@ -364,7 +439,7 @@ function renderSavedReflection(
               className="text-[17px] leading-8 mb-2"
               style={{ fontFamily: "Lora_400Regular", color: bodyColor }}
             >
-              {renderInlineHtml(bodyAfterImg)}
+              {renderInlineHtml(bodyAfterImg, linkColor)}
             </Text>,
           );
         }
@@ -389,7 +464,7 @@ function renderSavedReflection(
           className="text-[17px] leading-8 mb-2"
           style={{ fontFamily: "Lora_400Regular", color: bodyColor }}
         >
-          {renderInlineHtml(body)}
+          {renderInlineHtml(body, linkColor)}
         </Text>,
       );
       return;
@@ -611,7 +686,7 @@ export default function JournalEntryScreen() {
   const renderedBody = useMemo(() => {
     if (!entry) return null;
     try {
-      return renderSavedReflection(entry.content, colors.brown800);
+      return renderSavedReflection(entry.content, colors.brown800, colors.gold);
     } catch (e) {
       if (__DEV__) {
         console.error(e);
@@ -630,7 +705,7 @@ export default function JournalEntryScreen() {
         </Text>,
       ];
     }
-  }, [colors.brown800, entry]);
+  }, [colors.brown800, colors.gold, entry]);
 
   const confirmDelete = () => {
     if (!entry || !id) return;

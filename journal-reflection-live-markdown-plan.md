@@ -168,6 +168,45 @@ wiring it into the real editor.
 **Exit criteria:** A `MarkdownTextInput` visually matches the app's current formatted-preview look
 for bold/italic/headings/lists/links.
 
+### Phase 1 findings
+
+Recorded 2026-08-23. Did **not** start Phase 2.
+
+**What landed**
+- `lib/journal-reflection-live-markdown-style.ts` — `createReflectionLiveMarkdownStyle` /
+  `createReflectionLiveMarkdownInputStyle`. Body: `Lora_400Regular` 17/28 `brown800`. Links:
+  `colors.gold` (native formatter always underlines). Syntax markers: `colors.tan100`. h1:
+  fontSize 26 (non-compact heading1 in `renderReflectionBlockContent`).
+- `lib/journal-reflection-live-markdown-parser.ts` — worklet parser for the app's GitHub-style
+  dialect (`**bold**`, `_italic_`, `# `/`## `, lists, checklists, `[label](url)`, `[image:id]`).
+  Default `parseExpensiMark` cannot match the formatted preview because it treats `*bold*` (single
+  asterisk), not `**bold**`.
+- Spike `/dev/live-markdown-spike` now uses these modules and shows a live `MarkdownTextInput`
+  next to `ReflectionFormattedPreview` of the same string. Journal editor is unchanged.
+
+**`markdownStyle` API (what we can actually paint)**
+- Configurable: `syntax.color`, `link.color`, `h1.fontSize`. Bold/italic are native weight/italic
+  on the TextInput's `fontFamily` (so `Lora_400Regular` + bold span ≈ `Lora_700Bold` when the
+  native font matcher finds the face). Links are always underlined (iOS `NSUnderlineStyleSingle`,
+  Android `MarkdownUnderlineSpan`) — matches `LINK_COLOR` + underline in the preview.
+- **Not configurable:** h1 `fontFamily` / weight (native h1 always applies bold — slightly heavier
+  than the preview's `Lora_400Regular` 26). No h2, list, checklist, or custom-token style slots.
+
+**Custom parser (Phase 2/3 implications)**
+- Parser **is pluggable** via the required `parser` worklet prop. Custom parsers may only emit the
+  library's `MarkdownType` set (`bold | italic | strikethrough | emoji | mention-* | link | code |
+  pre | blockquote | h1 | syntax | inline-image | codeblock`). **No list, checklist, h2, or
+  arbitrary token types.**
+- Mapping used: `# ` → `h1`; `## ` → `bold` (body size 17 vs preview 20 — closest available);
+  `- ` / `1. ` / `- [ ] ` prefixes → `syntax` (dimmed; glyphs stay `-`/`1.`/`- [ ]`, not `•`/`☐`);
+  `[image:id]` → `syntax` (dimmed token, not an inline image). Checklists and image tokens cannot
+  live-render as widgets — Phase 2 should keep them as visible/dimmed text (or a thumbnail strip
+  outside the input), not expect native checkbox/image-in-field.
+
+**Exit criteria:** style + parser modules exist; spike paints bold/italic/h1/gold links live and
+dims list/checklist/image syntax. Visual match is as close as the library allows (h1 slightly
+bolder; h2/lists are approximations). Confirm on-device via `/dev/live-markdown-spike`.
+
 ---
 
 ## Phase 2 — Replace the per-block editor with a single `MarkdownTextInput`
@@ -206,6 +245,32 @@ for bold/italic/headings/lists/links.
 `**bold**`/`_italic_`/`# heading`/`- bullet` renders live; no block-swap flicker; scrolling long
 entries works using the input's native scroll (no nested `ScrollView` conflicts).
 
+### Phase 2 findings
+
+Recorded 2026-08-25. Did **not** start Phase 3 as a dedicated toolbar-verification pass.
+
+**What landed**
+- `components/journal-new-entry-form.tsx` — per-block state/handlers/`renderReflectionSurface` are
+  gone. Sheet and fullscreen both call `renderReflectionInput`, which is one `MarkdownTextInput`
+  bound to `reflectionMarkdown` + `reflectionSelection` (plus the existing one-shot selection
+  override for programmatic cursor nudges). Parser/style come from Phase 1.
+- Undo + typing-undo checkpoints kept. `continueListOnNewline` now runs on the full document.
+- Checklists: `- [ ] ` / `- [x] ` stay as dimmed syntax in the live input (parser mapping from
+  Phase 1). No native checkbox.
+- Images: still insert `\n[image:id]\n` at the cursor. Token is dimmed in the input; a compact
+  thumbnail strip under the field shows referenced images (avoids inlining widgets in the text
+  field).
+
+**Toolbar (needed to compile after deleting `applyReflectionBlockEdit`)**
+- Bold/italic/heading/list/checklist/link/image/undo now call the same
+  `wrapMarkdownMarker` / `toggleLinePrefix` / `insertMarkdownLink` / `insertTextAtSelection`
+  helpers against full `reflectionMarkdown` + `reflectionSelection`. That is the mechanical
+  repoint Phase 3 describes; Phase 3 still owns confirming every button applies at the right
+  cursor and paints live on device.
+
+**Exit criteria:** one live `MarkdownTextInput` in sheet + fullscreen; no block-swap. Confirm
+typing/scrolling on-device. Toolbar live-check is Phase 3.
+
 ---
 
 ## Phase 3 — Rewire the formatting toolbar
@@ -227,6 +292,37 @@ new single input.
 
 **Exit criteria:** All toolbar buttons apply formatting at the correct cursor position/selection
 and the result renders live immediately (no blur required).
+
+### Phase 3 findings
+
+Recorded 2026-08-25. Did **not** start Phase 4.
+
+**What landed**
+- `applyReflectionToolbarAction` / `insertReflectionImageToken` in
+  `lib/journal-reflection-markdown-edit.ts` — one dispatcher for bold/italic/heading/list/
+  checklist/link against full `reflectionMarkdown` + document caret. Image insert is the same
+  `\n[image:id]\n` token as before.
+- `components/journal-new-entry-form.tsx` — format buttons call that dispatcher. Caret is
+  snapshotted on toolbar `onPressIn` so a blur-driven `onSelectionChange` (often `{0,0}`) cannot
+  move the insert to the start of the document. Image attach keeps the snapshot across the picker.
+  `focus()` runs *after* the edit (plus the existing one-shot `selection` override).
+- Spike `/dev/live-markdown-spike` now has the same format buttons against `MarkdownTextInput`
+  (focus + controllable `selection`) for on-device confirmation.
+
+**`MarkdownTextInput` selection / focus (confirmed in library source)**
+- Native component is a thin wrapper: it forwards `ref` and `...props` to a real `TextInput`, so
+  imperative `.focus()` / `.blur()` and `selection` / `onSelectionChange` work the same way.
+- `formatSelection` exists on the type but is only used on web. Native toolbar formatting stays
+  in our JS helpers.
+
+**Live paint after toolbar**
+- Bold / italic / link paint as those types immediately.
+- Heading still inserts `## ` (unchanged) → parser maps that to `bold` at body size (Phase 1;
+  no h2 type). Lists / checklist / `[image:id]` stay dimmed `syntax`.
+
+**Exit criteria:** toolbar applies at the document caret; parser paints the result without a blur
+step. Confirm on-device via the journal editor and `/dev/live-markdown-spike`. Did not delete
+preview/block helpers (Phase 4).
 
 ---
 
@@ -250,6 +346,34 @@ known pre-existing, unrelated `overflow` type errors in
 `journal-migration.test.ts` failure — do not attempt to fix those as part of this work unless
 asked).
 
+### Phase 4 findings
+
+Recorded 2026-08-25. Did **not** start Phase 5.
+
+**What we kept (still has consumers)**
+- `lib/journal-reflection-blocks.ts` (`computeReflectionBlocks`) and
+  `components/reflection-formatted-preview.tsx` — journal list tiles use `stripHtmlPreview`, not
+  this preview, but `/dev/live-markdown-spike` still renders it side-by-side with
+  `MarkdownTextInput`. Deleting them would break the spike; they are no longer used by the live
+  editor.
+- `renderReflectionBlockContent` is now file-private. `classifyReflectionLineKind` is now
+  module-private.
+
+**What we removed**
+- `findReflectionBlockIndexForOffset` and its tests — editor-only caret-to-block lookup.
+- Unused `insertLinePrefix`; `insertTextAtSelection` is now private to the image-token helper.
+- Unused live-style exports (`REFLECTION_LIVE_H1_LINE_HEIGHT`, h2 size constants, bold/italic
+  family constants the native formatter never reads).
+- Unused `formFields` fragment in `journal-new-entry-form.tsx` (layouts inline leading +
+  reflection sections instead).
+- `TextStyle` import + `as StyleProp<ViewStyle>` cast on the reflection input wrapper in
+  `journal-new-entry-form.tsx` (layout style is a `ViewStyle`).
+
+**Exit criteria:** dead editor APIs gone; preview/block splitter kept for the spike. `tsc --noEmit`
+is only the two known `overflow` errors. `eslint .` still has a large pre-existing
+`react-hooks/refs` / `set-state-in-effect` flood (500+ errors, unrelated); not fixed here.
+CHANGELOG and device pass stay Phase 5.
+
 ---
 
 ## Phase 5 — Verification
@@ -270,6 +394,35 @@ asked).
 **Exit criteria:** All of the above pass; original three user-reported pain points
 ("text disappears while editing," "formatting only shows after closing keyboard," "cumbersome to
 edit") are gone.
+
+### Phase 5 findings
+
+Recorded 2026-08-25.
+
+**Automated gates (modulo known pre-existing failures)**
+- `pnpm typecheck` — only the two known `overflow` errors in `app/(tabs)/journal/index.tsx` and
+  `JournalListEntryTilePreview.tsx`.
+- `pnpm lint` — still the repo-wide pre-existing `react-hooks/refs` / `set-state-in-effect` flood
+  (~522 errors); not introduced by this work.
+- `pnpm test` — 92 passed / 1 failed: the known `journal-migration.test.ts` blob-row
+  `content_markdown` assertion. All live-markdown / toolbar / block tests passed.
+
+**Android (SM_F971B cover display, dev client + Metro)**
+- New-entry sheet: reflection field focuses, keyboard opens, floating toolbar appears (undo /
+  bold / italic / heading / lists / checklist / link / image / hide keyboard).
+- Typing `"Hello"` stayed visible (no block-swap disappear). Bold at the caret inserted `****`
+  live; heading then bullet replaced the line prefix to `- Hello****` without blurring. Undo
+  restored `## Hello****`.
+- Fullscreen editor opened with the same document + toolbar; Done returned to the sheet with
+  text intact. Saved as `Phase5LiveMd`, reopened for edit, tap on the reflection field opened
+  the keyboard and toolbar again (`## Hello****` still in the field).
+- Image attach (system picker) not exercised. iOS not rebuilt/verified this plan (flagged since
+  Phase 0).
+
+**CHANGELOG** — `1.1.0` entry added for the live-markdown reflection editor.
+
+**Exit criteria:** original three pain points are gone on the Android editor path above. Remaining
+manual: iOS, and attach-image on device.
 
 ---
 
@@ -303,3 +456,14 @@ _(Append a dated one-line note here at the end of each session that touches this
   at Phase 0 next session.
 - 2026-08-23: Phase 0 — installed live-markdown 0.1.335 + worklets 0.10.4, html-entities worklet
   patch, Android native rebuild. Spike route `/dev/live-markdown-spike`. Did not start Phase 1.
+- 2026-08-23: Phase 1 — style mapping + custom GitHub-dialect parser. Spike updated with
+  side-by-side formatted preview. Journal editor untouched. Did not start Phase 2.
+- 2026-08-25: Phase 2 — replaced per-block editor with one `MarkdownTextInput` (sheet +
+  fullscreen). Checklists/image tokens dimmed; image thumbnail strip under the field. Did not
+  start Phase 3.
+- 2026-08-25: Phase 3 — toolbar dispatcher on full-document caret; freeze selection on press-in;
+  spike format buttons. Did not start Phase 4.
+- 2026-08-25: Phase 4 — removed editor-only block-offset lookup and unused helpers/exports;
+  kept formatted preview + block splitter for the spike. Did not start Phase 5.
+- 2026-08-25: Phase 5 — typecheck/lint/test modulo known failures; Android sheet + fullscreen
+  toolbar/undo/save/reopen-keyboard pass; CHANGELOG 1.1.0. iOS and image-picker still manual.

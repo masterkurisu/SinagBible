@@ -93,6 +93,55 @@ export function ReflectionFullscreenIcon({ size = 18, color = "#ffffff" }: { siz
   );
 }
 
+/** Heading (H + small "2" flourish) */
+export function ReflectionHeadingIcon({ size = 18, color = "#ffffff" }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M5 5V19M5 12H13M13 5V19"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M16 10.5C16 9.67157 16.6716 9 17.5 9C18.3284 9 19 9.67157 19 10.5C19 11.0575 18.6572 11.5347 18.1667 11.7778L16.5 13H19"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** Checklist (checkbox + line, matching the bullet/numbered list glyph style) */
+export function ReflectionChecklistIcon({ size = 18, color = "#ffffff" }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M10 6H21M10 12H21M10 18H21" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Rect x="3" y="4.5" width="4" height="4" rx="1" stroke={color} strokeWidth={1.6} />
+      <Path d="M3.9 6.5L4.7 7.3L6.1 5.7" stroke={color} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
+      <Rect x="3" y="16.5" width="4" height="4" rx="1" stroke={color} strokeWidth={1.6} />
+    </Svg>
+  );
+}
+
+/** Link (chain glyph) */
+export function ReflectionLinkIcon({ size = 18, color = "#ffffff" }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M9.5 14.5L14.5 9.5M8 17L6.5 18.5C5.11929 19.8807 2.88071 19.8807 1.5 18.5C0.119288 17.1193 0.119288 14.8807 1.5 13.5L3 12M16 12L17.5 10.5C18.8807 9.11929 18.8807 6.88071 17.5 5.5C16.1193 4.11929 13.8807 4.11929 12.5 5.5L11 7"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export function ReflectionImageIcon({ size = 18, color = "#ffffff" }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

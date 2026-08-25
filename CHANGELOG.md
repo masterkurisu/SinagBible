@@ -3,9 +3,10 @@
 All notable changes to Sinag Bible, organized by version.
 
 ---
-## 1.0.1
+## 1.1.0
 
-
+### New features & UI
+- **Journal reflection editor** — formatting paints live in the field as you type (bold, italic, headings, lists, checklists, links). The editor is one native markdown input again, so text no longer disappears when moving between lines, and you do not need to close the keyboard to see styles.
 
 ## 1.0.0 - Public Release
 

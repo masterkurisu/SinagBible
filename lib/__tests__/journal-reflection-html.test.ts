@@ -35,4 +35,23 @@ describe("htmlToReflectionMarkdown", () => {
   it("converts plain paragraph HTML from legacy edit mode", () => {
     expect(htmlToReflectionMarkdown("<p>Hello world</p>")).toBe("Hello world");
   });
+
+  it("converts headings", () => {
+    expect(htmlToReflectionMarkdown("<h1>Big Title</h1>")).toBe("# Big Title");
+    expect(htmlToReflectionMarkdown("<h2>Smaller heading</h2>")).toBe("## Smaller heading");
+  });
+
+  it("converts checklists, including the embedded checkbox glyph journal-local.ts writes", () => {
+    expect(
+      htmlToReflectionMarkdown(
+        '<ul data-checklist="true"><li data-checked="false">☐ todo one</li><li data-checked="true">☑ done one</li></ul>',
+      ),
+    ).toBe("- [ ] todo one\n- [x] done one");
+  });
+
+  it("converts links", () => {
+    expect(htmlToReflectionMarkdown('<p>Visit <a href="https://example.com">here</a> now.</p>')).toBe(
+      "Visit [here](https://example.com) now.",
+    );
+  });
 });

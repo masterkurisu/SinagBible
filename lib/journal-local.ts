@@ -223,51 +223,46 @@ function escapeXmlAttr(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
-function applyItalic(s: string): string {
-  let out = "";
-  let i = 0;
-  while (i < s.length) {
-    if (s[i] === "_") {
-      const j = s.indexOf("_", i + 1);
-      if (j !== -1 && j > i + 1) {
-        out += "<em>" + escapeXml(s.slice(i + 1, j)) + "</em>";
-        i = j + 1;
-        continue;
-      }
-    }
-    const j = s.indexOf("_", i);
-    const end = j === -1 ? s.length : j;
-    if (end === i) {
-      out += escapeXml(s[i] ?? "");
-      i += 1;
-      continue;
-    }
-    out += escapeXml(s.slice(i, end));
-    i = end;
-  }
-  return out;
-}
-
-function applyBold(s: string): string {
+/**
+ * Recursive inline-markdown scanner: bold, italic, and `[text](url)` links, nestable in either
+ * direction (e.g. `**[text](url)**` or `_[text](url)_`). Replaces the old separate
+ * applyBold/applyItalic pair, which only supported italic-inside-bold, not the reverse.
+ */
+function applyInlineFormatting(s: string): string {
   let out = "";
   let i = 0;
   while (i < s.length) {
     if (s.slice(i, i + 2) === "**") {
       const j = s.indexOf("**", i + 2);
       if (j !== -1) {
-        const inner = s.slice(i + 2, j);
-        out += "<strong>" + applyItalic(inner) + "</strong>";
+        out += "<strong>" + applyInlineFormatting(s.slice(i + 2, j)) + "</strong>";
         i = j + 2;
         continue;
       }
-      out += escapeXml("**");
-      i += 2;
-      continue;
     }
-    const j = s.indexOf("**", i);
-    const end = j === -1 ? s.length : j;
-    out += applyItalic(s.slice(i, end));
-    i = end;
+    if (s[i] === "_") {
+      const j = s.indexOf("_", i + 1);
+      if (j !== -1 && j > i + 1) {
+        out += "<em>" + applyInlineFormatting(s.slice(i + 1, j)) + "</em>";
+        i = j + 1;
+        continue;
+      }
+    }
+    if (s[i] === "[") {
+      const linkMatch = /^\[([^\]]*)\]\(([^)\s]+)\)/.exec(s.slice(i));
+      if (linkMatch) {
+        const linkText = linkMatch[1] ?? "";
+        const href = linkMatch[2] ?? "";
+        out +=
+          `<a href="${escapeXmlAttr(href)}">` +
+          (linkText ? applyInlineFormatting(linkText) : escapeXml(href)) +
+          `</a>`;
+        i += linkMatch[0].length;
+        continue;
+      }
+    }
+    out += escapeXml(s[i] ?? "");
+    i += 1;
   }
   return out;
 }
@@ -286,22 +281,105 @@ function paragraphBlock(chunk: string, images: Record<string, string>): string {
   const nonEmpty = lines.map((l) => l.trimEnd()).filter((l) => l.length > 0);
   if (nonEmpty.length === 0) return "";
 
-  if (nonEmpty.every((l) => /^\s*-\s+/.test(l))) {
+  if (nonEmpty.length === 1) {
+    const h2 = /^##\s+(.*)$/.exec(nonEmpty[0] ?? "");
+    if (h2) return `<h2>${applyInlineFormatting(h2[1] ?? "")}</h2>`;
+    const h1 = /^#\s+(.*)$/.exec(nonEmpty[0] ?? "");
+    if (h1) return `<h1>${applyInlineFormatting(h1[1] ?? "")}</h1>`;
+  }
+
+  if (nonEmpty.every((l) => /^\s*-\s\[[ xX]\]\s/.test(l))) {
     const items = nonEmpty
-      .map((l) => `<li>${applyBold(l.replace(/^\s*-\s+/, ""))}</li>`)
+      .map((l) => {
+        const m = /^\s*-\s\[([ xX])\]\s(.*)$/.exec(l);
+        const checked = (m?.[1] ?? "").toLowerCase() === "x";
+        const body = m?.[2] ?? "";
+        const glyph = checked ? "☑ " : "☐ "; // embed the box directly so it renders
+        // correctly anywhere the HTML is displayed (detail view, PDF/print, future export)
+        // without depending on CSS support for the data-checked attribute.
+        return `<li data-checked="${checked}">${glyph}${applyInlineFormatting(body)}</li>`;
+      })
+      .join("");
+    return `<ul data-checklist="true">${items}</ul>`;
+  }
+
+  if (nonEmpty.every((l) => /^\s*-\s+/.test(l) && !/^\s*-\s\[[ xX]\]\s/.test(l))) {
+    const items = nonEmpty
+      .map((l) => `<li>${applyInlineFormatting(l.replace(/^\s*-\s+/, ""))}</li>`)
       .join("");
     return `<ul>${items}</ul>`;
   }
 
   if (nonEmpty.every((l) => /^\s*\d+\.\s+/.test(l))) {
     const items = nonEmpty
-      .map((l) => `<li>${applyBold(l.replace(/^\s*\d+\.\s+/, ""))}</li>`)
+      .map((l) => `<li>${applyInlineFormatting(l.replace(/^\s*\d+\.\s+/, ""))}</li>`)
       .join("");
     return `<ol>${items}</ol>`;
   }
 
   const joined = lines.join("\n");
-  return `<p>${applyBold(joined).replace(/\n/g, "<br/>")}</p>`;
+  return `<p>${applyInlineFormatting(joined).replace(/\n/g, "<br/>")}</p>`;
+}
+
+type ReflectionLineKind =
+  | "image"
+  | "heading1"
+  | "heading2"
+  | "checklist"
+  | "bullet"
+  | "ordered"
+  | "plain";
+
+function reflectionLineKind(line: string): ReflectionLineKind {
+  const t = line.trim();
+  if (/^\[image:[^\]]+\]$/.test(t)) return "image";
+  if (/^##\s+/.test(t)) return "heading2";
+  if (/^#\s+/.test(t)) return "heading1";
+  if (/^-\s\[[ xX]\]\s/.test(t)) return "checklist";
+  if (/^-\s+/.test(t)) return "bullet";
+  if (/^\d+\.\s+/.test(t)) return "ordered";
+  return "plain";
+}
+
+/**
+ * Groups reflection markdown into HTML-paragraph chunks. A blank line always starts a new
+ * chunk; an `[image:id]` line is always its own chunk (it may sit inside running text without a
+ * blank line around it); and a run of same-kind lines (all "- " bullets, all "1. " ordered, all
+ * "- [ ] " checklist items, or plain text) stays together so multi-line lists actually merge
+ * into one <ul>/<ol>/checklist instead of one list tag per line.
+ */
+function splitReflectionMarkdownIntoChunks(trimmed: string): string[] {
+  const lines = trimmed.split("\n");
+  const chunks: string[] = [];
+  let current: string[] = [];
+  let currentKind: ReflectionLineKind | null = null;
+
+  const flush = () => {
+    if (current.length > 0) chunks.push(current.join("\n"));
+    current = [];
+    currentKind = null;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    if (line.trim().length === 0) {
+      flush();
+      continue;
+    }
+    const kind = reflectionLineKind(line);
+    if (kind === "image") {
+      flush();
+      chunks.push(line);
+      continue;
+    }
+    if (currentKind !== null && kind !== currentKind) {
+      flush();
+    }
+    current.push(line);
+    currentKind = kind;
+  }
+  flush();
+  return chunks;
 }
 
 /**
@@ -314,7 +392,7 @@ export function reflectionMarkdownToContent(
 ): string {
   const trimmed = text.trim();
   if (!trimmed) return "<p></p>";
-  const chunks = trimmed.split(/\n+/);
+  const chunks = splitReflectionMarkdownIntoChunks(trimmed);
   const html = chunks.map((c) => paragraphBlock(c, images)).filter(Boolean).join("");
   return html || "<p></p>";
 }
