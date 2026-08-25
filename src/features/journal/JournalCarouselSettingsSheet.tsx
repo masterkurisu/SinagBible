@@ -53,6 +53,7 @@ import {
   subscribeCarouselFavorites,
   type CarouselVerseRecord,
 } from "@/lib/journal-carousel-verses";
+import { isTabletLayout } from "@/lib/tablet-layout";
 import { READER_M3_SURFACE_CONTAINER } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type JournalCarouselSettingsSheetProps = {
@@ -96,7 +97,7 @@ export function JournalCarouselSettingsSheet({
 }: JournalCarouselSettingsSheetProps) {
   const colors = bundle.ui;
   const j = bundle.journal;
-  const { width: screenW } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const [settings, setSettings] = useState<JournalCarouselSettings | null>(null);
   const [favorites, setFavorites] = useState<CarouselVerseRecord[]>([]);
   const [cardSizeOverrides, setCardSizeOverrides] = useState<Record<string, CarouselCardSize>>({});
@@ -107,7 +108,7 @@ export function JournalCarouselSettingsSheet({
   const opacity = useSharedValue(0);
   const scrimOpacity = useSharedValue(0);
 
-  const sheetMaxW = Math.min(360, screenW - 48);
+  const sheetMaxW = Math.min(isTabletLayout(screenW, screenH) ? 440 : 360, screenW - 48);
 
   const finishDismissAnimation = useCallback(() => {
     isClosingRef.current = false;

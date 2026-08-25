@@ -6,6 +6,7 @@ import type { BibleChapter } from "@sinag-bible/types";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { ReaderM3BottomSheet } from "@/src/components/m3/ReaderM3BottomSheet";
 import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
+import { READER_OVERLAY_CONTENT_SCALE } from "@/src/features/reader/readerSettingsPanelChrome";
 import {
   COMMENTARY_API_BASE_URL,
   COMMENTARY_DEFAULT_ID,
@@ -43,7 +44,7 @@ export function ReaderStudyNotesSheet({
   const colors = bundle.ui;
   const primary = bundle.chrome.tabTint;
   const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
-  const scale = isTabletReaderLayout ? 1.35 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
 
   const [selectedCommentary, setSelectedCommentary] = useState(COMMENTARY_DEFAULT_ID);
   const [commentaryListLoading, setCommentaryListLoading] = useState(false);
@@ -199,6 +200,7 @@ export function ReaderStudyNotesSheet({
       isTabletReaderLayout={isTabletReaderLayout}
       title="Study Notes"
       accessibilityDismissLabel="Dismiss study notes"
+      widthVariant="reading"
       maxHeightRatio={0.78}
     >
       {selectedVerseFeedbackLabel ? (

@@ -1,6 +1,5 @@
 import { useEffect, type ReactNode } from "react";
 import {
-  Dimensions,
   ScrollView,
   StyleSheet,
   View,
@@ -24,6 +23,10 @@ import {
   READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
   READER_M3_BOTTOM_SHEET_RADIUS_PX,
   READER_M3_OUTLINE_VARIANT,
+  READER_OVERLAY_CONTENT_SCALE,
+  readerM3SheetMaxHeightRatio,
+  readerM3SheetMaxWidthPx,
+  type ReaderM3SheetWidthVariant,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
 
@@ -38,6 +41,11 @@ export type ReaderM3BottomSheetProps = {
   accessibilityDismissLabel?: string;
   children: ReactNode;
   footer?: ReactNode;
+  /**
+   * Tablet card width: compact for settings controls, reading for long-form copy.
+   * Phones always use a full-width bottom sheet.
+   */
+  widthVariant?: ReaderM3SheetWidthVariant;
   /** When false, children render directly without an inner ScrollView. */
   scrollable?: boolean;
   maxHeightRatio?: number;
@@ -57,6 +65,7 @@ export function ReaderM3BottomSheet({
   accessibilityDismissLabel = "Dismiss sheet",
   children,
   footer,
+  widthVariant = "compact",
   scrollable = true,
   maxHeightRatio = 0.82,
   contentPaddingBottom,
@@ -64,15 +73,16 @@ export function ReaderM3BottomSheet({
   onBackdropPress,
 }: ReaderM3BottomSheetProps) {
   const rc = bundle.reader;
-  const { width: screenW } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const slideProgress = useSharedValue(0);
   const scrimOpacity = useSharedValue(0);
   const sheetOpacity = useSharedValue(0);
 
-  const scale = isTabletReaderLayout ? 1.35 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const useBottomSheet = !isTabletReaderLayout;
-  const sheetMaxW = useBottomSheet ? screenW : Math.min(420, screenW - 48);
-  const sheetMaxH = Dimensions.get("window").height * (isTabletReaderLayout ? 0.72 : maxHeightRatio);
+  const sheetMaxW = readerM3SheetMaxWidthPx(screenW, isTabletReaderLayout, widthVariant);
+  const sheetMaxH =
+    screenH * readerM3SheetMaxHeightRatio(isTabletReaderLayout, maxHeightRatio, widthVariant);
   const padH = 24 * scale;
   const bottomPad =
     contentPaddingBottom ?? (useBottomSheet ? Math.max(insets.bottom, 16) * scale : 16 * scale);
@@ -134,10 +144,10 @@ export function ReaderM3BottomSheet({
         style={[
           styles.sheetAnchor,
           {
-            justifyContent: useBottomSheet ? "flex-end" : "flex-start",
-            paddingTop: useBottomSheet ? 0 : Math.max(insets.top, 12) + 16,
-            paddingBottom: 0,
-            paddingHorizontal: useBottomSheet ? 0 : 12,
+            justifyContent: useBottomSheet ? "flex-end" : "center",
+            paddingTop: useBottomSheet ? 0 : Math.max(insets.top, 16),
+            paddingBottom: useBottomSheet ? 0 : Math.max(insets.bottom, 16),
+            paddingHorizontal: useBottomSheet ? 0 : 24,
           },
         ]}
       >

@@ -45,6 +45,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   card: {
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingTop: 18,

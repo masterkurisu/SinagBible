@@ -18,7 +18,7 @@ import {
   M3_EMPHASIZED_DECELERATE_EASING,
   M3_MOTION_DURATION_SHORT4_MS,
 } from "@/src/components/m3/m3-motion";
-import { READER_M3_BOTTOM_SHEET_RADIUS_PX } from "@/src/features/reader/readerSettingsPanelChrome";
+import { READER_M3_BOTTOM_SHEET_RADIUS_PX, READER_OVERLAY_CONTENT_SCALE } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useVerseTagMention } from "@/src/features/verse-tags/useVerseTagMention";
 import { VerseTagMentionSheet } from "@/src/features/verse-tags/VerseTagMentionSheet";
 
@@ -70,7 +70,7 @@ export function ReaderVerseNoteDialog({
     contextTranslation: contextTranslationId,
   });
 
-  const scale = isTabletReaderLayout ? 1.15 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const dialogMaxW = Math.min(400, screenW - 48);
   const pad = 24 * scale;
   const keyboardOpen = keyboardHeight > 0;

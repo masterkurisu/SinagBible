@@ -1600,8 +1600,7 @@ export default function ReaderChapterScreen() {
     readerChapterCols;
   /** Keep a floor so theme/translation popovers always get a sane width (avoids 0‑width tiles when `screenW` is briefly 0). */
   const readerDropdownMaxW = Math.min(340, Math.max(200, screenW - 24));
-  const fontSettingsScale = isTabletReaderLayout ? 1.5 : 1;
-  const fontSettingsPopupPadH = 16 * fontSettingsScale;
+  const fontSettingsPopupPadH = 16;
   const readerDropdownTop =
     dropdownAnchor != null ? dropdownAnchor.y + dropdownAnchor.height + 8 : 0;
   const readerDropdownLeft =

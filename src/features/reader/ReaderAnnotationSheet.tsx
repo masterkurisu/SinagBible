@@ -31,6 +31,7 @@ import {
   READER_M3_LABEL_FONT_PX,
   READER_M3_LABEL_LETTER_SPACING,
   READER_M3_LABEL_LINE_HEIGHT_PX,
+  READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type ReaderAnnotationSheetProps = {
@@ -100,7 +101,7 @@ export function ReaderAnnotationSheet({
   onRemove,
 }: ReaderAnnotationSheetProps) {
   const sheetChrome = useReaderSheetChrome();
-  const scale = isTabletReaderLayout ? 1.35 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const [draft, setDraft] = useState<VerseAnnotation>(() => normalizeDraft(initialAnnotation));
 
   useEffect(() => {

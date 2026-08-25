@@ -7,6 +7,7 @@ import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
+  READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type CreditsSheetProps = {
@@ -31,7 +32,7 @@ export function CreditsSheet({
   const colors = bundle.ui;
   const primary = bundle.chrome.tabTint;
   const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
-  const scale = isTabletReaderLayout ? 1.35 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
 
   const sectionHeadingStyle = useMemo(
     () => ({
@@ -78,6 +79,7 @@ export function CreditsSheet({
       isTabletReaderLayout={isTabletReaderLayout}
       title="Credits"
       accessibilityDismissLabel="Dismiss credits"
+      widthVariant="reading"
       maxHeightRatio={0.9}
     >
       <View style={styles.content}>

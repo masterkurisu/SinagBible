@@ -29,6 +29,7 @@ import {
   READER_M3_LABEL_LINE_HEIGHT_PX,
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
+  READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 type ReaderVerseTextAlign = "left" | "right" | "center" | "justify";
@@ -94,7 +95,7 @@ export function ReaderFontSettingsSheet({
   const [readerFontPickerOpen, setReaderFontPickerOpen] = useState(false);
   const { ensureFontLoaded, isFontLoaded } = useLazyFont();
 
-  const scale = isTabletReaderLayout ? 1.35 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const useBottomSheet = !isTabletReaderLayout;
   const sectionGap = 20 * scale;
   const alignIconSize = 22 * scale;

@@ -105,3 +105,56 @@ export const READER_M3_SEGMENTED_BUTTON_HEIGHT_PX = 48;
 export const READER_M3_SETTINGS_SHEET_TITLE_FONT = "Lora_400Regular";
 export const READER_M3_SETTINGS_SHEET_TITLE_FONT_PX = 24;
 export const READER_M3_SETTINGS_SHEET_TITLE_LINE_HEIGHT_PX = 30;
+
+/**
+ * Overlay type, padding, and controls stay at M3 phone sizes on every screen.
+ * Tablet sheets adapt by width and placement, not by inflating the content scale.
+ */
+export const READER_OVERLAY_CONTENT_SCALE = 1;
+
+export type ReaderM3SheetWidthVariant = "compact" | "reading";
+
+const TABLET_SHEET_GUTTER_PX = 48;
+const TABLET_COMPACT_SHEET_MAX_WIDTH_PX = 440;
+const TABLET_READING_SHEET_MIN_WIDTH_PX = 520;
+const TABLET_READING_SHEET_MAX_WIDTH_PX = 720;
+const TABLET_PICKER_SHEET_MAX_WIDTH_PX = 720;
+const TABLET_COMPACT_SHEET_MAX_HEIGHT_RATIO = 0.72;
+const TABLET_READING_SHEET_MAX_HEIGHT_RATIO = 0.82;
+
+/** Centered tablet card width — compact for controls, wider for reading content. */
+export function readerM3SheetMaxWidthPx(
+  screenWidth: number,
+  isTablet: boolean,
+  variant: ReaderM3SheetWidthVariant = "compact",
+): number {
+  if (!isTablet) return screenWidth;
+  const available = Math.max(280, screenWidth - TABLET_SHEET_GUTTER_PX);
+  if (variant === "reading") {
+    const preferred = Math.round(screenWidth * 0.56);
+    return Math.min(
+      TABLET_READING_SHEET_MAX_WIDTH_PX,
+      available,
+      Math.max(TABLET_READING_SHEET_MIN_WIDTH_PX, preferred),
+    );
+  }
+  return Math.min(TABLET_COMPACT_SHEET_MAX_WIDTH_PX, available);
+}
+
+/** Book/translation pickers need more width than compact settings, but not a full tablet bleed. */
+export function readerPickerSheetMaxWidthPx(screenWidth: number, isTablet: boolean): number {
+  if (!isTablet) return screenWidth;
+  return Math.min(TABLET_PICKER_SHEET_MAX_WIDTH_PX, Math.max(280, screenWidth - TABLET_SHEET_GUTTER_PX));
+}
+
+export function readerM3SheetMaxHeightRatio(
+  isTablet: boolean,
+  phoneRatio: number,
+  variant: ReaderM3SheetWidthVariant = "compact",
+): number {
+  if (!isTablet) return phoneRatio;
+  if (variant === "reading") {
+    return Math.max(phoneRatio, TABLET_READING_SHEET_MAX_HEIGHT_RATIO);
+  }
+  return Math.min(phoneRatio, TABLET_COMPACT_SHEET_MAX_HEIGHT_RATIO);
+}

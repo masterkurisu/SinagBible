@@ -13,6 +13,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
   type KeyboardEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -61,6 +62,8 @@ import {
 import { startTranslationDownload } from "@/lib/translation-download";
 import { TranslationOfflineStatus } from "@/src/features/reader/TranslationOfflineStatus";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import { isTabletLayout } from "@/lib/tablet-layout";
+import { readerPickerSheetMaxWidthPx } from "@/src/features/reader/readerSettingsPanelChrome";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
 import { pickerFlashListPerfProps } from "@/src/features/reader/pickerFlashListChrome";
 import { M3Snackbar } from "@/src/components/m3/M3Snackbar";
@@ -659,7 +662,15 @@ export function TranslationPickerSheet({
       .filter((item): item is TranslationPickerItem => item != null);
   }, [translationPickerItems, favoriteTranslationIds]);
   const ui = colors;
+  const { width: screenW, height: windowH } = useWindowDimensions();
   const isAndroidSheet = Platform.OS === "android";
+  const isTablet = isTabletLayout(screenW, windowH);
+  const pickerMaxW = readerPickerSheetMaxWidthPx(screenW, isTablet);
+  const sheetOuterW = isAndroidSheet
+    ? pickerMaxW
+    : Math.min(pickerMaxW, screenW - (insets.left + 5) - (insets.right + 5));
+  const sheetLeftPx =
+    isAndroidSheet || isTablet ? (screenW - sheetOuterW) / 2 : insets.left + 5;
   const m3SheetBottomPad = nativeTabSheetBottomInsetPx(insets.bottom, 0);
   const m3SheetMaxHeight = Math.min(screenHeight * 0.92, screenHeight - insets.top - 48);
 
@@ -1426,17 +1437,24 @@ export function TranslationPickerSheet({
           accessibilityLabel="Dismiss translation picker"
         />
         {isAndroidSheet ? (
-          <View pointerEvents="box-none" style={{ flex: 1, justifyContent: sheetKeyboardMode ? "flex-start" : "flex-end" }}>
+          <View
+            pointerEvents="box-none"
+            style={{
+              flex: 1,
+              justifyContent: sheetKeyboardMode ? "flex-start" : "flex-end",
+              alignItems: "center",
+            }}
+          >
             <Animated.View
               pointerEvents="box-none"
               style={{
-                width: "100%",
+                width: sheetOuterW,
                 ...(sheetKeyboardMode
                   ? {
                       position: "absolute",
                       top: sheetKeyboardTopPx,
-                      left: 0,
-                      right: 0,
+                      left: sheetLeftPx,
+                      width: sheetOuterW,
                       bottom: sheetKeyboardBottomPx,
                     }
                   : showResults
@@ -1475,14 +1493,14 @@ export function TranslationPickerSheet({
               ...(sheetKeyboardMode || showResults
                 ? {
                     top: sheetKeyboardMode ? sheetKeyboardTopPx : insets.top + 8,
-                    left: insets.left + 5,
-                    right: insets.right + 5,
+                    left: sheetLeftPx,
+                    width: sheetOuterW,
                     bottom: sheetKeyboardMode ? sheetKeyboardBottomPx : insets.bottom + 10,
                   }
                 : {
                     top: sheetTopPx,
-                    left: insets.left + 5,
-                    right: insets.right + 5,
+                    left: sheetLeftPx,
+                    width: sheetOuterW,
                     maxHeight: translationSheetViewportMaxH,
                   }),
               opacity: dropOpacityAnim,
@@ -1528,11 +1546,11 @@ export function TranslationPickerSheet({
               accessibilityLabel="Dismiss language filters"
             />
             {isAndroidSheet ? (
-              <View pointerEvents="box-none" style={{ flex: 1, justifyContent: "flex-end" }}>
+              <View pointerEvents="box-none" style={{ flex: 1, justifyContent: "flex-end", alignItems: "center" }}>
                 <Animated.View
                   pointerEvents="box-none"
                   style={{
-                    width: "100%",
+                    width: sheetOuterW,
                     maxHeight: Math.min(langSheetMaxHeight, screenHeight * 0.75),
                     backgroundColor: rc.sceneSurface,
                     borderTopLeftRadius: M3_SHEET_TOP_RADIUS_PX,
@@ -1557,8 +1575,8 @@ export function TranslationPickerSheet({
                 <Animated.View
                   style={{
                     position: "absolute",
-                    left: insets.left + 5,
-                    right: insets.right + 5,
+                    left: sheetLeftPx,
+                    width: sheetOuterW,
                     top: langSheetTopPx,
                     maxHeight: langSheetMaxHeight,
                     backgroundColor: bundle.ui.parchment,

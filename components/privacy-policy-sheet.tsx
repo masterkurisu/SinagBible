@@ -16,6 +16,7 @@ import {
   READER_M3_SETTINGS_SHEET_TITLE_FONT,
   READER_M3_SETTINGS_SHEET_TITLE_FONT_PX,
   READER_M3_SETTINGS_SHEET_TITLE_LINE_HEIGHT_PX,
+  READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 /**
@@ -142,7 +143,7 @@ export function PrivacyPolicySheet({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
-  const scale = isTabletReaderLayout ? 1.35 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
   const markdownStyles = useMemo(
     () => buildMarkdownStyles(scale, sheetChrome),
@@ -200,6 +201,7 @@ export function PrivacyPolicySheet({
       title="Privacy Policy"
       subtitle={prepared?.subtitle ? `Effective ${prepared.subtitle}` : undefined}
       accessibilityDismissLabel="Dismiss privacy policy"
+      widthVariant="reading"
       maxHeightRatio={0.9}
     >
       {loading && markdown === null ? (

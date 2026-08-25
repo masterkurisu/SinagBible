@@ -33,6 +33,7 @@ import {
   READER_M3_ERROR,
   READER_M3_ERROR_CONTAINER,
   READER_M3_LIST_TRAILING_ICON_PX,
+  READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type ReaderDataBackupSheetProps = {
@@ -169,7 +170,7 @@ export function ReaderDataBackupSheet({
 }: ReaderDataBackupSheetProps) {
   const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
   const rippleColor = bundle.chrome.androidRipple;
-  const scale = isTabletReaderLayout ? 1.35 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const useBottomSheet = !isTabletReaderLayout;
   const [step, setStep] = useState<SheetStep>("menu");
   const [busy, setBusy] = useState(false);

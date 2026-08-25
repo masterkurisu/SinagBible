@@ -22,6 +22,8 @@ import { readerThemeTileOnSwatchLabel } from "@/src/features/reader/readerThemeT
 import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
+  READER_OVERLAY_CONTENT_SCALE,
+  readerM3SheetMaxWidthPx,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type ReaderThemePickerSheetProps = {
@@ -48,9 +50,9 @@ export function ReaderThemePickerSheet({
   const primary = bundle.chrome.tabTint;
   const { width: screenW } = useWindowDimensions();
 
-  const scale = isTabletReaderLayout ? 1.35 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const useBottomSheet = !isTabletReaderLayout;
-  const sheetMaxW = useBottomSheet ? screenW : Math.min(420, screenW - 48);
+  const sheetMaxW = readerM3SheetMaxWidthPx(screenW, isTabletReaderLayout, "compact");
   const padH = 24 * scale;
   const rowGap = 24 * scale;
   const colGap = 16 * scale;

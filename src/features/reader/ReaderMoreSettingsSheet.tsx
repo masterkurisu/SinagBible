@@ -29,6 +29,7 @@ import {
   READER_M3_LIST_TRAILING_ICON_PX,
   READER_M3_SWITCH_TRACK_HEIGHT_PX,
   READER_M3_SWITCH_TRACK_WIDTH_PX,
+  READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type ReaderMoreSettingsSheetProps = {
@@ -141,7 +142,7 @@ export function ReaderMoreSettingsSheet({
   const [logsExportBusy, setLogsExportBusy] = useState(false);
   const [logsSnackbar, setLogsSnackbar] = useState<string | null>(null);
 
-  const scale = isTabletReaderLayout ? 1.35 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const useBottomSheet = !isTabletReaderLayout;
   const trailingIconSize = READER_M3_LIST_TRAILING_ICON_PX * scale;
   const switchScale = scale;

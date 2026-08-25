@@ -52,9 +52,11 @@ import { hapticLightImpact } from "@/lib/haptics";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { getReaderSheetChrome, useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
+import { isTabletLayout } from "@/lib/tablet-layout";
 import { ActionBarOnboardingOverlay } from "@/src/features/reader/ActionBarOnboardingOverlay";
 import {
   READER_M3_APP_BAR_ICON_BUTTON_PX,
+  readerPickerSheetMaxWidthPx,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useBookPickerOnboarding } from "@/src/features/reader/useBookPickerOnboarding";
 import { pickerFlashListPerfProps } from "@/src/features/reader/pickerFlashListChrome";
@@ -342,11 +344,25 @@ export function BookPickerSheet({
 
   const { width: screenW, height: screenH } = useWindowDimensions();
   const isAndroidSheet = Platform.OS === "android";
+  const isTablet = isTabletLayout(screenW, screenH);
   const m3SheetPad = 24;
   const m3SheetBottomPad = nativeTabSheetBottomInsetPx(insets.bottom, 0);
-  const m3SheetHeight = Math.max(280, screenH - M3_SHEET_TOP_GAP_PX);
+  const m3SheetHeight = Math.max(
+    280,
+    isTablet ? Math.min(screenH - M3_SHEET_TOP_GAP_PX, screenH * 0.88) : screenH - M3_SHEET_TOP_GAP_PX,
+  );
+  const pickerMaxW = readerPickerSheetMaxWidthPx(screenW, isTablet);
+  const sheetOuterW = isAndroidSheet
+    ? pickerMaxW
+    : Math.min(
+        pickerMaxW,
+        screenW - (insets.left + readerBookSheetScreenEdgePad) - (insets.right + readerBookSheetScreenEdgePad),
+      );
   const sheetHorizontalPad = isAndroidSheet ? m3SheetPad : readerBookSheetPad;
-  const sheetScreenEdgePad = isAndroidSheet ? 0 : readerBookSheetScreenEdgePad;
+  const sheetLeftPx =
+    isAndroidSheet || isTablet
+      ? (screenW - sheetOuterW) / 2
+      : insets.left + readerBookSheetScreenEdgePad;
 
   const bookPickerOnboarding = useBookPickerOnboarding({
     isOpen,
@@ -410,10 +426,7 @@ export function BookPickerSheet({
   }, [isAndroidSheet]);
 
   const bookGridColumns = BOOK_PICKER_GRID_COLUMNS;
-  const bookSheetInnerW = Math.max(
-    240,
-    screenW - sheetScreenEdgePad * 2 - sheetHorizontalPad * 2,
-  );
+  const bookSheetInnerW = Math.max(240, sheetOuterW - sheetHorizontalPad * 2);
   const readerBookGridCellWResolved = Math.max(
     72,
     Math.min(
@@ -1312,21 +1325,25 @@ export function BookPickerSheet({
       )}
       <View
         pointerEvents="box-none"
-        style={isAndroidSheet ? { flex: 1, justifyContent: "flex-end" } : StyleSheet.absoluteFill}
+        style={
+          isAndroidSheet
+            ? { flex: 1, justifyContent: "flex-end", alignItems: "center" }
+            : StyleSheet.absoluteFill
+        }
       >
         <Animated.View
           pointerEvents="box-none"
           style={
             isAndroidSheet
               ? {
-                  width: "100%",
+                  width: sheetOuterW,
                   maxHeight: m3SheetHeight,
                   transform: [{ translateY: bookSheetTranslateY }],
                 }
               : {
                   position: "absolute",
-                  left: insets.left + readerBookSheetScreenEdgePad,
-                  right: insets.right + readerBookSheetScreenEdgePad,
+                  left: sheetLeftPx,
+                  width: sheetOuterW,
                   top: insets.top + 8,
                   bottom: readerBookSheetBottomPx,
                   transform: [{ translateY: bookSheetTranslateY }],

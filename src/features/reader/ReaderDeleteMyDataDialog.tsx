@@ -38,6 +38,7 @@ import {
   READER_M3_SECONDARY_CONTAINER,
   READER_M3_SHEET_TITLE_FONT_PX,
   READER_M3_SHEET_TITLE_LINE_HEIGHT_PX,
+  READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 type DeleteDialogStep = "backup-reminder" | "confirm";
@@ -58,7 +59,7 @@ export function ReaderDeleteMyDataDialog({
   onOpenBackup,
   onConfirmDelete,
   bundle,
-  isTabletReaderLayout = false,
+  isTabletReaderLayout: _isTabletReaderLayout = false,
 }: ReaderDeleteMyDataDialogProps) {
   const rc = bundle.reader;
   const { width: screenW } = useWindowDimensions();
@@ -68,7 +69,7 @@ export function ReaderDeleteMyDataDialog({
   const scaleAnim = useRef(new Animated.Value(0.92)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
-  const scale = isTabletReaderLayout ? 1.15 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const dialogMaxW = Math.min(400, screenW - 48);
   const pad = 24 * scale;
 

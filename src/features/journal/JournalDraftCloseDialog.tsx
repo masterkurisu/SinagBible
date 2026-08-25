@@ -22,6 +22,7 @@ import {
   READER_M3_ON_SURFACE_VARIANT,
   READER_M3_SHEET_TITLE_FONT_PX,
   READER_M3_SHEET_TITLE_LINE_HEIGHT_PX,
+  READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type JournalDraftCloseDialogProps = {
@@ -44,7 +45,7 @@ export function JournalDraftCloseDialog({
   bundle,
   title = "Save or discard?",
   message = "You have unsaved text in this draft.",
-  isTabletLayout = false,
+  isTabletLayout: _isTabletLayout = false,
 }: JournalDraftCloseDialogProps) {
   const j = bundle.journal;
   const rc = bundle.reader;
@@ -53,7 +54,7 @@ export function JournalDraftCloseDialog({
   const scaleAnim = useRef(new Animated.Value(0.92)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
-  const scale = isTabletLayout ? 1.15 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const dialogMaxW = Math.min(400, screenW - 48);
   const pad = 24 * scale;
 

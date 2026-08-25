@@ -13,6 +13,7 @@ import { M3OutlinedTextField } from "@/src/components/m3/M3OutlinedTextField";
 import {
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
+  READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import {
   searchVerseTagSuggestions,
@@ -41,7 +42,7 @@ export function VerseTagMentionSheet({
   onPick,
 }: VerseTagMentionSheetProps) {
   const rc = bundle.reader;
-  const scale = isTabletReaderLayout ? 1.15 : 1;
+  const scale = READER_OVERLAY_CONTENT_SCALE;
   const [query, setQuery] = useState(initialQuery);
   const [suggestions, setSuggestions] = useState<VerseTagSuggestion[]>([]);
   const [pending, setPending] = useState(false);
