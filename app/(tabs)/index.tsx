@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Platform, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
@@ -51,29 +51,31 @@ export default function HomeScreen() {
   }, [router]);
 
   return (
-    <View
-      className="flex-1"
-      style={{
-        backgroundColor: h.pageBackground,
-        paddingBottom: bottomPad + androidHomeBottomCompensation,
-      }}
-    >
-      <View
-        className="w-full max-w-[680px] self-center"
-        style={{ paddingHorizontal: HOME_M3_HORIZONTAL_PADDING_PX }}
+    <View className="flex-1" style={{ backgroundColor: h.pageBackground }}>
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingBottom: bottomPad + androidHomeBottomCompensation,
+        }}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={{ paddingTop: Math.max(20, insets.top) }}>
-          <HomeM3HeroSection
-            bundle={bundle}
-            onReadScripture={openReader}
-            onWriteJournal={() => navigateWithHaptic("/journal")}
-          />
-        </View>
+        <View
+          className="w-full max-w-[680px] self-center"
+          style={{ paddingHorizontal: HOME_M3_HORIZONTAL_PADDING_PX }}
+        >
+          <View style={{ paddingTop: Math.max(10, insets.top) }}>
+            <HomeM3HeroSection
+              bundle={bundle}
+              onReadScripture={openReader}
+              onWriteJournal={() => navigateWithHaptic("/journal")}
+            />
+          </View>
 
-        <View style={{ marginTop: HOME_M3_VERSE_CARD_TOP_GAP_PX }}>
-          <HomeM3DailyVerseCard bundle={bundle} />
+          <View style={{ marginTop: HOME_M3_VERSE_CARD_TOP_GAP_PX }}>
+            <HomeM3DailyVerseCard bundle={bundle} />
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
