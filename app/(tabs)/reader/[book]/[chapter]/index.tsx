@@ -1800,6 +1800,12 @@ export default function ReaderChapterScreen() {
         translationLoadingAccentColor={colors.gold}
         yvpFootnotes={chapter.yvpFootnotes}
         onYvpFootnotePress={handleYvpFootnotePress}
+        androidHideVerseList={Platform.OS === "android" && readerDropdown === "book"}
+        androidRestoreScrollY={
+          Platform.OS === "android" && readerDropdown === "book"
+            ? Math.max(latestScrollMetricsRef.current.y, readerScrollY.value)
+            : 0
+        }
       />
 
       </Animated.View>

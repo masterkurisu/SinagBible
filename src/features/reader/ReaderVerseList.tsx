@@ -1,5 +1,5 @@
-import { useCallback, useMemo, type ComponentProps, type ReactNode, type RefObject } from "react";
-import { Animated, Pressable, StyleSheet, type GestureResponderHandlers, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, type ComponentProps, type ReactNode, type RefObject } from "react";
+import { Animated, Pressable, StyleSheet, View, type GestureResponderHandlers, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import type { FlashListRef, ListRenderItemInfo } from "@shopify/flash-list";
 import {
   READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX,
@@ -110,6 +110,13 @@ type ReaderVerseListProps = {
   onListLayoutHeight?: (height: number) => void;
   /** Chapter cross-fade — applied on the list shell, not per verse row. */
   readerVersesOpacityAnim?: Animated.Value;
+  /**
+   * Android FlashList cells paint above a transparent Modal. Unmount the list
+   * while the book selector is open so verse text cannot show through the sheet.
+   */
+  androidHideVerseList?: boolean;
+  /** Scroll Y to restore after `androidHideVerseList` turns off. */
+  androidRestoreScrollY?: number;
 };
 
 export function ReaderVerseList({
@@ -137,7 +144,32 @@ export function ReaderVerseList({
   onListContentSizeChange,
   onListLayoutHeight,
   readerVersesOpacityAnim,
+  androidHideVerseList = false,
+  androidRestoreScrollY = 0,
 }: ReaderVerseListProps) {
+  const pendingRestoreYRef = useRef<number | null>(null);
+  const wasHiddenRef = useRef(false);
+
+  useEffect(() => {
+    if (androidHideVerseList) {
+      wasHiddenRef.current = true;
+      pendingRestoreYRef.current = androidRestoreScrollY;
+      return;
+    }
+    if (!wasHiddenRef.current) return;
+    wasHiddenRef.current = false;
+    const offset = pendingRestoreYRef.current ?? androidRestoreScrollY;
+    if (offset <= 0) {
+      pendingRestoreYRef.current = null;
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      readerScrollRef.current?.scrollToOffset({ offset, animated: false });
+      pendingRestoreYRef.current = null;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [androidHideVerseList, androidRestoreScrollY, readerScrollRef]);
+
   const readerVerseFlashGetItemType = useCallback(
     (item: ReaderVerseFlashItem) => {
       if (item.kind === "empty") return "empty";
@@ -238,6 +270,15 @@ export function ReaderVerseList({
       contentContainerStyle={flashListContentContainerStyle}
     />
   );
+
+  if (androidHideVerseList) {
+    return (
+      <View
+        style={[readerFlashListChromeStyles.list, { backgroundColor: rc.sceneSurface }]}
+        pointerEvents="none"
+      />
+    );
+  }
 
   if (readerVersesOpacityAnim == null) {
     return flashList;

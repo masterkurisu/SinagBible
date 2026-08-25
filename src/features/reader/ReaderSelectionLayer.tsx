@@ -652,6 +652,8 @@ export type ReaderSelectionLayerProps = {
   translationLoadingAccentColor?: string;
   yvpFootnotes?: Record<number, { label: string; body: string }>;
   onYvpFootnotePress?: (noteId: number) => void;
+  androidHideVerseList?: boolean;
+  androidRestoreScrollY?: number;
 };
 
 export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
@@ -714,6 +716,8 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   translationLoadingAccentColor,
   yvpFootnotes,
   onYvpFootnotePress,
+  androidHideVerseList = false,
+  androidRestoreScrollY = 0,
 }: ReaderSelectionLayerProps) {
   const actionBarOnboardingStudyNotesRef = useRef<View | null>(null);
   const actionBarOnboardingHighlightRef = useRef<View | null>(null);
@@ -1117,6 +1121,8 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           readerVersesOpacityAnim={readerVersesOpacityAnim}
           onListContentSizeChange={onListContentSizeChange}
           onListLayoutHeight={onListLayoutHeight}
+          androidHideVerseList={androidHideVerseList}
+          androidRestoreScrollY={androidRestoreScrollY}
         />
         <ReaderTranslationLoadingOverlay
           phase={translationLoadingPhase}

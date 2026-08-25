@@ -505,16 +505,38 @@ export function BookPickerSheet({
     (bookSheetInnerW - readerBookGridGap * (readerChapterCols - 1)) / readerChapterCols,
   );
 
-  const bookPickerListLayerStyle = useCallback(
-    (visible: boolean) => [
-      StyleSheet.absoluteFill,
-      {
-        paddingHorizontal: sheetHorizontalPad,
-        opacity: visible ? 1 : 0,
-        zIndex: visible ? 1 : 0,
-      },
-    ],
-    [sheetHorizontalPad],
+  const bookPickerListHostStyle = useMemo(
+    () => ({
+      flex: 1 as const,
+      backgroundColor: rc.sceneSurface,
+      overflow: "hidden" as const,
+      paddingHorizontal: sheetHorizontalPad,
+    }),
+    [rc.sceneSurface, sheetHorizontalPad],
+  );
+
+  const bookListStyle = useMemo(
+    () => ({
+      flex: 1 as const,
+      backgroundColor: rc.sceneSurface,
+      overflow: "hidden" as const,
+    }),
+    [rc.sceneSurface],
+  );
+  const bookListContentStyle = useMemo(
+    () => ({
+      paddingBottom: isAndroidSheet ? 16 : 24,
+      backgroundColor: rc.sceneSurface,
+    }),
+    [isAndroidSheet, rc.sceneSurface],
+  );
+  const bookPickerListPerfProps = useMemo(
+    () => ({
+      ...pickerFlashListPerfProps,
+      // Off-screen rows otherwise keep painting through the sheet on Android.
+      removeClippedSubviews: isAndroidSheet,
+    }),
+    [isAndroidSheet],
   );
 
   const sheetTitleColor = isAndroidSheet ? sheetChrome.onSurface : colors.brown800;
@@ -1177,6 +1199,18 @@ export function BookPickerSheet({
     return () => clearTimeout(timeout);
   }, [isOpen, step]);
 
+  const bookListViewKey = `${bookSelectorViewMode}:${selectorTestamentTab}`;
+  const prevBookListViewKeyRef = useRef(bookListViewKey);
+  useEffect(() => {
+    const viewChanged = prevBookListViewKeyRef.current !== bookListViewKey;
+    prevBookListViewKeyRef.current = bookListViewKey;
+    if (!isOpen || step !== "books" || !viewChanged) return;
+    const timeout = setTimeout(() => {
+      scrollBookListToCurrentBookRef.current();
+    }, 120);
+    return () => clearTimeout(timeout);
+  }, [bookListViewKey, isOpen, step]);
+
   useEffect(() => {
     if (!isOpen) return;
     setBookSheetDismissPanEnabled(true);
@@ -1268,7 +1302,6 @@ export function BookPickerSheet({
         backgroundColor: rc.sceneSurface,
         borderTopLeftRadius: M3_SHEET_TOP_RADIUS_PX,
         borderTopRightRadius: M3_SHEET_TOP_RADIUS_PX,
-        overflow: "hidden" as const,
         elevation: 10,
         shadowColor: rc.popoverShadow,
         shadowOffset: { width: 0, height: -4 },
@@ -1281,12 +1314,27 @@ export function BookPickerSheet({
         minHeight: 0,
         borderRadius: 20,
         backgroundColor: rc.sceneSurface,
-        overflow: "hidden" as const,
         shadowColor: rc.popoverShadow,
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.14,
         shadowRadius: 16,
         elevation: 10,
+      };
+  const sheetClipStyle = isAndroidSheet
+    ? {
+        flex: 1,
+        minHeight: 0,
+        overflow: "hidden" as const,
+        borderTopLeftRadius: M3_SHEET_TOP_RADIUS_PX,
+        borderTopRightRadius: M3_SHEET_TOP_RADIUS_PX,
+        backgroundColor: rc.sceneSurface,
+      }
+    : {
+        flex: 1,
+        minHeight: 0,
+        overflow: "hidden" as const,
+        borderRadius: 20,
+        backgroundColor: rc.sceneSurface,
       };
 
   if (!isOpen) return null;
@@ -1298,7 +1346,11 @@ export function BookPickerSheet({
     onRequestClose={() => animateClose(0, 0)}
   >
     <View
-      style={isAndroidSheet ? { flex: 1 } : [StyleSheet.absoluteFill, { zIndex: 9999, elevation: 32 }]}
+      style={
+        isAndroidSheet
+          ? { flex: 1, backgroundColor: rc.sceneSurface }
+          : [StyleSheet.absoluteFill, { zIndex: 9999, elevation: 32 }]
+      }
       pointerEvents={isOpen ? "box-none" : "none"}
       accessibilityViewIsModal={isOpen}
     >
@@ -1350,8 +1402,13 @@ export function BookPickerSheet({
                 }
           }
         >
-          <View style={sheetSurfaceStyle}>
-          <PanGestureHandler
+          <View style={sheetSurfaceStyle} collapsable={false}>
+            <View style={sheetClipStyle} collapsable={false}>
+              <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { backgroundColor: rc.sceneSurface }]}
+              />
+              <PanGestureHandler
             ref={bookSheetPanRef}
             enabled={Platform.OS === "android" ? true : bookSheetDismissPanEnabled}
             simultaneousHandlers={bookSheetScrollNativeRef}
@@ -1361,7 +1418,12 @@ export function BookPickerSheet({
             failOffsetX={[-32, 32]}
           >
             <View
-              style={{ flex: 1, minHeight: 0, paddingTop: isAndroidSheet ? 0 : 6 }}
+              style={{
+                flex: 1,
+                minHeight: 0,
+                paddingTop: isAndroidSheet ? 0 : 6,
+                backgroundColor: rc.sceneSurface,
+              }}
               accessibilityLabel="Book picker sheet"
               accessibilityHint="Swipe down to return to the reader without changing book or chapter"
             >
@@ -1373,6 +1435,7 @@ export function BookPickerSheet({
                   paddingTop: isAndroidSheet ? 12 : 4,
                   paddingBottom: isAndroidSheet ? 4 : 10,
                   minHeight: 44,
+                  backgroundColor: rc.sceneSurface,
                 }}
               >
                 <View
@@ -1396,7 +1459,7 @@ export function BookPickerSheet({
               </View>
       {step === "books" ? (
         <>
-          <View style={{ paddingHorizontal: sheetHorizontalPad, paddingTop: 0, paddingBottom: 6 }}>
+          <View style={{ paddingHorizontal: sheetHorizontalPad, paddingTop: 0, paddingBottom: 6, backgroundColor: rc.sceneSurface }}>
             <View style={{ minHeight: isAndroidSheet ? 56 : 48, justifyContent: "center", zIndex: 1 }}>
               <View
                 ref={bookViewFilterButtonRef}
@@ -1448,11 +1511,8 @@ export function BookPickerSheet({
             ref={bookSheetScrollNativeRef}
             simultaneousHandlers={bookSheetPanRef}
           >
-            <View style={{ flex: 1, position: "relative" }}>
-              <View
-                style={bookPickerListLayerStyle(isBookGridView)}
-                pointerEvents={isBookGridView ? "auto" : "none"}
-              >
+            <View style={bookPickerListHostStyle} collapsable={false}>
+              {isBookGridView ? (
                 <FlashList
                   ref={bookGridFlashListRef}
                   data={bookGridFlashData}
@@ -1460,77 +1520,68 @@ export function BookPickerSheet({
                   keyExtractor={bookGridKeyExtractor}
                   getItemType={bookGridItemType}
                   extraData={bookListFlashExtraData}
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
+                  style={bookListStyle}
+                  contentContainerStyle={bookListContentStyle}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled={Platform.OS === "android"}
                   onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
-                  {...pickerFlashListPerfProps}
+                  {...bookPickerListPerfProps}
                 />
-              </View>
-              <View
-                style={bookPickerListLayerStyle(isBookAzView)}
-                pointerEvents={isBookAzView ? "auto" : "none"}
-              >
+              ) : null}
+              {isBookAzView ? (
                 <FlashList
                   ref={bookAzFlashListRef}
                   data={bookAzListFlashData}
                   renderItem={renderBookAzRow}
                   keyExtractor={bookRowKeyExtractor}
                   extraData={bookListFlashExtraData}
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
+                  style={bookListStyle}
+                  contentContainerStyle={bookListContentStyle}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled={Platform.OS === "android"}
                   onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
-                  {...pickerFlashListPerfProps}
+                  {...bookPickerListPerfProps}
                 />
-              </View>
-              <View
-                style={bookPickerListLayerStyle(isBookOldTestamentView)}
-                pointerEvents={isBookOldTestamentView ? "auto" : "none"}
-              >
+              ) : null}
+              {isBookOldTestamentView ? (
                 <FlashList
                   ref={bookOldTestamentFlashListRef}
                   data={bookOldTestamentListFlashData}
                   renderItem={renderBookTestamentRow}
                   keyExtractor={bookRowKeyExtractor}
                   extraData={bookListFlashExtraData}
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
+                  style={bookListStyle}
+                  contentContainerStyle={bookListContentStyle}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled={Platform.OS === "android"}
                   onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
-                  {...pickerFlashListPerfProps}
+                  {...bookPickerListPerfProps}
                 />
-              </View>
-              <View
-                style={bookPickerListLayerStyle(isBookNewTestamentView)}
-                pointerEvents={isBookNewTestamentView ? "auto" : "none"}
-              >
+              ) : null}
+              {isBookNewTestamentView ? (
                 <FlashList
                   ref={bookNewTestamentFlashListRef}
                   data={bookNewTestamentListFlashData}
                   renderItem={renderBookTestamentRow}
                   keyExtractor={bookRowKeyExtractor}
                   extraData={bookListFlashExtraData}
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ paddingBottom: isAndroidSheet ? 16 : 24 }}
+                  style={bookListStyle}
+                  contentContainerStyle={bookListContentStyle}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled={Platform.OS === "android"}
                   onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
-                  {...pickerFlashListPerfProps}
+                  {...bookPickerListPerfProps}
                 />
-              </View>
+              ) : null}
             </View>
           </NativeViewGestureHandler>
         </>
       ) : pickerBook ? (
-        <View style={{ flex: 1, paddingHorizontal: sheetHorizontalPad }}>
+        <View style={{ flex: 1, paddingHorizontal: sheetHorizontalPad, backgroundColor: rc.sceneSurface }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: isAndroidSheet ? 12 : 16 }}>
             <TouchableOpacity
               onPress={() => {
@@ -1586,13 +1637,13 @@ export function BookPickerSheet({
               renderItem={renderChapterGridRow}
               keyExtractor={chapterGridKeyExtractor}
               extraData={chapterListFlashExtraData}
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: 20 }}
+              style={bookListStyle}
+              contentContainerStyle={{ paddingBottom: 20, backgroundColor: rc.sceneSurface }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled={Platform.OS === "android"}
               onScroll={(ev) => onBookSheetScroll(ev.nativeEvent.contentOffset.y)}
-              {...pickerFlashListPerfProps}
+              {...bookPickerListPerfProps}
             />
           </NativeViewGestureHandler>
         </View>
@@ -1718,6 +1769,7 @@ export function BookPickerSheet({
         </View>
       </View>
     ) : null}
+          </View>
           </View>
         </Animated.View>
       </View>
