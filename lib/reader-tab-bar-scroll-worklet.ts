@@ -5,7 +5,8 @@ export const TAB_BAR_TOP_EDGE_PX = 16;
 export const TAB_BAR_BOTTOM_EDGE_PX = 48;
 /**
  * Extra slack before hiding again after reaching the chapter end.
- * Covers list padding animation + native tab bar show/hide viewport resize.
+ * Keep this modest — flicker from native-tab hide resizing the list is
+ * prevented by ignoring layout-driven "at bottom" samples, not by a large gap.
  */
 export const TAB_BAR_BOTTOM_UNPIN_SCROLL_UP_PX = 96;
 
@@ -41,6 +42,7 @@ export function updateTabBarSlideProgress(
   viewportHeight: number,
   bottomPinned: SharedValue<boolean>,
   dragAccum: SharedValue<number>,
+  prevMaxScrollY: SharedValue<number>,
 ): number {
   "worklet";
   if (viewportHeight <= 0) {
@@ -48,26 +50,37 @@ export function updateTabBarSlideProgress(
     return 0;
   }
 
-  const prev = prevY.value < 0 ? y : prevY.value;
+  const isFirstSample = prevY.value < 0;
+  const prev = isFirstSample ? y : prevY.value;
   const dy = y - prev;
   prevY.value = y;
 
   const maxScrollY = Math.max(0, contentHeight - viewportHeight);
+  const prevMax = prevMaxScrollY.value;
+  const maxScrollYShrunk = prevMax >= 0 && maxScrollY < prevMax - 1;
+  prevMaxScrollY.value = maxScrollY;
+
   const atTop = y <= TAB_BAR_TOP_EDGE_PX;
-  const nearBottom =
+  const atBottomEdge =
     maxScrollY <= TAB_BAR_BOTTOM_EDGE_PX || y >= maxScrollY - TAB_BAR_BOTTOM_EDGE_PX;
 
-  if (atTop || nearBottom) {
-    bottomPinned.value = nearBottom;
+  if (atTop) {
+    bottomPinned.value = false;
+    dragAccum.value = 0;
+    return 0;
+  }
+
+  // Show at the chapter end only for a real downward approach (or while already
+  // pinned). Hiding the native tab bar grows the list viewport, which shrinks
+  // maxScrollY and can clamp y — that must not count as "scrolled to the end".
+  if (atBottomEdge && !maxScrollYShrunk && (bottomPinned.value || dy > 0 || isFirstSample)) {
+    bottomPinned.value = true;
     dragAccum.value = 0;
     return 0;
   }
 
   if (bottomPinned.value) {
     if (y < maxScrollY - TAB_BAR_BOTTOM_UNPIN_SCROLL_UP_PX) {
-      // Scrolled decisively away from the bottom edge — resume hidden immediately rather
-      // than waiting for a fresh downward scroll. Mirrors leaving the top dead zone, where
-      // departing the edge (there, via downward scroll) is itself what resumes hiding.
       bottomPinned.value = false;
       dragAccum.value = TAB_BAR_SLIDE_DRAG_PX;
       return 1;
@@ -76,7 +89,8 @@ export function updateTabBarSlideProgress(
     return 0;
   }
 
-  const clampedDy = Math.abs(dy) > MAX_PLAUSIBLE_FRAME_DELTA_PX ? 0 : dy;
+  const clampedDy =
+    maxScrollYShrunk || Math.abs(dy) > MAX_PLAUSIBLE_FRAME_DELTA_PX ? 0 : dy;
   if (clampedDy > 0) {
     dragAccum.value = Math.min(TAB_BAR_SLIDE_DRAG_PX, dragAccum.value + clampedDy);
   }

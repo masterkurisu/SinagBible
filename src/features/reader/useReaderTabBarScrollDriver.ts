@@ -9,6 +9,7 @@ function snapTabBarSlideToVisible(
   tabBarSlideProgressSV: SharedValue<number>,
   dragAccumSV: SharedValue<number>,
   prevYSV: SharedValue<number>,
+  prevMaxScrollYSV: SharedValue<number>,
   bottomPinnedSV: SharedValue<boolean>,
   hideIntentSV: SharedValue<boolean>,
   restStateSV: SharedValue<number>,
@@ -16,6 +17,7 @@ function snapTabBarSlideToVisible(
   "worklet";
   dragAccumSV.value = 0;
   prevYSV.value = -1;
+  prevMaxScrollYSV.value = -1;
   bottomPinnedSV.value = false;
   hideIntentSV.value = false;
   restStateSV.value = -1;
@@ -52,6 +54,7 @@ export function useReaderTabBarScrollDriver({
   /** Accumulated finger-travel since the last direction reversal — drives slide progress directly. */
   const dragAccumSV = useSharedValue(0);
   const prevYSV = useSharedValue(-1);
+  const prevMaxScrollYSV = useSharedValue(-1);
   /** Current committed direction — mirrors which side (native shown/hidden) is authoritative right now. */
   const hideIntentSV = useSharedValue(false);
   /** -1 = resting shown, 1 = resting hidden, 0 = mid-drag. Gates one-shot begin/complete calls. */
@@ -70,6 +73,7 @@ export function useReaderTabBarScrollDriver({
       tabBarSlideProgressSV,
       dragAccumSV,
       prevYSV,
+      prevMaxScrollYSV,
       bottomPinnedSV,
       hideIntentSV,
       restStateSV,
@@ -80,6 +84,7 @@ export function useReaderTabBarScrollDriver({
     bottomPinnedSV,
     dragAccumSV,
     hideIntentSV,
+    prevMaxScrollYSV,
     prevYSV,
     restStateSV,
     snapScrollHidden,
@@ -92,6 +97,7 @@ export function useReaderTabBarScrollDriver({
       tabBarSlideProgressSV,
       dragAccumSV,
       prevYSV,
+      prevMaxScrollYSV,
       bottomPinnedSV,
       hideIntentSV,
       restStateSV,
@@ -104,6 +110,7 @@ export function useReaderTabBarScrollDriver({
     contentHeightSV,
     dragAccumSV,
     hideIntentSV,
+    prevMaxScrollYSV,
     prevYSV,
     readerScrollY,
     restStateSV,
@@ -122,6 +129,7 @@ export function useReaderTabBarScrollDriver({
         viewportHeightSV.value,
         bottomPinnedSV,
         dragAccumSV,
+        prevMaxScrollYSV,
       );
     },
     (progress) => {
@@ -150,7 +158,17 @@ export function useReaderTabBarScrollDriver({
         restStateSV.value = 0;
       }
     },
-    [readerScrollY, contentHeightSV, viewportHeightSV, bottomPinnedSV, enabledSV, forceVisibleSV],
+    [
+      readerScrollY,
+      contentHeightSV,
+      viewportHeightSV,
+      bottomPinnedSV,
+      dragAccumSV,
+      prevYSV,
+      prevMaxScrollYSV,
+      enabledSV,
+      forceVisibleSV,
+    ],
   );
 
   useEffect(() => {
