@@ -1,6 +1,11 @@
 import { StyleSheet, View } from "react-native";
 import { usePathname } from "expo-router";
-import Reanimated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
+import Reanimated, {
+  Easing,
+  useAnimatedStyle,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Platform } from "react-native";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
@@ -9,6 +14,9 @@ import { mixHexColors } from "@/lib/mix-hex-color";
 import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
 import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
 import { androidBottomNavChromeHideSlidePx } from "@/src/features/search/tabBarSearchFabChrome";
+
+/** Short smoothing tween chasing the raw scroll-driven fade target — see `fadeAnimatedStyle`. */
+const TAB_BAR_FADE_SMOOTHING_MS = 120;
 
 /** True when the active reader tab is showing a chapter (not the redirect index). */
 function isReaderChapterRoute(pathname: string | null): boolean {
@@ -31,8 +39,10 @@ type ReaderBottomNavSlideChromeProps = {
 };
 
 /**
- * Android reader: one translateY on a full-height bottom chrome panel + FAB.
- * The panel spans the FAB and nav strip so nothing visually leads during the slide.
+ * Android reader: opacity cross-fade on a full-height bottom chrome panel + FAB.
+ * Same execution as the header title's scroll-driven fade — `tabBarSlideProgressSV`
+ * is a plain 0–1 value assigned directly every frame (no timing curve), so the panel
+ * tracks the scroll gesture 1:1 instead of sliding on its own animation clock.
  */
 export function ReaderBottomNavSlideChrome({
   tabBarSlideProgressSV,
@@ -58,25 +68,37 @@ export function ReaderBottomNavSlideChrome({
     settingsTabBarTint,
   );
 
-  const slideAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: tabBarSlideProgressSV.value * slideChromeHeight }],
+  const fadeAnimatedStyle = useAnimatedStyle(() => ({
+    // Chase the raw scroll-driven target with a short tween instead of snapping to it
+    // every scroll sample. Scroll events land at a fixed sampling rate regardless of
+    // display refresh, so this lets Reanimated fill in the gaps with real interpolated
+    // frames — the higher the panel's refresh rate (90/120Hz), the more of those extra
+    // frames get rendered, making the cross-fade read as smoother rather than faster.
+    opacity: withTiming(1 - tabBarSlideProgressSV.value, {
+      duration: TAB_BAR_FADE_SMOOTHING_MS,
+      easing: Easing.out(Easing.quad),
+    }),
   }));
 
   if (!onReaderChapter) return null;
 
-  /** Full panel while native is hidden — one rigid block slides with the FAB. */
+  /** Full panel while native is hidden — one rigid block fades with the FAB. */
   const showSlidePanel = nativeTabBarHidden || slideOverlayActive;
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       <Reanimated.View
         pointerEvents="box-none"
+        // Android: without this, animating opacity on a view whose own/child elevation shadow
+        // is composited separately renders the shadow as a faceted octagon mid-fade instead of
+        // a smooth circle — https://github.com/facebook/react-native/issues/23090
+        needsOffscreenAlphaCompositing={Platform.OS === "android"}
         style={[
           styles.slideHost,
           {
             height: slideChromeHeight,
           },
-          slideAnimatedStyle,
+          fadeAnimatedStyle,
         ]}
       >
         {showSlidePanel ? (
