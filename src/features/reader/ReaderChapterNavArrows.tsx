@@ -3,28 +3,29 @@ import {
   Animated,
   Easing,
   Platform,
-  Pressable,
   StyleSheet,
   View,
   useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
+import { Pressable } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { hapticLightImpact } from "@/lib/haptics";
+import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 
-/** Tap target diameter (36px radius). */
-export const READER_CHAPTER_NAV_ARROW_CIRCLE_PX = 72;
-/** Chevron glyph size inside the circle. */
-export const READER_CHAPTER_NAV_ARROW_ICON_PX = 36;
+/** Same diameter as the back-to-top control. */
+export const READER_CHAPTER_NAV_ARROW_CIRCLE_PX = 59;
+/** Same glyph size as the back-to-top control. */
+export const READER_CHAPTER_NAV_ARROW_ICON_PX = 29;
 /** Distance from the left screen edge. */
-export const READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX = 20;
+export const READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX = 12;
 /** Distance from the right screen edge (next arrow only). */
-export const READER_CHAPTER_NAV_ARROW_RIGHT_EDGE_INSET_PX = 0;
+export const READER_CHAPTER_NAV_ARROW_RIGHT_EDGE_INSET_PX = 12;
 /** Extra pressable slop beyond the circle edge. */
 export const READER_CHAPTER_NAV_ARROW_HIT_SLOP_PX = 8;
-/** Opacity when arrows are visible (before idle fade-out). */
-export const READER_CHAPTER_NAV_ARROW_VISIBLE_OPACITY = 0.7;
+/** Opacity when arrows are visible (before idle fade-out). Matches back-to-top. */
+export const READER_CHAPTER_NAV_ARROW_VISIBLE_OPACITY = 0.9;
 /** Scale when arrows are visible. */
 export const READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE = 1;
 /** Scale while fading out. */
@@ -48,16 +49,79 @@ type ReaderChapterNavArrowsProps = {
   nextChapter: ChapterNavTarget | null;
   onPrev: () => void;
   onNext: () => void;
-  colors: { brown800: string };
-  rc: { sceneSurface: string; popoverShadow: string };
   prevArrowRef?: RefObject<View | null>;
   nextArrowRef?: RefObject<View | null>;
 };
 
-function chapterNavArrowCircleBackground(rc: { sceneSurface: string }) {
-  // Android: theme surface (light/white in default theme) like book selector pill.
-  // iOS: same scene-surface pill as the centered header title chip.
-  return rc.sceneSurface;
+type ChapterNavArrowButtonProps = {
+  direction: "prev" | "next";
+  onPress: () => void;
+  accessibilityLabel: string;
+  arrowRef?: RefObject<View | null>;
+  containerColor: string;
+  iconColor: string;
+  rippleColor: string;
+  shadowColor: string;
+};
+
+function ChapterNavArrowButton({
+  direction,
+  onPress,
+  accessibilityLabel,
+  arrowRef,
+  containerColor,
+  iconColor,
+  rippleColor,
+  shadowColor,
+}: ChapterNavArrowButtonProps) {
+  const size = READER_CHAPTER_NAV_ARROW_CIRCLE_PX;
+  const circleChromeStyle = {
+    backgroundColor: containerColor,
+    ...Platform.select({
+      ios: {
+        shadowColor,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.14,
+        shadowRadius: 6,
+      },
+      android: {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: "rgba(0,0,0,0.08)",
+      },
+      default: {},
+    }),
+  };
+
+  return (
+    <View ref={arrowRef} collapsable={false} style={styles.circle}>
+      <Pressable
+        onPress={() => {
+          hapticLightImpact();
+          onPress();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        hitSlop={{
+          top: READER_CHAPTER_NAV_ARROW_HIT_SLOP_PX,
+          bottom: READER_CHAPTER_NAV_ARROW_HIT_SLOP_PX,
+          left: READER_CHAPTER_NAV_ARROW_HIT_SLOP_PX,
+          right: READER_CHAPTER_NAV_ARROW_HIT_SLOP_PX,
+        }}
+        android_ripple={{ color: rippleColor, borderless: false, radius: size / 2 }}
+        style={({ pressed }) => [
+          styles.circlePressable,
+          circleChromeStyle,
+          { opacity: pressed ? 0.82 : 1 },
+        ]}
+      >
+        <Ionicons
+          name={direction === "prev" ? "chevron-back" : "chevron-forward"}
+          size={READER_CHAPTER_NAV_ARROW_ICON_PX}
+          color={iconColor}
+        />
+      </Pressable>
+    </View>
+  );
 }
 
 function chapterNavArrowScreenInsets(
@@ -92,16 +156,17 @@ export function ReaderChapterNavArrows({
   nextChapter,
   onPrev,
   onNext,
-  colors,
-  rc,
   prevArrowRef,
   nextArrowRef,
 }: ReaderChapterNavArrowsProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const overlayRef = useRef<View>(null);
   const [overlayFrame, setOverlayFrame] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const circleBg = chapterNavArrowCircleBackground(rc);
-  const hitSlop = READER_CHAPTER_NAV_ARROW_HIT_SLOP_PX;
+  const { bundle } = useMobileAppTheme();
+  const containerColor = bundle.reader.popoverSurface;
+  const iconColor = bundle.ui.brown800;
+  const rippleColor = bundle.journal.fabRipple;
+  const shadowColor = bundle.reader.popoverShadow;
   const leftInset = READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX;
   const rightInset = READER_CHAPTER_NAV_ARROW_RIGHT_EDGE_INSET_PX;
   const circlePx = READER_CHAPTER_NAV_ARROW_CIRCLE_PX;
@@ -149,41 +214,16 @@ export function ReaderChapterNavArrows({
     accessibilityLabel: string,
     arrowRef?: RefObject<View | null>,
   ) => (
-    <View ref={arrowRef} collapsable={false} style={styles.circle}>
-      <Pressable
-        onPress={() => {
-          hapticLightImpact();
-          onPress();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        hitSlop={{ top: hitSlop, bottom: hitSlop, left: hitSlop, right: hitSlop }}
-        style={({ pressed }) => [
-          styles.circlePressable,
-          {
-            backgroundColor: circleBg,
-            opacity: pressed ? 0.82 : 1,
-            ...Platform.select({
-              ios: {
-                shadowColor: rc.popoverShadow,
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.14,
-                shadowRadius: 6,
-              },
-              android: { elevation: 3 },
-              default: {},
-            }),
-          },
-        ]}
-      >
-        <Ionicons
-          name={direction === "prev" ? "chevron-back" : "chevron-forward"}
-          size={READER_CHAPTER_NAV_ARROW_ICON_PX}
-          color={colors.brown800}
-          style={direction === "next" ? styles.nextChevronIcon : undefined}
-        />
-      </Pressable>
-    </View>
+    <ChapterNavArrowButton
+      direction={direction}
+      onPress={onPress}
+      accessibilityLabel={accessibilityLabel}
+      arrowRef={arrowRef}
+      containerColor={containerColor}
+      iconColor={iconColor}
+      rippleColor={rippleColor}
+      shadowColor={shadowColor}
+    />
   );
 
   return (
@@ -222,13 +262,11 @@ const styles = StyleSheet.create({
   sideSlot: {
     position: "absolute",
   },
-  nextChevronIcon: {
-    transform: [{ translateX: 8 }],
-  },
   circle: {
     width: READER_CHAPTER_NAV_ARROW_CIRCLE_PX,
     height: READER_CHAPTER_NAV_ARROW_CIRCLE_PX,
     borderRadius: READER_CHAPTER_NAV_ARROW_CIRCLE_PX / 2,
+    overflow: "hidden",
   },
   circlePressable: {
     width: READER_CHAPTER_NAV_ARROW_CIRCLE_PX,
@@ -236,6 +274,7 @@ const styles = StyleSheet.create({
     borderRadius: READER_CHAPTER_NAV_ARROW_CIRCLE_PX / 2,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
 });
 

@@ -38,20 +38,6 @@ export const readerFlashListChromeStyles = StyleSheet.create({
     textTransform: "uppercase",
     marginTop: 2,
   },
-  footerNavRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 32,
-    gap: 12,
-  },
-  footerNavSpacer: { flex: 1 },
-  footerNavButton: {
-    flex: 1,
-    borderRadius: 9999,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: "center",
-  },
 });
 
 /** FlashList v2 auto-measures cells; this matches a typical single-line verse row (Lora line + number + padding). */

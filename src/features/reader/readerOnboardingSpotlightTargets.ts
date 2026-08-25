@@ -1,5 +1,6 @@
 import type { LayoutRectangle } from "react-native";
 import type { SpotlightTarget } from "@/src/components/feature-onboarding/SpotlightOverlay";
+import { READER_CHAPTER_NAV_ARROW_CIRCLE_PX } from "@/src/features/reader/ReaderChapterNavArrows";
 
 /** Visual center offset of the glyph inside measured button bounds (icon wrapper transforms). */
 export type IconVisualCenterOffset = { dx: number; dy: number };
@@ -19,11 +20,11 @@ export const READER_HEADER_ICON_SPOTLIGHT_DIAMETER_PX: Record<ReaderHeaderIconSp
 };
 
 export const READER_PAGE_TURN_ICON_VISUAL_OFFSET: Record<"prev" | "next", IconVisualCenterOffset> = {
-  prev: { dx: 0, dy: -8 },
-  next: { dx: 8, dy: -8 },
+  prev: { dx: 0, dy: 0 },
+  next: { dx: 0, dy: 0 },
 };
 
-export const READER_PAGE_TURN_SPOTLIGHT_DIAMETER_PX = 52;
+export const READER_PAGE_TURN_SPOTLIGHT_DIAMETER_PX = READER_CHAPTER_NAV_ARROW_CIRCLE_PX;
 
 /** Builds a circle spotlight centered on the icon glyph, not the touch-target bounds. */
 export function centeredIconSpotlightTarget(

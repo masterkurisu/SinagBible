@@ -3,7 +3,6 @@ import type { GestureResponderEvent, PanResponderGestureState, NativeScrollEvent
 import {
   View,
   Text,
-  TouchableOpacity,
   TouchableWithoutFeedback,
   ActivityIndicator,
   Pressable,
@@ -1133,50 +1132,8 @@ export default function ReaderChapterScreen() {
 
   const readerChapterFlashListFooter = useCallback(() => {
     if (resolvedTranslationId !== requestedTranslationId) return null;
-    const { prevChapter, nextChapter } = chapterNav;
     return (
       <Animated.View style={{ opacity: readerVersesOpacityAnim }}>
-        <View style={readerFlashListChromeStyles.footerNavRow}>
-          {prevChapter ? (
-            <TouchableOpacity
-              style={[readerFlashListChromeStyles.footerNavButton, { backgroundColor: colors.parchmentDark }]}
-              onPress={() => {
-                closeToolsMenu();
-                goToReaderChapter(
-                  prevChapter.slug,
-                  prevChapter.chapter,
-                  resolvedTranslationId ?? requestedTranslationId,
-                );
-              }}
-            >
-              <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: colors.brown800 }}>
-                ← Previous
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={readerFlashListChromeStyles.footerNavSpacer} />
-          )}
-
-          {nextChapter ? (
-            <TouchableOpacity
-              style={[readerFlashListChromeStyles.footerNavButton, { backgroundColor: colors.parchmentDark }]}
-              onPress={() => {
-                closeToolsMenu();
-                goToReaderChapter(
-                  nextChapter.slug,
-                  nextChapter.chapter,
-                  resolvedTranslationId ?? requestedTranslationId,
-                );
-              }}
-            >
-              <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: colors.brown800 }}>
-                Next →
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={readerFlashListChromeStyles.footerNavSpacer} />
-          )}
-        </View>
         <Pressable
           onPress={dismissReaderChromeFromBackgroundPress}
           style={{ height: READER_CHAPTER_FOOTER_ABOVE_TAB_BAR_PX }}
@@ -1189,13 +1146,6 @@ export default function ReaderChapterScreen() {
     resolvedTranslationId,
     requestedTranslationId,
     readerVersesOpacityAnim,
-    chapterNav,
-    colors.parchmentDark,
-    colors.brown800,
-    resolvedTranslationId,
-    requestedTranslationId,
-    goToReaderChapter,
-    closeToolsMenu,
     dismissReaderChromeFromBackgroundPress,
   ]);
 
@@ -1862,8 +1812,6 @@ export default function ReaderChapterScreen() {
         nextChapter={chapterNav.nextChapter}
         onPrev={goToPrevChapter}
         onNext={goToNextChapter}
-        colors={colors}
-        rc={rc}
         prevArrowRef={chapterNavPrevArrowRef}
         nextArrowRef={chapterNavNextArrowRef}
       />
