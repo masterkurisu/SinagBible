@@ -50,6 +50,9 @@ const WIDTH_RATIOS = [0.58, 0.72, 0.64] as const;
 
 const listeners = new Set<(overrides: Record<string, CarouselCardSize>) => void>();
 
+/** Updated on load/save so carousel hooks can hydrate without waiting on AsyncStorage. */
+let memoryCarouselCardSizes: Record<string, CarouselCardSize> | null = null;
+
 function notifyListeners(overrides: Record<string, CarouselCardSize>) {
   for (const listener of listeners) {
     listener(overrides);
@@ -146,12 +149,23 @@ export function subscribeCarouselCardSizes(
   return () => listeners.delete(listener);
 }
 
+/** Synchronous snapshot (null before first load/save this session). */
+export function peekCarouselCardSizes(): Record<string, CarouselCardSize> | null {
+  return memoryCarouselCardSizes;
+}
+
 export async function loadCarouselCardSizes(): Promise<Record<string, CarouselCardSize>> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    return normalizeOverrides(JSON.parse(raw));
+    if (!raw) {
+      memoryCarouselCardSizes = {};
+      return {};
+    }
+    const next = normalizeOverrides(JSON.parse(raw));
+    memoryCarouselCardSizes = next;
+    return next;
   } catch {
+    memoryCarouselCardSizes = {};
     return {};
   }
 }
@@ -160,6 +174,7 @@ export async function saveCarouselCardSizes(
   overrides: Record<string, CarouselCardSize>,
 ): Promise<Record<string, CarouselCardSize>> {
   const next = normalizeOverrides(overrides);
+  memoryCarouselCardSizes = next;
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {

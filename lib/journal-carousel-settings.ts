@@ -90,6 +90,9 @@ export const DEFAULT_JOURNAL_CAROUSEL_SETTINGS: JournalCarouselSettings = {
   defaultCardSize: DEFAULT_CAROUSEL_DEFAULT_CARD_SIZE,
 };
 
+/** Updated on load/save so carousel hooks can hydrate theme without waiting on AsyncStorage. */
+let memoryCarouselSettings: JournalCarouselSettings | null = null;
+
 const listeners = new Set<(settings: JournalCarouselSettings) => void>();
 
 function clampVerseCount(count: number): number {
@@ -137,14 +140,31 @@ export function subscribeJournalCarouselSettings(
   return () => listeners.delete(listener);
 }
 
+/** Synchronous snapshot (null before first load/save this session). */
+export function peekJournalCarouselSettings(): JournalCarouselSettings | null {
+  return memoryCarouselSettings;
+}
+
+export function peekJournalCarouselImageTheme(): CarouselImageTheme {
+  return memoryCarouselSettings?.imageTheme ?? DEFAULT_CAROUSEL_IMAGE_THEME;
+}
+
 export async function loadJournalCarouselSettings(): Promise<JournalCarouselSettings> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_JOURNAL_CAROUSEL_SETTINGS };
+    if (!raw) {
+      const defaults = { ...DEFAULT_JOURNAL_CAROUSEL_SETTINGS };
+      memoryCarouselSettings = defaults;
+      return defaults;
+    }
     const parsed = JSON.parse(raw) as Partial<JournalCarouselSettings>;
-    return normalizeSettings(parsed);
+    const next = normalizeSettings(parsed);
+    memoryCarouselSettings = next;
+    return next;
   } catch {
-    return { ...DEFAULT_JOURNAL_CAROUSEL_SETTINGS };
+    const defaults = { ...DEFAULT_JOURNAL_CAROUSEL_SETTINGS };
+    memoryCarouselSettings = defaults;
+    return defaults;
   }
 }
 
@@ -152,6 +172,7 @@ export async function saveJournalCarouselSettings(
   settings: JournalCarouselSettings,
 ): Promise<JournalCarouselSettings> {
   const next = normalizeSettings(settings);
+  memoryCarouselSettings = next;
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {

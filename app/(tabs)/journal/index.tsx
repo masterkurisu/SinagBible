@@ -452,6 +452,9 @@ export default function JournalIndexScreen() {
   const [newEntrySheetKey, setNewEntrySheetKey] = useState(0);
   const listRef = useRef<FlatList<JournalRow> | null>(null);
   const entryRowRefs = useRef(new Map<string, RefObject<RNView | null>>());
+  const entriesCountRef = useRef(0);
+  const hasVisitedJournalTabRef = useRef(false);
+  entriesCountRef.current = entries.length;
 
   const pruneEntryRowRefs = useCallback((activeEntryIds: ReadonlySet<string>) => {
     const map = entryRowRefs.current;
@@ -629,6 +632,8 @@ export default function JournalIndexScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      const isRevisit = hasVisitedJournalTabRef.current;
+      hasVisitedJournalTabRef.current = true;
       setHasVisitedJournalTab(true);
       const pending = peekPendingJournalListUpsert();
       if (pending) {
@@ -642,14 +647,23 @@ export default function JournalIndexScreen() {
         });
       }
       let cancelled = false;
-      setLoading(true);
-      const task = InteractionManager.runAfterInteractions(() => {
+      const hasEntries = entriesCountRef.current > 0;
+      if (!hasEntries) {
+        setLoading(true);
+      }
+      const runLoad = () => {
         if (cancelled) return;
         void load();
-      });
+      };
+      const interactionTask = isRevisit
+        ? null
+        : InteractionManager.runAfterInteractions(runLoad);
+      if (isRevisit) {
+        runLoad();
+      }
       return () => {
         cancelled = true;
-        task.cancel();
+        interactionTask?.cancel();
         // Dismiss journal new-entry sheet when leaving the tab.
         setNewEntryOpen(false);
         settingsMenu.closeToolsMenu();
@@ -1183,7 +1197,10 @@ export default function JournalIndexScreen() {
     });
   }, []);
 
-  if (!isFocused || !hasVisitedJournalTab) {
+  // Lazy-mount until first visit (4GB RAM). After that, keep the last painted tree so
+  // tab switches do not flash an empty page. Do not gate on isFocused — focus lags the
+  // native tab highlight and was the blank-page delay.
+  if (!hasVisitedJournalTab) {
     return (
       <View style={{ flex: 1, backgroundColor: bundle.journal.listPageBackground }} />
     );

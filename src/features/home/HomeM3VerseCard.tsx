@@ -24,6 +24,10 @@ export type HomeM3VerseCardProps = {
   imageUrl?: string | null;
   imageTheme?: CarouselImageTheme;
   gradient?: readonly [string, string, string];
+  /** Carousel verse id — used as expo-image recycling identity with the photo URI. */
+  verseId?: string;
+  /** Session already has this photo URL — skip the first-decode fade. */
+  imageCached?: boolean;
 };
 
 /** M3 elevated card — featured verse on the home screen. */
@@ -35,6 +39,8 @@ export function HomeM3VerseCard({
   imageUrl,
   imageTheme = "auto",
   gradient,
+  verseId,
+  imageCached = false,
 }: HomeM3VerseCardProps) {
   const h = bundle.home;
   const primary = bundle.chrome.tabTint;
@@ -79,7 +85,11 @@ export function HomeM3VerseCard({
       ) : null}
 
       {showImage ? (
-        <CarouselBackgroundImage uri={imageUrl!} recyclingKey={imageUrl!} />
+        <CarouselBackgroundImage
+          uri={imageUrl!}
+          recyclingKey={verseId ? `${verseId}:${imageUrl}` : imageUrl!}
+          cached={imageCached}
+        />
       ) : null}
 
       {showPhotoChrome && !isLightBackground ? (

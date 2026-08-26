@@ -49,6 +49,7 @@ type CarouselCardProps = {
   cardIndex: number;
   cardWidth: number;
   imageUrl: string | null;
+  imageCached: boolean;
   imageTheme: CarouselImageTheme;
   captureRef: (node: View | null) => void;
   onLongPress: (item: CarouselDisplayVerse) => void;
@@ -59,6 +60,7 @@ const CarouselCard = memo(function CarouselCard({
   cardIndex,
   cardWidth,
   imageUrl,
+  imageCached,
   imageTheme,
   captureRef,
   onLongPress,
@@ -107,7 +109,11 @@ const CarouselCard = memo(function CarouselCard({
         )}
 
         {showImage ? (
-          <CarouselBackgroundImage uri={imageUrl!} recyclingKey={imageUrl!} />
+          <CarouselBackgroundImage
+            uri={imageUrl!}
+            recyclingKey={`${item.id}:${imageUrl!}`}
+            cached={imageCached}
+          />
         ) : null}
 
         {isLightBackground ? null : (
@@ -151,7 +157,7 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
   const { width: windowWidth } = useWindowDimensions();
   const { bundle } = useMobileAppTheme();
   const { displayVerses, settings, cardSizeOverrides, removeFavorite } = useJournalCarouselVerses();
-  const { getImageUrl, imageTheme } = useCarouselBackgroundUrls(displayVerses);
+  const { getImageUrl, isCachedImageUrl, imageTheme } = useCarouselBackgroundUrls(displayVerses);
   const listRef = useRef<FlatList<CarouselDisplayVerse> | null>(null);
   const captureRefs = useRef(new Map<string, View>());
   const [menuState, setMenuState] = useState<MenuState | null>(null);
@@ -325,18 +331,22 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
 
   const renderItem = useMemo<ListRenderItem<CarouselDisplayVerse>>(
     () =>
-      ({ item, index }) => (
-        <CarouselCard
-          item={item}
-          cardIndex={index}
-          cardWidth={cardWidths[index]!}
-          imageUrl={getImageUrl(item)}
-          imageTheme={imageTheme}
-          captureRef={setCaptureRef(item.id)}
-          onLongPress={handleLongPress}
-        />
-      ),
-    [cardWidths, getImageUrl, handleLongPress, imageTheme, setCaptureRef],
+      ({ item, index }) => {
+        const imageUrl = getImageUrl(item);
+        return (
+          <CarouselCard
+            item={item}
+            cardIndex={index}
+            cardWidth={cardWidths[index]!}
+            imageUrl={imageUrl}
+            imageCached={isCachedImageUrl(item.id, imageUrl)}
+            imageTheme={imageTheme}
+            captureRef={setCaptureRef(item.id)}
+            onLongPress={handleLongPress}
+          />
+        );
+      },
+    [cardWidths, getImageUrl, handleLongPress, imageTheme, isCachedImageUrl, setCaptureRef],
   );
 
   const keyExtractor = (item: CarouselDisplayVerse) => item.id;

@@ -13,7 +13,7 @@ import {
   NAV_TAB_SF,
 } from "@/lib/android-nav-bar-chrome";
 import { hapticLightImpact } from "@/lib/haptics";
-import { loadReaderLastPosition, peekReaderLastPosition } from "@/lib/reader-last-position";
+import { loadReaderLastPosition, peekReaderLastPosition, getPreferredReaderTranslation } from "@/lib/reader-last-position";
 import {
   ReaderTabBarVisibilityProvider,
   READER_TOOLS_MENU_TAB_BAR_COLOR,
@@ -28,7 +28,9 @@ import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
 import { hasAnyJournalDraft } from "@/lib/journal-draft-index";
 import { refreshLocalEntriesCache } from "@/lib/journal-local";
 import { warmReaderTranslationSearchCache } from "@/lib/bible-search-service";
-import { getPreferredReaderTranslation } from "@/lib/reader-last-position";
+import { loadJournalCarouselSettings, peekJournalCarouselSettings } from "@/lib/journal-carousel-settings";
+import { loadCarouselFavorites, peekCarouselFavorites } from "@/lib/journal-carousel-verses";
+import { loadCarouselCardSizes, peekCarouselCardSizes } from "@/lib/journal-carousel-card-sizes";
 import { usePinnedTranslationsPrefetch } from "@/lib/use-pinned-translations-prefetch";
 
 /** True when the active reader tab is showing a chapter (not the redirect index). */
@@ -83,6 +85,15 @@ function TabLayoutInner() {
     if (peekReaderLastPosition() == null) {
       // Warm memory cache so /reader can redirect without waiting on AsyncStorage.
       void loadReaderLastPosition();
+    }
+    if (peekJournalCarouselSettings() == null) {
+      void loadJournalCarouselSettings();
+    }
+    if (peekCarouselFavorites() == null) {
+      void loadCarouselFavorites();
+    }
+    if (peekCarouselCardSizes() == null) {
+      void loadCarouselCardSizes();
     }
     // Warm journal cache so tab-bar search can filter entries without waiting on AsyncStorage.
     void refreshLocalEntriesCache();

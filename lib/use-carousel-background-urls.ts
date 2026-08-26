@@ -3,28 +3,49 @@ import type { CarouselImageTheme } from "@/lib/carousel-image-themes";
 import type { CarouselDisplayVerse } from "@/lib/journal-carousel-verses";
 import {
   CAROUSEL_IMAGE_REFRESH_INTERVAL_MS,
-  DEFAULT_CAROUSEL_IMAGE_THEME,
   loadJournalCarouselSettings,
+  peekJournalCarouselImageTheme,
+  peekJournalCarouselSettings,
   subscribeJournalCarouselSettings,
   type CarouselImageRefreshInterval,
 } from "@/lib/journal-carousel-settings";
 import {
   buildCarouselVersesKey,
   getCarouselBackgroundUrlSession,
+  prefetchCarouselPhotoUrls,
   registerCarouselVerseConsumer,
   requestCarouselImageRefresh,
   resolveCarouselBackgroundUrls,
   subscribeCarouselImageRefresh,
 } from "@/lib/pexels-repository";
 
+/** Last non-empty URL map — reused on remount so session lookup is not a frame behind. */
+let memoryUrlByVerseId: Record<string, string> = {};
+
+function rememberCarouselBackgroundUrls(urls: Record<string, string>): void {
+  if (Object.keys(urls).length === 0) return;
+  memoryUrlByVerseId = urls;
+}
+
+function initialCarouselUrls(displayVerses: CarouselDisplayVerse[]): Record<string, string> {
+  const session = getCarouselBackgroundUrlSession(
+    displayVerses,
+    peekJournalCarouselImageTheme(),
+  );
+  if (session) return session;
+  return displayVerses.length === 0 ? {} : memoryUrlByVerseId;
+}
+
 /**
  * Resolves unique Pexels background URLs for each visible carousel card.
- * URLs are cached per verse in AsyncStorage; image bytes cached on disk via expo-image.
+ * URLs are cached per verse in AsyncStorage; image bytes cached via expo-image.
  */
 export function useCarouselBackgroundUrls(displayVerses: CarouselDisplayVerse[]) {
-  const [imageTheme, setImageTheme] = useState<CarouselImageTheme>(DEFAULT_CAROUSEL_IMAGE_THEME);
+  const [imageTheme, setImageTheme] = useState<CarouselImageTheme>(peekJournalCarouselImageTheme);
   const [imageRefreshInterval, setImageRefreshInterval] =
-    useState<CarouselImageRefreshInterval>("never");
+    useState<CarouselImageRefreshInterval>(
+      () => peekJournalCarouselSettings()?.imageRefreshInterval ?? "never",
+    );
 
   const versesKey = useMemo(
     () => buildCarouselVersesKey(displayVerses, imageTheme),
@@ -36,14 +57,20 @@ export function useCarouselBackgroundUrls(displayVerses: CarouselDisplayVerse[])
   imageThemeRef.current = imageTheme;
   const verseConsumerRef = useRef<ReturnType<typeof registerCarouselVerseConsumer> | null>(null);
 
-  const [urlByVerseId, setUrlByVerseId] = useState<Record<string, string>>(() => {
-    return getCarouselBackgroundUrlSession(displayVerses, DEFAULT_CAROUSEL_IMAGE_THEME) ?? {};
+  const [urlByVerseId, setUrlByVerseId] = useState<Record<string, string>>(() =>
+    initialCarouselUrls(displayVerses),
+  );
+  const [sessionUrlByVerseId, setSessionUrlByVerseId] = useState<Record<string, string>>(() => {
+    return getCarouselBackgroundUrlSession(displayVerses, peekJournalCarouselImageTheme()) ?? {};
   });
 
   useEffect(() => {
-    const consumer = registerCarouselVerseConsumer(displayVerses);
+    const consumer = registerCarouselVerseConsumer(displayVersesRef.current);
     verseConsumerRef.current = consumer;
-    return consumer.unregister;
+    return () => {
+      consumer.unregister();
+      verseConsumerRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -53,6 +80,20 @@ export function useCarouselBackgroundUrls(displayVerses: CarouselDisplayVerse[])
   useEffect(() => {
     return subscribeCarouselImageRefresh((result) => {
       const verses = displayVersesRef.current;
+      setSessionUrlByVerseId((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const verse of verses) {
+          if (result[verse.id] && next[verse.id]) {
+            delete next[verse.id];
+            changed = true;
+          } else if (!result[verse.id] && next[verse.id]) {
+            delete next[verse.id];
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
       setUrlByVerseId((prev) => {
         const next = { ...prev };
         let changed = false;
@@ -68,6 +109,7 @@ export function useCarouselBackgroundUrls(displayVerses: CarouselDisplayVerse[])
             changed = true;
           }
         }
+        if (changed) rememberCarouselBackgroundUrls(next);
         return changed ? next : prev;
       });
     });
@@ -95,21 +137,25 @@ export function useCarouselBackgroundUrls(displayVerses: CarouselDisplayVerse[])
 
   useEffect(() => {
     if (displayVerses.length === 0) {
-      setUrlByVerseId({});
       return;
     }
 
     const session = getCarouselBackgroundUrlSession(displayVerses, imageTheme);
     if (session) {
+      prefetchCarouselPhotoUrls(Object.values(session));
+      rememberCarouselBackgroundUrls(session);
+      setSessionUrlByVerseId(session);
       setUrlByVerseId((prev) => (prev === session ? prev : session));
       return;
     }
 
     let cancelled = false;
+    setSessionUrlByVerseId({});
 
     void (async () => {
       const resolved = await resolveCarouselBackgroundUrls(displayVerses, { imageTheme });
       if (!cancelled) {
+        rememberCarouselBackgroundUrls(resolved);
         setUrlByVerseId(resolved);
       }
     })();
@@ -124,5 +170,13 @@ export function useCarouselBackgroundUrls(displayVerses: CarouselDisplayVerse[])
     [urlByVerseId],
   );
 
-  return { getImageUrl, imageTheme };
+  const isCachedImageUrl = useCallback(
+    (verseId: string, url: string | null): boolean => {
+      if (!url) return false;
+      return sessionUrlByVerseId[verseId] === url;
+    },
+    [sessionUrlByVerseId],
+  );
+
+  return { getImageUrl, isCachedImageUrl, imageTheme };
 }

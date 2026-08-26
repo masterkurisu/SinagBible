@@ -168,6 +168,13 @@ function rememberSessionUrls(versesKey: string, urls: Record<string, string>): v
   sessionResolvedByVersesKey.set(versesKey, urls);
 }
 
+/** Prefetch assigned card photos into memory+disk. Does not hit Pexels. */
+export function prefetchCarouselPhotoUrls(urls: readonly string[]): void {
+  for (const url of urls) {
+    if (url) void Image.prefetch(url, "memory-disk");
+  }
+}
+
 function poolStorageKey(keyword: string): string {
   return `${POOL_STORAGE_PREFIX}${keywordPoolStorageSlug(keyword)}`;
 }
@@ -434,7 +441,7 @@ export async function resolveCarouselBackgroundUrls(
 
   const assignedUrls = Object.values(result);
   const assignedUrlSet = new Set(assignedUrls);
-  await Promise.all(assignedUrls.map((url) => Image.prefetch(url, "disk")));
+  await Promise.all(assignedUrls.map((url) => Image.prefetch(url, "memory-disk")));
 
   for (const keyword of keywords) {
     const pool = await loadKeywordPool(keyword);

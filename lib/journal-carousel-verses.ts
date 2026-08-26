@@ -39,6 +39,9 @@ export type CarouselVerseRecord = {
   addedAt: string;
 };
 
+/** Updated on load/save so carousel hooks can hydrate without waiting on AsyncStorage. */
+let memoryCarouselFavorites: CarouselVerseRecord[] | null = null;
+
 export type CarouselDisplayVerse = {
   id: string;
   reference: string;
@@ -484,16 +487,26 @@ export function buildCarouselDisplayVerses(
 export async function loadCarouselFavorites(): Promise<CarouselVerseRecord[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
+    if (!raw) {
+      memoryCarouselFavorites = [];
+      return [];
+    }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isCarouselVerseRecord);
+    if (!Array.isArray(parsed)) {
+      memoryCarouselFavorites = [];
+      return [];
+    }
+    const next = parsed.filter(isCarouselVerseRecord);
+    memoryCarouselFavorites = next;
+    return next;
   } catch {
+    memoryCarouselFavorites = [];
     return [];
   }
 }
 
 async function saveCarouselFavorites(records: CarouselVerseRecord[]): Promise<void> {
+  memoryCarouselFavorites = records;
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(records));
     notifyCarouselFavoritesChanged();
@@ -509,6 +522,11 @@ export async function replaceCarouselFavorites(records: CarouselVerseRecord[]): 
 }
 
 const carouselFavoriteListeners = new Set<() => void>();
+
+/** Synchronous snapshot (null before first load/save this session). */
+export function peekCarouselFavorites(): CarouselVerseRecord[] | null {
+  return memoryCarouselFavorites;
+}
 
 function notifyCarouselFavoritesChanged(): void {
   for (const listener of carouselFavoriteListeners) {
