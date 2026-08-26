@@ -12,7 +12,23 @@ type JournalRow = {
   content_markdown: string | null;
   created_at: string;
   is_favorite: number;
+  tags: string | null;
 };
+
+const JOURNAL_TABLE_COLUMNS = [
+  { name: "id" },
+  { name: "book" },
+  { name: "chapter" },
+  { name: "verse_start" },
+  { name: "verse_end" },
+  { name: "bible_translation" },
+  { name: "title" },
+  { name: "content" },
+  { name: "content_markdown" },
+  { name: "created_at" },
+  { name: "is_favorite" },
+  { name: "tags" },
+];
 
 const rows = new Map<string, JournalRow>();
 const asyncStore = new Map<string, string>();
@@ -30,13 +46,17 @@ function rowFromParams(params: (string | number | null)[]): JournalRow {
     content_markdown: (params[8] as string | null) ?? null,
     created_at: String(params[9]),
     is_favorite: Number(params[10]),
+    tags: (params[11] as string | null) ?? null,
   };
 }
 
 function createDbHandle() {
   return {
     execAsync: async () => {},
-    getAllAsync: async <T>(_sql: string): Promise<T[]> => {
+    getAllAsync: async <T>(sql: string): Promise<T[]> => {
+      if (sql.includes("PRAGMA table_info")) {
+        return JOURNAL_TABLE_COLUMNS as T[];
+      }
       const sorted = [...rows.values()].sort((a, b) => {
         const byDate = b.created_at.localeCompare(a.created_at);
         return byDate !== 0 ? byDate : b.id.localeCompare(a.id);
@@ -126,8 +146,10 @@ export function makeJournalEntry(overrides: Partial<LocalJournalEntry> & { id: s
     bible_translation: "KJV",
     title: "Test entry",
     content: "<p>Hello migration</p>",
+    content_markdown: null,
     created_at: "2024-06-01T12:00:00.000Z",
     is_favorite: false,
+    tags: [],
     ...overrides,
   };
 }

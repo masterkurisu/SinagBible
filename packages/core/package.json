@@ -15,7 +15,12 @@
     "./text-utils": "./src/text-utils.ts",
     "./verse-tags": "./src/verse-tags.ts",
     "./lru-map": "./src/lru-map.ts",
-    "./vague-keyword-index": "./src/vague-keyword-index.ts"
+    "./vague-keyword-index": "./src/vague-keyword-index.ts",
+    "./search-named-passages": "./src/search-named-passages.ts",
+    "./search-keyword-popular": "./src/search-keyword-popular.ts",
+    "./search-topical-index": "./src/search-topical-index.ts",
+    "./search-strongs-index": "./src/search-strongs-index.ts",
+    "./search-related-verses": "./src/search-related-verses.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

@@ -1,6 +1,7 @@
 const { getDefaultConfig } = require("expo/metro-config");
 const { withNativeWind } = require("nativewind/metro");
 const path = require("path");
+const fs = require("fs");
 
 const projectRoot = __dirname;
 const workspaceRoot = projectRoot;
@@ -122,7 +123,18 @@ const pinnedCssInteropJsx = {
 };
 
 const previousResolveRequest = config.resolver.resolveRequest;
+const expoSpeechRecognitionStub = path.resolve(
+  projectRoot,
+  "lib/__tests__/expo-speech-recognition-stub.ts",
+);
+const expoSpeechRecognitionInstalled = path.resolve(
+  projectRoot,
+  "node_modules/expo-speech-recognition",
+);
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === "expo-speech-recognition" && !fs.existsSync(expoSpeechRecognitionInstalled)) {
+    return { type: "sourceFile", filePath: expoSpeechRecognitionStub };
+  }
   const pinned = pinnedReactSource[moduleName];
   if (pinned) {
     return { type: "sourceFile", filePath: pinned };

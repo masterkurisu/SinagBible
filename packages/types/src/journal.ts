@@ -13,6 +13,8 @@ export type JournalEntry = {
   is_favorite?: boolean;
   created_at: string;
   updated_at?: string | null;
+  /** User-assigned category tokens (gratitude, forgiveness, …). */
+  tags?: string[];
 };
 
 /** A journal entry stored locally in localStorage (prefixed with "local-") */
@@ -30,6 +32,8 @@ export type LocalJournalEntry = {
   created_at: string;
   title?: string | null;
   is_favorite?: boolean;
+  /** User-assigned category tokens (gratitude, forgiveness, …). */
+  tags?: string[];
 };
 
 /** Union of both entry types for list rendering */

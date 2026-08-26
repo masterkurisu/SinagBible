@@ -88,7 +88,7 @@ async function buildYvpSearchTranslationContext(bibleId: number): Promise<Search
   };
 }
 
-/** Loads all YVP chapters once per Bible id so keyword search uses the active translation text. */
+/** Loads all YVP chapters once per Bible id into RAM. Diagnostic / perf-snapshot only — overlay search must not call this. */
 export function getYvpSearchTranslationContext(bibleId: number): Promise<SearchTranslationContext> {
   const cached = yvpSearchContextCache.get(bibleId);
   if (cached) return cached;
@@ -119,3 +119,5 @@ export function warmYvpSearchTranslationContext(bibleId: number): void {
 export function getYvpSearchContextCacheSize(): number {
   return yvpSearchContextCache.size;
 }
+
+export { scheduleYvpSearchCorpusJob, pauseYvpSearchCorpusJob } from "@/lib/yvp-corpus-job";

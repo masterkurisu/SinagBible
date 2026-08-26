@@ -15,7 +15,7 @@ import { LruMap } from "@sinag-bible/core/lru-map";
 const ANNOTATIONS_STORAGE_KEY_PREFIX = "sb:reader:highlights:";
 const NOTES_STORAGE_KEY_PREFIX = "sb:reader:notes:";
 
-function getAnnotationsStorageKey(bookSlug: string, chapter: number, tr: string) {
+export function getReaderAnnotationsStorageKey(bookSlug: string, chapter: number, tr: string) {
   return `${ANNOTATIONS_STORAGE_KEY_PREFIX}${bookSlug}:${chapter}:${tr}`;
 }
 
@@ -99,7 +99,7 @@ function loadChapterStorage(bookSlug: string, chapter: number, translationId: st
     return inflight;
   }
 
-  const ak = getAnnotationsStorageKey(bookSlug, chapter, translationId);
+  const ak = getReaderAnnotationsStorageKey(bookSlug, chapter, translationId);
   const nk = getNotesStorageKey(bookSlug, chapter, translationId);
 
   const promise = AsyncStorage.multiGet([ak, nk])
@@ -221,7 +221,7 @@ export function useReaderStorage(
       setAnnotations((curr) => {
         const next = { ...curr };
         for (const v of verseNumbers) delete next[v];
-        const key = getAnnotationsStorageKey(chapter.bookSlug, chapter.chapterNumber, translationId);
+        const key = getReaderAnnotationsStorageKey(chapter.bookSlug, chapter.chapterNumber, translationId);
         persistStorageSafely(key, JSON.stringify(next));
         patchChapterStorageCache(chapterStorageCacheKey(chapter.bookSlug, chapter.chapterNumber, translationId), {
           annotations: next,
@@ -238,7 +238,7 @@ export function useReaderStorage(
       setAnnotations((curr) => {
         const next = { ...curr };
         for (const v of verseNumbers) next[v] = annotation;
-        const key = getAnnotationsStorageKey(chapter.bookSlug, chapter.chapterNumber, translationId);
+        const key = getReaderAnnotationsStorageKey(chapter.bookSlug, chapter.chapterNumber, translationId);
         persistStorageSafely(key, JSON.stringify(next));
         patchChapterStorageCache(chapterStorageCacheKey(chapter.bookSlug, chapter.chapterNumber, translationId), {
           annotations: next,
@@ -318,6 +318,36 @@ export function getReaderChapterStorageCacheSize(): number {
   return chapterStorageCache.size;
 }
 
+export type ReaderAnnotationChapter = {
+  bookSlug: string;
+  chapter: number;
+  translationId: string;
+  annotations: Record<number, VerseAnnotation>;
+};
+
+/** Loads persisted highlight/underline maps only (no notes). Used by overlay marks search. */
+export async function listReaderAnnotationChapters(): Promise<ReaderAnnotationChapter[]> {
+  const allKeys = await AsyncStorage.getAllKeys();
+  const annotationKeys = allKeys.filter((key) => key.startsWith(ANNOTATIONS_STORAGE_KEY_PREFIX));
+  if (annotationKeys.length === 0) return [];
+
+  const pairs = await AsyncStorage.multiGet(annotationKeys);
+  const chapters: ReaderAnnotationChapter[] = [];
+  for (const [key, raw] of pairs) {
+    const parsed = parseChapterStorageKey(key, ANNOTATIONS_STORAGE_KEY_PREFIX);
+    if (!parsed) continue;
+    const annotations = parseAnnotations(raw);
+    if (Object.keys(annotations).length === 0) continue;
+    chapters.push({
+      bookSlug: parsed.bookSlug,
+      chapter: parsed.chapter,
+      translationId: parsed.translationId,
+      annotations,
+    });
+  }
+  return chapters;
+}
+
 /** Loads every persisted annotation and note chapter from AsyncStorage. */
 export async function exportAllReaderChapterAnnotations(): Promise<ReaderChapterAnnotationExport[]> {
   const allKeys = await AsyncStorage.getAllKeys();
@@ -385,7 +415,7 @@ export async function importAllReaderChapterAnnotations(
           : {};
     if (Object.keys(annotations).length > 0) {
       writes.push([
-        getAnnotationsStorageKey(bookSlug, chapterNum, translationId),
+        getReaderAnnotationsStorageKey(bookSlug, chapterNum, translationId),
         JSON.stringify(annotations),
       ]);
     }

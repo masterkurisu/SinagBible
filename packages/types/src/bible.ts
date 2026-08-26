@@ -68,6 +68,18 @@ export type SearchResult = {
   chapterNumber: number;
   verseNumber: number;
   verseText: string;
+  /** Next verse in the chapter when present, else the previous verse. Overlay snippet only. */
+  neighborVerseText?: string;
+  /** Present when the overlay marks filter matched this verse. */
+  markKind?: "highlight" | "underline" | "favorite";
+  /** Highlight/underline color id when `markKind` is a reader annotation. */
+  markColorId?: string;
+  /** Same verse in another pinned/requested translation. Overlay also-in snippet only. */
+  alsoVerseText?: string;
+  /** Short label for `alsoVerseText` (e.g. `NIV`, `WEB`). */
+  alsoTranslationLabel?: string;
+  /** Present when the hit came from a Strong’s number query. */
+  strongsLabel?: string;
 };
 
 /** Testament of a Bible book */
@@ -100,4 +112,9 @@ export type TranslationSearchOutcome = {
   nearbyBooks: BookSuggestion[];
   /** Normalized query used to produce `results` (after any book-name correction). */
   effectiveQuery: string;
+  /**
+   * YVP hydrate: chapters this search started fetching that failed.
+   * Cancelled leftovers are not counted.
+   */
+  failedHydrationCount?: number;
 };

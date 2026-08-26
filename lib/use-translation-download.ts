@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import NetInfo from "@react-native-community/netinfo";
-import { isOfflineNetInfo } from "@/lib/network-connectivity";
+import { isOnWifi } from "@/lib/network-connectivity";
 import {
   getTranslationDownloadState,
   startTranslationDownload,
@@ -50,9 +49,4 @@ export function useTranslationDownload(translationId: string): {
   };
 }
 
-/** True when the device is on Wi-Fi (used for optional auto-download on pin). */
-export async function isOnWifi(): Promise<boolean> {
-  const state = await NetInfo.fetch();
-  if (isOfflineNetInfo(state)) return false;
-  return state.type === "wifi";
-}
+export { isOnWifi };

@@ -30,6 +30,7 @@ export function getDefaultSampleEntry(): LocalJournalEntry {
       "<p>Sample journal entry</p><p>John 3:16 reminds us that God's love is personal and sacrificial. Use this space to write what this verse means to you today.</p><ul><li>Capture one key phrase from the verse</li><li>Write a short prayer response</li><li>Mark it as favorite so you can find it again</li></ul>",
     created_at: DEFAULT_SAMPLE_ENTRY_CREATED_AT,
     is_favorite: false,
+    tags: ["gratitude"],
   };
 }
 

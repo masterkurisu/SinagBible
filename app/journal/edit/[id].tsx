@@ -31,6 +31,7 @@ function toEditDraft(item: MobileJournalListItem): JournalEditDraft {
     verse_start: item.verse_start,
     verse_end: item.verse_end,
     bible_translation: item.bible_translation,
+    tags: item.tags,
   };
 }
 

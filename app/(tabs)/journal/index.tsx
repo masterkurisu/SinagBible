@@ -98,6 +98,10 @@ import {
   journalEntryMatchesSearchQuery,
   journalEntrySearchRelevanceScore,
 } from "@/lib/journal-local-search";
+import {
+  overlayPowerToJournalCombinator,
+  parseOverlayPowerQuery,
+} from "@/lib/search-power-query";
 
 const FAB_SIZE_PX = JOURNAL_NEW_ENTRY_FAB_PX;
 const IOS_FAB_SIZE_PX = JOURNAL_IOS_FAB_SIZE_PX;
@@ -712,14 +716,20 @@ export default function JournalIndexScreen() {
 
   const searchFiltered = useMemo(() => {
     if (!hasActiveSearch) return filteredSorted;
-    const matched = filteredSorted.filter((entry) =>
-      journalEntryMatchesSearchQuery(entry, searchTrimmed),
-    );
+    const power = parseOverlayPowerQuery(searchTrimmed);
+    const combinator = overlayPowerToJournalCombinator(power);
+    const journalQuery = power.keyword;
+    const matched =
+      !journalQuery && !combinator
+        ? []
+        : filteredSorted.filter((entry) =>
+            journalEntryMatchesSearchQuery(entry, journalQuery, { combinator }),
+          );
     const ranked = [...matched];
     ranked.sort((a, b) => {
       const scoreDelta =
-        journalEntrySearchRelevanceScore(b, searchTrimmed) -
-        journalEntrySearchRelevanceScore(a, searchTrimmed);
+        journalEntrySearchRelevanceScore(b, journalQuery, { combinator }) -
+        journalEntrySearchRelevanceScore(a, journalQuery, { combinator });
       if (scoreDelta !== 0) return scoreDelta;
 
       const timeA = new Date(a.created_at).getTime();

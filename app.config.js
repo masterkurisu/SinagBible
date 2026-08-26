@@ -1,5 +1,11 @@
 /** @type {import('expo/config').ConfigContext} */
+const fs = require("fs");
+const path = require("path");
+
 const IS_DEV = process.env.APP_VARIANT === "development";
+const hasSpeechRecognition = fs.existsSync(
+  path.join(__dirname, "node_modules/expo-speech-recognition"),
+);
 
 module.exports = ({ config }) => ({
   ...config,
@@ -15,6 +21,7 @@ module.exports = ({ config }) => ({
     ...config.android,
     package: IS_DEV ? "com.sinagbible.app.dev" : config.android?.package,
     // Keep Play photo/video policy compliance even if another plugin re-adds these.
+    // RECORD_AUDIO is allowed: optional overlay voice search. Camera stays blocked.
     blockedPermissions: Array.from(
       new Set([
         ...(config.android?.blockedPermissions ?? []),
@@ -23,10 +30,25 @@ module.exports = ({ config }) => ({
         "android.permission.READ_MEDIA_AUDIO",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
       ]),
     ),
   },
+  plugins: [
+    ...(config.plugins ?? []),
+    ...(hasSpeechRecognition
+      ? [
+          [
+            "expo-speech-recognition",
+            {
+              microphonePermission:
+                "Sinag Bible uses the microphone for optional voice search. You can still type in the search overlay without it.",
+              speechRecognitionPermission:
+                "Sinag Bible uses speech recognition to turn your words into a search query. Typing still works if you decline.",
+            },
+          ],
+        ]
+      : []),
+  ],
   extra: {
     ...config.extra,
     appVariant: IS_DEV ? "development" : "production",

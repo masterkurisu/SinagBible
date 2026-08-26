@@ -13,6 +13,9 @@ import {
 import { type Href, Link } from "expo-router";
 import type { BookSuggestion, LocalJournalEntry, SearchResult } from "@sinag-bible/types";
 import { formatPassageReference } from "@sinag-bible/core";
+import { formatJournalTagList } from "@/lib/journal-tags";
+import { formatReaderMarkCaption, HIGHLIGHT_COLOR_IDS } from "@/lib/reader-marks-search";
+import { highlightColors } from "@/lib/token";
 import { M3ContainedLoadingIndicator } from "@/components/m3-contained-loading-indicator";
 import { RecentSvgrepoIcon } from "@/components/icons/RecentSvgrepoIcon";
 import { formatBookSuggestionChipLabel } from "@/lib/book-genre-display";
@@ -20,6 +23,7 @@ import { stripHtmlPreview } from "@/lib/journal-preview";
 import { hapticLightImpact } from "@/lib/haptics";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import type { useBibleSearch } from "@/src/features/search/useBibleSearch";
+import { findSnippetHighlightRange } from "@/src/features/search/searchVerseSnippet";
 
 function journalSearchRowTitle(entry: LocalJournalEntry): string {
   const passage =
@@ -34,6 +38,49 @@ function journalSearchRowTitle(entry: LocalJournalEntry): string {
   const t = entry.title?.trim();
   if (t) return t;
   return passage || "Journal entry";
+}
+
+function BibleVerseSnippet({
+  result,
+  query,
+  snippetStyle,
+  highlightStyle,
+  neighborStyle,
+  alsoStyle,
+}: {
+  result: SearchResult;
+  query: string;
+  snippetStyle: object;
+  highlightStyle: object;
+  neighborStyle: object;
+  alsoStyle: object;
+}) {
+  const range = findSnippetHighlightRange(result.verseText, query);
+  const verse = range ? (
+    <>
+      {result.verseText.slice(0, range.start)}
+      <Text style={highlightStyle}>{result.verseText.slice(range.start, range.end)}</Text>
+      {result.verseText.slice(range.end)}
+    </>
+  ) : (
+    result.verseText
+  );
+  const extraLines = (result.neighborVerseText ? 1 : 0) + (result.alsoVerseText ? 1 : 0);
+  return (
+    <Text style={snippetStyle} numberOfLines={2 + extraLines}>
+      {verse}
+      {result.neighborVerseText ? (
+        <Text style={neighborStyle}> {result.neighborVerseText}</Text>
+      ) : null}
+      {result.alsoVerseText ? (
+        <Text style={alsoStyle}>
+          {"\n"}
+          {result.alsoTranslationLabel ? `${result.alsoTranslationLabel} · ` : ""}
+          {result.alsoVerseText}
+        </Text>
+      ) : null}
+    </Text>
+  );
 }
 
 function createSearchBodyStyles(s: MobileAppThemeBundle["search"]) {
@@ -153,6 +200,74 @@ function createSearchBodyStyles(s: MobileAppThemeBundle["search"]) {
       color: s.recentText,
       lineHeight: 19.5,
     },
+    snippetHighlight: {
+      fontFamily: "Inter_600SemiBold",
+      color: s.bodyText,
+    },
+    snippetNeighbor: {
+      fontFamily: "Inter_400Regular",
+      fontSize: 13,
+      color: s.muted,
+      lineHeight: 19.5,
+    },
+    snippetAlso: {
+      fontFamily: "Inter_400Regular",
+      fontSize: 12,
+      color: s.muted,
+      lineHeight: 18,
+    },
+    scopeRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 12,
+    },
+    scopeChip: {
+      paddingVertical: 5,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      backgroundColor: s.cardBackground,
+      borderWidth: 0.5,
+      borderColor: s.cardBorder,
+    },
+    scopeChipSelected: {
+      borderColor: s.tint,
+      backgroundColor: s.pageBackground,
+    },
+    scopeChipPressed: { opacity: 0.85 },
+    scopeChipText: {
+      fontFamily: "Inter_500Medium",
+      fontSize: 12,
+      color: s.muted,
+    },
+    scopeChipTextSelected: {
+      color: s.tint,
+    },
+    journalTags: {
+      marginTop: 2,
+      fontFamily: "Inter_400Regular",
+      fontSize: 12,
+      color: s.muted,
+    },
+    colorRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 12,
+    },
+    colorDot: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 1,
+      borderColor: s.cardBorder,
+    },
+    colorDotSelected: {
+      borderWidth: 2,
+      borderColor: s.tint,
+    },
     empty: {
       marginTop: 24,
       textAlign: "center",
@@ -228,6 +343,23 @@ function createSearchBodyStyles(s: MobileAppThemeBundle["search"]) {
       gap: 10,
       paddingVertical: 12,
     },
+    retryFooter: {
+      marginTop: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      backgroundColor: s.cardBackground,
+      borderWidth: 0.5,
+      borderColor: s.cardBorder,
+      alignItems: "center",
+    },
+    retryFooterPressed: { opacity: 0.85 },
+    retryFooterText: {
+      fontFamily: "Inter_500Medium",
+      fontSize: 13,
+      color: s.tint,
+      textAlign: "center",
+    },
     emptyScrollContent: { paddingTop: 4 },
     scroll: { flex: 1 },
   });
@@ -251,6 +383,155 @@ export function SearchResultsBody({
   const s = bundle.search;
   const styles = useMemo(() => createSearchBodyStyles(s), [s]);
 
+  const renderMarkChip = (
+    kind: NonNullable<SearchState["activeMarksKind"]>,
+    label: string,
+    accessibilityLabel: string,
+  ) => (
+    <Pressable
+      onPress={() => search.onChangeMarksKind(search.activeMarksKind === kind ? null : kind)}
+      style={({ pressed }) => [
+        styles.scopeChip,
+        search.activeMarksKind === kind && styles.scopeChipSelected,
+        pressed && styles.scopeChipPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: search.activeMarksKind === kind }}
+      accessibilityLabel={accessibilityLabel}
+    >
+      <Text
+        style={[
+          styles.scopeChipText,
+          search.activeMarksKind === kind && styles.scopeChipTextSelected,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+
+  const renderScopeChips = () => {
+    const showColorDots =
+      search.activeMarksKind === "highlights" || search.activeMarksKind === "marks";
+    return (
+      <View>
+        <View style={styles.scopeRow}>
+          {search.showScopeChips && search.scopeBookName ? (
+            <>
+              <Pressable
+                onPress={() => search.onChangeBibleScope("all")}
+                style={({ pressed }) => [
+                  styles.scopeChip,
+                  search.bibleScope === "all" && styles.scopeChipSelected,
+                  pressed && styles.scopeChipPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: search.bibleScope === "all" }}
+                accessibilityLabel="Search the whole Bible"
+              >
+                <Text
+                  style={[
+                    styles.scopeChipText,
+                    search.bibleScope === "all" && styles.scopeChipTextSelected,
+                  ]}
+                >
+                  Whole Bible
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => search.onChangeBibleScope("book")}
+                style={({ pressed }) => [
+                  styles.scopeChip,
+                  search.bibleScope === "book" && styles.scopeChipSelected,
+                  pressed && styles.scopeChipPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: search.bibleScope === "book" }}
+                accessibilityLabel={`Search in ${search.scopeBookName}`}
+              >
+                <Text
+                  style={[
+                    styles.scopeChipText,
+                    search.bibleScope === "book" && styles.scopeChipTextSelected,
+                  ]}
+                >
+                  {search.scopeBookName}
+                </Text>
+              </Pressable>
+            </>
+          ) : null}
+          <Pressable
+            onPress={() => search.onChangeJournalFavoritesOnly(!search.journalFavoritesOnly)}
+            style={({ pressed }) => [
+              styles.scopeChip,
+              search.journalFavoritesOnly && styles.scopeChipSelected,
+              pressed && styles.scopeChipPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: search.journalFavoritesOnly }}
+            accessibilityLabel="Show favorite journal entries only"
+          >
+            <Text
+              style={[
+                styles.scopeChipText,
+                search.journalFavoritesOnly && styles.scopeChipTextSelected,
+              ]}
+            >
+              Favorites
+            </Text>
+          </Pressable>
+          {renderMarkChip("marks", "Marks", "Show highlighted, underlined, and saved verses")}
+          {renderMarkChip("highlights", "Highlights", "Show highlighted verses")}
+          {renderMarkChip("underlines", "Underlines", "Show underlined verses")}
+          {renderMarkChip("favorites", "Saved verses", "Show saved favorite verses")}
+          {search.alsoChipLabel ? (
+            <Pressable
+              onPress={() => search.onChangeAlsoTranslationEnabled(!search.alsoTranslationActive)}
+              style={({ pressed }) => [
+                styles.scopeChip,
+                search.alsoTranslationActive && styles.scopeChipSelected,
+                pressed && styles.scopeChipPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: search.alsoTranslationActive }}
+              accessibilityLabel={`Also show this verse in ${search.alsoChipLabel}`}
+            >
+              <Text
+                style={[
+                  styles.scopeChipText,
+                  search.alsoTranslationActive && styles.scopeChipTextSelected,
+                ]}
+              >
+                Also in {search.alsoChipLabel}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+        {showColorDots ? (
+          <View style={styles.colorRow}>
+            {HIGHLIGHT_COLOR_IDS.map((id) => (
+              <Pressable
+                key={id}
+                onPress={() =>
+                  search.onChangeHighlightColor(search.activeHighlightColor === id ? null : id)
+                }
+                style={({ pressed }) => [
+                  styles.colorDot,
+                  { backgroundColor: highlightColors[id] },
+                  search.activeHighlightColor === id && styles.colorDotSelected,
+                  pressed && styles.scopeChipPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: search.activeHighlightColor === id }}
+                accessibilityLabel={`Filter highlights by ${id}`}
+              />
+            ))}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
   const renderBookSuggestionChip = (suggestion: BookSuggestion, key: string) => {
     const chipLabel = formatBookSuggestionChipLabel(suggestion.bookName, suggestion.bookSlug);
     return (
@@ -266,6 +547,18 @@ export function SearchResultsBody({
     );
   };
 
+  const retryFooter =
+    !search.pending && search.failedHydrationCount > 0 ? (
+      <Pressable
+        onPress={search.onRetryBibleSearch}
+        style={({ pressed }) => [styles.retryFooter, pressed && styles.retryFooterPressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Retry loading Bible verses"
+      >
+        <Text style={styles.retryFooterText}>Some verses could not be loaded. Tap to retry.</Text>
+      </Pressable>
+    ) : null;
+
   const suggestionBanner =
     search.showBookSuggestionBanner && search.bookSuggestion ? (
       <View style={styles.suggestionBanner}>
@@ -278,6 +571,7 @@ export function SearchResultsBody({
   if (search.showSearchLoading) {
     return (
       <Pressable style={styles.bodyTapDismiss} onPress={Keyboard.dismiss}>
+        {renderScopeChips()}
         <View
           style={styles.searchPendingCenter}
           accessibilityLabel="Searching"
@@ -303,6 +597,7 @@ export function SearchResultsBody({
         contentContainerStyle={[styles.emptyScrollContent, styles.bodyScrollGrow]}
         showsVerticalScrollIndicator={false}
       >
+        {renderScopeChips()}
         <Text style={[styles.sectionLabel, styles.quickPicksSectionLabel]}>QUICK PICKS</Text>
         <View style={styles.grid}>
           {search.quickPicks.map((pick) => (
@@ -360,6 +655,7 @@ export function SearchResultsBody({
   if (search.noMatches) {
     return (
       <Pressable style={[styles.bodyTapDismiss, styles.bodyScrollGrow]} onPress={Keyboard.dismiss}>
+        {renderScopeChips()}
         <Text style={styles.empty}>No matches.</Text>
         {search.emptyNearbyBooks.length > 0 ? (
           <View style={styles.nearbySection}>
@@ -369,6 +665,7 @@ export function SearchResultsBody({
             </View>
           </View>
         ) : null}
+        {retryFooter}
       </Pressable>
     );
   }
@@ -390,7 +687,12 @@ export function SearchResultsBody({
           ? `v-${item.bookSlug}-${item.chapterNumber}-${item.verseNumber}-${index}`
           : `j-${item.id}`
       }
-      ListHeaderComponent={suggestionBanner}
+      ListHeaderComponent={
+        <>
+          {renderScopeChips()}
+          {suggestionBanner}
+        </>
+      }
       renderSectionHeader={({ section: { title } }) => (
         <Text style={[styles.sectionLabel, styles.resultsSectionHeader]}>{title}</Text>
       )}
@@ -410,6 +712,7 @@ export function SearchResultsBody({
               <Text style={styles.searchLoadingLabel}>Searching Bible…</Text>
             </View>
           ) : null}
+          {retryFooter}
           <Pressable style={styles.tapToDismissFiller} onPress={Keyboard.dismiss} accessibilityRole="none" />
         </>
       }
@@ -426,6 +729,11 @@ export function SearchResultsBody({
           >
             <TouchableOpacity activeOpacity={0.75} style={styles.row}>
               <Text style={styles.refText}>{journalSearchRowTitle(item as LocalJournalEntry)}</Text>
+              {formatJournalTagList((item as LocalJournalEntry).tags) ? (
+                <Text style={styles.journalTags} numberOfLines={1}>
+                  {formatJournalTagList((item as LocalJournalEntry).tags)}
+                </Text>
+              ) : null}
               <Text style={styles.snippet} numberOfLines={2}>
                 {stripHtmlPreview((item as LocalJournalEntry).content, 160)}
               </Text>
@@ -447,9 +755,19 @@ export function SearchResultsBody({
                 {(item as SearchResult).bookName} {(item as SearchResult).chapterNumber}:
                 {(item as SearchResult).verseNumber}
               </Text>
-              <Text style={styles.snippet} numberOfLines={2}>
-                {(item as SearchResult).verseText}
-              </Text>
+              {formatReaderMarkCaption(item as SearchResult) || (item as SearchResult).strongsLabel ? (
+                <Text style={styles.journalTags} numberOfLines={1}>
+                  {formatReaderMarkCaption(item as SearchResult) ?? (item as SearchResult).strongsLabel}
+                </Text>
+              ) : null}
+              <BibleVerseSnippet
+                result={item as SearchResult}
+                query={search.snippetQuery}
+                snippetStyle={styles.snippet}
+                highlightStyle={styles.snippetHighlight}
+                neighborStyle={styles.snippetNeighbor}
+                alsoStyle={styles.snippetAlso}
+              />
             </TouchableOpacity>
           </Link>
         )

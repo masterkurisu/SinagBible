@@ -5,6 +5,7 @@ import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import type { MobileJournalListItem } from "@/lib/load-journal-entries";
 import { stripHtmlPreview } from "@/lib/journal-preview";
 import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
+import { formatJournalTagLabel } from "@/lib/journal-tags";
 import { useTranslationPicker } from "@/lib/use-translation-picker";
 import { READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -95,6 +96,39 @@ export function JournalEntryDetailPreview({ entry }: JournalEntryDetailPreviewPr
       >
         {dateLine}
       </Text>
+      {entry.tags && entry.tags.length > 0 ? (
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: 8,
+            marginBottom: 16,
+          }}
+        >
+          {entry.tags.map((tag) => (
+            <View
+              key={tag}
+              style={{
+                borderWidth: 1,
+                borderColor: colors.tan200,
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "Inter_500Medium",
+                  fontSize: 12,
+                  color: colors.tan200,
+                }}
+              >
+                {formatJournalTagLabel(tag)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {passageLine ? (
         <>

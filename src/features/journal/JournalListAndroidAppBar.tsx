@@ -223,7 +223,7 @@ export function JournalListAndroidAppBar({
                   ref={inputRef}
                   value={searchQuery}
                   onChangeText={onChangeSearchQuery}
-                  placeholder="Search entries, verses, dates…"
+                  placeholder="Search entries, verses, dates, tags…"
                   placeholderTextColor={s.placeholder}
                   style={themedStyles.input}
                   returnKeyType="search"

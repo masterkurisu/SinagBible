@@ -15,6 +15,8 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Sinag Bible uses your photo library to attach images to journal reflections.",
         "NSPhotoLibraryAddUsageDescription": "Sinag Bible saves journal entry images you export to your photo library.",
+        "NSMicrophoneUsageDescription": "Sinag Bible uses the microphone for optional voice search. You can still type in the search overlay without it.",
+        "NSSpeechRecognitionUsageDescription": "Sinag Bible uses speech recognition to turn your words into a search query. Typing still works if you decline.",
         "UISupportedInterfaceOrientations": [
           "UIInterfaceOrientationPortrait",
           "UIInterfaceOrientationPortraitUpsideDown"
@@ -41,7 +43,6 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA"
       ]
     },

@@ -12,6 +12,7 @@ export type MobileJournalListItem = {
   created_at: string;
   title?: string | null;
   is_favorite?: boolean;
+  tags?: string[];
 };
 
 function localToListItem(e: {
@@ -26,6 +27,7 @@ function localToListItem(e: {
   created_at: string;
   title?: string | null;
   is_favorite?: boolean;
+  tags?: string[];
 }): MobileJournalListItem {
   return {
     id: e.id,
@@ -39,6 +41,7 @@ function localToListItem(e: {
     created_at: e.created_at,
     title: e.title,
     is_favorite: e.is_favorite,
+    tags: e.tags ?? [],
   };
 }
 

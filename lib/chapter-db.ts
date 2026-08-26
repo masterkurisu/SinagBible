@@ -76,6 +76,26 @@ function initSchema(database: SQLiteDatabase): void {
       key TEXT NOT NULL PRIMARY KEY,
       value TEXT NOT NULL
     ) WITHOUT ROWID;
+
+    CREATE TABLE IF NOT EXISTS yvp_keyword_postings (
+      translation_id TEXT NOT NULL,
+      token TEXT NOT NULL,
+      book_slug TEXT NOT NULL,
+      chapter_number INTEGER NOT NULL,
+      verse_number INTEGER NOT NULL,
+      PRIMARY KEY (translation_id, token, book_slug, chapter_number, verse_number)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE IF NOT EXISTS yvp_indexed_chapters (
+      translation_id TEXT NOT NULL,
+      book_slug TEXT NOT NULL,
+      chapter_number INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (translation_id, book_slug, chapter_number)
+    ) WITHOUT ROWID;
+
+    CREATE INDEX IF NOT EXISTS idx_yvp_keyword_token
+      ON yvp_keyword_postings (translation_id, token);
   `);
 }
 

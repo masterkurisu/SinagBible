@@ -97,6 +97,13 @@ import {
 } from "@/components/journal-reflection-toolbar-icons";
 import { isTabletLayout, TABLET_NEW_ENTRY_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 import { M3OutlinedTextField } from "@/src/components/m3/M3OutlinedTextField";
+import { JournalM3FilterChip } from "@/src/features/journal/JournalM3FilterChip";
+import {
+  formatJournalTagLabel,
+  JOURNAL_TAG_SUGGESTIONS,
+  normalizeJournalTag,
+  normalizeJournalTags,
+} from "@/lib/journal-tags";
 import { m3SettingsSheetTitleStyle } from "@/src/components/m3/M3SettingsSheetTitle";
 import {
   JOURNAL_M3_ELEVATED_CARD_ELEVATION_PX,
@@ -158,6 +165,7 @@ export type JournalEditDraft = {
   verse_start: number | null;
   verse_end: number | null;
   bible_translation?: string | null;
+  tags?: string[];
 };
 
 type Props = {
@@ -286,6 +294,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const [passage, setPassage] = useState(() => (editDraft ? editPassageFormatted : defaultPassageNew));
   const [title, setTitle] = useState(() => editDraft?.title?.trim() ?? "");
+  const [tags, setTags] = useState<string[]>(() => normalizeJournalTags(editDraft?.tags));
+  const [tagDraft, setTagDraft] = useState("");
   const [reflectionMarkdown, setReflectionMarkdown] = useState(() => initialReflectionState.markdown);
   const [reflectionImages, setReflectionImages] = useState<Record<string, string>>(
     () => initialReflectionState.images,
@@ -525,7 +535,25 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   );
 
   const hasReflectionInput = reflectionMarkdownHasContent(reflectionMarkdown);
-  const hasDraftInput = passage.trim().length > 0 || title.trim().length > 0 || hasReflectionInput;
+  const hasDraftInput =
+    passage.trim().length > 0 || title.trim().length > 0 || tags.length > 0 || hasReflectionInput;
+  const customTags = tags.filter(
+    (tag) => !(JOURNAL_TAG_SUGGESTIONS as readonly string[]).includes(tag),
+  );
+
+  const toggleTag = (tag: string) => {
+    hapticSelection();
+    setTags((prev) =>
+      prev.includes(tag) ? prev.filter((item) => item !== tag) : normalizeJournalTags([...prev, tag]),
+    );
+  };
+
+  const commitTagDraft = (raw: string) => {
+    const tag = normalizeJournalTag(raw);
+    if (!tag) return false;
+    setTags((prev) => normalizeJournalTags([...prev, tag]));
+    return true;
+  };
 
   useEffect(() => {
     if (editDraft) return;
@@ -535,6 +563,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       if (draft) {
         if (draft.passage.trim()) setPassage(draft.passage);
         if (draft.title.trim()) setTitle(draft.title);
+        if (draft.tags && draft.tags.length > 0) setTags(draft.tags);
         if (draft.reflectionMarkdown.trim()) {
           reflectionMarkdownRef.current = draft.reflectionMarkdown;
           setReflectionMarkdown(draft.reflectionMarkdown);
@@ -559,6 +588,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         JSON.stringify({
           passage,
           title,
+          tags,
           reflectionMarkdown: reflectionMarkdownRef.current,
           journalTranslationId,
           initialParams,
@@ -572,6 +602,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     hasDraftInput,
     passage,
     title,
+    tags,
     reflectionMarkdown,
     journalTranslationId,
     initialParams,
@@ -1169,6 +1200,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       const verse_start = parsed?.verseStart ?? null;
       const verse_end = parsed?.verseEnd ?? null;
       const titleTrim = title.trim() || null;
+      const tagsNormalized = normalizeJournalTags(tags);
 
       if (editDraft) {
         const updated = await updateLocalEntry(editDraft.id, {
@@ -1180,6 +1212,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           content,
           content_markdown: markdown,
           title: titleTrim,
+          tags: tagsNormalized,
         });
         if (!updated) {
           throw new Error("Journal entry not found");
@@ -1194,6 +1227,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           content,
           content_markdown: markdown,
           title: titleTrim,
+          tags: tagsNormalized,
         };
         setPendingJournalDetailEntry(savedEntry);
         await clearDefaultJournalDraft();
@@ -1211,6 +1245,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         content_markdown: markdown,
         title: titleTrim,
         is_favorite: false,
+        tags: tagsNormalized,
       });
 
       await clearDefaultJournalDraft();
@@ -1460,6 +1495,68 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           onFocus={() => markActiveFormField("title")}
           onBlur={() => releaseActiveFormField("title")}
         />
+      </View>
+
+      <View collapsable={false} style={{ backgroundColor: modalSurfaceColor, marginTop: 12 }}>
+        <Text
+          style={{
+            fontFamily: "Inter_400Regular",
+            fontSize: 12,
+            color: READER_M3_ON_SURFACE_VARIANT,
+            marginBottom: 8,
+          }}
+        >
+          Tags (optional)
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {JOURNAL_TAG_SUGGESTIONS.map((tag) => (
+            <JournalM3FilterChip
+              key={tag}
+              label={formatJournalTagLabel(tag)}
+              selected={tags.includes(tag)}
+              onPress={() => toggleTag(tag)}
+              bundle={bundle}
+            />
+          ))}
+          {customTags.map((tag) => (
+            <JournalM3FilterChip
+              key={tag}
+              label={formatJournalTagLabel(tag)}
+              selected
+              onPress={() => toggleTag(tag)}
+              bundle={bundle}
+              accessibilityLabel={`Remove tag ${formatJournalTagLabel(tag)}`}
+            />
+          ))}
+        </View>
+        {tags.length < 8 ? (
+          <View style={{ marginTop: 8 }}>
+            <M3OutlinedTextField
+              label="Add a tag"
+              value={tagDraft}
+              onChangeText={(text) => {
+                if (text.includes(",")) {
+                  const [head, ...rest] = text.split(",");
+                  if (commitTagDraft(head)) {
+                    setTagDraft(rest.join(",").replace(/^\s+/, ""));
+                    return;
+                  }
+                }
+                setTagDraft(text);
+              }}
+              surfaceColor={modalSurfaceColor}
+              accentColor={colors.brown800}
+              roundedEnds
+              minHeight={52}
+              inputFontFamily="Inter_400Regular"
+              returnKeyType="done"
+              blurOnSubmit
+              onSubmitEditing={() => {
+                if (commitTagDraft(tagDraft)) setTagDraft("");
+              }}
+            />
+          </View>
+        ) : null}
       </View>
     </>
   );

@@ -10,6 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getInfoAsync, moveAsync } from "expo-file-system/legacy";
 import * as SQLite from "expo-sqlite";
 import type { LocalJournalEntry } from "@sinag-bible/types";
+import { normalizeJournalTags, parseJournalTagsJson, serializeJournalTags } from "@/lib/journal-tags";
 
 const DB_NAME = "sinag-journal.db";
 export const JOURNAL_MIGRATION_FLAG_KEY = "sinagbible_journal_migrated_v1";
@@ -33,7 +34,8 @@ const INIT_SQL = `
     content TEXT NOT NULL,
     content_markdown TEXT,
     created_at TEXT NOT NULL,
-    is_favorite INTEGER NOT NULL DEFAULT 0
+    is_favorite INTEGER NOT NULL DEFAULT 0,
+    tags TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_journal_created_at
     ON journal_entries(created_at DESC, id DESC);
@@ -41,9 +43,12 @@ const INIT_SQL = `
 
 async function migrateJournalSchema(db: SQLite.SQLiteDatabase): Promise<void> {
   const columns = await db.getAllAsync<{ name: string }>("PRAGMA table_info(journal_entries)");
-  const hasMarkdown = columns.some((col) => col.name === "content_markdown");
-  if (!hasMarkdown) {
+  const names = new Set(columns.map((col) => col.name));
+  if (!names.has("content_markdown")) {
     await db.execAsync("ALTER TABLE journal_entries ADD COLUMN content_markdown TEXT");
+  }
+  if (!names.has("tags")) {
+    await db.execAsync("ALTER TABLE journal_entries ADD COLUMN tags TEXT");
   }
 }
 
@@ -200,6 +205,7 @@ type JournalRow = {
   content_markdown: string | null;
   created_at: string;
   is_favorite: number;
+  tags: string | null;
 };
 
 function rowToEntry(row: JournalRow): LocalJournalEntry {
@@ -215,6 +221,7 @@ function rowToEntry(row: JournalRow): LocalJournalEntry {
     content_markdown: row.content_markdown,
     created_at: row.created_at,
     is_favorite: row.is_favorite === 1,
+    tags: parseJournalTagsJson(row.tags),
   };
 }
 
@@ -231,14 +238,15 @@ function entryToParams(entry: LocalJournalEntry): (string | number | null)[] {
     entry.content_markdown ?? null,
     entry.created_at,
     entry.is_favorite ? 1 : 0,
+    serializeJournalTags(entry.tags),
   ];
 }
 
 const INSERT_SQL = `
   INSERT OR REPLACE INTO journal_entries
     (id, book, chapter, verse_start, verse_end, bible_translation,
-     title, content, content_markdown, created_at, is_favorite)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     title, content, content_markdown, created_at, is_favorite, tags)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /** Newest-first; ISO-8601 strings sort correctly lexicographically. */
@@ -313,6 +321,7 @@ function normalizeLegacyJournalEntry(entry: LocalJournalEntry): LocalJournalEntr
       typeof entry.created_at === "string" && entry.created_at.trim()
         ? entry.created_at
         : new Date().toISOString(),
+    tags: normalizeJournalTags(entry.tags),
   };
 }
 

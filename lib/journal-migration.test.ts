@@ -164,4 +164,12 @@ describe("dbReplaceAll", () => {
     const rows = await dbSelectAll();
     expect(rows.map((row) => row.id).sort()).toEqual(["local-import-1", "local-import-2"]);
   });
+
+  it("round-trips tags through sqlite", async () => {
+    const source = [
+      makeJournalEntry({ id: "local-tagged", tags: ["Gratitude", "prayer"] }),
+    ];
+    await dbReplaceAll(source);
+    expect((await dbSelectAll())[0]?.tags).toEqual(["gratitude", "prayer"]);
+  });
 });

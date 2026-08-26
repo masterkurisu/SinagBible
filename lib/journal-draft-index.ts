@@ -8,6 +8,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { htmlToReflectionMarkdown } from "@/lib/journal-reflection-html";
+import { normalizeJournalTags } from "@/lib/journal-tags";
 
 export const JOURNAL_DRAFT_INDEX_KEY = "sinagbible_journal_draft_index";
 export const JOURNAL_DRAFT_INDEX_MIGRATED_FLAG = "sinagbible_journal_draft_index_migrated_v1";
@@ -35,6 +36,8 @@ export type JournalNewEntryDraftPayload = {
   /** @deprecated Legacy RichEditor HTML draft — migrated on load. */
   reflectionHtml?: string;
   journalTranslationId: string;
+  /** Optional category tokens; omitted on older drafts. */
+  tags?: string[];
   initialParams?: {
     book?: string;
     chapter?: string;
@@ -161,6 +164,7 @@ export async function loadDefaultJournalDraft(): Promise<JournalNewEntryDraftPay
       reflectionMarkdown,
       journalTranslationId:
         typeof parsed.journalTranslationId === "string" ? parsed.journalTranslationId : "",
+      tags: normalizeJournalTags(parsed.tags),
       initialParams: parsed.initialParams,
       updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : "",
     };

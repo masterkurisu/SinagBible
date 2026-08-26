@@ -32,6 +32,7 @@ import {
 } from "@/src/components/m3/m3-motion";
 import { SearchResultsBody } from "@/src/features/search/SearchResultsBody";
 import { useBibleSearch } from "@/src/features/search/useBibleSearch";
+import { useSearchVoice } from "@/src/features/search/useSearchVoice";
 import { TAB_BAR_SEARCH_FAB_SIZE_PX } from "@/src/features/search/tabBarSearchFabChrome";
 
 const SEARCH_PILL_HEIGHT_PX = 56;
@@ -58,6 +59,10 @@ export function TabBarSearchLayer() {
   const [layerMounted, setLayerMounted] = useState(isOpen);
 
   const search = useBibleSearch({ enabled: isOpen });
+  const voice = useSearchVoice({
+    enabled: isOpen,
+    onTranscript: search.onVoiceTranscript,
+  });
   const inputRef = useRef<TextInput>(null);
 
   const tabBarTopPx = nativeTabSheetBottomInsetPx(insets.bottom, 0);
@@ -305,7 +310,7 @@ export function TabBarSearchLayer() {
               ref={inputRef}
               value={search.query}
               onChangeText={search.onSearchQueryChange}
-              placeholder="Search Bible, references, and journal"
+              placeholder={voice.listening ? "Listening…" : "Search Bible, references, and journal"}
               placeholderTextColor={s.placeholder}
               style={styles.input}
               returnKeyType="search"
@@ -314,6 +319,26 @@ export function TabBarSearchLayer() {
               selectionColor={s.tint}
               onSubmitEditing={search.onSubmitSearch}
             />
+            {voice.available ? (
+              <TouchableOpacity
+                onPress={() => {
+                  hapticLightImpact();
+                  voice.toggle();
+                }}
+                activeOpacity={0.65}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.clearButton}
+                accessibilityLabel={voice.listening ? "Stop voice search" : "Start voice search"}
+                accessibilityRole="button"
+                accessibilityState={{ selected: voice.listening }}
+              >
+                <MaterialCommunityIcons
+                  name={voice.listening ? "microphone" : "microphone-outline"}
+                  size={22}
+                  color={voice.listening ? s.tint : s.muted}
+                />
+              </TouchableOpacity>
+            ) : null}
             {showClear ? (
               <TouchableOpacity
                 onPressIn={() => {

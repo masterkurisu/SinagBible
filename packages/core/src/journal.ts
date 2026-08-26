@@ -1,16 +1,17 @@
 import type { PassageReference } from "@sinag-bible/types";
+import { expandReferenceQuery } from "./reference-aliases";
 
 export { BIBLE_BOOK_MISSPELLINGS, getPassageMisspellingSuggestion } from "./book-aliases";
 
 /**
- * Parse a passage string like "John 3:16", "Romans 8", or "Genesis 1:1-3" into
- * a PassageReference. Returns null if empty or unparseable.
+ * Parse a passage string like "John 3:16", "Romans 8", "john 3 16", or
+ * "Genesis 1:1-3" into a PassageReference. Returns null if empty or unparseable.
  */
 export function parsePassageReference(passage: string): PassageReference | null {
   const raw = passage.trim();
   if (!raw) return null;
 
-  const tokens = raw.split(/\s+/);
+  const tokens = expandReferenceQuery(raw).split(/\s+/);
   if (tokens.length < 2) return null;
 
   const last = tokens[tokens.length - 1];

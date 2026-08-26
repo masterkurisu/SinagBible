@@ -10,6 +10,8 @@ export type ToggleFavoriteTranslationResult = "pinned" | "unpinned" | "limit_rea
 
 const STORAGE_KEY = "sb:reader:favorite-translations";
 
+let memoryFavoriteTranslationIds: string[] | null = null;
+
 function mergeWithDefaultPins(stored: string[]): string[] {
   const seen = new Set(stored);
   const merged = [...stored];
@@ -30,6 +32,7 @@ async function loadFavorites(): Promise<string[]> {
       const defaults = getDefaultPinnedTranslationIds();
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
       await AsyncStorage.setItem(DEFAULTS_MIGRATION_KEY, "1");
+      memoryFavoriteTranslationIds = defaults;
       return defaults;
     }
 
@@ -40,21 +43,35 @@ async function loadFavorites(): Promise<string[]> {
       const merged = mergeWithDefaultPins(stored);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
       await AsyncStorage.setItem(DEFAULTS_MIGRATION_KEY, "1");
+      memoryFavoriteTranslationIds = merged;
       return merged;
     }
 
+    memoryFavoriteTranslationIds = stored;
     return stored;
   } catch {
-    return getDefaultPinnedTranslationIds();
+    const defaults = getDefaultPinnedTranslationIds();
+    memoryFavoriteTranslationIds = defaults;
+    return defaults;
   }
 }
 
 async function saveFavorites(ids: string[]): Promise<void> {
+  memoryFavoriteTranslationIds = ids;
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
   } catch {
     /* ignore */
   }
+}
+
+/** Synchronous snapshot (null before first load/save this session). */
+export function peekFavoriteTranslationIds(): string[] | null {
+  return memoryFavoriteTranslationIds;
+}
+
+export async function loadFavoriteTranslationIds(): Promise<string[]> {
+  return loadFavorites();
 }
 
 export function useFavoriteTranslations(): {
@@ -65,9 +82,14 @@ export function useFavoriteTranslations(): {
 
   useEffect(() => {
     void loadFavorites()
-      .then(setFavoriteTranslationIds)
+      .then((ids) => {
+        memoryFavoriteTranslationIds = ids;
+        setFavoriteTranslationIds(ids);
+      })
       .catch(() => {
-        setFavoriteTranslationIds(getDefaultPinnedTranslationIds());
+        const defaults = getDefaultPinnedTranslationIds();
+        memoryFavoriteTranslationIds = defaults;
+        setFavoriteTranslationIds(defaults);
       });
   }, []);
 

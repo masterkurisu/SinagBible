@@ -1,5 +1,7 @@
 import { getDb } from "@/lib/chapter-db";
 import { canonicalTranslationId } from "@/lib/canonical-translation-id";
+import { clearYvpKeywordIndex, indexYvpStoredChapter } from "@/lib/yvp-keyword-index";
+import { yvpCorpusCompleteFlagKey } from "@/lib/yvp-corpus-policy";
 
 export type ChapterSource = "helloao" | "yvp";
 
@@ -151,6 +153,7 @@ export function putChapter(chapter: StoredChapter): void {
 
   const key = chapterStoreKey(chapter.translationId, chapter.bookSlug, chapter.chapterNumber);
   chapterLru.set(key, { ...chapter, updatedAt });
+  indexYvpStoredChapter({ ...chapter, updatedAt });
 }
 
 export function putChapters(chapters: StoredChapter[]): void {
@@ -170,6 +173,7 @@ export function putChapters(chapters: StoredChapter[]): void {
     const updatedAt = chapter.updatedAt ?? batchUpdatedAt;
     const key = chapterStoreKey(chapter.translationId, chapter.bookSlug, chapter.chapterNumber);
     chapterLru.set(key, { ...chapter, updatedAt });
+    indexYvpStoredChapter({ ...chapter, updatedAt });
   }
 }
 
@@ -195,6 +199,72 @@ export function getChapterSync(
   const chapter = rowToStoredChapter(row);
   chapterLru.set(key, chapter);
   return chapter;
+}
+
+export function listStoredYvpChaptersForBooks(
+  translationId: string,
+  bookSlugs: readonly string[],
+): StoredChapter[] {
+  if (bookSlugs.length === 0) return [];
+  const db = getDb();
+  const placeholders = bookSlugs.map(() => "?").join(", ");
+  const rows = db.getAllSync<ChapterRow>(
+    `SELECT translation_id, book_slug, chapter_number, source, payload, updated_at
+     FROM chapters
+     WHERE translation_id = ? AND source = 'yvp' AND book_slug IN (${placeholders})`,
+    [translationId, ...bookSlugs],
+  );
+  return rows.map(rowToStoredChapter);
+}
+
+export function listStoredYvpChapterKeys(
+  translationId: string,
+): { bookSlug: string; chapterNumber: number }[] {
+  const db = getDb();
+  const rows = db.getAllSync<{ book_slug: string; chapter_number: number }>(
+    `SELECT book_slug, chapter_number
+     FROM chapters
+     WHERE translation_id = ? AND source = 'yvp'`,
+    [translationId],
+  );
+  return rows.map((row) => ({ bookSlug: row.book_slug, chapterNumber: row.chapter_number }));
+}
+
+export function countStoredYvpChapters(translationId?: string): number {
+  const db = getDb();
+  if (translationId) {
+    const row = db.getFirstSync<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM chapters WHERE translation_id = ? AND source = 'yvp'",
+      [translationId],
+    );
+    return row?.count ?? 0;
+  }
+  const row = db.getFirstSync<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM chapters WHERE source = 'yvp'",
+  );
+  return row?.count ?? 0;
+}
+
+export function getStoreFlag(key: string): string | null {
+  const db = getDb();
+  const row = db.getFirstSync<{ value: string }>(
+    "SELECT value FROM store_flags WHERE key = ?",
+    [key],
+  );
+  return row?.value ?? null;
+}
+
+export function setStoreFlag(key: string, value: string): void {
+  const db = getDb();
+  db.runSync(
+    "INSERT INTO store_flags (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    [key, value],
+  );
+}
+
+export function deleteStoreFlag(key: string): void {
+  const db = getDb();
+  db.runSync("DELETE FROM store_flags WHERE key = ?", [key]);
 }
 
 export function hasChapterSync(
@@ -277,6 +347,12 @@ export function purgeTranslation(translationId: string): void {
   });
 
   chapterLru.deleteByTranslation(translationId);
+  try {
+    clearYvpKeywordIndex(translationId);
+    deleteStoreFlag(yvpCorpusCompleteFlagKey(translationId));
+  } catch {
+    /* index tables may not exist yet */
+  }
 }
 
 /** Applies remote revoke + revision updates. Phase 4b supplies config via {@link fetchChapterRemoteConfig}. */
@@ -304,5 +380,15 @@ export function clearChapterStoreMemoryCache(): void {
 export function clearAllStoredChapters(): void {
   const db = getDb();
   db.runSync("DELETE FROM chapters");
+  try {
+    db.runSync("DELETE FROM store_flags WHERE key LIKE 'yvp_search_corpus_complete:%'");
+  } catch {
+    /* flags table may not exist yet */
+  }
   chapterLru.clear();
+  try {
+    clearYvpKeywordIndex();
+  } catch {
+    /* index tables may not exist yet */
+  }
 }

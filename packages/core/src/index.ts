@@ -4,5 +4,5 @@ export * from "./journal";
 export * from "./verse-tags";
 // Note: kjv.ts is NOT re-exported here because it imports the full 4.5MB KJV JSON.
 // Import it directly in server-side code only:
-//   import { getChapterBySlug, getSearchResults } from "@sinag-bible/core/kjv"
+//   import { getChapterBySlug, getBookNav } from "@sinag-bible/core/kjv"
 // or use the Next.js server-only wrapper in apps/web.

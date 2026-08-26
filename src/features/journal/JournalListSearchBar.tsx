@@ -96,7 +96,7 @@ export function JournalListSearchBar({
         ref={inputRef}
         value={query}
         onChangeText={onChangeQuery}
-        placeholder="Search entries, verses, dates…"
+        placeholder="Search entries, verses, dates, tags…"
         placeholderTextColor={s.placeholder}
         style={styles.input}
         returnKeyType="search"
