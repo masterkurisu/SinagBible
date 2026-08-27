@@ -2,6 +2,11 @@
  * Temporary dev flags — flip to `true`, reload the app, then test the tour.
  * All flags are no-ops in production (`__DEV__` is false).
  *
+ * In-app coachmarks/spotlights are currently off via
+ * `FEATURE_ONBOARDING_DISABLED` in `lib/feature-onboarding-storage.ts`.
+ * Force flags below still win so you can preview a tour while that kill
+ * switch is true.
+ *
  * Quick start:
  * - `forceAppIntro` — first-launch slide deck (OnboardingContainer)
  * - `forceAllFeatures` — every feature tour below (reader, journal, forms, …)

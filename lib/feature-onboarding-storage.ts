@@ -2,6 +2,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { onboardingDebugForcedFeaturePages } from "@/lib/onboarding-debug";
 
 /**
+ * Temporary kill switch for in-app coachmarks and spotlights (reader, journal,
+ * book picker, action bar, and the intro privacy spotlight).
+ *
+ * Flip to `false` when tours are ready to ship again. Dev force flags in
+ * `lib/onboarding-debug.ts` still take precedence so a single tour can be
+ * tested while this is true. Does not hide the first-launch intro slides.
+ */
+export const FEATURE_ONBOARDING_DISABLED = true;
+
+/**
  * Dev-only: always re-run these tours and skip persisting completion.
  * Populated from `lib/onboarding-debug.ts` — edit flags there.
  */
@@ -48,6 +58,7 @@ export function isFeatureOnboardingForced(page: FeatureOnboardingPage): boolean 
 }
 
 export function isFeatureOnboardingSkipped(page: FeatureOnboardingPage): boolean {
+  if (FEATURE_ONBOARDING_DISABLED) return true;
   return FEATURE_ONBOARDING_SKIP_PAGES.has(page);
 }
 

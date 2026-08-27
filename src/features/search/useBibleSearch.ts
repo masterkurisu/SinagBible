@@ -34,6 +34,7 @@ import {
   attachAlsoTranslationSnippets,
   pickAlsoTranslationId,
 } from "@/lib/search-also-translation";
+import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
 import {
   loadFavoriteTranslationIds,
   peekFavoriteTranslationIds,

@@ -21,6 +21,7 @@ import Markdown from "react-native-markdown-display";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Asset } from "expo-asset";
 import { readAsStringAsync, EncodingType } from "expo-file-system/legacy";
+import { FEATURE_ONBOARDING_DISABLED } from "@/lib/feature-onboarding-storage";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { PRIVACY_POLICY_URL } from "@/lib/legal-urls";
 import { TermsOfServiceSheet } from "@/components/terms-of-service-sheet";
@@ -183,8 +184,12 @@ export function OnboardingSlide4({ onFinish, onBack, onPrivacyPress: _onPrivacyP
       onFinish?.();
       return;
     }
+    if (FEATURE_ONBOARDING_DISABLED) {
+      openPrivacyModal();
+      return;
+    }
     showPrivacySpotlight();
-  }, [onFinish, privacyAgreed, showPrivacySpotlight]);
+  }, [onFinish, openPrivacyModal, privacyAgreed, showPrivacySpotlight]);
 
   const openLivePrivacyPolicy = useCallback(() => {
     void (async () => {
