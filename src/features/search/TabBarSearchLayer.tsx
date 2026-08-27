@@ -127,7 +127,11 @@ function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearc
   const md = getSearchOverlayChrome(bundle);
   const pillBottomPx = nativeTabSheetBottomInsetPx(insets.bottom, 0);
   const expandedPillWidthPx = screenW - SEARCH_BAR_HORIZONTAL_INSET_PX * 2;
-  const pillSurfaceColor = md.surfaceContainerHigh;
+  // Identical to the sheet's surface (not just a close tonal step) — at
+  // near-white lightness even a ~7/255 delta reads as "washed out" rather
+  // than "intentionally elevated", so exact equality is what actually
+  // reads as seamless.
+  const pillSurfaceColor = md.surfaceContainerLow;
   const frostColor = searchFrostScrimColor(isMobileAppDarkThemeId(bundle.id), md.surfaceContainerLow);
 
   const scrimStyle = useAnimatedStyle(() => ({
@@ -318,7 +322,7 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
     [search],
   );
 
-  const pillSurfaceColor = md.surfaceContainerHigh;
+  const pillSurfaceColor = md.surfaceContainerLow;
   const showClear = search.query.length > 0;
 
   const styles = useMemo(

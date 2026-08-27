@@ -1,4 +1,4 @@
-import type { Testament } from "@sinag-bible/types";
+import type { BibleBookNavItem, Testament } from "@sinag-bible/types";
 
 const BIBLE_BOOK_NAMES = [
   "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
@@ -26,6 +26,30 @@ function normalizeBookSlug(name: string) {
 }
 
 const BIBLE_BOOK_SLUGS = BIBLE_BOOK_NAMES.map(normalizeBookSlug);
+
+/**
+ * KJV chapter count per book, same order as `BIBLE_BOOK_NAMES` (index 0 = Genesis).
+ * Lets nav/slug resolution use the canonical KJV shape without loading the 4.5MB
+ * KJV JSON — that file should only be parsed when its verse text is actually needed.
+ */
+const BIBLE_BOOK_CHAPTER_COUNTS = [
+  50, 40, 27, 36, 34, 24, 21, 4, 31, 24,
+  22, 25, 29, 36, 10, 13, 10, 42, 150, 31,
+  12, 8, 66, 52, 5, 48, 12, 14, 3, 9,
+  1, 4, 7, 3, 3, 3, 2, 14, 4, 28,
+  16, 24, 21, 28, 16, 16, 13, 6, 6, 4,
+  4, 5, 3, 6, 4, 3, 1, 13, 5, 5,
+  3, 5, 1, 1, 1, 22,
+] as const;
+
+/** Canonical KJV book nav (name + slug + chapter count) with no JSON data load. */
+export function getKjvCanonicalBookNav(): BibleBookNavItem[] {
+  return BIBLE_BOOK_NAMES.map((name, i) => ({
+    name,
+    slug: BIBLE_BOOK_SLUGS[i]!,
+    chapterCount: BIBLE_BOOK_CHAPTER_COUNTS[i],
+  }));
+}
 
 /**
  * Standard USFM 3-letter book codes in KJV canon order (index 0 = Genesis).

@@ -11,6 +11,7 @@ import {
   flattenHelloaoVerseText,
   parseHelloaoVerseContentArray,
 } from "./helloao-verse-inline";
+import { getKjvCanonicalBookNav } from "./bible-meta";
 import { getPassageMisspellingSuggestion } from "./book-aliases";
 import { expandReferenceQuery } from "./reference-aliases";
 import { lookupNamedPassage } from "./search-named-passages";
@@ -428,37 +429,20 @@ function normalizeBookSlug(name: string) {
     .replace(/\s+/g, "-");
 }
 
-/** Slugs derived from each translation's book titles (e.g. ADB1905 "Filipos" → `filipos`). */
-function buildBookNavFromData(data: TranslationData): BibleBookNavItem[] {
-  return data.books.map((book) => ({
-    name: book.name,
-    slug: normalizeBookSlug(book.name),
-    chapterCount: book.chapters.length,
-  }));
-}
-
-let kjvCanonicalNavPromise: Promise<BibleBookNavItem[]> | null = null;
-
-async function getKjvCanonicalNav(): Promise<BibleBookNavItem[]> {
-  if (!kjvCanonicalNavPromise) {
-    const kjv = await loadTranslationData("KJV");
-    kjvCanonicalNavPromise = Promise.resolve(buildBookNavFromData(kjv));
-  }
-  return kjvCanonicalNavPromise;
-}
-
 /**
  * Reader URLs and `getBookNameFromSlug` use KJV-shaped English slugs (e.g. `philippians`).
  * Some translations use different book titles (e.g. Tagalog "Filipos"); for datasets that align
  * 1:1 with KJV (same book order and chapter counts), we reuse KJV slugs so routing matches.
+ *
+ * Compares against the canonical KJV book/chapter shape (static metadata, no JSON load) —
+ * this runs for every translation's nav, so it must not force-parse the 4.5MB KJV file.
  */
 async function buildBookNav(data: TranslationData): Promise<BibleBookNavItem[]> {
-  const kjvBooks = (await loadTranslationData("KJV")).books;
-  const kjvCanonicalNav = await getKjvCanonicalNav();
+  const kjvCanonicalNav = getKjvCanonicalBookNav();
   const useKjvSlugs =
-    data.books.length === kjvBooks.length &&
+    data.books.length === kjvCanonicalNav.length &&
     data.books.every(
-      (book, i) => book.chapters.length === kjvBooks[i]!.chapters.length,
+      (book, i) => book.chapters.length === kjvCanonicalNav[i]!.chapterCount,
     );
 
   return data.books.map((book, index) => ({

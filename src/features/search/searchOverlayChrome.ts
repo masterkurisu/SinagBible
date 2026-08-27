@@ -21,8 +21,12 @@ export function getSearchOverlayChrome(bundle: MobileAppThemeBundle): SearchOver
     primary: search.tint,
     onSurface: ui.brown800,
     onSurfaceVariant: ui.brown500,
+    // Neutral tonal steps from the same palette as the sheet, so the pill
+    // reads as "one step up" in every theme instead of an unrelated accent
+    // color. Ordering (low -> highest) holds across all themes, light or dark:
+    // parchmentMid -> parchmentDeep -> parchmentDark.
     surfaceContainerLow: ui.parchmentMid,
-    surfaceContainerHigh: chrome.androidIndicator,
+    surfaceContainerHigh: ui.parchmentDeep,
     surfaceContainerHighest: ui.parchmentDark,
     outline: ui.tan300,
     outlineVariant: ui.borderSolid,
