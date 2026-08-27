@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { type Href, Link } from "expo-router";
 import type { BookSuggestion, LocalJournalEntry, SearchResult } from "@sinag-bible/types";
 import { formatPassageReference } from "@sinag-bible/core";
@@ -22,6 +23,11 @@ import { formatBookSuggestionChipLabel } from "@/lib/book-genre-display";
 import { stripHtmlPreview } from "@/lib/journal-preview";
 import { hapticLightImpact } from "@/lib/haptics";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { SearchM3FilterChip } from "@/src/features/search/SearchM3FilterChip";
+import {
+  getSearchOverlayChrome,
+  type SearchOverlayChrome,
+} from "@/src/features/search/searchOverlayChrome";
 import type { useBibleSearch } from "@/src/features/search/useBibleSearch";
 import { findSnippetHighlightRange } from "@/src/features/search/searchVerseSnippet";
 
@@ -83,52 +89,56 @@ function BibleVerseSnippet({
   );
 }
 
-function createSearchBodyStyles(s: MobileAppThemeBundle["search"]) {
+function createSearchBodyStyles(md: SearchOverlayChrome) {
   return StyleSheet.create({
     sectionLabel: {
-      fontFamily: "Inter_500Medium",
-      fontSize: 10,
-      letterSpacing: 1.2,
+      fontFamily: "Inter_600SemiBold",
+      fontSize: 11,
+      lineHeight: 16,
+      letterSpacing: 1.6,
       textTransform: "uppercase",
-      color: s.muted,
+      color: md.primary,
     },
-    quickPicksSectionLabel: { marginTop: 0 },
+    filterSectionLabel: { marginTop: 10, marginBottom: 10, marginLeft: 2 },
+    quickPicksSectionLabel: { marginTop: 14, marginBottom: 10, marginLeft: 2 },
     resultsSectionHeader: {
-      paddingTop: 4,
+      paddingTop: 14,
       paddingBottom: 8,
+      marginLeft: 2,
     },
-    recentSectionLabel: { marginTop: 28 },
+    recentSectionLabel: { marginTop: 14, marginBottom: 4, marginLeft: 2 },
     grid: {
       flexDirection: "row",
       flexWrap: "wrap",
       justifyContent: "space-between",
-      marginTop: 12,
-      rowGap: 12,
+      rowGap: 10,
     },
     pickCard: {
-      width: "48%",
-      paddingVertical: 12,
-      paddingHorizontal: 14,
+      width: "48.5%",
       borderRadius: 12,
-      backgroundColor: s.cardBackground,
-      borderWidth: 0.5,
-      borderColor: s.cardBorder,
+      backgroundColor: md.surfaceContainerHighest,
+      overflow: "hidden",
+    },
+    pickCardPress: {
+      paddingVertical: 14,
+      paddingHorizontal: 14,
     },
     pickCardPressed: { opacity: 0.92 },
     pickRef: {
       fontFamily: "Inter_500Medium",
-      fontSize: 14,
-      color: s.bodyText,
-      marginBottom: 6,
+      fontSize: 15,
+      lineHeight: 20,
+      color: md.onSurface,
+      marginBottom: 3,
     },
     pickExcerpt: {
-      fontFamily: "Inter_300Light",
-      fontSize: 11,
-      color: s.muted,
+      fontFamily: "Inter_400Regular",
+      fontSize: 12,
+      lineHeight: 16,
+      color: md.onSurfaceVariant,
     },
     recentList: {
-      marginTop: 12,
-      gap: 6,
+      marginTop: 4,
       width: "100%",
       alignSelf: "stretch",
     },
@@ -137,9 +147,10 @@ function createSearchBodyStyles(s: MobileAppThemeBundle["search"]) {
       flexDirection: "row",
       alignItems: "center",
       alignSelf: "stretch",
-      borderRadius: 2,
-      paddingVertical: 2,
-      paddingHorizontal: 2,
+      paddingVertical: 12,
+      paddingLeft: 2,
+      borderBottomWidth: 1,
+      borderBottomColor: md.outlineVariant,
     },
     recentMainTouchable: {
       flex: 1,
@@ -153,159 +164,117 @@ function createSearchBodyStyles(s: MobileAppThemeBundle["search"]) {
       justifyContent: "center",
     },
     recentIconWrap: {
-      width: 40,
-      height: 40,
+      width: 24,
+      height: 24,
       marginRight: 12,
       flexShrink: 0,
       alignItems: "center",
       justifyContent: "center",
-      opacity: 0.35,
     },
     recentText: {
       width: "100%",
       fontFamily: "Inter_400Regular",
-      fontSize: 13,
+      fontSize: 14,
       lineHeight: 20,
-      color: s.recentText,
+      color: md.onSurface,
     },
     recentRemove: {
-      paddingLeft: 8,
-      paddingVertical: 4,
+      width: 40,
+      height: 40,
       justifyContent: "center",
       alignItems: "center",
     },
     recentRemovePressed: { opacity: 0.6 },
-    recentRemoveMark: {
-      fontFamily: "Inter_400Regular",
-      fontSize: 20,
-      lineHeight: 22,
-      color: s.bodyText,
-      opacity: 0.25,
-    },
-    listContent: { paddingTop: 8, paddingBottom: 24 },
+    listContent: { paddingTop: 4, paddingBottom: 24 },
     row: {
       paddingVertical: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: s.divider,
+      paddingHorizontal: 2,
+      borderBottomWidth: 1,
+      borderBottomColor: md.outlineVariant,
     },
     refText: {
       fontFamily: "Inter_500Medium",
-      fontSize: 14,
-      color: s.bodyText,
-      marginBottom: 4,
+      fontSize: 16,
+      lineHeight: 24,
+      color: md.onSurface,
+      marginBottom: 3,
     },
     snippet: {
       fontFamily: "Inter_400Regular",
-      fontSize: 13,
-      color: s.recentText,
-      lineHeight: 19.5,
+      fontSize: 14,
+      color: md.onSurfaceVariant,
+      lineHeight: 21,
     },
     snippetHighlight: {
       fontFamily: "Inter_600SemiBold",
-      color: s.bodyText,
+      color: md.onSurface,
     },
     snippetNeighbor: {
       fontFamily: "Inter_400Regular",
-      fontSize: 13,
-      color: s.muted,
-      lineHeight: 19.5,
+      fontSize: 14,
+      color: md.outline,
+      lineHeight: 21,
     },
     snippetAlso: {
       fontFamily: "Inter_400Regular",
       fontSize: 12,
-      color: s.muted,
-      lineHeight: 18,
+      color: md.outline,
+      lineHeight: 16,
     },
-    scopeRow: {
+    chipWrap: {
       flexDirection: "row",
       flexWrap: "wrap",
       alignItems: "center",
       gap: 8,
-      marginBottom: 12,
-    },
-    scopeChip: {
-      paddingVertical: 5,
-      paddingHorizontal: 12,
-      borderRadius: 999,
-      backgroundColor: s.cardBackground,
-      borderWidth: 0.5,
-      borderColor: s.cardBorder,
-    },
-    scopeChipSelected: {
-      borderColor: s.tint,
-      backgroundColor: s.pageBackground,
-    },
-    scopeChipPressed: { opacity: 0.85 },
-    scopeChipText: {
-      fontFamily: "Inter_500Medium",
-      fontSize: 12,
-      color: s.muted,
-    },
-    scopeChipTextSelected: {
-      color: s.tint,
+      marginBottom: 6,
     },
     journalTags: {
       marginTop: 2,
       fontFamily: "Inter_400Regular",
       fontSize: 12,
-      color: s.muted,
+      lineHeight: 16,
+      color: md.onSurfaceVariant,
     },
     colorRow: {
       flexDirection: "row",
       flexWrap: "wrap",
       alignItems: "center",
       gap: 8,
-      marginBottom: 12,
+      marginTop: 10,
+      marginBottom: 6,
     },
     colorDot: {
       width: 22,
       height: 22,
       borderRadius: 11,
       borderWidth: 1,
-      borderColor: s.cardBorder,
+      borderColor: md.outlineVariant,
     },
     colorDotSelected: {
       borderWidth: 2,
-      borderColor: s.tint,
+      borderColor: md.primary,
     },
     empty: {
       marginTop: 24,
       textAlign: "center",
       fontFamily: "Inter_400Regular",
       fontSize: 15,
-      color: s.muted,
+      color: md.onSurfaceVariant,
     },
     suggestionBanner: {
       flexDirection: "row",
       flexWrap: "wrap",
       alignItems: "center",
-      gap: 6,
+      gap: 8,
       marginBottom: 12,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
-      borderRadius: 12,
-      backgroundColor: s.cardBackground,
-      borderWidth: 0.5,
-      borderColor: s.cardBorder,
+      paddingVertical: 12,
+      paddingHorizontal: 4,
     },
     suggestionLabel: {
       fontFamily: "Inter_400Regular",
-      fontSize: 13,
-      color: s.muted,
-    },
-    suggestionChip: {
-      paddingVertical: 4,
-      paddingHorizontal: 10,
-      borderRadius: 999,
-      backgroundColor: s.pageBackground,
-      borderWidth: 0.5,
-      borderColor: s.cardBorder,
-    },
-    suggestionChipPressed: { opacity: 0.85 },
-    suggestionChipText: {
-      fontFamily: "Inter_500Medium",
-      fontSize: 13,
-      color: s.tint,
+      fontSize: 14,
+      lineHeight: 20,
+      color: md.onSurfaceVariant,
     },
     nearbySection: {
       marginTop: 20,
@@ -333,7 +302,7 @@ function createSearchBodyStyles(s: MobileAppThemeBundle["search"]) {
       fontFamily: "Inter_500Medium",
       fontSize: 14,
       lineHeight: 20,
-      color: s.muted,
+      color: md.onSurfaceVariant,
       textAlign: "center",
     },
     searchPendingInline: {
@@ -346,21 +315,17 @@ function createSearchBodyStyles(s: MobileAppThemeBundle["search"]) {
     retryFooter: {
       marginTop: 8,
       paddingVertical: 12,
-      paddingHorizontal: 14,
-      borderRadius: 12,
-      backgroundColor: s.cardBackground,
-      borderWidth: 0.5,
-      borderColor: s.cardBorder,
+      paddingHorizontal: 4,
       alignItems: "center",
     },
     retryFooterPressed: { opacity: 0.85 },
     retryFooterText: {
       fontFamily: "Inter_500Medium",
       fontSize: 13,
-      color: s.tint,
+      color: md.primary,
       textAlign: "center",
     },
-    emptyScrollContent: { paddingTop: 4 },
+    emptyScrollContent: { paddingTop: 2 },
     scroll: { flex: 1 },
   });
 }
@@ -380,34 +345,23 @@ export function SearchResultsBody({
   onPickBookSuggestion,
   onNavigateResult,
 }: SearchResultsBodyProps) {
-  const s = bundle.search;
-  const styles = useMemo(() => createSearchBodyStyles(s), [s]);
+  const md = useMemo(() => getSearchOverlayChrome(bundle), [bundle]);
+  const styles = useMemo(() => createSearchBodyStyles(md), [md]);
+  const chipRipple =
+    Platform.OS === "android" ? { color: md.iconRipple } : undefined;
 
   const renderMarkChip = (
     kind: NonNullable<SearchState["activeMarksKind"]>,
     label: string,
     accessibilityLabel: string,
   ) => (
-    <Pressable
+    <SearchM3FilterChip
+      label={label}
+      selected={search.activeMarksKind === kind}
       onPress={() => search.onChangeMarksKind(search.activeMarksKind === kind ? null : kind)}
-      style={({ pressed }) => [
-        styles.scopeChip,
-        search.activeMarksKind === kind && styles.scopeChipSelected,
-        pressed && styles.scopeChipPressed,
-      ]}
-      accessibilityRole="button"
-      accessibilityState={{ selected: search.activeMarksKind === kind }}
+      chrome={md}
       accessibilityLabel={accessibilityLabel}
-    >
-      <Text
-        style={[
-          styles.scopeChipText,
-          search.activeMarksKind === kind && styles.scopeChipTextSelected,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
+    />
   );
 
   const renderScopeChips = () => {
@@ -415,96 +369,47 @@ export function SearchResultsBody({
       search.activeMarksKind === "highlights" || search.activeMarksKind === "marks";
     return (
       <View>
-        <View style={styles.scopeRow}>
+        <Text style={[styles.sectionLabel, styles.filterSectionLabel]}>Filter</Text>
+        <View style={styles.chipWrap}>
           {search.showScopeChips && search.scopeBookName ? (
             <>
-              <Pressable
+              <SearchM3FilterChip
+                label="Whole Bible"
+                selected={search.bibleScope === "all"}
                 onPress={() => search.onChangeBibleScope("all")}
-                style={({ pressed }) => [
-                  styles.scopeChip,
-                  search.bibleScope === "all" && styles.scopeChipSelected,
-                  pressed && styles.scopeChipPressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: search.bibleScope === "all" }}
+                chrome={md}
                 accessibilityLabel="Search the whole Bible"
-              >
-                <Text
-                  style={[
-                    styles.scopeChipText,
-                    search.bibleScope === "all" && styles.scopeChipTextSelected,
-                  ]}
-                >
-                  Whole Bible
-                </Text>
-              </Pressable>
-              <Pressable
+              />
+              <SearchM3FilterChip
+                label={search.scopeBookName}
+                selected={search.bibleScope === "book"}
                 onPress={() => search.onChangeBibleScope("book")}
-                style={({ pressed }) => [
-                  styles.scopeChip,
-                  search.bibleScope === "book" && styles.scopeChipSelected,
-                  pressed && styles.scopeChipPressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: search.bibleScope === "book" }}
+                chrome={md}
                 accessibilityLabel={`Search in ${search.scopeBookName}`}
-              >
-                <Text
-                  style={[
-                    styles.scopeChipText,
-                    search.bibleScope === "book" && styles.scopeChipTextSelected,
-                  ]}
-                >
-                  {search.scopeBookName}
-                </Text>
-              </Pressable>
+              />
             </>
           ) : null}
-          <Pressable
+          <SearchM3FilterChip
+            label="Favorites"
+            selected={search.journalFavoritesOnly}
             onPress={() => search.onChangeJournalFavoritesOnly(!search.journalFavoritesOnly)}
-            style={({ pressed }) => [
-              styles.scopeChip,
-              search.journalFavoritesOnly && styles.scopeChipSelected,
-              pressed && styles.scopeChipPressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityState={{ selected: search.journalFavoritesOnly }}
+            chrome={md}
             accessibilityLabel="Show favorite journal entries only"
-          >
-            <Text
-              style={[
-                styles.scopeChipText,
-                search.journalFavoritesOnly && styles.scopeChipTextSelected,
-              ]}
-            >
-              Favorites
-            </Text>
-          </Pressable>
+          />
           {renderMarkChip("marks", "Marks", "Show highlighted, underlined, and saved verses")}
           {renderMarkChip("highlights", "Highlights", "Show highlighted verses")}
           {renderMarkChip("underlines", "Underlines", "Show underlined verses")}
           {renderMarkChip("favorites", "Saved verses", "Show saved favorite verses")}
           {search.alsoChipLabel ? (
-            <Pressable
-              onPress={() => search.onChangeAlsoTranslationEnabled(!search.alsoTranslationActive)}
-              style={({ pressed }) => [
-                styles.scopeChip,
-                search.alsoTranslationActive && styles.scopeChipSelected,
-                pressed && styles.scopeChipPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: search.alsoTranslationActive }}
+            <SearchM3FilterChip
+              label={`Also in ${search.alsoChipLabel}`}
+              selected={search.alsoTranslationActive}
+              onPress={() =>
+                search.onChangeAlsoTranslationEnabled(!search.alsoTranslationActive)
+              }
+              chrome={md}
               accessibilityLabel={`Also show this verse in ${search.alsoChipLabel}`}
-            >
-              <Text
-                style={[
-                  styles.scopeChipText,
-                  search.alsoTranslationActive && styles.scopeChipTextSelected,
-                ]}
-              >
-                Also in {search.alsoChipLabel}
-              </Text>
-            </Pressable>
+            />
           ) : null}
         </View>
         {showColorDots ? (
@@ -519,7 +424,7 @@ export function SearchResultsBody({
                   styles.colorDot,
                   { backgroundColor: highlightColors[id] },
                   search.activeHighlightColor === id && styles.colorDotSelected,
-                  pressed && styles.scopeChipPressed,
+                  pressed && styles.pickCardPressed,
                 ]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: search.activeHighlightColor === id }}
@@ -535,15 +440,14 @@ export function SearchResultsBody({
   const renderBookSuggestionChip = (suggestion: BookSuggestion, key: string) => {
     const chipLabel = formatBookSuggestionChipLabel(suggestion.bookName, suggestion.bookSlug);
     return (
-      <Pressable
+      <SearchM3FilterChip
         key={key}
+        label={chipLabel}
+        selected={false}
         onPress={() => onPickBookSuggestion(suggestion)}
-        style={({ pressed }) => [styles.suggestionChip, pressed && styles.suggestionChipPressed]}
-        accessibilityRole="button"
+        chrome={md}
         accessibilityLabel={`Search for ${chipLabel}`}
-      >
-        <Text style={styles.suggestionChipText}>{chipLabel}</Text>
-      </Pressable>
+      />
     );
   };
 
@@ -579,8 +483,8 @@ export function SearchResultsBody({
         >
           <M3ContainedLoadingIndicator
             size={44}
-            color={s.tint}
-            containerColor={bundle.chrome.androidIndicator}
+            color={md.primary}
+            containerColor={md.surfaceContainerHigh}
           />
           <Text style={styles.searchLoadingLabel}>Searching…</Text>
         </View>
@@ -598,25 +502,27 @@ export function SearchResultsBody({
         showsVerticalScrollIndicator={false}
       >
         {renderScopeChips()}
-        <Text style={[styles.sectionLabel, styles.quickPicksSectionLabel]}>QUICK PICKS</Text>
+        <Text style={[styles.sectionLabel, styles.quickPicksSectionLabel]}>Quick picks</Text>
         <View style={styles.grid}>
           {search.quickPicks.map((pick) => (
-            <Pressable
-              key={pick.ref}
-              onPress={() => search.runImmediateSearch(pick.ref)}
-              style={({ pressed }) => [styles.pickCard, pressed && styles.pickCardPressed]}
-            >
-              <Text style={styles.pickRef}>{pick.ref}</Text>
-              <Text style={styles.pickExcerpt} numberOfLines={1}>
-                {pick.excerpt}
-              </Text>
-            </Pressable>
+            <View key={pick.ref} collapsable={false} style={styles.pickCard}>
+              <Pressable
+                onPress={() => search.runImmediateSearch(pick.ref)}
+                android_ripple={chipRipple}
+                style={({ pressed }) => [styles.pickCardPress, pressed && styles.pickCardPressed]}
+              >
+                <Text style={styles.pickRef}>{pick.ref}</Text>
+                <Text style={styles.pickExcerpt} numberOfLines={1}>
+                  {pick.excerpt}
+                </Text>
+              </Pressable>
+            </View>
           ))}
         </View>
 
         {search.recentShown.length > 0 ? (
           <>
-            <Text style={[styles.sectionLabel, styles.recentSectionLabel]}>RECENT</Text>
+            <Text style={[styles.sectionLabel, styles.recentSectionLabel]}>Recent</Text>
             <View style={styles.recentList}>
               {search.recentShown.map((q) => (
                 <View key={q} style={styles.recentRowWrap}>
@@ -626,7 +532,7 @@ export function SearchResultsBody({
                     style={styles.recentMainTouchable}
                   >
                     <View style={styles.recentIconWrap}>
-                      <RecentSvgrepoIcon size={40} color={s.bodyText} />
+                      <RecentSvgrepoIcon size={22} color={md.onSurfaceVariant} />
                     </View>
                     <View style={styles.recentTextCell} collapsable={false}>
                       <Text style={styles.recentText} numberOfLines={1} ellipsizeMode="tail">
@@ -640,7 +546,7 @@ export function SearchResultsBody({
                     style={({ pressed }) => [styles.recentRemove, pressed && styles.recentRemovePressed]}
                     accessibilityLabel={`Remove ${q} from history`}
                   >
-                    <Text style={styles.recentRemoveMark}>×</Text>
+                    <MaterialCommunityIcons name="close" size={18} color={md.onSurfaceVariant} />
                   </Pressable>
                 </View>
               ))}
@@ -706,8 +612,8 @@ export function SearchResultsBody({
             <View style={styles.searchPendingInline}>
               <M3ContainedLoadingIndicator
                 size={28}
-                color={s.tint}
-                containerColor={bundle.chrome.androidIndicator}
+                color={md.primary}
+                containerColor={md.surfaceContainerHigh}
               />
               <Text style={styles.searchLoadingLabel}>Searching Bible…</Text>
             </View>

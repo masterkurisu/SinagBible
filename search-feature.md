@@ -8,12 +8,13 @@ This document describes how search is structured, what it can do, and how a quer
 
 ### Global search (tab-bar overlay)
 
-Search is not a full-screen tab. The fourth bottom-nav slot is a disabled native-tab placeholder. A circular magnifying-glass FAB sits on top of that slot. Tapping it opens a Material 3-style overlay:
+Search is not a full-screen tab. The fourth bottom-nav slot is a disabled native-tab placeholder. A circular magnifying-glass FAB sits on top of that slot. Tapping it opens a Material 3 overlay:
 
-- A **scrim** covers the current tab.
-- A **search pill** expands from the FAB into a full-width input above the tab bar.
-- A **results sheet** sits above the pill (max ~62% of screen height).
-- Android hardware back, tapping the scrim, or the close control dismisses the overlay and clears the query.
+- A **frosted** wash covers the current tab so the sheet keeps focus.
+- A **search bar** (M3 stadium, `surface-container-high`, elevation 1) expands from the FAB above the tab bar.
+- A **results sheet** (`surface-container-low`, 28dp top corners) sits above the bar. Idle is ~74% of screen height; while querying or showing results it extends to the top safe area.
+- **Filter** chips wrap as M3 filter chips (32dp, 8dp corners). Quick picks are filled 12dp cards (`surface-container-highest`). Recent and Bible hits use two-line list items with outline-variant dividers.
+- Android hardware back, tapping the frost, or the close control dismisses the overlay and clears the query.
 
 Placeholder copy: *“Search Bible, references, and journal”*.
 
@@ -23,7 +24,7 @@ The overlay is available on Home, Bible, and Journal. On Android reader chapter 
 
 | State | What appears |
 | --- | --- |
-| Empty query | **Quick Picks** (up to 5 cards) and **Recent** (up to 3 rows, removable). Scope / Favorites / Highlights / Also-in chips. Optional mic on the pill. |
+| Empty query | **Filter** chips, then **Quick picks** (up to 5 cards) and **Recent** (up to 3 pill rows, removable). Optional mic on the pill. |
 | Empty query + a Marks chip | **Marks** section: highlighted, underlined, or saved verses (cap 20). Not Quick Picks. |
 | Typing, no results yet | Centered “Searching…” spinner (chips stay visible) |
 | Matches | Sectioned list: **Journal** first, then **Bible** (or **Marks** when listing personal marks with no keyword), then **Related** for reference / named-passage queries. Bible snippets highlight the match, may show a neighbor verse, and may show an also-in line. |
@@ -221,7 +222,7 @@ Search is **client-side**. There is no remote search API. Bundled and helloao tr
 
 1. FAB calls `openSearch()`.
 2. `TabBarSearchLayer` mounts (or was already mounted for the close animation).
-3. Progress animates 0 → 1 (pill expands, sheet fades/slides up, scrim appears).
+3. Progress animates 0 → 1 (pill expands, sheet fades/slides up, frost wash appears).
 4. Input focuses after a short delay.
 5. `useBibleSearch({ enabled: true })` loads preferred reader translation, search history, journal cache, reader marks, and warms the keyword index.
 
@@ -462,7 +463,7 @@ Journal rows link to `/journal/{id}`.
 | YVP corpus fill delay | 200 ms / chapter | `yvp-corpus-job` |
 | YVP corpus min free disk | 250 MB (when measurable) | `yvp-corpus-policy` |
 | YVP stored chapter cap | 2,000 | `yvp-corpus-policy` |
-| Overlay sheet height | 62% of screen, minus pill | `TabBarSearchLayer` |
+| Overlay sheet height | Idle ~74% of screen, minus search bar; results extend to the top safe area | `TabBarSearchLayer` |
 | FAB size | 64 px | `tabBarSearchFabChrome` |
 | Overlay marks listing | 20 | `reader-marks-search.ts` |
 

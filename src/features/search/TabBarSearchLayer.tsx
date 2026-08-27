@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BackHandler,
   Keyboard,
-  Platform,
   Pressable,
   StyleSheet,
   TextInput,
@@ -22,16 +21,22 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BookSuggestion } from "@sinag-bible/types";
+import { isMobileAppDarkThemeId } from "@sinag-bible/tokens";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { hapticLightImpact } from "@/lib/haptics";
 import { nativeTabSheetBottomInsetPx } from "@/lib/native-tab-chrome";
 import {
   M3_CONTAINER_TRANSFORM_ENTER_MS,
   M3_CONTAINER_TRANSFORM_RETURN_MS,
-  M3_SCRIM_OPACITY,
   animateM3SpatialProgress,
 } from "@/src/components/m3/m3-motion";
+import {
+  READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
+  READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
+  READER_M3_BOTTOM_SHEET_RADIUS_PX,
+} from "@/src/features/reader/readerSettingsPanelChrome";
 import { SearchResultsBody } from "@/src/features/search/SearchResultsBody";
+import { getSearchOverlayChrome } from "@/src/features/search/searchOverlayChrome";
 import { useBibleSearch } from "@/src/features/search/useBibleSearch";
 import { useSearchVoice } from "@/src/features/search/useSearchVoice";
 import { TAB_BAR_SEARCH_FAB_SIZE_PX } from "@/src/features/search/tabBarSearchFabChrome";
@@ -39,13 +44,25 @@ import { TAB_BAR_SEARCH_FAB_SIZE_PX } from "@/src/features/search/tabBarSearchFa
 const SEARCH_PILL_HEIGHT_PX = 56;
 const SEARCH_PILL_RADIUS_PX = 28;
 const COLLAPSED_PILL_WIDTH_PX = TAB_BAR_SEARCH_FAB_SIZE_PX;
-const SHEET_HORIZONTAL_INSET_PX = 12;
+const SEARCH_BAR_HORIZONTAL_INSET_PX = 18;
 const SHEET_GAP_ABOVE_PILL_PX = 8;
-const SHEET_MAX_HEIGHT_RATIO = 0.62;
+const SHEET_TOP_GAP_PX = 0;
+const SHEET_IDLE_HEIGHT_RATIO = 0.74;
 const FADE_THROUGH_OUTGOING_END = 0.25;
 const FADE_THROUGH_INCOMING_START = 0.25;
 const SHEET_TRANSLATE_FROM_PX = 28;
 const LAYER_UNMOUNT_BUFFER_MS = 50;
+
+/** Near-opaque frost so the current tab recedes and the sheet keeps focus. */
+function searchFrostScrimColor(isDark: boolean, pageBackground: string): string {
+  if (!isDark) return "rgba(255, 255, 255, 0.72)";
+  const hex = pageBackground.replace("#", "");
+  if (hex.length < 6) return "rgba(0, 0, 0, 0.88)";
+  const r = Number.parseInt(hex.slice(0, 2), 16);
+  const g = Number.parseInt(hex.slice(2, 4), 16);
+  const b = Number.parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, 0.88)`;
+}
 
 /** Bottom-tab search — pill expands above the nav bar; results in a sheet above the pill. */
 export function TabBarSearchLayer() {
@@ -106,15 +123,14 @@ function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearc
   const insets = useSafeAreaInsets();
   const { width: screenW } = useWindowDimensions();
   const { bundle } = useMobileAppTheme();
-  const s = bundle.search;
-  const chrome = bundle.chrome;
-  const isAndroid = Platform.OS === "android";
+  const md = getSearchOverlayChrome(bundle);
   const pillBottomPx = nativeTabSheetBottomInsetPx(insets.bottom, 0);
-  const expandedPillWidthPx = screenW - SHEET_HORIZONTAL_INSET_PX * 2;
-  const pillSurfaceColor = isAndroid ? chrome.androidIndicator : s.cardBackground;
+  const expandedPillWidthPx = screenW - SEARCH_BAR_HORIZONTAL_INSET_PX * 2;
+  const pillSurfaceColor = md.surfaceContainerHigh;
+  const frostColor = searchFrostScrimColor(isMobileAppDarkThemeId(bundle.id), md.surfaceContainerLow);
 
   const scrimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0, M3_SCRIM_OPACITY], Extrapolation.CLAMP),
+    opacity: interpolate(progress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
   }));
   const pillStyle = useAnimatedStyle(() => ({
     width: interpolate(
@@ -129,7 +145,7 @@ function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearc
   return (
     <View
       pointerEvents={isOpen ? "box-none" : "none"}
-      style={[StyleSheet.absoluteFillObject, { zIndex: 200, elevation: 200 }]}
+      style={[StyleSheet.absoluteFill, { zIndex: 5000, elevation: 500 }]}
     >
       <Pressable
         style={StyleSheet.absoluteFill}
@@ -143,7 +159,7 @@ function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearc
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: "#000000" },
+            { backgroundColor: frostColor },
             scrimStyle,
           ]}
         />
@@ -152,11 +168,11 @@ function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearc
         pointerEvents="box-none"
         style={{
           position: "absolute",
-          left: SHEET_HORIZONTAL_INSET_PX,
-          right: SHEET_HORIZONTAL_INSET_PX,
+          left: SEARCH_BAR_HORIZONTAL_INSET_PX,
+          right: SEARCH_BAR_HORIZONTAL_INSET_PX,
           bottom: pillBottomPx,
           alignItems: "center",
-          zIndex: 200,
+          zIndex: 5000,
         }}
       >
         <Animated.View
@@ -174,8 +190,8 @@ function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearc
         >
           <MaterialCommunityIcons
             name="magnify"
-            size={28}
-            color={isAndroid ? s.muted : s.bodyText}
+            size={22}
+            color={md.onSurface}
           />
         </Animated.View>
       </View>
@@ -187,9 +203,7 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const { bundle } = useMobileAppTheme();
-  const s = bundle.search;
-  const chrome = bundle.chrome;
-  const isAndroid = Platform.OS === "android";
+  const md = getSearchOverlayChrome(bundle);
 
   const search = useBibleSearch({ enabled: isOpen });
   const voice = useSearchVoice({
@@ -198,11 +212,21 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
   });
   const inputRef = useRef<TextInput>(null);
 
+  const expandProgress = useSharedValue(0);
   const tabBarTopPx = nativeTabSheetBottomInsetPx(insets.bottom, 0);
   const pillBottomPx = tabBarTopPx;
-  const expandedPillWidthPx = screenW - SHEET_HORIZONTAL_INSET_PX * 2;
-  const sheetMaxHeightPx =
-    screenH * SHEET_MAX_HEIGHT_RATIO - SEARCH_PILL_HEIGHT_PX - SHEET_GAP_ABOVE_PILL_PX - pillBottomPx;
+  const expandedPillWidthPx = screenW - SEARCH_BAR_HORIZONTAL_INSET_PX * 2;
+  const sheetBottomPx = pillBottomPx + SEARCH_PILL_HEIGHT_PX + SHEET_GAP_ABOVE_PILL_PX;
+  const idleSheetHeightPx = Math.max(
+    180,
+    screenH * SHEET_IDLE_HEIGHT_RATIO - SEARCH_PILL_HEIGHT_PX - SHEET_GAP_ABOVE_PILL_PX - pillBottomPx,
+  );
+  const expandedSheetHeightPx = Math.max(
+    idleSheetHeightPx,
+    screenH - insets.top - SHEET_TOP_GAP_PX - sheetBottomPx,
+  );
+  const frostColor = searchFrostScrimColor(isMobileAppDarkThemeId(bundle.id), md.surfaceContainerLow);
+  const sheetExpanded = !search.showEmptyState;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -210,6 +234,10 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
     const id = setTimeout(() => inputRef.current?.focus(), focusDelayMs);
     return () => clearTimeout(id);
   }, [isOpen]);
+
+  useEffect(() => {
+    animateM3SpatialProgress(expandProgress, sheetExpanded ? 1 : 0, sheetExpanded);
+  }, [expandProgress, sheetExpanded]);
 
   const dismissSearch = useCallback(() => {
     hapticLightImpact();
@@ -226,10 +254,16 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
   }, [dismissSearch, isOpen]);
 
   const scrimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0, M3_SCRIM_OPACITY], Extrapolation.CLAMP),
+    opacity: interpolate(progress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
   }));
 
   const sheetStyle = useAnimatedStyle(() => ({
+    height: interpolate(
+      expandProgress.value,
+      [0, 1],
+      [idleSheetHeightPx, expandedSheetHeightPx],
+      Extrapolation.CLAMP,
+    ),
     opacity: interpolate(
       progress.value,
       [FADE_THROUGH_INCOMING_START, 1],
@@ -283,7 +317,7 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
     [search],
   );
 
-  const pillSurfaceColor = isAndroid ? chrome.androidIndicator : s.cardBackground;
+  const pillSurfaceColor = md.surfaceContainerHigh;
   const showClear = search.query.length > 0;
 
   const styles = useMemo(
@@ -291,45 +325,43 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
       StyleSheet.create({
         root: {
           ...StyleSheet.absoluteFill,
-          zIndex: 200,
-          elevation: 200,
+          zIndex: 5000,
+          elevation: 500,
         },
         scrim: {
           ...StyleSheet.absoluteFill,
-          backgroundColor: "#000000",
+          backgroundColor: frostColor,
         },
         sheet: {
           position: "absolute",
-          left: SHEET_HORIZONTAL_INSET_PX,
-          right: SHEET_HORIZONTAL_INSET_PX,
-          bottom: pillBottomPx + SEARCH_PILL_HEIGHT_PX + SHEET_GAP_ABOVE_PILL_PX,
-          maxHeight: Math.max(180, sheetMaxHeightPx),
-          borderRadius: 24,
-          backgroundColor: s.pageBackground,
-          borderWidth: isAndroid ? 0 : StyleSheet.hairlineWidth,
-          borderColor: s.cardBorder,
+          left: 0,
+          right: 0,
+          bottom: sheetBottomPx,
+          borderTopLeftRadius: READER_M3_BOTTOM_SHEET_RADIUS_PX,
+          borderTopRightRadius: READER_M3_BOTTOM_SHEET_RADIUS_PX,
+          backgroundColor: md.surfaceContainerLow,
           overflow: "hidden",
-          paddingHorizontal: 14,
+          paddingHorizontal: 18,
           paddingTop: 10,
           paddingBottom: 8,
-          shadowColor: "#16120c",
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.14,
-          shadowRadius: 16,
-          elevation: 12,
+          shadowColor: "#000000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+          elevation: 3,
         },
         sheetHandle: {
           alignSelf: "center",
-          width: 44,
-          height: 5,
+          width: READER_M3_BOTTOM_SHEET_HANDLE_WIDTH_PX,
+          height: READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX,
           borderRadius: 999,
-          backgroundColor: "rgba(0,0,0,0.18)",
-          marginBottom: 8,
+          backgroundColor: md.outlineVariant,
+          marginBottom: 4,
         },
         dock: {
           position: "absolute",
-          left: SHEET_HORIZONTAL_INSET_PX,
-          right: SHEET_HORIZONTAL_INSET_PX,
+          left: SEARCH_BAR_HORIZONTAL_INSET_PX,
+          right: SEARCH_BAR_HORIZONTAL_INSET_PX,
           bottom: pillBottomPx,
           alignItems: "center",
         },
@@ -338,17 +370,11 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
           borderRadius: SEARCH_PILL_RADIUS_PX,
           backgroundColor: pillSurfaceColor,
           overflow: "hidden",
-          ...(isAndroid
-            ? {}
-            : {
-                borderWidth: 1,
-                borderColor: s.searchBarBorder,
-                shadowColor: "#242423",
-                shadowOffset: { width: 0, height: 3 },
-                shadowOpacity: 0.2,
-                shadowRadius: 6,
-                elevation: 5,
-              }),
+          shadowColor: "#000000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.3,
+          shadowRadius: 2,
+          elevation: 1,
         },
         outgoingIcon: {
           ...StyleSheet.absoluteFill,
@@ -362,13 +388,13 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
           paddingLeft: 16,
           paddingRight: 8,
         },
-        searchIcon: { marginRight: isAndroid ? 12 : 10 },
+        searchIcon: { marginRight: 12 },
         input: {
           flex: 1,
           fontFamily: "Inter_400Regular",
-          fontSize: isAndroid ? 16 : 15,
-          color: s.primaryText,
-          paddingVertical: isAndroid ? 14 : 12,
+          fontSize: 16,
+          color: md.onSurface,
+          paddingVertical: 14,
           paddingRight: 6,
           margin: 0,
           minWidth: 0,
@@ -376,12 +402,14 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
         clearButton: {
           justifyContent: "center",
           alignItems: "center",
-          minWidth: 36,
-          minHeight: 36,
+          width: 40,
+          height: 40,
+          borderRadius: 20,
         },
       }),
-    [isAndroid, pillBottomPx, pillSurfaceColor, s, sheetMaxHeightPx],
+    [frostColor, md, pillBottomPx, pillSurfaceColor, sheetBottomPx],
   );
+
 
   return (
     <View pointerEvents={isOpen ? "box-none" : "none"} style={styles.root}>
@@ -394,14 +422,16 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
         <Animated.View style={[styles.scrim, scrimStyle]} />
       </Pressable>
 
-      <Animated.View pointerEvents="box-none" style={[styles.sheet, sheetStyle]}>
+      <Animated.View style={[styles.sheet, sheetStyle]}>
         <View style={styles.sheetHandle} pointerEvents="none" />
-        <SearchResultsBody
-          search={search}
-          bundle={bundle}
-          onPickBookSuggestion={onPickBookSuggestion}
-          onNavigateResult={dismissSearch}
-        />
+        <View style={{ flex: 1 }}>
+          <SearchResultsBody
+            search={search}
+            bundle={bundle}
+            onPickBookSuggestion={onPickBookSuggestion}
+            onNavigateResult={dismissSearch}
+          />
+        </View>
       </Animated.View>
 
       <View pointerEvents="box-none" style={styles.dock}>
@@ -409,15 +439,15 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
           <Animated.View style={[styles.outgoingIcon, outgoingIconStyle]} pointerEvents="none">
             <MaterialCommunityIcons
               name="magnify"
-              size={28}
-              color={isAndroid ? s.muted : s.bodyText}
+              size={22}
+              color={md.onSurface}
             />
           </Animated.View>
           <Animated.View style={[styles.incomingPillContent, incomingPillContentStyle]}>
             <MaterialCommunityIcons
               name="magnify"
-              size={28}
-              color={isAndroid ? s.muted : s.bodyText}
+              size={22}
+              color={md.onSurface}
               style={styles.searchIcon}
             />
             <TextInput
@@ -425,12 +455,12 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
               value={search.query}
               onChangeText={search.onSearchQueryChange}
               placeholder={voice.listening ? "Listening…" : "Search Bible, references, and journal"}
-              placeholderTextColor={s.placeholder}
+              placeholderTextColor={md.onSurfaceVariant}
               style={styles.input}
               returnKeyType="search"
               autoCapitalize="none"
               autoCorrect={false}
-              selectionColor={s.tint}
+              selectionColor={md.primary}
               onSubmitEditing={search.onSubmitSearch}
             />
             {voice.available ? (
@@ -448,8 +478,8 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
               >
                 <MaterialCommunityIcons
                   name={voice.listening ? "microphone" : "microphone-outline"}
-                  size={22}
-                  color={voice.listening ? s.tint : s.muted}
+                    size={20}
+                    color={voice.listening ? md.primary : md.onSurfaceVariant}
                 />
               </TouchableOpacity>
             ) : null}
@@ -465,7 +495,7 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
                 accessibilityLabel="Clear search"
                 accessibilityRole="button"
               >
-                <MaterialCommunityIcons name="close-circle" size={22} color={s.muted} />
+                <MaterialCommunityIcons name="close" size={20} color={md.onSurfaceVariant} />
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -476,7 +506,7 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
                 accessibilityLabel="Close search"
                 accessibilityRole="button"
               >
-                <MaterialCommunityIcons name="close" size={22} color={s.muted} />
+                <MaterialCommunityIcons name="close" size={20} color={md.onSurfaceVariant} />
               </TouchableOpacity>
             )}
           </Animated.View>
