@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import {
   Keyboard,
-  Platform,
   Pressable,
   ScrollView,
   SectionList,
@@ -100,43 +99,12 @@ function createSearchBodyStyles(md: SearchOverlayChrome) {
       color: md.primary,
     },
     filterSectionLabel: { marginTop: 10, marginBottom: 10, marginLeft: 2 },
-    quickPicksSectionLabel: { marginTop: 14, marginBottom: 10, marginLeft: 2 },
     resultsSectionHeader: {
       paddingTop: 14,
       paddingBottom: 8,
       marginLeft: 2,
     },
     recentSectionLabel: { marginTop: 14, marginBottom: 4, marginLeft: 2 },
-    grid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "space-between",
-      rowGap: 10,
-    },
-    pickCard: {
-      width: "48.5%",
-      borderRadius: 12,
-      backgroundColor: md.surfaceContainerHighest,
-      overflow: "hidden",
-    },
-    pickCardPress: {
-      paddingVertical: 14,
-      paddingHorizontal: 14,
-    },
-    pickCardPressed: { opacity: 0.92 },
-    pickRef: {
-      fontFamily: "Inter_500Medium",
-      fontSize: 15,
-      lineHeight: 20,
-      color: md.onSurface,
-      marginBottom: 3,
-    },
-    pickExcerpt: {
-      fontFamily: "Inter_400Regular",
-      fontSize: 12,
-      lineHeight: 16,
-      color: md.onSurfaceVariant,
-    },
     recentList: {
       marginTop: 4,
       width: "100%",
@@ -225,7 +193,8 @@ function createSearchBodyStyles(md: SearchOverlayChrome) {
       flexDirection: "row",
       flexWrap: "wrap",
       alignItems: "center",
-      gap: 8,
+      justifyContent: "space-between",
+      rowGap: 10,
       marginBottom: 6,
     },
     journalTags: {
@@ -254,6 +223,7 @@ function createSearchBodyStyles(md: SearchOverlayChrome) {
       borderWidth: 2,
       borderColor: md.primary,
     },
+    colorDotPressed: { opacity: 0.92 },
     empty: {
       marginTop: 24,
       textAlign: "center",
@@ -347,8 +317,6 @@ export function SearchResultsBody({
 }: SearchResultsBodyProps) {
   const md = useMemo(() => getSearchOverlayChrome(bundle), [bundle]);
   const styles = useMemo(() => createSearchBodyStyles(md), [md]);
-  const chipRipple =
-    Platform.OS === "android" ? { color: md.iconRipple } : undefined;
 
   const renderMarkChip = (
     kind: NonNullable<SearchState["activeMarksKind"]>,
@@ -397,20 +365,8 @@ export function SearchResultsBody({
             accessibilityLabel="Show favorite journal entries only"
           />
           {renderMarkChip("marks", "Marks", "Show highlighted, underlined, and saved verses")}
-          {renderMarkChip("highlights", "Highlights", "Show highlighted verses")}
-          {renderMarkChip("underlines", "Underlines", "Show underlined verses")}
+          {renderMarkChip("highlights", "Highlights", "Show highlighted and underlined verses")}
           {renderMarkChip("favorites", "Saved verses", "Show saved favorite verses")}
-          {search.alsoChipLabel ? (
-            <SearchM3FilterChip
-              label={`Also in ${search.alsoChipLabel}`}
-              selected={search.alsoTranslationActive}
-              onPress={() =>
-                search.onChangeAlsoTranslationEnabled(!search.alsoTranslationActive)
-              }
-              chrome={md}
-              accessibilityLabel={`Also show this verse in ${search.alsoChipLabel}`}
-            />
-          ) : null}
         </View>
         {showColorDots ? (
           <View style={styles.colorRow}>
@@ -424,7 +380,7 @@ export function SearchResultsBody({
                   styles.colorDot,
                   { backgroundColor: highlightColors[id] },
                   search.activeHighlightColor === id && styles.colorDotSelected,
-                  pressed && styles.pickCardPressed,
+                  pressed && styles.colorDotPressed,
                 ]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: search.activeHighlightColor === id }}
@@ -502,23 +458,6 @@ export function SearchResultsBody({
         showsVerticalScrollIndicator={false}
       >
         {renderScopeChips()}
-        <Text style={[styles.sectionLabel, styles.quickPicksSectionLabel]}>Quick picks</Text>
-        <View style={styles.grid}>
-          {search.quickPicks.map((pick) => (
-            <View key={pick.ref} collapsable={false} style={styles.pickCard}>
-              <Pressable
-                onPress={() => search.runImmediateSearch(pick.ref)}
-                android_ripple={chipRipple}
-                style={({ pressed }) => [styles.pickCardPress, pressed && styles.pickCardPressed]}
-              >
-                <Text style={styles.pickRef}>{pick.ref}</Text>
-                <Text style={styles.pickExcerpt} numberOfLines={1}>
-                  {pick.excerpt}
-                </Text>
-              </Pressable>
-            </View>
-          ))}
-        </View>
 
         {search.recentShown.length > 0 ? (
           <>

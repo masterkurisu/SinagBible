@@ -56,7 +56,7 @@ describe("parseOverlayMarksQuery", () => {
       kind: "highlights",
       color: null,
     });
-    expect(parseOverlayMarksQuery("in:underlines")).toMatchObject({ kind: "underlines", remainder: "" });
+    expect(parseOverlayMarksQuery("in:underlines")).toMatchObject({ kind: "highlights", remainder: "" });
     expect(parseOverlayMarksQuery("in:favorites")).toMatchObject({ kind: "favorites", remainder: "" });
     expect(parseOverlayMarksQuery("in:marks faith")).toEqual({
       remainder: "faith",
@@ -80,11 +80,11 @@ describe("resolveOverlayMarksFilter", () => {
   it("lets typed tokens win over chips, and chips apply when the query has no gate", () => {
     expect(
       resolveOverlayMarksFilter(
-        { remainder: "love", kind: "underlines", color: null },
+        { remainder: "love", kind: "highlights", color: null },
         "highlights",
         "yellow",
       ),
-    ).toEqual({ kind: "underlines", color: "yellow" });
+    ).toEqual({ kind: "highlights", color: "yellow" });
     expect(
       resolveOverlayMarksFilter({ remainder: "love", kind: null, color: null }, "highlights", null),
     ).toEqual({ kind: "highlights", color: null });
@@ -130,14 +130,17 @@ describe("reader marks filter", () => {
       [highlighted, underlined, saved],
       { kind: "highlights", color: null },
     );
-    expect(highlightedOnly.map((row) => row.verseNumber)).toEqual([16]);
+    expect(highlightedOnly.map((row) => row.verseNumber)).toEqual([16, 17]);
     expect(highlightedOnly[0]?.markKind).toBe("highlight");
     expect(highlightedOnly[0]?.markColorId).toBe("yellow");
+    expect(highlightedOnly[1]?.markKind).toBe("underline");
   });
 
   it("filters by color and by saved verses, and respects this-book scope", () => {
     expect(readerMarkMatchesFilter(highlighted, { kind: "highlights", color: "blue" })).toBe(false);
     expect(readerMarkMatchesFilter(highlighted, { kind: "highlights", color: "yellow" })).toBe(true);
+    expect(readerMarkMatchesFilter(underlined, { kind: "highlights", color: null })).toBe(true);
+    expect(readerMarkMatchesFilter(underlined, { kind: "highlights", color: "yellow" })).toBe(false);
     expect(readerMarkMatchesFilter(saved, { kind: "favorites", color: null })).toBe(true);
     expect(readerMarkMatchesFilter(saved, { kind: "favorites", color: "yellow" })).toBe(false);
     expect(

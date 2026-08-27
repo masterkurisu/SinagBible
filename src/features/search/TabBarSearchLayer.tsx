@@ -45,7 +45,8 @@ const SEARCH_PILL_HEIGHT_PX = 56;
 const SEARCH_PILL_RADIUS_PX = 28;
 const COLLAPSED_PILL_WIDTH_PX = TAB_BAR_SEARCH_FAB_SIZE_PX;
 const SEARCH_BAR_HORIZONTAL_INSET_PX = 18;
-const SHEET_GAP_ABOVE_PILL_PX = 8;
+/** Sheet's bottom edge sits flush against the pill's top edge — no visible seam. */
+const SHEET_GAP_ABOVE_PILL_PX = 0;
 const SHEET_TOP_GAP_PX = 0;
 const SHEET_IDLE_HEIGHT_RATIO = 0.74;
 const FADE_THROUGH_OUTGOING_END = 0.25;
@@ -145,7 +146,7 @@ function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearc
   return (
     <View
       pointerEvents={isOpen ? "box-none" : "none"}
-      style={[StyleSheet.absoluteFill, { zIndex: 5000, elevation: 500 }]}
+      style={[StyleSheet.absoluteFill, { zIndex: 5000, elevation: 24 }]}
     >
       <Pressable
         style={StyleSheet.absoluteFill}
@@ -326,7 +327,7 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
         root: {
           ...StyleSheet.absoluteFill,
           zIndex: 5000,
-          elevation: 500,
+          elevation: 24,
         },
         scrim: {
           ...StyleSheet.absoluteFill,
@@ -344,11 +345,6 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
           paddingHorizontal: 18,
           paddingTop: 10,
           paddingBottom: 8,
-          shadowColor: "#000000",
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 12,
-          elevation: 3,
         },
         sheetHandle: {
           alignSelf: "center",
@@ -370,11 +366,6 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
           borderRadius: SEARCH_PILL_RADIUS_PX,
           backgroundColor: pillSurfaceColor,
           overflow: "hidden",
-          shadowColor: "#000000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.3,
-          shadowRadius: 2,
-          elevation: 1,
         },
         outgoingIcon: {
           ...StyleSheet.absoluteFill,

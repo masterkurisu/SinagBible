@@ -11,7 +11,7 @@ export type SearchM3FilterChipProps = {
 };
 
 /**
- * M3 filter chip — 32dp tall, 8dp corners (not a stadium).
+ * Pill-shaped filter chip — fully rounded ends, ~32dp tall.
  * Unselected: outline-variant stroke, transparent fill.
  * Selected: secondary-container fill, leading check, no stroke.
  *
@@ -33,12 +33,19 @@ export function SearchM3FilterChip({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected }}
-      android_ripple={Platform.OS === "android" ? { color: chrome.iconRipple } : undefined}
+      android_ripple={
+        Platform.OS === "android" ? { color: chrome.iconRipple, borderless: false } : undefined
+      }
       style={[
         styles.chip,
         selected ? styles.chipSelected : null,
         {
-          backgroundColor: selected ? chrome.secondaryContainer : "transparent",
+          // A literal "transparent" fill leaves Android with no background
+          // drawable to derive a rounded clip mask from, so the ripple falls
+          // back to a plain rectangle. Filling with the chip's own resting
+          // surface color (which is visually identical against the sheet)
+          // gives Android something real to clip the ripple against.
+          backgroundColor: selected ? chrome.secondaryContainer : chrome.surfaceContainerLow,
           borderColor: selected ? "transparent" : chrome.outlineVariant,
         },
       ]}
@@ -65,7 +72,7 @@ const styles = StyleSheet.create({
     minHeight: 32,
     paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: "hidden",
   },

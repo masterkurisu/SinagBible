@@ -12,8 +12,8 @@ Search is not a full-screen tab. The fourth bottom-nav slot is a disabled native
 
 - A **frosted** wash covers the current tab so the sheet keeps focus.
 - A **search bar** (M3 stadium, `surface-container-high`, elevation 1) expands from the FAB above the tab bar.
-- A **results sheet** (`surface-container-low`, 28dp top corners) sits above the bar. Idle is ~74% of screen height; while querying or showing results it extends to the top safe area.
-- **Filter** chips wrap as M3 filter chips (32dp, 8dp corners). Quick picks are filled 12dp cards (`surface-container-highest`). Recent and Bible hits use two-line list items with outline-variant dividers.
+- A **results sheet** (`surface-container-low`, 28dp top corners) sits above the bar, flush against its top edge (no gap). Idle is ~74% of screen height; while querying or showing results it extends to the top safe area.
+- **Filter** chips are pill-shaped M3 filter chips (~32dp tall). Recent and Bible hits use two-line list items with outline-variant dividers.
 - Android hardware back, tapping the frost, or the close control dismisses the overlay and clears the query.
 
 Placeholder copy: *“Search Bible, references, and journal”*.
@@ -24,8 +24,8 @@ The overlay is available on Home, Bible, and Journal. On Android reader chapter 
 
 | State | What appears |
 | --- | --- |
-| Empty query | **Filter** chips, then **Quick picks** (up to 5 cards) and **Recent** (up to 3 pill rows, removable). Optional mic on the pill. |
-| Empty query + a Marks chip | **Marks** section: highlighted, underlined, or saved verses (cap 20). Not Quick Picks. |
+| Empty query | **Filter** chips, then **Recent** (up to 3 pill rows, removable). Optional mic on the pill. |
+| Empty query + a Marks chip | **Marks** section: highlighted, underlined, or saved verses (cap 20). |
 | Typing, no results yet | Centered “Searching…” spinner (chips stay visible) |
 | Matches | Sectioned list: **Journal** first, then **Bible** (or **Marks** when listing personal marks with no keyword), then **Related** for reference / named-passage queries. Bible snippets highlight the match, may show a neighbor verse, and may show an also-in line. |
 | Still loading more Bible hits | Inline “Searching Bible…” under existing journal rows |
@@ -37,7 +37,7 @@ Tapping a Bible row opens that verse in the reader (same translation as search) 
 
 ### Journal-tab search (list filter)
 
-The Journal tab has its own search bar (iOS header bar; Android large app bar). It only filters **local journal entries**, does not search the Bible, and does not share the overlay’s history or quick picks. Placeholder: *“Search entries, verses, dates, tags…”*.
+The Journal tab has its own search bar (iOS header bar; Android large app bar). It only filters **local journal entries**, does not search the Bible, and does not share the overlay’s history. Placeholder: *“Search entries, verses, dates, tags…”*.
 
 ---
 
@@ -54,15 +54,15 @@ The Journal tab has its own search bar (iOS header bar; Android large app bar). 
 - Typo / near-miss book titles (“Did you mean”)
 - Common aliases: `Psalm` → `Psalms`, `prov` → `proverbs`, `II Corinthians`, `1st John`, `St. John`, plus shorts (`jn`, `rom`, `ps`/`psa`, `mt`/`mk`/`lk`, `1jn`/`1pe`, …)
 - Results in the **active reader translation** (bundled, helloao, or YouVersion)
-- Optional **also-in** snippet: same verse in another pinned translation (`Also in NIV` chip, or `also:WEB` / `also:niv`). Not a second result list
+- Optional **also-in** snippet: same verse in another pinned translation, via typed `also:WEB` / `also:niv` (no chip). Not a second result list
 - Capped keyword lists (score, then per-book cap, then max 20; NT/OT mix is a tie-break)
 - Overlay scope: **Whole Bible** (default) vs **this book** (last-read). Keywords stay in-book; `John 3:16` and named passages still navigate. Typed `book:john` overrides the chip
 - Bible row preview: highlighted match span plus an optional neighboring verse; journal rows keep the ~160-character body preview
-- Personal marks (opt-in): **Marks** / **Highlights** / **Underlines** / **Saved verses** chips, highlight color dots, or `in:highlights` / `in:underlines` / `in:favorites` / `in:marks` / `color:yellow`. Keyword search does **not** shrink to marked verses unless a gate is on
+- Personal marks (opt-in): **Marks** / **Highlights** (also matches underlined verses — no separate Underlines chip) / **Saved verses** chips, highlight color dots, or `in:highlights` (aliases `in:underline(s)`) / `in:favorites` / `in:marks` / `color:yellow`. Keyword search does **not** shrink to marked verses unless a gate is on
 - Topical index for themes whose word often does not appear in the verse (`trinity`, `baptism`, `holy spirit`, …). Separate from popular whole-word verses
 - AND combinators in one query: `book:john`, `tag:gratitude`, date phrases (`last week`, `2026-01`), plus a keyword remainder. No OR / NOT / parentheses
 - Strong’s numbers (`G26`, `H7225`, `strong:g26`) → a small curated verse list with a `G26 · agape` caption. Not a Greek/Hebrew corpus or lemma search. Digit-only `26` / `316` stay locked
-- Related verses after a **reference or named passage** (separate **Related** section). Explicit cross-ref table, not leftover `love` keyword hits. Not Quick Picks and not “Did you mean”
+- Related verses after a **reference or named passage** (separate **Related** section). Explicit cross-ref table, not leftover `love` keyword hits. Not “Did you mean”
 - Optional **voice search** (mic on the pill). Overlay typing still works if the OS recognizer, permission, or native module is missing
 
 **Journal (global overlay)**
@@ -79,15 +79,15 @@ The Journal tab has its own search bar (iOS header bar; Android large app bar). 
 **Session / chrome**
 
 - 280 ms debounce while typing Bible search
-- History recorded on **submit** (keyboard Search) or **immediate** picks (quick pick, recent, book chip) — not on every keystroke
+- History recorded on **submit** (keyboard Search) or **immediate** picks (recent, book chip) — not on every keystroke
 - Up to 10 history items in AsyncStorage; overlay shows 3
 - Cache warm-up for the reader translation’s keyword index (YVP also indexes already-cached Psalms / John / Romans chapters)
 - Overlay resets when closed; in-flight YVP hydration is cooperatively cancelled
 - Partial YVP hydration can show a footer retry (“Some verses could not be loaded”)
 - When last-read is set, **Whole Bible** / **{Book}** chips scope Bible results; overlay close resets to Whole Bible
-- **Favorites** chip (always visible) restricts overlay journal rows to starred entries; empty query still shows Quick Picks. Overlay close clears the chip. The Journal tab Favorites filter is separate and unchanged
-- **Highlights** / **Underlines** / **Saved verses** chips opt into reader marks (not journal favorites). **Marks** is any of the three. Color dots appear for highlights / all-marks. Overlay close clears them. `in:favorites` is saved carousel verses; plain `favorites` is still journal
-- **Also in {abbr}** chip (first pinned translation that is not the reader translation) adds a muted second-line snippet. Overlay close clears it. Typed `also:WEB` wins over the chip
+- **Favorites** chip (always visible) restricts overlay journal rows to starred entries. Overlay close clears the chip. The Journal tab Favorites filter is separate and unchanged
+- **Highlights** (matches both highlighted and underlined verses) / **Saved verses** chips opt into reader marks (not journal favorites). **Marks** is any of the three underlying kinds. Color dots appear for highlights / all-marks. Overlay close clears them. `in:favorites` is saved carousel verses; plain `favorites` is still journal
+- **Also-in snippet.** No chip. Typed `also:WEB` (first pinned translation that is not the reader translation, if you want a default, type it) adds a muted second-line snippet. Overlay close clears it
 - **Voice.** Mic on the search pill when the OS recognizer is available. Decline permission or missing native module → keep typing. Overlay close stops listening. Interim speech fills the box without searching; the final phrase runs the search
 
 ---
@@ -138,7 +138,7 @@ Search is **client-side**. There is no remote search API. Bundled and helloao tr
 | `src/features/search/TabBarSearchFab.tsx` | Circular FAB in the fourth slot |
 | `src/features/search/tabBarSearchFabChrome.ts` | FAB size (64px), position, Android scroll-hide distance |
 | `src/features/search/TabBarSearchLayer.tsx` | Overlay animation, pill input, optional voice mic, results sheet |
-| `src/features/search/SearchResultsBody.tsx` | Idle / loading / empty / error / sectioned results; scope chips; journal Favorites; Highlights / Underlines / Saved verses; Also in; color dots; verse highlight; Related section |
+| `src/features/search/SearchResultsBody.tsx` | Idle / loading / empty / error / sectioned results; scope chips; journal Favorites; Highlights (incl. underlines) / Saved verses; color dots; verse highlight; Related section |
 | `src/features/search/searchVerseSnippet.ts` | Match-span finder for Bible overlay snippets |
 | `src/features/search/useBibleSearch.ts` | Query lifecycle, debounce, dual result sources, Bible scope, overlay journal favorites, reader marks, also-in, power combinators, related verses |
 | `src/features/search/useSearchVoice.ts` | Optional speech-to-text; typing still works without it |
@@ -231,7 +231,7 @@ Search is **client-side**. There is no remote search API. Bundled and helloao tr
 - Each keystroke: selection haptic + `setQuery`.
 - Journal filter runs from `getCachedLocalEntries()` via `rankLocalJournalEntriesForOverlay` on the query **remainder** after `in:` / `color:` tokens are stripped. Synchronous below 200 cached entries; **140 ms debounce** when the cache has 200 or more. Overlay **Favorites** re-ranks journal only (Bible search is not re-run).
 - Marks chips re-run Bible/marks listing (not journal ranking). Keyword search is unchanged unless a marks gate is on.
-- Bible search is **debounced 280 ms**, unless skipped (clear, submit, quick pick, recent, book chip).
+- Bible search is **debounced 280 ms**, unless skipped (clear, submit, recent, book chip).
 - In-flight Bible requests use a monotonically increasing request id **and** an overlay-owned `AbortSignal`; stale responses are ignored. The signal cancels further YVP hydration work without aborting shared `fetchYvpChapter` / `yvpFetch`.
 - Retry footer re-runs the current query **without** recording history.
 
@@ -241,7 +241,7 @@ Search is **client-side**. There is no remote search API. Bundled and helloao tr
 | --- | --- | --- |
 | Typing | No | Yes (280 ms) |
 | Keyboard Search / Enter | Yes | Flushed immediately |
-| Quick pick / recent / “Did you mean” | Yes | Skipped |
+| Recent / “Did you mean” | Yes | Skipped |
 | Clear | No | Skipped; results wiped |
 | Close overlay | No | Query and results reset; in-flight YVP hydrate cancelled |
 | Retry footer | No | Immediate re-run |
@@ -413,25 +413,17 @@ Short queries (< 3 chars) skip the bundled/helloao index and scan verses with su
 
 Overlay journal results use `rankLocalJournalEntriesForOverlay` (filter, then score, then `created_at` desc). The journal tab still filters with `journalEntryMatchesSearchQuery` (then ranks with `journalEntrySearchRelevanceScore` plus the user’s sort). `filterLocalJournalEntriesByQuery` preserves cache order for callers that need it.
 
-The overlay’s journal section can appear **before** Bible results finish, because journal filtering is synchronous. An empty query still returns no journal rows (Quick Picks), even if the Favorites chip is on.
+The overlay’s journal section can appear **before** Bible results finish, because journal filtering is synchronous. An empty query still returns no journal rows, even if the Favorites chip is on.
 
 ---
 
-## 11. Quick picks and history
+## 11. History
 
 **History** (`search_history` in AsyncStorage): prepend, dedupe, max 10. Overlay shows 3 with a remove control.
 
-**Quick picks** (max 5, first-seen wins):
+Tapping a recent-search row runs that string as an immediate search (history recorded).
 
-1. Up to 2 recent queries (length ≥ 2) labeled “Recent search”
-2. Continue-reading card from last reader position (`{Book} {chapter}` / “Continue reading…”)
-3. Time-of-day set:
-   - 05:00–10:59 — morning psalms
-   - 18:00–04:59 — evening psalms
-   - otherwise — defaults (`Mark 11:22`, `John 3:16`, `Psalm 23`, `Romans 8`, `Philippians 4:13`)
-4. Fill remaining slots from the default set
-
-Tapping a pick runs that string as an immediate search (history recorded).
+There is no Quick Picks feature — it was tried (recent-query / continue-reading / time-of-day cards) and removed; the code lived in `lib/search-quick-picks.ts` (deleted).
 
 ---
 
@@ -456,7 +448,6 @@ Journal rows link to `/journal/{id}`.
 | Popular verses prepended | 5 | `search-keyword-popular.ts` |
 | Hits per book (vague) | 1, or 3 if curated keyword | same |
 | History stored / shown | 10 / 3 | `search-history` / hook |
-| Quick picks | 5 | `search-quick-picks` |
 | Nearby books | 3 | search outcome |
 | YVP hydrate concurrency | 4 | `yvp-translation-search` |
 | YVP keyword chapters in memory | 60 (LRU) | `yvp-keyword-index` |
@@ -562,7 +553,7 @@ These are separate from the overlay but share helpers.
 - **English synonyms expand the query**, not the popular-verse table. Tagalog/Cebuano ids skip that map.
 - **Overlay journal order is relevance**, then newest `created_at`. The journal tab still filters in cache order, then ranks + user sort.
 - **History is intentional-submit only**, so typing `john 3:1` then `john 3:16` does not store every prefix.
-- **Closing search wipes the query**, the journal Favorites chip, the reader-marks chips, and the Also-in chip. Reopening always starts idle (quick picks + recents).
+- **Closing search wipes the query**, the journal Favorites chip, and the reader-marks chips. Reopening always starts idle (filter chips + recents).
 - **Reader marks are opt-in.** `love` still searches the whole Bible (within scope). Highlights / `in:highlights` / `color:yellow` are explicit gates. `in:favorites` ≠ journal `favorites`.
 - **Also-in is a snippet, not columns.** No second keyword search. YVP also-in uses cached chapters only.
 - **Combinators are AND-only.** `book:` is the book gate (`in:` is marks). Date phrases in leftover apply to journal. `favorites` without `in:` is still journal starring.
@@ -625,7 +616,7 @@ Phase 7 shipped **journal search depth**. Overlay and Journal tab share the matc
 
 - **Tags.** Entries store `tags: string[]` (SQLite `tags` JSON, suggested set plus custom). Overlay and Journal tab match a tag that equals the query or a whole-word token. Verse-tag HTML in the body is not used as a category.
 - **Date ranges.** Whole-query `last week` (rolling 7 local days including today), `YYYY-MM`, `YYYY-MM ... YYYY-MM`, and `jan 1 - jan 7` (current year; wraps if end < start). `today` / `yesterday` / locale substring stay. `2026-01-15` is not a month token.
-- **Overlay favorites.** Exact query `favorite` / `favorites`, or the **Favorites** chip next to Whole Bible / this-book. Chip re-ranks journal only. Empty query still shows Quick Picks. Journal tab Favorites filter remains.
+- **Overlay favorites.** Exact query `favorite` / `favorites`, or the **Favorites** chip next to Whole Bible / this-book. Chip re-ranks journal only. Journal tab Favorites filter remains.
 
 | Overlay / journal rule | Tests |
 | --- | --- |
@@ -637,8 +628,8 @@ Phase 7 shipped **journal search depth**. Overlay and Journal tab share the matc
 
 Phase 8 shipped **personal marks** search.
 
-- **Opt-in gate.** Ordinary keyword / reference search is unchanged. Marks apply only with chips (**Marks**, **Highlights**, **Underlines**, **Saved verses**) or query tokens (`in:highlights`, `in:underline(s)`, `in:favorite(s)`, `in:marks`, `color:yellow|blue|pink|green|purple`). `color:*` with no `in:` implies highlights. Typed tokens win over chips when both are present.
-- **Empty query + chip.** Lists matching marks (cap 20) under a **Marks** section. Journal Favorites with an empty query still stays on Quick Picks.
+- **Opt-in gate.** Ordinary keyword / reference search is unchanged. Marks apply only with chips (**Marks**, **Highlights**, **Saved verses**) or query tokens (`in:highlights`, `in:underline(s)` — alias for `in:highlights`, `in:favorite(s)`, `in:marks`, `color:yellow|blue|pink|green|purple`). `color:*` with no `in:` implies highlights. Typed tokens win over chips when both are present. There is no standalone Underlines chip — the Highlights chip matches both highlighted and underlined verses.
+- **Empty query + chip.** Lists matching marks (cap 20) under a **Marks** section.
 - **Keyword + gate.** Bible search runs on the remainder, then results are intersected with marks. Journal search also uses the remainder, so `in:highlights love` can still match journal entries for `love`.
 - **Data.** Highlights/underlines from `sb:reader:highlights:…` (`listReaderAnnotationChapters`). Saved verses from the journal carousel (`loadCarouselFavorites`). Not journal `is_favorite`. `in:favorites` ≠ `favorites`.
 - **Color.** Pastel highlight chips filter `colorId`. Saved verses have no color and drop out of a color filter.
@@ -670,7 +661,7 @@ Phase 10 shipped **differentiating** search, gated so the overlay still works wi
 
 - **Voice.** Hands-free fill of the overlay input. Mic is hidden when the native module or OS recognizer is missing. Permission copy lives in `app.json` / `app.config.js`. Android `RECORD_AUDIO` is no longer force-blocked (camera still is). The input stays usable if the user declines. Interim transcripts do not search; the final phrase does.
 - **Strong’s.** Study-audience slice: a small number index (`G26`, `H7225`, `strong:g26`), not a Greek/Hebrew corpus or lemma tokenizer. Unknown numbers return no hits (they do not fall through to `316`-style digit search). This-book scope filters the list. Named passages still win if the whole query is a passage name.
-- **Related.** Separate **Related** section after Bible results. Source is `search-related-verses.ts` (explicit cross-refs). Shown only for a book-qualified reference or named passage. `love` / topical keywords / Strong’s queries do not get Related. Not Quick Picks and not book “Did you mean”.
+- **Related.** Separate **Related** section after Bible results. Source is `search-related-verses.ts` (explicit cross-refs). Shown only for a book-qualified reference or named passage. `love` / topical keywords / Strong’s queries do not get Related. Not book “Did you mean”.
 
 | Overlay rule | Tests |
 | --- | --- |

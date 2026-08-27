@@ -6,7 +6,6 @@ import {
   prependSearchHistory,
   removeSearchHistoryItem,
 } from "@/lib/search-history";
-import { buildSearchQuickPicks } from "@/lib/search-quick-picks";
 import {
   getPreferredReaderTranslation,
   peekReaderLastPosition,
@@ -27,16 +26,7 @@ import {
   overlayPowerToJournalCombinator,
   parseOverlayPowerQuery,
 } from "@/lib/search-power-query";
-import {
-  attachAlsoTranslationSnippets,
-  pickAlsoTranslationId,
-} from "@/lib/search-also-translation";
-import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
-import {
-  loadFavoriteTranslationIds,
-  peekFavoriteTranslationIds,
-} from "@/lib/use-favorite-translations";
-import { getDefaultPinnedTranslationIds } from "@/lib/default-pinned-translations";
+import { attachAlsoTranslationSnippets } from "@/lib/search-also-translation";
 import { getRelatedVerseRefsForQuery } from "@sinag-bible/core/search-related-verses";
 import { relatedRefsToSearchResults } from "@/lib/search-related-results";
 import { hapticSelection } from "@/lib/haptics";
@@ -82,16 +72,11 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
   const [failedHydrationCount, setFailedHydrationCount] = useState(0);
   const [recentQueries, setRecentQueries] = useState<string[]>([]);
   const [searchTranslationId, setSearchTranslationId] = useState<string>(translationFromPeek);
-  const [quickPicksSeed, setQuickPicksSeed] = useState(0);
   const [bibleScope, setBibleScope] = useState<OverlayBibleScope>("all");
   const [scopeBook, setScopeBook] = useState<{ slug: string; name: string } | null>(null);
   const [journalFavoritesOnly, setJournalFavoritesOnly] = useState(false);
   const [marksKind, setMarksKind] = useState<OverlayMarksKind | null>(null);
   const [highlightColor, setHighlightColor] = useState<HighlightColor | null>(null);
-  const [alsoTranslationEnabled, setAlsoTranslationEnabled] = useState(false);
-  const [pinnedTranslationIds, setPinnedTranslationIds] = useState<string[]>(
-    () => peekFavoriteTranslationIds() ?? getDefaultPinnedTranslationIds(),
-  );
 
   const recordNextRef = useRef(false);
   const skipNextDebounceRef = useRef(false);
@@ -106,10 +91,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
   marksKindRef.current = marksKind;
   const highlightColorRef = useRef(highlightColor);
   highlightColorRef.current = highlightColor;
-  const alsoTranslationEnabledRef = useRef(alsoTranslationEnabled);
-  alsoTranslationEnabledRef.current = alsoTranslationEnabled;
-  const pinnedTranslationIdsRef = useRef(pinnedTranslationIds);
-  pinnedTranslationIdsRef.current = pinnedTranslationIds;
   const marksCacheRef = useRef<ReaderVerseMark[] | null>(null);
   const prevSearchTranslationRef = useRef<string | null>(null);
 
@@ -138,11 +119,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
       bookScopeSlug,
     };
     const keyword = power.keyword;
-    const pinned = peekFavoriteTranslationIds() ?? pinnedTranslationIdsRef.current;
-    const chipAlsoId = alsoTranslationEnabledRef.current
-      ? pickAlsoTranslationId(searchTranslationId, pinned)
-      : null;
-    const alsoId = power.alsoTranslationId ?? chipAlsoId;
+    const alsoId = power.alsoTranslationId;
     const shouldRecord = recordNextRef.current;
     recordNextRef.current = false;
 
@@ -276,7 +253,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
 
   useEffect(() => {
     if (!enabled) return;
-    setQuickPicksSeed((n) => n + 1);
     const last = peekReaderLastPosition();
     const slug = last?.bookSlug?.trim();
     if (slug) {
@@ -290,9 +266,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
       .catch(() => {
         /* keep fallback */
       });
-    void loadFavoriteTranslationIds()
-      .then(setPinnedTranslationIds)
-      .catch(() => setPinnedTranslationIds(getDefaultPinnedTranslationIds()));
     void loadSearchHistory()
       .then(setRecentQueries)
       .catch(() => setRecentQueries([]));
@@ -365,7 +338,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
       setJournalFavoritesOnly(false);
       setMarksKind(null);
       setHighlightColor(null);
-      setAlsoTranslationEnabled(false);
       marksCacheRef.current = null;
       return;
     }
@@ -438,15 +410,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
         marksKindRef.current = "highlights";
         setMarksKind("highlights");
       }
-      rerunWithoutHistory(queryRef.current);
-    },
-    [rerunWithoutHistory],
-  );
-
-  const onChangeAlsoTranslationEnabled = useCallback(
-    (next: boolean) => {
-      alsoTranslationEnabledRef.current = next;
-      setAlsoTranslationEnabled(next);
       rerunWithoutHistory(queryRef.current);
     },
     [rerunWithoutHistory],
@@ -557,13 +520,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
   const activeMarksFilter = resolveOverlayMarksFilter(parsedPower, marksKind, highlightColor);
   const listingMarksOnly = Boolean(activeMarksFilter.kind && !parsedPower.keyword);
   const snippetQuery = parsedPower.keyword;
-  const alsoChipTargetId = pickAlsoTranslationId(searchTranslationId, pinnedTranslationIds);
-  const alsoChipLabel = alsoChipTargetId
-    ? getTranslationDisplayAbbreviation(alsoChipTargetId)
-    : null;
-  const alsoTranslationActive = Boolean(
-    parsedPower.alsoTranslationId ?? (alsoTranslationEnabled ? alsoChipTargetId : null),
-  );
   const showEmptyState = query.trim().length === 0 && !activeMarksFilter.kind;
   const hasQuery = query.trim().length > 0 || Boolean(activeMarksFilter.kind);
   const searchSections = useMemo(() => {
@@ -596,14 +552,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     [nearbyBooks],
   );
   const recentShown = recentQueries.slice(0, 3);
-  const quickPicks = useMemo(
-    () =>
-      buildSearchQuickPicks({
-        recentQueries,
-        lastReaderPosition: peekReaderLastPosition(),
-      }),
-    [recentQueries, quickPicksSeed],
-  );
 
   return {
     query,
@@ -626,7 +574,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     emptyNearbyBooks,
     searchSections,
     recentShown,
-    quickPicks,
     readerHrefForResult,
     onOpenVerseResult,
     bibleScope,
@@ -640,8 +587,5 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
     onChangeMarksKind,
     onChangeHighlightColor,
     snippetQuery,
-    alsoChipLabel,
-    alsoTranslationActive,
-    onChangeAlsoTranslationEnabled,
   };
 }

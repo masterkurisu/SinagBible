@@ -7,7 +7,8 @@ import { listReaderAnnotationChapters } from "@/lib/use-reader-storage";
 
 export const OVERLAY_MARKS_RESULT_CAP = 20;
 
-export type OverlayMarksKind = "highlights" | "underlines" | "favorites" | "marks";
+/** `underlines` merges into `highlights` — underline marks match the "Highlights" filter too. */
+export type OverlayMarksKind = "highlights" | "favorites" | "marks";
 
 export type OverlayMarksQuery = {
   remainder: string;
@@ -48,7 +49,7 @@ function lastMatch<T>(re: RegExp, raw: string, map: (value: string) => T | null)
 function parseKindToken(value: string): OverlayMarksKind | null {
   const token = value.toLowerCase();
   if (token === "highlight" || token === "highlights") return "highlights";
-  if (token === "underline" || token === "underlines") return "underlines";
+  if (token === "underline" || token === "underlines") return "highlights";
   if (token === "favorite" || token === "favorites") return "favorites";
   if (token === "mark" || token === "marks") return "marks";
   return null;
@@ -109,8 +110,9 @@ export function readerMarkMatchesFilter(mark: ReaderVerseMark, filter: OverlayMa
   if (!filter.kind) return false;
   if (filter.bookScopeSlug && mark.bookSlug !== filter.bookScopeSlug) return false;
 
-  if (filter.kind === "highlights" && mark.kind !== "highlight") return false;
-  if (filter.kind === "underlines" && mark.kind !== "underline") return false;
+  if (filter.kind === "highlights" && mark.kind !== "highlight" && mark.kind !== "underline") {
+    return false;
+  }
   if (filter.kind === "favorites" && mark.kind !== "favorite") return false;
 
   if (filter.color) {
