@@ -20,10 +20,21 @@ export function useSearchVoice({
   onTranscript: (text: string, isFinal: boolean) => void;
 }) {
   const [listening, setListening] = useState(false);
-  const available = isSearchVoiceAvailable();
+  const [available, setAvailable] = useState(false);
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
   const subsRef = useRef<VoiceSub[]>([]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setAvailable(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => {
+      setAvailable(isSearchVoiceAvailable());
+    });
+    return () => cancelAnimationFrame(id);
+  }, [enabled]);
 
   const clearSubs = useCallback(() => {
     for (const sub of subsRef.current) {

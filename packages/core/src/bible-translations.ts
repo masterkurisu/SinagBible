@@ -34,6 +34,7 @@ import {
   evictVagueKeywordIndex,
   getOrBuildVagueKeywordIndex,
   lookupKeywordVerseRefs,
+  scheduleVagueKeywordIndexBuild,
   type VagueKeywordVerseRef,
 } from "./vague-keyword-index";
 
@@ -1687,7 +1688,7 @@ export async function getClosestBookSuggestionsForTranslation(
 export function warmTranslationSearchCache(translationId: string = "KJV"): void {
   void resolveSearchTranslationContext(translationId)
     .then((ctx) => {
-      getOrBuildVagueKeywordIndex(ctx.searchKey, ctx.data);
+      scheduleVagueKeywordIndexBuild(ctx.searchKey, ctx.data);
     })
     .catch(() => {
       /* warm-up is best-effort */

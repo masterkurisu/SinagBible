@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  getSearchResultsForReaderTranslation,
-  warmReaderTranslationSearchCache,
-} from "@/lib/bible-search-service";
+import { getSearchResultsForReaderTranslation } from "@/lib/bible-search-service";
 import type { BookSuggestion, HighlightColor, LocalJournalEntry, SearchResult } from "@sinag-bible/types";
 import {
   loadSearchHistory,
@@ -323,11 +320,6 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
       cancelled = true;
     };
   }, [enabled]);
-
-  useEffect(() => {
-    if (!enabled) return;
-    warmReaderTranslationSearchCache(searchTranslationId);
-  }, [enabled, searchTranslationId]);
 
   useEffect(() => {
     if (!enabled) return;

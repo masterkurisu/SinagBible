@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, Platform, View } from "react-native";
 import { usePathname } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -22,7 +22,7 @@ import {
 } from "@/lib/reader-tab-bar-visibility-context";
 import { mixHexColors } from "@/lib/mix-hex-color";
 import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
-import { TabBarSearchProvider } from "@/lib/tab-bar-search-context";
+import { TabBarSearchProvider, useTabBarSearch } from "@/lib/tab-bar-search-context";
 import { TabBarSearchLayer } from "@/src/features/search/TabBarSearchLayer";
 import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
 import { hasAnyJournalDraft } from "@/lib/journal-draft-index";
@@ -78,6 +78,9 @@ function TabLayoutInner() {
       : TAB_BAR_BACKGROUND;
   const [hasJournalDraft, setHasJournalDraft] = useState(false);
   const lastDraftBadgeRefreshAtRef = useRef(0);
+  const { isOpen, openSearch } = useTabBarSearch();
+  /** Ignore native search-slot presses that fire as a side effect of Home ↔ Reader tab changes. */
+  const ignoreSearchTabPressUntilRef = useRef(0);
 
   usePinnedTranslationsPrefetch();
 
@@ -97,7 +100,11 @@ function TabLayoutInner() {
     }
     // Warm journal cache so tab-bar search can filter entries without waiting on AsyncStorage.
     void refreshLocalEntriesCache();
-    void getPreferredReaderTranslation().then(warmReaderTranslationSearchCache);
+    // Defer KJV JSON parse + keyword index so VectorIcon rasterization can paint the tab bar first.
+    const warmSearchCacheId = setTimeout(() => {
+      void getPreferredReaderTranslation().then(warmReaderTranslationSearchCache);
+    }, 600);
+    return () => clearTimeout(warmSearchCacheId);
   }, []);
 
   useEffect(() => {
@@ -146,9 +153,17 @@ function TabLayoutInner() {
     const prev = prevTabHapticKeyRef.current;
     if (prev !== null && prev !== key) {
       hapticLightImpact();
+      ignoreSearchTabPressUntilRef.current = Date.now() + 450;
     }
     prevTabHapticKeyRef.current = key;
   }, [activeTabKey]);
+
+  const onSearchTabPress = useCallback(() => {
+    if (Date.now() < ignoreSearchTabPressUntilRef.current) return;
+    if (isOpen) return;
+    hapticLightImpact();
+    openSearch();
+  }, [isOpen, openSearch]);
 
   const iosTabBarSurfaceProps =
     Platform.OS === "ios"
@@ -239,7 +254,12 @@ function TabLayoutInner() {
           disabled
           disablePopToTop
           disableScrollToTop
+          disableIndicator
+          accessibilityLabel="Search"
           contentStyle={{ backgroundColor: "transparent" }}
+          listeners={{
+            tabPress: onSearchTabPress,
+          }}
         />
       </NativeTabs>
       {!readerChapterAndroidScrollHide ? <TabBarSearchFab /> : null}

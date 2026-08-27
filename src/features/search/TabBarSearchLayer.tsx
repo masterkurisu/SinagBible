@@ -18,6 +18,7 @@ import Animated, {
   interpolate,
   useAnimatedStyle,
   useSharedValue,
+  type SharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BookSuggestion } from "@sinag-bible/types";
@@ -49,14 +50,146 @@ const LAYER_UNMOUNT_BUFFER_MS = 50;
 /** Bottom-tab search — pill expands above the nav bar; results in a sheet above the pill. */
 export function TabBarSearchLayer() {
   const { isOpen, closeSearch } = useTabBarSearch();
+  const [layerMounted, setLayerMounted] = useState(false);
+  const [engineReady, setEngineReady] = useState(false);
+  const progress = useSharedValue(0);
+
+  if (isOpen && !layerMounted) {
+    setLayerMounted(true);
+  }
+
+  useEffect(() => {
+    cancelAnimation(progress);
+
+    if (isOpen) {
+      progress.value = 0;
+      animateM3SpatialProgress(progress, 1, true);
+      let innerId = 0;
+      const outerId = requestAnimationFrame(() => {
+        innerId = requestAnimationFrame(() => setEngineReady(true));
+      });
+      return () => {
+        cancelAnimationFrame(outerId);
+        cancelAnimationFrame(innerId);
+      };
+    }
+
+    setEngineReady(false);
+    animateM3SpatialProgress(progress, 0, false);
+    Keyboard.dismiss();
+    const id = setTimeout(
+      () => setLayerMounted(false),
+      M3_CONTAINER_TRANSFORM_RETURN_MS + LAYER_UNMOUNT_BUFFER_MS,
+    );
+    return () => clearTimeout(id);
+  }, [isOpen, progress]);
+
+  if (!layerMounted) {
+    return null;
+  }
+
+  if (!engineReady) {
+    return <TabBarSearchOpeningShell isOpen={isOpen} closeSearch={closeSearch} progress={progress} />;
+  }
+
+  return <TabBarSearchOverlay isOpen={isOpen} closeSearch={closeSearch} progress={progress} />;
+}
+
+type TabBarSearchOverlayProps = {
+  isOpen: boolean;
+  closeSearch: () => void;
+  progress: SharedValue<number>;
+};
+
+/** Scrim + expanding pill only — must paint before `useBibleSearch` mounts. */
+function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearchOverlayProps) {
+  const insets = useSafeAreaInsets();
+  const { width: screenW } = useWindowDimensions();
+  const { bundle } = useMobileAppTheme();
+  const s = bundle.search;
+  const chrome = bundle.chrome;
+  const isAndroid = Platform.OS === "android";
+  const pillBottomPx = nativeTabSheetBottomInsetPx(insets.bottom, 0);
+  const expandedPillWidthPx = screenW - SHEET_HORIZONTAL_INSET_PX * 2;
+  const pillSurfaceColor = isAndroid ? chrome.androidIndicator : s.cardBackground;
+
+  const scrimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 1], [0, M3_SCRIM_OPACITY], Extrapolation.CLAMP),
+  }));
+  const pillStyle = useAnimatedStyle(() => ({
+    width: interpolate(
+      progress.value,
+      [0, 1],
+      [COLLAPSED_PILL_WIDTH_PX, expandedPillWidthPx],
+      Extrapolation.CLAMP,
+    ),
+    alignSelf: "stretch" as const,
+  }));
+
+  return (
+    <View
+      pointerEvents={isOpen ? "box-none" : "none"}
+      style={[StyleSheet.absoluteFillObject, { zIndex: 200, elevation: 200 }]}
+    >
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss search"
+        onPress={() => {
+          hapticLightImpact();
+          closeSearch();
+        }}
+      >
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: "#000000" },
+            scrimStyle,
+          ]}
+        />
+      </Pressable>
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: "absolute",
+          left: SHEET_HORIZONTAL_INSET_PX,
+          right: SHEET_HORIZONTAL_INSET_PX,
+          bottom: pillBottomPx,
+          alignItems: "center",
+          zIndex: 200,
+        }}
+      >
+        <Animated.View
+          style={[
+            {
+              height: SEARCH_PILL_HEIGHT_PX,
+              borderRadius: SEARCH_PILL_RADIUS_PX,
+              backgroundColor: pillSurfaceColor,
+              overflow: "hidden",
+              alignItems: "center",
+              justifyContent: "center",
+            },
+            pillStyle,
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="magnify"
+            size={28}
+            color={isAndroid ? s.muted : s.bodyText}
+          />
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOverlayProps) {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const { bundle } = useMobileAppTheme();
   const s = bundle.search;
   const chrome = bundle.chrome;
   const isAndroid = Platform.OS === "android";
-
-  const [layerMounted, setLayerMounted] = useState(isOpen);
 
   const search = useBibleSearch({ enabled: isOpen });
   const voice = useSearchVoice({
@@ -71,27 +204,12 @@ export function TabBarSearchLayer() {
   const sheetMaxHeightPx =
     screenH * SHEET_MAX_HEIGHT_RATIO - SEARCH_PILL_HEIGHT_PX - SHEET_GAP_ABOVE_PILL_PX - pillBottomPx;
 
-  const progress = useSharedValue(0);
-
   useEffect(() => {
-    cancelAnimation(progress);
-
-    if (isOpen) {
-      setLayerMounted(true);
-      animateM3SpatialProgress(progress, 1, true);
-      const focusDelayMs = Math.round(M3_CONTAINER_TRANSFORM_ENTER_MS * FADE_THROUGH_INCOMING_START);
-      const id = setTimeout(() => inputRef.current?.focus(), focusDelayMs);
-      return () => clearTimeout(id);
-    }
-
-    animateM3SpatialProgress(progress, 0, false);
-    Keyboard.dismiss();
-    const id = setTimeout(
-      () => setLayerMounted(false),
-      M3_CONTAINER_TRANSFORM_RETURN_MS + LAYER_UNMOUNT_BUFFER_MS,
-    );
+    if (!isOpen) return;
+    const focusDelayMs = Math.round(M3_CONTAINER_TRANSFORM_ENTER_MS * FADE_THROUGH_INCOMING_START);
+    const id = setTimeout(() => inputRef.current?.focus(), focusDelayMs);
     return () => clearTimeout(id);
-  }, [isOpen, progress]);
+  }, [isOpen]);
 
   const dismissSearch = useCallback(() => {
     hapticLightImpact();
@@ -264,10 +382,6 @@ export function TabBarSearchLayer() {
       }),
     [isAndroid, pillBottomPx, pillSurfaceColor, s, sheetMaxHeightPx],
   );
-
-  if (!layerMounted) {
-    return null;
-  }
 
   return (
     <View pointerEvents={isOpen ? "box-none" : "none"} style={styles.root}>

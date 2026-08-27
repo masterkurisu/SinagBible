@@ -31,6 +31,8 @@ import {
 const INDEX_BATCH_PER_TICK = 15;
 const FETCH_DELAY_MS = 200;
 const BACKOFF_MS = 5_000;
+/** Keep the first corpus tick off the search-open / first-paint path. */
+const FIRST_TICK_DELAY_MS = 4_000;
 
 let targetTranslationId: string | null = null;
 let tickInflight: Promise<void> | null = null;
@@ -174,7 +176,9 @@ export function scheduleYvpSearchCorpusJob(translationId: string): void {
   targetTranslationId = trimmed;
   ensureListeners();
   InteractionManager.runAfterInteractions(() => {
-    queueTick();
+    setTimeout(() => {
+      queueTick();
+    }, FIRST_TICK_DELAY_MS);
   });
 }
 

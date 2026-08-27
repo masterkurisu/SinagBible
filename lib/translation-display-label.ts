@@ -4,10 +4,12 @@ import {
   isTranslationId,
   type TranslationId,
 } from "@sinag-bible/core/bible-translations";
-import {
-  getTranslationPickerAbbreviation,
-  type TranslationPickerItem,
-} from "@/lib/use-translation-picker";
+import type { TranslationPickerItem } from "@/lib/use-translation-picker";
+
+/** Keep this a type-only import so search/tab startup does not pull the picker catalog. */
+function pickerItemAbbreviation(item: TranslationPickerItem): string {
+  return item.label.split(" - ")[0]?.trim() || item.id;
+}
 
 /** Display abbreviations for pinned YouVersion translations when the picker catalog has not loaded. */
 const YVP_DISPLAY_ABBREVIATION_FALLBACK: Record<string, string> = {
@@ -53,7 +55,7 @@ export function getTranslationDisplayAbbreviation(
 
   if (pickerItems?.length) {
     const item = findPickerItem(trimmed, pickerItems);
-    if (item) return getTranslationPickerAbbreviation(item);
+    if (item) return pickerItemAbbreviation(item);
   }
 
   const yvpFallback = YVP_DISPLAY_ABBREVIATION_FALLBACK[trimmed.toLowerCase()];
