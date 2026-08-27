@@ -135,32 +135,80 @@ async function fetchApiTranslationData(id: ApiTranslationId): Promise<Translatio
 
 // ---------------------------------------------------------------------------
 
-const translationDataCache = new Map<TranslationId, Promise<TranslationData>>();
+// Bundled translation trees are large (4-4.7MB parsed) and only two are ever needed
+// concurrently in the current codebase (the two default pins, or one pin + the
+// "also translation" search snippet) — capped at 2, split from the mapped-API cache
+// below so a BSB/ASV/etc. fetch can never evict a bundled translation (see Fix-A.md).
+const bundledTranslationDataCache = new LruMap<TranslationId, Promise<TranslationData>>(2);
+// Mapped-API translation fetches (BSB, ENG_ASV, etc.) — left unbounded for now; out of
+// scope for Fix A (see Fix-A.md Phase 1, option 2).
+const apiTranslationDataCache = new Map<TranslationId, Promise<TranslationData>>();
+
+function loadBundledTranslationData(id: TranslationId): Promise<TranslationData> {
+  switch (id) {
+    case "KJV":
+      return import("../data/kjv.json").then((m) => m.default as TranslationData);
+    case "WEB":
+      return import("../data/web.json").then((m) => m.default as TranslationData);
+    case "ADB1905":
+      return import("../data/adb1905.json").then((m) => m.default as TranslationData);
+    case "OEB":
+      return import("../data/oeb.json").then((m) => m.default as TranslationData);
+    default:
+      throw new Error(`Unknown translation: ${id}`);
+  }
+}
+
+/**
+ * Fires when a bundled translation falls out of `bundledTranslationDataCache`.
+ * `bookNavPromiseCache` and the keyword index are both keyed by `TranslationId` for
+ * bundled translations, so they must be evicted in lockstep to avoid a stale nav or
+ * keyword index outliving the translation text it was built from.
+ *
+ * (Forward reference to `bookNavPromiseCache`, declared further down — safe because
+ * this only runs when `.set()` evicts an entry, i.e. after the module has finished
+ * initializing, never during module load.)
+ */
+function evictBundledTranslationCaches(id: TranslationId): void {
+  delete bookNavPromiseCache[id];
+  evictVagueKeywordIndex(id);
+}
 
 function loadTranslationData(id: TranslationId): Promise<TranslationData> {
-  const ex = translationDataCache.get(id);
+  if (isApiTranslationId(id)) {
+    const ex = apiTranslationDataCache.get(id);
+    if (ex) return ex;
+    const p = fetchApiTranslationData(id);
+    apiTranslationDataCache.set(id, p);
+    return p;
+  }
+
+  const ex = bundledTranslationDataCache.get(id);
   if (ex) return ex;
 
-  const p = (async () => {
-    if (isApiTranslationId(id)) {
-      return fetchApiTranslationData(id);
-    }
-    switch (id) {
-      case "KJV":
-        return (await import("../data/kjv.json")).default as TranslationData;
-      case "WEB":
-        return (await import("../data/web.json")).default as TranslationData;
-      case "ADB1905":
-        return (await import("../data/adb1905.json")).default as TranslationData;
-      case "OEB":
-        return (await import("../data/oeb.json")).default as TranslationData;
-      default:
-        throw new Error(`Unknown translation: ${id}`);
-    }
-  })();
-
-  translationDataCache.set(id, p);
+  const p = loadBundledTranslationData(id);
+  bundledTranslationDataCache.set(id, p, evictBundledTranslationCaches);
   return p;
+}
+
+/** Dev/diagnostic — current bundled-translation (KJV/WEB/ADB1905/OEB) cache entry count. */
+export function getBundledTranslationDataCacheSize(): number {
+  return bundledTranslationDataCache.size;
+}
+
+/** Dev/diagnostic — current mapped-API translation (BSB, ENG_ASV, etc.) cache entry count. */
+export function getApiTranslationDataCacheSize(): number {
+  return apiTranslationDataCache.size;
+}
+
+/** Dev/diagnostic — whether `id`'s text is currently resident in memory (either cache). */
+export function isTranslationDataCached(id: TranslationId): boolean {
+  return isApiTranslationId(id) ? apiTranslationDataCache.has(id) : bundledTranslationDataCache.has(id);
+}
+
+/** Dev/diagnostic — whether `id`'s book nav is currently cached. */
+export function isBookNavCached(id: TranslationId): boolean {
+  return bookNavPromiseCache[id] !== undefined;
 }
 
 const helloaoCompleteDataCache = new LruMap<string, Promise<TranslationData>>(3);

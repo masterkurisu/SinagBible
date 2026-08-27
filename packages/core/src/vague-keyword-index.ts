@@ -118,6 +118,11 @@ export function getVagueKeywordIndexCacheSize(): number {
   return indexByTranslation.size;
 }
 
+/** Dev/diagnostic — whether a keyword index is currently cached for `id`. */
+export function hasVagueKeywordIndex(id: string): boolean {
+  return indexByTranslation.has(id);
+}
+
 /**
  * Whole-word hits first; when none exist and the query is long enough, include words
  * that start with the query (e.g. "test" → testify, testimony) in canonical order.

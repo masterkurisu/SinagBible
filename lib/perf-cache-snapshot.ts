@@ -1,10 +1,16 @@
-import { getHelloaoCompleteDataCacheSize } from "@sinag-bible/core/bible-translations";
+import {
+  getApiTranslationDataCacheSize,
+  getBundledTranslationDataCacheSize,
+  getHelloaoCompleteDataCacheSize,
+} from "@sinag-bible/core/bible-translations";
 import { getVagueKeywordIndexCacheSize } from "@sinag-bible/core/vague-keyword-index";
 import { getPexelsSessionCacheSizes } from "@/lib/pexels-repository";
 import { getReaderChapterStorageCacheSize } from "@/lib/use-reader-storage";
 import { getYvpSearchContextCacheSize } from "@/lib/yvp-search-corpus";
 
 export type PerfCacheSnapshot = {
+  bundledTranslationData: number;
+  apiTranslationData: number;
   helloaoCompleteData: number;
   yvpSearchContext: number;
   vagueKeywordIndex: number;
@@ -17,6 +23,8 @@ export type PerfCacheSnapshot = {
 export function getPerfCacheSnapshot(): PerfCacheSnapshot {
   const pexels = getPexelsSessionCacheSizes();
   return {
+    bundledTranslationData: getBundledTranslationDataCacheSize(),
+    apiTranslationData: getApiTranslationDataCacheSize(),
     helloaoCompleteData: getHelloaoCompleteDataCacheSize(),
     yvpSearchContext: getYvpSearchContextCacheSize(),
     vagueKeywordIndex: getVagueKeywordIndexCacheSize(),
