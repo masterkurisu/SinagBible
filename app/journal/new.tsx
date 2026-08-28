@@ -2,12 +2,15 @@ import { useCallback, useState } from "react";
 import { Pressable, View, useWindowDimensions } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { isMobileAppDarkThemeId } from "@sinag-bible/tokens";
 import { JournalNewEntryForm, type JournalNewEntryInitialParams } from "@/components/journal-new-entry-form";
 import { JOURNAL_NEW_ENTRY_FORM_TOP_OFFSET_PX } from "@/lib/native-tab-chrome";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 import { clearDefaultJournalDraft } from "@/lib/journal-draft-index";
 import { JournalDraftCloseDialog } from "@/src/features/journal/JournalDraftCloseDialog";
+import { SheetBlurBackdrop } from "@/src/components/m3/SheetBlurBackdrop";
+import { useAndroidSheetBackdropSnapshot } from "@/lib/use-android-sheet-backdrop-snapshot";
 
 const NEW_ENTRY_STACK_SCREEN_OPTIONS = {
   headerShown: false,
@@ -27,6 +30,8 @@ export default function NewJournalEntryScreen() {
   const colors = bundle.ui;
   const j = bundle.journal;
   const isTablet = isTabletLayout(windowWidth, windowHeight);
+  const isDark = isMobileAppDarkThemeId(bundle.id);
+  const androidBackdropUri = useAndroidSheetBackdropSnapshot(true);
 
   const requestClose = useCallback(() => {
     if (!hasDraftInput) {
@@ -50,7 +55,12 @@ export default function NewJournalEntryScreen() {
   return (
     <>
       <Stack.Screen options={NEW_ENTRY_STACK_SCREEN_OPTIONS} />
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: j.newEntryRouteScrim }}>
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+        <SheetBlurBackdrop
+          isDark={isDark}
+          androidBackdropUri={androidBackdropUri}
+          tintColor={j.newEntryRouteScrim}
+        />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Dismiss new entry"
