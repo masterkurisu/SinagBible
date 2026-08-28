@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BackHandler,
+  Image,
   Keyboard,
+  Platform,
   Pressable,
   StyleSheet,
   TextInput,
@@ -9,6 +11,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useTabBarSearch } from "@/lib/tab-bar-search-context";
 import Animated, {
@@ -53,24 +56,89 @@ const FADE_THROUGH_OUTGOING_END = 0.25;
 const FADE_THROUGH_INCOMING_START = 0.25;
 const SHEET_TRANSLATE_FROM_PX = 28;
 const LAYER_UNMOUNT_BUFFER_MS = 50;
+const SEARCH_SNAPSHOT_BLUR_RADIUS = 24;
+const SEARCH_IOS_BLUR_INTENSITY = 70;
+const SEARCH_BACKDROP_TINT_OPACITY = 0.4;
 
-/** Near-opaque frost so the current tab recedes and the sheet keeps focus. */
-function searchFrostScrimColor(isDark: boolean, pageBackground: string): string {
-  if (!isDark) return "rgba(255, 255, 255, 0.72)";
-  const hex = pageBackground.replace("#", "");
-  if (hex.length < 6) return "rgba(0, 0, 0, 0.88)";
-  const r = Number.parseInt(hex.slice(0, 2), 16);
-  const g = Number.parseInt(hex.slice(2, 4), 16);
-  const b = Number.parseInt(hex.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, 0.88)`;
+const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
+
+const layerRootStyle = {
+  ...StyleSheet.absoluteFill,
+  zIndex: 5000,
+} as const;
+
+type SearchFrostBackdropProps = {
+  isDark: boolean;
+  progress: SharedValue<number>;
+  androidBackdropUri: string | null;
+  onDismiss: () => void;
+};
+
+/**
+ * iOS: live UIVisualEffect blur of whatever is behind the overlay.
+ * Android: native tabs cannot be sampled by BlurView — freeze a window
+ * screenshot (taken before this overlay mounts) and blur that image.
+ */
+function SearchFrostBackdrop({
+  isDark,
+  progress,
+  androidBackdropUri,
+  onDismiss,
+}: SearchFrostBackdropProps) {
+  const fadeStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
+  }));
+  const tint = isDark
+    ? `rgba(0, 0, 0, ${SEARCH_BACKDROP_TINT_OPACITY})`
+    : `rgba(255, 255, 255, ${SEARCH_BACKDROP_TINT_OPACITY})`;
+
+  return (
+    <Pressable
+      style={StyleSheet.absoluteFill}
+      accessibilityRole="button"
+      accessibilityLabel="Dismiss search"
+      onPress={onDismiss}
+    >
+      {Platform.OS === "ios" ? (
+        <AnimatedBlurView
+          pointerEvents="none"
+          intensity={SEARCH_IOS_BLUR_INTENSITY}
+          tint={isDark ? "dark" : "light"}
+          style={[StyleSheet.absoluteFill, fadeStyle]}
+        />
+      ) : (
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, fadeStyle]}>
+          {androidBackdropUri ? (
+            <Image
+              source={{
+                uri: androidBackdropUri.startsWith("file:")
+                  ? androidBackdropUri
+                  : `file://${androidBackdropUri}`,
+              }}
+              blurRadius={SEARCH_SNAPSHOT_BLUR_RADIUS}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : null}
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} />
+        </Animated.View>
+      )}
+    </Pressable>
+  );
 }
 
 /** Bottom-tab search — pill expands above the nav bar; results in a sheet above the pill. */
 export function TabBarSearchLayer() {
-  const { isOpen, closeSearch } = useTabBarSearch();
+  const { isOpen, closeSearch, androidBackdropUri } = useTabBarSearch();
+  const { bundle } = useMobileAppTheme();
   const [layerMounted, setLayerMounted] = useState(false);
   const [engineReady, setEngineReady] = useState(false);
   const progress = useSharedValue(0);
+  const isDark = isMobileAppDarkThemeId(bundle.id);
+
+  const dismissSearch = useCallback(() => {
+    hapticLightImpact();
+    closeSearch();
+  }, [closeSearch]);
 
   if (isOpen && !layerMounted) {
     setLayerMounted(true);
@@ -106,11 +174,21 @@ export function TabBarSearchLayer() {
     return null;
   }
 
-  if (!engineReady) {
-    return <TabBarSearchOpeningShell isOpen={isOpen} closeSearch={closeSearch} progress={progress} />;
-  }
-
-  return <TabBarSearchOverlay isOpen={isOpen} closeSearch={closeSearch} progress={progress} />;
+  return (
+    <View pointerEvents={isOpen ? "box-none" : "none"} style={layerRootStyle}>
+      <SearchFrostBackdrop
+        isDark={isDark}
+        progress={progress}
+        androidBackdropUri={androidBackdropUri}
+        onDismiss={dismissSearch}
+      />
+      {engineReady ? (
+        <TabBarSearchOverlay isOpen={isOpen} closeSearch={closeSearch} progress={progress} />
+      ) : (
+        <TabBarSearchOpeningShell progress={progress} />
+      )}
+    </View>
+  );
 }
 
 type TabBarSearchOverlayProps = {
@@ -119,8 +197,8 @@ type TabBarSearchOverlayProps = {
   progress: SharedValue<number>;
 };
 
-/** Scrim + expanding pill only — must paint before `useBibleSearch` mounts. */
-function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearchOverlayProps) {
+/** Expanding pill only — must paint before `useBibleSearch` mounts. */
+function TabBarSearchOpeningShell({ progress }: Pick<TabBarSearchOverlayProps, "progress">) {
   const insets = useSafeAreaInsets();
   const { width: screenW } = useWindowDimensions();
   const { bundle } = useMobileAppTheme();
@@ -132,11 +210,7 @@ function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearc
   // than "intentionally elevated", so exact equality is what actually
   // reads as seamless.
   const pillSurfaceColor = md.surfaceContainerLow;
-  const frostColor = searchFrostScrimColor(isMobileAppDarkThemeId(bundle.id), md.surfaceContainerLow);
 
-  const scrimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
-  }));
   const pillStyle = useAnimatedStyle(() => ({
     width: interpolate(
       progress.value,
@@ -149,57 +223,35 @@ function TabBarSearchOpeningShell({ isOpen, closeSearch, progress }: TabBarSearc
 
   return (
     <View
-      pointerEvents={isOpen ? "box-none" : "none"}
-      style={[StyleSheet.absoluteFill, { zIndex: 5000, elevation: 24 }]}
+      pointerEvents="box-none"
+      style={{
+        position: "absolute",
+        left: SEARCH_BAR_HORIZONTAL_INSET_PX,
+        right: SEARCH_BAR_HORIZONTAL_INSET_PX,
+        bottom: pillBottomPx,
+        alignItems: "center",
+        zIndex: 5000,
+      }}
     >
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss search"
-        onPress={() => {
-          hapticLightImpact();
-          closeSearch();
-        }}
+      <Animated.View
+        style={[
+          {
+            height: SEARCH_PILL_HEIGHT_PX,
+            borderRadius: SEARCH_PILL_RADIUS_PX,
+            backgroundColor: pillSurfaceColor,
+            overflow: "hidden",
+            alignItems: "center",
+            justifyContent: "center",
+          },
+          pillStyle,
+        ]}
       >
-        <Animated.View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: frostColor },
-            scrimStyle,
-          ]}
+        <MaterialCommunityIcons
+          name="magnify"
+          size={22}
+          color={md.onSurface}
         />
-      </Pressable>
-      <View
-        pointerEvents="box-none"
-        style={{
-          position: "absolute",
-          left: SEARCH_BAR_HORIZONTAL_INSET_PX,
-          right: SEARCH_BAR_HORIZONTAL_INSET_PX,
-          bottom: pillBottomPx,
-          alignItems: "center",
-          zIndex: 5000,
-        }}
-      >
-        <Animated.View
-          style={[
-            {
-              height: SEARCH_PILL_HEIGHT_PX,
-              borderRadius: SEARCH_PILL_RADIUS_PX,
-              backgroundColor: pillSurfaceColor,
-              overflow: "hidden",
-              alignItems: "center",
-              justifyContent: "center",
-            },
-            pillStyle,
-          ]}
-        >
-          <MaterialCommunityIcons
-            name="magnify"
-            size={22}
-            color={md.onSurface}
-          />
-        </Animated.View>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -230,7 +282,6 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
     idleSheetHeightPx,
     screenH - insets.top - SHEET_TOP_GAP_PX - sheetBottomPx,
   );
-  const frostColor = searchFrostScrimColor(isMobileAppDarkThemeId(bundle.id), md.surfaceContainerLow);
   const sheetExpanded = !search.showEmptyState;
 
   useEffect(() => {
@@ -257,10 +308,6 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
     });
     return () => sub.remove();
   }, [dismissSearch, isOpen]);
-
-  const scrimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
-  }));
 
   const sheetStyle = useAnimatedStyle(() => ({
     height: interpolate(
@@ -328,15 +375,6 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        root: {
-          ...StyleSheet.absoluteFill,
-          zIndex: 5000,
-          elevation: 24,
-        },
-        scrim: {
-          ...StyleSheet.absoluteFill,
-          backgroundColor: frostColor,
-        },
         sheet: {
           position: "absolute",
           left: 0,
@@ -402,21 +440,12 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
           borderRadius: 20,
         },
       }),
-    [frostColor, md, pillBottomPx, pillSurfaceColor, sheetBottomPx],
+    [md, pillBottomPx, pillSurfaceColor, sheetBottomPx],
   );
 
 
   return (
-    <View pointerEvents={isOpen ? "box-none" : "none"} style={styles.root}>
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss search"
-        onPress={dismissSearch}
-      >
-        <Animated.View style={[styles.scrim, scrimStyle]} />
-      </Pressable>
-
+    <>
       <Animated.View style={[styles.sheet, sheetStyle]}>
         <View style={styles.sheetHandle} pointerEvents="none" />
         <View style={{ flex: 1 }}>
@@ -507,6 +536,6 @@ function TabBarSearchOverlay({ isOpen, closeSearch, progress }: TabBarSearchOver
           </Animated.View>
         </Animated.View>
       </View>
-    </View>
+    </>
   );
 }

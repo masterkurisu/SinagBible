@@ -10,11 +10,11 @@ This document describes how search is structured, what it can do, and how a quer
 
 Search is not a full-screen tab. The fourth bottom-nav slot is a disabled native-tab placeholder. A circular magnifying-glass FAB sits on top of that slot. Tapping it opens a Material 3 overlay:
 
-- A **frosted** wash covers the current tab so the sheet keeps focus.
+- A **blurred** wash covers the current tab so the sheet keeps focus. iOS uses a live native blur. Android freezes a screenshot of the current tab (native tabs cannot be sampled live) and blurs that image.
 - A **search bar** (M3 stadium, `surface-container-high`, elevation 1) expands from the FAB above the tab bar.
 - A **results sheet** (`surface-container-low`, 28dp top corners) sits above the bar, flush against its top edge (no gap). Idle is ~74% of screen height; while querying or showing results it extends to the top safe area.
 - **Filter** chips are pill-shaped M3 filter chips (~32dp tall). Recent and Bible hits use two-line list items with outline-variant dividers.
-- Android hardware back, tapping the frost, or the close control dismisses the overlay and clears the query.
+- Android hardware back, tapping the blur, or the close control dismisses the overlay and clears the query.
 
 Placeholder copy: *“Search Bible, references, and journal”*.
 
@@ -222,7 +222,7 @@ Search is **client-side**. There is no remote search API. Bundled and helloao tr
 
 1. FAB calls `openSearch()`.
 2. `TabBarSearchLayer` mounts (or was already mounted for the close animation).
-3. Progress animates 0 → 1 (pill expands, sheet fades/slides up, frost wash appears).
+3. Progress animates 0 → 1 (pill expands, sheet fades/slides up, blurred backdrop appears).
 4. Input focuses after a short delay.
 5. `useBibleSearch({ enabled: true })` loads preferred reader translation, search history, journal cache, reader marks, and warms the keyword index.
 

@@ -183,21 +183,21 @@ function TabLayoutInner() {
   return (
     <View style={{ flex: 1 }}>
       <NativeTabs
-        {...iosTabBarSurfaceProps}
-        {...tabHiddenProps}
-        tintColor={TAB_TINT}
-        iconColor={{ default: TAB_MUTED, selected: TAB_TINT }}
-        badgeBackgroundColor="#e53935"
-        backgroundColor={tabBarBackgroundColor}
-        {...Platform.select({
-          android: {
-            labelVisibilityMode: ANDROID_NAV_LABEL_VISIBILITY_MODE,
-            rippleColor: androidRipple,
-            indicatorColor: androidIndicator,
-          },
-          default: {},
-        })}
-      >
+          {...iosTabBarSurfaceProps}
+          {...tabHiddenProps}
+          tintColor={TAB_TINT}
+          iconColor={{ default: TAB_MUTED, selected: TAB_TINT }}
+          badgeBackgroundColor="#e53935"
+          backgroundColor={tabBarBackgroundColor}
+          {...Platform.select({
+            android: {
+              labelVisibilityMode: ANDROID_NAV_LABEL_VISIBILITY_MODE,
+              rippleColor: androidRipple,
+              indicatorColor: androidIndicator,
+            },
+            default: {},
+          })}
+        >
         {NAV_TAB_DEFINITIONS.map((tab) => {
           const selectedAccent = getNavTabSelectedAccent(chrome, tab.tabIndex);
           return (
