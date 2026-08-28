@@ -25,7 +25,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useReaderStorage } from "@/lib/use-reader-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router/react-navigation";
-import type { FlashListRef } from "@shopify/flash-list";
+import type { ReaderChapterScrollHandle } from "@/src/features/reader/readerChapterScrollRef";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type {
   PanGestureHandlerGestureEvent,
@@ -326,7 +326,7 @@ export default function ReaderChapterScreen() {
     });
   }, []);
   const { selectedVerses, noteModalVisible } = selectionActivity;
-  const readerScrollRef = useRef<FlashListRef<ReaderVerseFlashItem> | null>(null);
+  const readerScrollRef = useRef<ReaderChapterScrollHandle | null>(null);
   /** Drives cross-fade between in-content heading and stack header title (UI-thread scroll). */
   const readerScrollY = useSharedValue(0);
   const lastScrollBridgeY = useSharedValue(-1);
@@ -1065,6 +1065,10 @@ export default function ReaderChapterScreen() {
   const readerTabletLandscapeTwoColumn =
     chapter != null && isReaderTabletLandscapeTwoColumn(windowWidth, windowHeight);
 
+  /** Paragraph mode always uses a single flowing column — two-column split truncates scroll at ~half the chapter. */
+  const verseListUsesTwoColumn =
+    readerTabletLandscapeTwoColumn && verseLayout !== "paragraph";
+
   const readerTwoColumnSplitIndex = useMemo(
     () => (chapter ? splitVerseIndexForBalancedColumns(chapter.verses) : 0),
     [chapter],
@@ -1074,12 +1078,12 @@ export default function ReaderChapterScreen() {
     if (!chapter) return [];
     return buildReaderVerseFlashListData(
       chapter.verses,
-      readerTabletLandscapeTwoColumn,
+      verseListUsesTwoColumn,
       readerTwoColumnSplitIndex,
       chapter.verseInlineContent,
       verseLayout,
     );
-  }, [chapter, readerTabletLandscapeTwoColumn, readerTwoColumnSplitIndex, verseLayout]);
+  }, [chapter, verseListUsesTwoColumn, readerTwoColumnSplitIndex, verseLayout]);
 
   const verseFlashListDataForList = useMemo(
     () => (isTranslationSwitching ? [] : verseFlashListData),
@@ -1104,11 +1108,16 @@ export default function ReaderChapterScreen() {
     if (targetVerse == null || !isReaderContentCurrent || verseFlashListDataForList.length === 0) {
       return;
     }
+    // Paragraph ScrollView scroll-to-verse is phase 4; FlashList path only (line-by-line).
+    if (verseLayout === "paragraph") {
+      return;
+    }
 
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
+        const flashListRef = readerScrollRef.current?.getFlashListRef?.() ?? null;
         const didScroll = scrollReaderFlashListToVerseCentered(
-          readerScrollRef.current,
+          flashListRef,
           verseFlashListDataForList,
           targetVerse,
           readerVerseEstimatedItemSize,
@@ -1130,6 +1139,7 @@ export default function ReaderChapterScreen() {
     initialScrollVerse,
     readerVerseEstimatedItemSize,
     scheduleVerseDeepLinkTabBarUnsuppress,
+    verseLayout,
   ]);
 
   const readerChapterFlashListFooter = useCallback(() => {
@@ -1748,6 +1758,7 @@ export default function ReaderChapterScreen() {
         readerVerseLineHeight={readerVerseLineHeight}
         readerVerseBodyFontFamily={readerVerseBodyFontFamily}
         verseTextAlign={verseTextAlign}
+        verseLayout={verseLayout}
         readerScrollRef={readerScrollRef}
         chapterSwipePanHandlers={chapterSwipePanHandlers}
         readerVerseEstimatedItemSize={readerVerseEstimatedItemSize}

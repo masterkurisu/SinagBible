@@ -14,8 +14,6 @@ import {
 import { BlurView } from "expo-blur";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useTabBarSearch } from "@/lib/tab-bar-search-context";
-import { warmReaderTranslationSearchCache } from "@/lib/bible-search-service";
-import { getPreferredReaderTranslation } from "@/lib/reader-last-position";
 import Animated, {
   cancelAnimation,
   Extrapolation,
@@ -61,6 +59,8 @@ const LAYER_UNMOUNT_BUFFER_MS = 50;
 const SEARCH_SNAPSHOT_BLUR_RADIUS = 24;
 const SEARCH_IOS_BLUR_INTENSITY = 70;
 const SEARCH_BACKDROP_TINT_OPACITY = 0.4;
+/** Android: visible scrim while the snapshot is still capturing (light theme wash is invisible). */
+const SEARCH_ANDROID_PENDING_SCRIM_OPACITY = 0.32;
 
 const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 
@@ -90,9 +90,15 @@ function SearchFrostBackdrop({
   const fadeStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
   }));
+  const pendingSnapshot = Platform.OS === "android" && androidBackdropUri == null;
+  const tintOpacity = pendingSnapshot
+    ? SEARCH_ANDROID_PENDING_SCRIM_OPACITY
+    : SEARCH_BACKDROP_TINT_OPACITY;
   const tint = isDark
-    ? `rgba(0, 0, 0, ${SEARCH_BACKDROP_TINT_OPACITY})`
-    : `rgba(255, 255, 255, ${SEARCH_BACKDROP_TINT_OPACITY})`;
+    ? `rgba(0, 0, 0, ${tintOpacity})`
+    : pendingSnapshot
+      ? `rgba(0, 0, 0, ${tintOpacity})`
+      : `rgba(255, 255, 255, ${tintOpacity})`;
 
   return (
     <Pressable
@@ -145,13 +151,6 @@ export function TabBarSearchLayer() {
   if (isOpen && !layerMounted) {
     setLayerMounted(true);
   }
-
-  useEffect(() => {
-    if (!isOpen) return;
-    // Warm search index only when the user opens search — not at app startup, where
-    // loading the full KJV JSON blocked the JS thread for tens of seconds on reload.
-    void getPreferredReaderTranslation().then(warmReaderTranslationSearchCache);
-  }, [isOpen]);
 
   useEffect(() => {
     cancelAnimation(progress);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 import type { GestureResponderEvent, PanResponderGestureState } from "react-native";
-import { Animated, BackHandler, Dimensions, Easing, PanResponder, Platform } from "react-native";
+import { Animated, BackHandler, Dimensions, Easing, PanResponder, Platform, ScrollView } from "react-native";
 import Reanimated from "react-native-reanimated";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
@@ -68,6 +68,8 @@ export function chapterSwipeReleaseShouldNavigate(g: PanResponderGestureState, m
 export const AnimatedReaderChapterFlashList = Reanimated.createAnimatedComponent(
   FlashList,
 ) as typeof FlashList<ReaderVerseFlashItem>;
+
+export const AnimatedReaderChapterScrollView = Reanimated.createAnimatedComponent(ScrollView);
 
 export function useReaderGestures({
   bookSlug,

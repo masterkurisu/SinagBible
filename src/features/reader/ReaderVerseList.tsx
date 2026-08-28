@@ -1,5 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, type ComponentProps, type ReactNode, type RefObject } from "react";
-import { Animated, Pressable, StyleSheet, View, type GestureResponderHandlers, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  type ComponentProps,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import {
+  Animated,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type GestureResponderHandlers,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import type { FlashListRef, ListRenderItemInfo } from "@shopify/flash-list";
 import {
   READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX,
@@ -8,7 +26,13 @@ import {
   READER_FLASH_LIST_DRAW_DISTANCE_PX,
   READER_SCROLL_EVENT_THROTTLE,
 } from "@/lib/device-capability";
-import { AnimatedReaderChapterFlashList, type ReaderVerseFlashItem } from "./useReaderGestures";
+import type { ReaderVerseLayout } from "@/src/features/reader/useReaderPreferences";
+import type { ReaderChapterScrollHandle } from "@/src/features/reader/readerChapterScrollRef";
+import {
+  AnimatedReaderChapterFlashList,
+  AnimatedReaderChapterScrollView,
+  type ReaderVerseFlashItem,
+} from "./useReaderGestures";
 import {
   findFlashListIndexForVerseNumber,
   readerVerseFlashListColumnProps,
@@ -85,7 +109,8 @@ export function scrollReaderFlashListToVerseCentered(
 
 type ReaderVerseListProps = {
   rc: { sceneSurface: string };
-  readerScrollRef: RefObject<import("@shopify/flash-list").FlashListRef<ReaderVerseFlashItem> | null>;
+  readerScrollRef: RefObject<ReaderChapterScrollHandle | null>;
+  verseLayout: ReaderVerseLayout;
   chapterSwipePanHandlers: GestureResponderHandlers;
   readerVerseEstimatedItemSize: number;
   /** Book:chapter:translation — remounts the list when chapter content changes. */
@@ -102,6 +127,8 @@ type ReaderVerseListProps = {
   readerVerseFlashKeyExtractor: (item: ReaderVerseFlashItem) => string;
   flashListExtraData: unknown;
   readerTabletLandscapeTwoColumn: boolean;
+  /** Paragraph body for single-column ScrollView (selection layer supplies highlighted block). */
+  renderParagraphContent?: () => ReactNode;
   listHeader: ReactNode;
   readerChapterFlashListFooter: () => React.ReactElement | null;
   hasVerseSelection: boolean;
@@ -122,6 +149,7 @@ type ReaderVerseListProps = {
 export function ReaderVerseList({
   rc,
   readerScrollRef,
+  verseLayout,
   chapterSwipePanHandlers,
   readerVerseEstimatedItemSize,
   readerListContentKey,
@@ -137,6 +165,7 @@ export function ReaderVerseList({
   readerVerseFlashKeyExtractor,
   flashListExtraData,
   readerTabletLandscapeTwoColumn,
+  renderParagraphContent,
   listHeader,
   readerChapterFlashListFooter,
   hasVerseSelection,
@@ -147,8 +176,27 @@ export function ReaderVerseList({
   androidHideVerseList = false,
   androidRestoreScrollY = 0,
 }: ReaderVerseListProps) {
+  const flashListRef = useRef<FlashListRef<ReaderVerseFlashItem> | null>(null);
+  const scrollViewRef = useRef<ScrollView | null>(null);
   const pendingRestoreYRef = useRef<number | null>(null);
   const wasHiddenRef = useRef(false);
+
+  const useParagraphScrollView = verseLayout === "paragraph";
+
+  useImperativeHandle(
+    readerScrollRef,
+    (): ReaderChapterScrollHandle => ({
+      scrollToOffset: ({ offset, animated = true }) => {
+        if (useParagraphScrollView) {
+          scrollViewRef.current?.scrollTo({ y: offset, animated });
+          return;
+        }
+        flashListRef.current?.scrollToOffset({ offset, animated });
+      },
+      getFlashListRef: () => (useParagraphScrollView ? null : flashListRef.current),
+    }),
+    [useParagraphScrollView],
+  );
 
   useEffect(() => {
     if (androidHideVerseList) {
@@ -181,36 +229,33 @@ export function ReaderVerseList({
     [readerVerseFontSize, readerVerseLineHeight],
   );
 
-  const readerFlashListLayoutKey = readerTabletLandscapeTwoColumn
-    ? `${readerListContentKey}:2col-masonry:${verseFlashListDataForList[0]?.kind ?? "verse"}`
-    : `${readerListContentKey}:1col:${verseFlashListDataForList[0]?.kind ?? "verse"}`;
+  const readerScrollLayoutKey = useParagraphScrollView
+    ? `${readerListContentKey}:paragraph-scroll`
+    : readerTabletLandscapeTwoColumn
+      ? `${readerListContentKey}:2col-masonry:${verseFlashListDataForList[0]?.kind ?? "verse"}`
+      : `${readerListContentKey}:1col:${verseFlashListDataForList[0]?.kind ?? "verse"}`;
 
   const selectionPaddingBottom =
     actionBarBottomPx + READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX;
 
-  const flashListContentContainerStyle = useMemo(() => {
-    if (hasVerseSelection) {
-      return {
-        flexGrow: 1,
-        paddingLeft: 10,
-        paddingRight: 15,
-        paddingTop: 94,
-        paddingBottom: selectionPaddingBottom,
-      };
-    }
-    return {
-      flexGrow: 1,
+  const scrollContentContainerStyle = useMemo(() => {
+    const base = {
       paddingLeft: 10,
       paddingRight: 15,
       paddingTop: 94,
-      paddingBottom: 0,
+      paddingBottom: hasVerseSelection ? selectionPaddingBottom : 0,
     };
-  }, [
-    hasVerseSelection,
-    selectionPaddingBottom,
-  ]);
+    if (useParagraphScrollView) {
+      // flexGrow on ScrollView content caps scroll extent on some devices — avoid for paragraph.
+      return base;
+    }
+    return {
+      flexGrow: 1,
+      ...base,
+    };
+  }, [hasVerseSelection, selectionPaddingBottom, useParagraphScrollView]);
 
-  const renderFlashListHeader = useCallback(
+  const listHeaderNode = useMemo(
     () => (
       <Pressable
         onPress={dismissReaderChromeFromBackgroundPress}
@@ -238,10 +283,39 @@ export function ReaderVerseList({
         )
       : readerVerseEstimatedItemSize;
 
+  const paragraphScrollView = (
+    <AnimatedReaderChapterScrollView
+      key={readerScrollLayoutKey}
+      ref={scrollViewRef}
+      {...chapterSwipePanHandlers}
+      style={listStyle}
+      scrollEventThrottle={READER_SCROLL_EVENT_THROTTLE}
+      onScroll={
+        onScroll as NonNullable<ComponentProps<typeof AnimatedReaderChapterScrollView>["onScroll"]>
+      }
+      onScrollBeginDrag={onScrollBeginDrag}
+      onScrollEndDrag={onScrollEndDrag}
+      onMomentumScrollEnd={onMomentumScrollEnd}
+      onContentSizeChange={onListContentSizeChange}
+      onLayout={
+        onListLayoutHeight
+          ? (event) => onListLayoutHeight(event.nativeEvent.layout.height)
+          : undefined
+      }
+      contentContainerStyle={scrollContentContainerStyle}
+      removeClippedSubviews={false}
+      showsVerticalScrollIndicator
+    >
+      {listHeaderNode}
+      {renderParagraphContent?.()}
+      {readerChapterFlashListFooter()}
+    </AnimatedReaderChapterScrollView>
+  );
+
   const flashList = (
     <AnimatedReaderChapterFlashList
-      key={readerFlashListLayoutKey}
-      ref={readerScrollRef}
+      key={readerScrollLayoutKey}
+      ref={flashListRef}
       {...chapterSwipePanHandlers}
       {...({ estimatedItemSize } as Record<string, unknown>)}
       style={listStyle}
@@ -265,11 +339,13 @@ export function ReaderVerseList({
       numColumns={columnLayout.numColumns}
       masonry={columnLayout.masonry}
       optimizeItemArrangement={columnLayout.optimizeItemArrangement}
-      ListHeaderComponent={renderFlashListHeader}
+      ListHeaderComponent={() => listHeaderNode}
       ListFooterComponent={readerChapterFlashListFooter}
-      contentContainerStyle={flashListContentContainerStyle}
+      contentContainerStyle={scrollContentContainerStyle}
     />
   );
+
+  const scrollSurface = useParagraphScrollView ? paragraphScrollView : flashList;
 
   if (androidHideVerseList) {
     return (
@@ -281,12 +357,12 @@ export function ReaderVerseList({
   }
 
   if (readerVersesOpacityAnim == null) {
-    return flashList;
+    return scrollSurface;
   }
 
   return (
     <Animated.View style={[readerFlashListChromeStyles.list, { opacity: readerVersesOpacityAnim }]}>
-      {flashList}
+      {scrollSurface}
     </Animated.View>
   );
 }

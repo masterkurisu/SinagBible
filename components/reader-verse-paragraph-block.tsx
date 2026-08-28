@@ -90,6 +90,112 @@ function buildParagraphRuns(
   return runs;
 }
 
+type ParagraphVerseTypography = {
+  readerVerseFontSize: number;
+  readerVerseLineHeight: number;
+  readerVerseBodyFontFamily: string;
+};
+
+type RenderParagraphVerseParams = {
+  verse: ReaderVerseFlashVerse;
+  isLastInRun: boolean;
+  selectedVerseNumbers: ReadonlySet<number>;
+  annotations: Record<number, VerseAnnotation | undefined>;
+  isDarkTheme: boolean;
+  selectionBackground: string;
+  selectionText: string;
+  verseNumberColor: string;
+  bodyTextColor: string;
+  wordsOfJesusDefaultColor: string;
+  verseNumberFontSize: number;
+  typography: ParagraphVerseTypography;
+  yvpFootnotes?: Record<number, { label: string; body: string }>;
+  onVersePress: (verseNum: number) => void;
+  onVerseLongPress: (verseNum: number) => void;
+  onYvpFootnotePress?: (noteId: number) => void;
+};
+
+function renderParagraphVerseText({
+  verse,
+  isLastInRun,
+  selectedVerseNumbers,
+  annotations,
+  isDarkTheme,
+  selectionBackground,
+  selectionText,
+  verseNumberColor,
+  bodyTextColor,
+  wordsOfJesusDefaultColor,
+  verseNumberFontSize,
+  typography,
+  yvpFootnotes,
+  onVersePress,
+  onVerseLongPress,
+  onYvpFootnotePress,
+}: RenderParagraphVerseParams) {
+  const verseNum = verse.verseIndex + 1;
+  const isSelected = selectedVerseNumbers.has(verseNum);
+  const annotation = annotations[verseNum];
+  const isHighlight = !isSelected && annotation?.style === "highlight";
+  const isUnderline = !isSelected && annotation?.style === "underline";
+  const highlightBg =
+    isHighlight && annotation
+      ? highlightColors[annotation.colorId as keyof typeof highlightColors]
+      : undefined;
+  const underlineColor =
+    isUnderline && annotation ? resolveAnnotationColorHex(annotation.colorId) : undefined;
+  const inkOnHighlight = isHighlight && isDarkTheme ? selectionText : null;
+  const textCol = isSelected ? selectionText : inkOnHighlight ?? bodyTextColor;
+  const numCol = isSelected ? selectionText : inkOnHighlight ?? verseNumberColor;
+  const wordsOfJesusInk =
+    isSelected || inkOnHighlight != null ? textCol : wordsOfJesusDefaultColor;
+  const useInlineBody = Boolean(verse.verseInlineContent && verse.verseInlineContent.length > 0);
+
+  return (
+    <Text
+      key={verse.verseIndex}
+      onPress={() => onVersePress(verseNum)}
+      onLongPress={() => onVerseLongPress(verseNum)}
+      suppressHighlighting
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      accessibilityLabel={isSelected ? `Deselect verse ${verseNum}` : `Select verse ${verseNum}`}
+      style={{
+        fontFamily: typography.readerVerseBodyFontFamily,
+        fontSize: typography.readerVerseFontSize,
+        lineHeight: typography.readerVerseLineHeight,
+        color: textCol,
+        backgroundColor: isSelected ? selectionBackground : highlightBg ?? "transparent",
+        textDecorationLine: underlineColor ? "underline" : "none",
+        textDecorationColor: underlineColor,
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: "Inter_400Regular",
+          fontSize: verseNumberFontSize,
+          lineHeight: typography.readerVerseLineHeight,
+          color: numCol,
+        }}
+      >
+        {verseNum}
+        {"\u00a0"}
+      </Text>
+      {useInlineBody && verse.verseInlineContent
+        ? renderVerseBodyInline(
+            verse.verseInlineContent,
+            wordsOfJesusInk,
+            typography,
+            yvpFootnotes,
+            onYvpFootnotePress,
+            true,
+          )
+        : verse.verseText}
+      {isLastInRun ? null : " "}
+    </Text>
+  );
+}
+
 function ReaderVerseParagraphBlockInner({
   verses,
   selectedVerseNumbers,
@@ -127,9 +233,28 @@ function ReaderVerseParagraphBlockInner({
     readerVerseBodyFontFamily,
   } as const;
 
+  const verseRenderParams = {
+    selectedVerseNumbers,
+    annotations,
+    isDarkTheme,
+    selectionBackground,
+    selectionText,
+    verseNumberColor,
+    bodyTextColor,
+    wordsOfJesusDefaultColor,
+    verseNumberFontSize,
+    typography,
+    yvpFootnotes,
+    onVersePress,
+    onVerseLongPress,
+    onYvpFootnotePress,
+  } as const;
+
   return (
     <View style={styles.wrap}>
-      {runs.map((run, runIndex) => (
+      {runs.map((run, runIndex) => {
+        const lastVerseIndexInRun = run.verses[run.verses.length - 1]?.verseIndex;
+        return (
         <View key={`run-${run.verses[0]?.verseIndex ?? runIndex}`}>
           <Text
             style={{
@@ -140,76 +265,13 @@ function ReaderVerseParagraphBlockInner({
               textAlign: verseTextAlign,
             }}
           >
-            {run.verses.map((verse, verseIndex) => {
-              const verseNum = verse.verseIndex + 1;
-              const isSelected = selectedVerseNumbers.has(verseNum);
-              const annotation = annotations[verseNum];
-              const isHighlight = !isSelected && annotation?.style === "highlight";
-              const isUnderline = !isSelected && annotation?.style === "underline";
-              const highlightBg =
-                isHighlight && annotation
-                  ? highlightColors[annotation.colorId as keyof typeof highlightColors]
-                  : undefined;
-              const underlineColor =
-                isUnderline && annotation ? resolveAnnotationColorHex(annotation.colorId) : undefined;
-              const inkOnHighlight = isHighlight && isDarkTheme ? selectionText : null;
-              const textCol = isSelected ? selectionText : inkOnHighlight ?? bodyTextColor;
-              const numCol = isSelected ? selectionText : inkOnHighlight ?? verseNumberColor;
-              const wordsOfJesusInk =
-                isSelected || inkOnHighlight != null ? textCol : wordsOfJesusDefaultColor;
-              const useInlineBody = Boolean(
-                verse.verseInlineContent && verse.verseInlineContent.length > 0,
-              );
-              const isLast = verseIndex === run.verses.length - 1;
-
-              return (
-                <Text
-                  key={verse.verseIndex}
-                  onPress={() => onVersePress(verseNum)}
-                  onLongPress={() => onVerseLongPress(verseNum)}
-                  suppressHighlighting
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
-                  accessibilityLabel={
-                    isSelected ? `Deselect verse ${verseNum}` : `Select verse ${verseNum}`
-                  }
-                  style={{
-                    fontFamily: readerVerseBodyFontFamily,
-                    fontSize: readerVerseFontSize,
-                    lineHeight: readerVerseLineHeight,
-                    color: textCol,
-                    backgroundColor: isSelected
-                      ? selectionBackground
-                      : highlightBg ?? "transparent",
-                    textDecorationLine: underlineColor ? "underline" : "none",
-                    textDecorationColor: underlineColor,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: "Inter_400Regular",
-                      fontSize: verseNumberFontSize,
-                      lineHeight: readerVerseLineHeight,
-                      color: numCol,
-                    }}
-                  >
-                    {verseNum}
-                    {"\u00a0"}
-                  </Text>
-                  {useInlineBody && verse.verseInlineContent
-                    ? renderVerseBodyInline(
-                        verse.verseInlineContent,
-                        wordsOfJesusInk,
-                        typography,
-                        yvpFootnotes,
-                        onYvpFootnotePress,
-                        true,
-                      )
-                    : verse.verseText}
-                  {isLast ? null : " "}
-                </Text>
-              );
-            })}
+            {run.verses.map((verse) =>
+              renderParagraphVerseText({
+                verse,
+                isLastInRun: verse.verseIndex === lastVerseIndexInRun,
+                ...verseRenderParams,
+              }),
+            )}
           </Text>
           {run.noteVerseNum != null && run.noteText ? (
             <Pressable
@@ -233,7 +295,8 @@ function ReaderVerseParagraphBlockInner({
             </Pressable>
           ) : null}
         </View>
-      ))}
+        );
+      })}
     </View>
   );
 }

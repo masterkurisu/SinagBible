@@ -41,7 +41,9 @@ import {
   ReaderVerseList,
   READER_TABLET_TWO_COLUMN_GAP,
 } from "@/src/features/reader/ReaderVerseList";
+import type { ReaderChapterScrollHandle } from "@/src/features/reader/readerChapterScrollRef";
 import type { ReaderVerseFlashItem } from "@/src/features/reader/useReaderGestures";
+import type { ReaderVerseLayout } from "@/src/features/reader/useReaderPreferences";
 import { useReaderSelection } from "@/src/features/reader/useReaderSelection";
 import { ReaderAnnotationSheet } from "@/src/features/reader/ReaderAnnotationSheet";
 import { ReaderVerseNoteDialog } from "@/src/features/reader/ReaderVerseNoteDialog";
@@ -612,7 +614,8 @@ export type ReaderSelectionLayerProps = {
   readerVerseLineHeight: number;
   readerVerseBodyFontFamily: string;
   verseTextAlign: ReaderVerseTextAlign;
-  readerScrollRef: RefObject<import("@shopify/flash-list").FlashListRef<ReaderVerseFlashItem> | null>;
+  verseLayout: ReaderVerseLayout;
+  readerScrollRef: RefObject<ReaderChapterScrollHandle | null>;
   chapterSwipePanHandlers: import("react-native").GestureResponderHandlers;
   readerVerseEstimatedItemSize: number;
   /** Book:chapter:translation — scopes FlashList keys so row heights are not recycled across chapters. */
@@ -678,6 +681,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
   readerVerseLineHeight,
   readerVerseBodyFontFamily,
   verseTextAlign,
+  verseLayout,
   readerScrollRef,
   chapterSwipePanHandlers,
   readerVerseEstimatedItemSize,
@@ -988,6 +992,32 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     [interactionData, stableVisualData],
   );
 
+  const renderParagraphContent = useCallback(() => {
+    const item = verseFlashListDataForList.find(
+      (row): row is Extract<ReaderVerseFlashItem, { kind: "paragraph" }> => row.kind === "paragraph",
+    );
+    if (!item) return null;
+    return (
+      <MemoizedReaderParagraphFlashRow
+        item={item}
+        index={0}
+        interactionData={interactionData}
+        stableVisualData={stableVisualData}
+        readerTabletLandscapeTwoColumn={false}
+        onVersePress={handleVerseTapForOnboarding}
+        onVerseLongPress={handleVerseLongPressForOnboarding}
+        onNoteLongPress={handleNoteLongPress}
+      />
+    );
+  }, [
+    verseFlashListDataForList,
+    interactionData,
+    stableVisualData,
+    handleVerseTapForOnboarding,
+    handleVerseLongPressForOnboarding,
+    handleNoteLongPress,
+  ]);
+
   const renderReaderVerseFlashItem = useCallback(
     ({ item, index, extraData: flashExtraData }: ListRenderItemInfo<ReaderVerseFlashItem>) => {
       const flashExtra = flashExtraData as {
@@ -1099,6 +1129,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
         <ReaderVerseList
           rc={rc}
           readerScrollRef={readerScrollRef}
+          verseLayout={verseLayout}
           chapterSwipePanHandlers={chapterSwipePanHandlers}
           readerVerseEstimatedItemSize={readerVerseEstimatedItemSize}
           readerListContentKey={readerListContentKey}
@@ -1110,6 +1141,7 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           onMomentumScrollEnd={onMomentumScrollEnd}
           dismissReaderChromeFromBackgroundPress={dismissReaderChromeFromBackgroundPress}
           verseFlashListDataForList={verseFlashListDataForList}
+          renderParagraphContent={renderParagraphContent}
           renderReaderVerseFlashItem={renderReaderVerseFlashItem}
           readerVerseFlashKeyExtractor={readerVerseFlashKeyExtractor}
           flashListExtraData={flashListExtraData}

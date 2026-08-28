@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getSearchResultsForReaderTranslation } from "@/lib/bible-search-service";
+import { getSearchResultsForReaderTranslation, warmReaderTranslationSearchCache } from "@/lib/bible-search-service";
 import type { BookSuggestion, HighlightColor, LocalJournalEntry, SearchResult } from "@sinag-bible/types";
 import {
   loadSearchHistory,
@@ -93,6 +93,13 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
   highlightColorRef.current = highlightColor;
   const marksCacheRef = useRef<ReaderVerseMark[] | null>(null);
   const prevSearchTranslationRef = useRef<string | null>(null);
+  const searchWarmStartedRef = useRef(false);
+
+  const startSearchWarmIfNeeded = useCallback(() => {
+    if (searchWarmStartedRef.current) return;
+    searchWarmStartedRef.current = true;
+    void getPreferredReaderTranslation().then(warmReaderTranslationSearchCache);
+  }, []);
 
   const flushDebouncedSearch = useCallback(() => {
     if (debounceTimerRef.current) {
@@ -339,6 +346,7 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
       setMarksKind(null);
       setHighlightColor(null);
       marksCacheRef.current = null;
+      searchWarmStartedRef.current = false;
       return;
     }
   }, [enabled, flushDebouncedSearch]);
@@ -478,8 +486,9 @@ export function useBibleSearch({ enabled }: { enabled: boolean }) {
 
   const onSearchQueryChange = useCallback((q: string) => {
     hapticSelection();
+    if (q.length > 0) startSearchWarmIfNeeded();
     setQuery(q);
-  }, []);
+  }, [startSearchWarmIfNeeded]);
 
   const onVoiceTranscript = useCallback(
     (text: string, isFinal: boolean) => {
