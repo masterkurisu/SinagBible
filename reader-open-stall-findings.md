@@ -472,50 +472,252 @@ appeared in every prior capture (Phases 1–3) no longer appear.
 
 ### Phase 5 — Prefetch impact on perceived responsiveness during startup (Open item #3)
 
-1. With Phase 1 profiling in place, specifically check CPU/network activity from
-   `runPinnedTranslationsPrefetch` (`lib/pinned-translations-prefetch.ts`) during the
-   first few seconds after a cold launch/reload — it fires fire-and-forget chapter
-   prefetches (`prefetchTranslationChaptersForReader` → `primeReaderChapterFetch`) for
-   every pinned non-KJV, non-bundled-featured translation.
-2. If it measurably competes with the JS thread during the stall window (e.g. large
-   `collectPrefetchChapterTargets` fan-out, or synchronous JSON work inside the
-   prefetch chain), consider delaying its kickoff slightly (e.g. until after the first
-   reader chapter has rendered) rather than firing it immediately alongside the hub
-   redirect.
-3. If profiling shows it's already negligible (likely, since it's async/network-bound
-   and skips KJV/bundled-featured translations via `shouldPrefetchTranslation`), close
-   the item with the measurement as evidence.
+**Status: instrumentation landed and code-level analysis done; on-device numbers
+still pending (same pattern as Phase 1).**
+
+1. ✅ Code-level analysis of `runPinnedTranslationsPrefetch` / `collectPrefetchChapterTargets`
+   (`lib/pinned-translations-prefetch.ts`, `lib/reader-chapter-nav.ts`), triggered from
+   `usePinnedTranslationsPrefetch()` in `app/(tabs)/_layout.tsx` on tab-layout mount —
+   the same startup tick as Phase 2's `loadReaderLastPosition` warm-up:
+   - Default pinned set is 4 translations (`KJV`, `yvp:111`, `ADB1905`, `yvp:1264`),
+     cap is `MAX_PINNED_TRANSLATIONS = 10`. `shouldPrefetchTranslation` skips `KJV`
+     and bundled-featured translations (`ADB1905`, `WEB`) outright, so by default only
+     **2 real dispatches** happen (`yvp:111`, `yvp:1264` in the default set) — matches
+     what every prior capture actually showed.
+   - `collectPrefetchChapterTargets` is a fixed `depth = TRANSLATION_OFFLINE_PREFETCH_DEPTH
+     = 2` walk (at most 4 neighbor targets per translation) — plain array/`Set` bookkeeping,
+     no JSON parsing, no I/O. Even at the 10-translation cap this is trivially cheap
+     synchronous work (tens of iterations at most).
+   - `prefetchTranslationChaptersForReader` → `primeReaderChapterFetch` →
+     `fetchReaderChapterContent` are `void`-fired (fire-and-forget) — the actual
+     network/SQLite work happens off the synchronous call stack. Phase 1 and 2's
+     captures already show these individually completing in 21-40ms each as background
+     async work, not blocking anything.
+   - Conclusion from code reading alone: the *synchronous* portion (the dispatch loop
+     that kicks off the fetches) should be sub-millisecond; the actual cost is 100%
+     async/network-bound, same as items already proven benign.
+2. ✅ Added temporary `[reader-perf]` markers (same `__DEV__`-gated pattern as prior
+   phases) to get a real number instead of relying on code-reading alone:
+   - `runPinnedTranslationsPrefetch: dispatch loop (N pinned)` around the `for` loop
+     that calls `prefetchTranslationChaptersForReader` for each pinned id — this
+     isolates exactly the synchronous, potentially-JS-thread-competing part item #3
+     was worried about.
+   - `resolvePrefetchAnchor: loadReaderLastPosition fallback` around its
+     `loadReaderLastPosition()` call, for completeness (this benefits from Phase 2's
+     dedupe fix — expect near-0ms if another caller already started the read that tick).
+   - `./node_modules/.bin/tsc --noEmit -p .` — clean, same 3 pre-existing unrelated
+     errors, no new ones.
+3. ✅ On-device capture confirms the code-level prediction:
+
+   ```
+   [reader-perf] ▶ runPinnedTranslationsPrefetch: dispatch loop (4 pinned)
+   [reader-perf] ■ runPinnedTranslationsPrefetch: dispatch loop (4 pinned): 14.7ms   ← first call (cold JIT)
+   [reader-perf] ■ runPinnedTranslationsPrefetch: dispatch loop (4 pinned): 0.0ms    ← every subsequent call
+   ... (repeated ~10x across the capture, all 0.0ms after the first)
+
+   [reader-perf] ▶ resolvePrefetchAnchor: loadReaderLastPosition fallback
+   [reader-perf] ■ resolvePrefetchAnchor: loadReaderLastPosition fallback: 0.6-0.8ms
+   [reader-perf] ▶ loadReaderLastPosition: joined in-flight read (deduped)
+   [reader-perf] ■ loadReaderLastPosition: joined in-flight read (deduped): 0.4-0.6ms
+   ```
+
+   **Confirmed negligible.** The dispatch loop (4 pinned translations, the app's
+   actual default count) took **14.7ms once** (first call in the session — plausibly
+   JIT/first-call overhead, not the loop itself) and **0.0ms every other time** it ran
+   across the whole capture (~10 separate invocations, since `runPinnedTranslationsPrefetch`
+   re-fires on every `NetInfo` connectivity event and pathname change per
+   `usePinnedTranslationsPrefetch`'s effect deps). `resolvePrefetchAnchor`'s
+   `AsyncStorage` fallback also benefits from Phase 2's dedupe fix, resolving in
+   under 1ms by joining the same in-flight read as everything else. No action needed.
 
 **Exit criteria:** measured verdict (negligible vs. needs-delay), acted on if needed.
+— **Met: confirmed negligible, no code change needed.** Phase 5 closed.
+
+**Data anomaly spotted in this capture (unrelated to Phase 5, noting for the
+record):** one `loadTranslationData(KJV) [cache miss]` line logged **53068.7ms**
+(53 seconds) in this same capture — wildly inconsistent with every other KJV-load
+measurement across all prior captures (~350-870ms). A real 53-second synchronous
+block would have triggered an ANR/watchdog kill, so this is almost certainly a
+measurement artifact — most likely the app was backgrounded/the device screen
+locked between the `▶` start and `■` end log lines (this instrumentation uses
+`performance.now()`, which keeps advancing during a real-world elapsed pause even
+though no JS was executing). Not treated as a real finding; flagging here only so it
+isn't mistaken for a regression if this doc is reread later.
 
 ### Phase 6 — Double-check `warmTranslationSearchCache` isn't triggered at startup (Open item #5)
 
-Low-risk verification task, can be folded into Phase 3's profiling pass.
+**Status: verification done — the original assumption was wrong. `warmTranslationSearchCache`
+*does* run automatically at every app startup, not gated behind user search. Assessed
+as likely intentional; flagging for your decision rather than changing it unilaterally.**
 
-1. Grep all call sites of `warmTranslationSearchCache` (`packages/core/src/bible-translations.ts`,
-   used by `lib/bible-search-service.ts`).
-2. Confirm none are reachable from app-boot / tab-mount code paths (only from actual
-   search-input-triggered actions).
-3. Note the confirmation in this doc; no code change expected unless a bad call site
-   is found.
+1. ✅ Grepped every call site of `warmTranslationSearchCache`
+   (`packages/core/src/bible-translations.ts`) and its wrapper
+   `warmReaderTranslationSearchCache` (`lib/bible-search-service.ts`):
 
-**Exit criteria:** confirmed list of call sites, all gated behind user-initiated search.
+   ```103:107:app/(tabs)/_layout.tsx
+   // Defer KJV JSON parse + keyword index so VectorIcon rasterization can paint the tab bar first.
+   const warmSearchCacheId = setTimeout(() => {
+     void getPreferredReaderTranslation().then(warmReaderTranslationSearchCache);
+   }, 600);
+   return () => clearTimeout(warmSearchCacheId);
+   ```
+
+   This runs in the tab layout's mount `useEffect` — i.e. **every app cold start and
+   every full reload**, 600ms after the tab layout mounts, unconditionally (not
+   behind any user search action).
+2. ❌ **Not confirmed "gated behind user-initiated search" as the original doc
+   assumed.** Tracing what actually happens 600ms after every session start:
+   - `getPreferredReaderTranslation()` resolves the last-read translation id (e.g.
+     `"yvp:111"` for the default pins).
+   - `warmReaderTranslationSearchCache(translationId)`
+     (`lib/bible-search-service.ts:138-154`): for **any YVP translation** (which is
+     the common case, given the default pins), it unconditionally calls
+     `warmTranslationSearchCache(FALLBACK_TRANSLATION)` i.e. `warmTranslationSearchCache("KJV")`
+     — "KJV index for hydrate fallback" — *in addition to* the YVP-specific
+     from-cache keyword indexing.
+   - `warmTranslationSearchCache("KJV")` → `resolveSearchTranslationContext("KJV")` →
+     `loadTranslationData("KJV")` — **loads the full real ~4.5MB `kjv.json`**, then
+     schedules the keyword-index build on it.
+   - Net effect: **every app session pays the ~350-870ms KJV JSON parse cost once,
+     600ms after tab-layout mount, regardless of whether the user ever opens the
+     search UI** — this is a deliberate proactive warm-up (per the comment: deferred
+     specifically so it doesn't block the tab bar's first paint), not an accident,
+     but it does contradict item #5's original "confirmed not to run automatically"
+     note and the exit criteria below.
+3. **Possible overlap with the reader-open stall window worth flagging:** the 600ms
+   deferral is a fixed delay from tab-layout mount, not "after the first chapter has
+   rendered." Phase 1/5 captures showed the first chapter's `fetchReaderChapterContent`
+   sometimes taking **~870ms** (YVP network fetch). In that case, the 600ms warm-up
+   timer fires *while the chapter is still loading*, so the ~350-870ms KJV parse and
+   this network fetch can end up competing for the JS thread and network concurrently
+   — a previously-undocumented **secondary** stall contributor, distinct from root
+   cause #1 (which this doc's fix already addressed for the *nav-building* path).
+
+**Exit criteria:** confirmed list of call sites, all gated behind user-initiated
+search. — **Not met as originally stated** (one call site is startup-triggered, not
+search-triggered), but not treated as a bug to silently accept either — see fix below.
+
+#### Fix applied: adaptive warm-up gate (chosen over "leave as-is")
+
+Replaced the fixed 600ms guess with a real "has the reader's first chapter settled"
+signal, so the KJV search-cache warm-up can never land while the reader's own
+initial network/JS work for the same session is still in flight — while still firing
+promptly (not waiting an arbitrary fixed delay) once the reader is actually done, and
+still firing eventually even if the reader tab is never opened this session.
+
+1. **New module `lib/reader-chapter-ready.ts`** — a small one-shot pub/sub:
+   - `markReaderFirstChapterSettled()` — idempotent; call on every chapter
+     load/settle, only the first call matters.
+   - `waitForReaderFirstChapterSettled(timeoutMs)` — resolves once settled, or after
+     `timeoutMs`, whichever comes first. The timeout matters because **the reader tab
+     isn't guaranteed to open every session** (`app/(tabs)/index.tsx` — Home — is a
+     separate landing screen with its own "Read Scripture" CTA into the reader); without
+     a fallback, a session that never opens Reader would never warm the search cache.
+2. **`src/features/reader/useReaderChapter.ts`** now calls `markReaderFirstChapterSettled()`:
+   - Immediately when a cached offline-store payload is shown (`buildWarmStartPayload`
+     hit — already-visible content, no further competition expected).
+   - In a `finally` around `loadChapter()`'s try/catch, so it fires exactly once
+     `settled` (loaded, or a definitive `not_downloaded_offline` /
+     `chapter_not_found` / `load_failed` error) regardless of which branch resolves.
+3. **`app/(tabs)/_layout.tsx`** now does:
+
+   ```ts
+   const WARM_SEARCH_CACHE_MAX_WAIT_MS = 3000;
+   // ...
+   void waitForReaderFirstChapterSettled(WARM_SEARCH_CACHE_MAX_WAIT_MS).then(() => {
+     if (searchWarmCancelled) return;
+     void getPreferredReaderTranslation().then(warmReaderTranslationSearchCache);
+   });
+   ```
+
+   instead of the old fixed `setTimeout(..., 600)`. The 3000ms ceiling only matters
+   when the reader is never opened this session; when it is opened, the warm-up now
+   fires right after the reader's own first-chapter work is done — no earlier (can't
+   compete) and no later than necessary (doesn't wait an arbitrary guess).
+4. Added a temporary `[reader-perf]` marker
+   (`tab layout: waitForReaderFirstChapterSettled (search-cache warm-up gate)`) so the
+   new timing can be confirmed on-device, consistent with every other phase's pattern.
+5. Verification: `./node_modules/.bin/tsc --noEmit -p .` — clean, same 3 pre-existing
+   unrelated errors, no new ones.
+
+**Not yet done:** on-device confirmation that the warm-up now fires adaptively
+(right after the reader settles) instead of at a fixed 600ms, and that it still
+correctly falls back to ~3000ms when Reader isn't opened this session.
 
 ### Phase 7 — App binary size follow-up (Open item #6)
 
-Lowest priority — not a runtime stall, purely a bundle-size/download-size concern.
-Revisit only if app size becomes an actual complaint/metric issue.
+**Status: measured and documented. No code change — revisit only if app size becomes a
+user-facing concern.**
 
-1. Measure current bundle contribution of `kjv.json` (~4.5MB source) post-Hermes
-   bytecode compilation (actual shipped size differs from raw JSON size).
-2. If it becomes a priority, evaluate options in order of effort: (a) gzip/brotli
-   compression of the bundled asset if not already applied by the build pipeline, (b)
-   external asset loading (bundle KJV as a static asset file loaded via `fetch`/`FileSystem`
-   instead of inline JS import, trading a small first-read cost for a smaller JS
-   bundle), (c) per-book splitting with lazy per-book loads (bigger refactor, only
-   worth it if (a)/(b) aren't enough).
+#### Measurements (Aug 28, 2026 — `npx expo export --platform android` on this repo)
 
-**Exit criteria:** none required now — revisit trigger is "app size becomes a concern."
+**Source JSON on disk** (`packages/core/data/`):
+
+| File | Raw size | gzip (level 9) | brotli (q11) |
+|---|---:|---:|---:|
+| `kjv.json` | **4.36 MB** | 1.18 MB | 0.88 MB |
+| `web.json` | 3.93 MB | 1.14 MB | 0.86 MB |
+| `adb1905.json` | 4.73 MB | 1.21 MB | 0.91 MB |
+| `oeb.json` | 2.92 MB | 0.94 MB | 0.74 MB |
+| **All four bundled** | **15.94 MB** | ~4.5 MB | ~3.4 MB |
+
+**Shipped Android JS bundle** (production export, Aug 28 2026):
+
+| Artifact | Size | Notes |
+|---|---:|---|
+| Plain JS entry (`--no-bytecode`) | **21.79 MB** | minified production bundle |
+| Hermes HBC entry (default export) | **27.37 MB** | what ships to devices (~1.26× plain JS) |
+| HBC gzip (level 9) | **9.91 MB** | rough OTA/APK-compressed order of magnitude |
+| HBC brotli (q11) | **7.34 MB** | |
+
+**`kjv.json` contribution to the shipped bundle** (from export sourcemap
+`sourcesContent` — all four JSON files are present as modules in the **main entry
+bundle**, not separate lazy chunks):
+
+| Metric | KJV | All 4 bundled JSONs |
+|---|---:|---:|
+| Uncompressed module source in bundle | **4.36 MB** (~20% of 21.8 MB JS entry) | **15.94 MB** (~73% of JS entry) |
+| Est. share of 27.4 MB HBC | **~5.5 MB** (~20%) | **~20 MB** (~73%) |
+| Est. share of 9.9 MB gzip HBC | **~2.0 MB** (~20%) | **~7.2 MB** (~73%) |
+
+Commands used (reproducible):
+
+```bash
+nvm use
+npx expo export --platform android --output-dir /tmp/sinag-export-hbc
+npx expo export --platform android --no-bytecode --source-maps --output-dir /tmp/sinag-export-js
+# Then inspect sourcemap sourcesContent for /packages/core/data/*.json module sizes.
+```
+
+#### Key finding (bigger than KJV alone)
+
+Despite `loadBundledTranslationData` using dynamic `import("../data/kjv.json")` etc.,
+**Expo's production export bundles all four local translation JSON files into the
+single main entry artifact** — they are *runtime*-lazy (parsed only when that
+translation is first opened), but **not download/install-lazy**. A user who only ever
+reads NIV (`yvp:111`) still downloads ~16 MB of bundled KJV/WEB/ADB1905/OEB text in the
+main JS/HBC bundle.
+
+This is separate from the runtime stall issues fixed in Phases 0–6: even with perfect
+parse-time fixes, the install/OTA footprint remains.
+
+#### Options ranked (if app size becomes a concern)
+
+| Option | Effort | Expected impact | Notes |
+|---|---|---|---|
+| **(a) Rely on transport compression** | None | KJV ~1.2 MB gzip raw JSON; ~2 MB est. of gzip HBC bundle | Already happens for APK zip / OTA; does **not** reduce on-device installed JS/HBC size after unpack. Lowest effort, smallest win for *installed* footprint. |
+| **(b) External asset loading** | Medium | Remove all 4 JSONs from JS bundle (~16 MB raw / ~7 MB gzip HBC) | Ship as `assets/` files (or SQLite rows); `fetch`/`FileSystem`/`expo-asset` on first use. Trades a small first-read latency for a much smaller main bundle. Good middle ground. |
+| **(c) Per-book lazy splits** | High | Same as (b) but finer-grained; only download books user reads | Bigger refactor (66 dynamic modules or DB schema). Only worth it if (b) isn't enough or offline partial-Bible is a product goal. |
+| **(d) Ship fewer bundled translations** | Low–medium | Drop unused files from bundle (e.g. if WEB/OEB aren't in default pins) | Quick audit: default pins are `KJV`, `yvp:111`, `ADB1905`, `yvp:1264` — **WEB and OEB may be dead weight** in the main bundle today (~6.8 MB raw combined). Requires product decision on which translations must be offline-bundled vs API-only. |
+
+**Recommendation:** no action now unless app size becomes a complaint or store limit.
+If it does, start with **(d)** (stop shipping unused bundled JSONs) before **(b)** —
+cheapest win. **(a)** alone does not shrink the installed bundle. KJV specifically is
+~20% of the current main bundle; the other three bundled translations together are
+~53%.
+
+**Exit criteria:** measured and documented — **met.** Revisit trigger remains "app size
+becomes a user-facing concern."
 
 ## Relevant files
 

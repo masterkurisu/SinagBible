@@ -2,6 +2,7 @@ import { isBundledFeaturedTranslationId } from "@sinag-bible/core/bible-translat
 import { getDefaultPinnedTranslationIds } from "@/lib/default-pinned-translations";
 import { isDeviceOffline } from "@/lib/network-connectivity";
 import { prefetchTranslationChaptersForReader } from "@/lib/reader-chapter-load";
+import { readerPerfEnd, readerPerfStart } from "@/lib/reader-open-perf-log";
 import { loadReaderLastPosition, peekReaderLastPosition } from "@/lib/reader-last-position";
 import { parseReaderChapterFromPathname } from "@/lib/reader-navigation";
 import { isYvpApiConfigured, isYvpTranslationId } from "@/lib/youversion-api";
@@ -22,7 +23,11 @@ export async function resolvePrefetchAnchor(
     return { bookSlug: fromMemory.bookSlug, chapter: fromMemory.chapter };
   }
 
+  // TEMPORARY (reader-open-stall-findings.md Phase 5) — remove alongside the rest of
+  // the [reader-perf] logging once prefetch impact is confirmed negligible on-device.
+  const perfHandle = readerPerfStart("resolvePrefetchAnchor: loadReaderLastPosition fallback");
   const fromStorage = await loadReaderLastPosition();
+  readerPerfEnd(perfHandle);
   if (fromStorage) {
     return { bookSlug: fromStorage.bookSlug, chapter: fromStorage.chapter };
   }
@@ -50,6 +55,14 @@ export async function runPinnedTranslationsPrefetch(
 
   const anchor = await resolvePrefetchAnchor(pathname);
 
+  // TEMPORARY (reader-open-stall-findings.md Phase 5) — measures only the *synchronous*
+  // dispatch cost of kicking off the fire-and-forget prefetches below, i.e. the part
+  // that could actually compete with the JS thread during the reader-open stall
+  // window. The prefetches themselves are async/network-bound and already individually
+  // timed via `fetchReaderChapterContent`'s own `[reader-perf]` markers.
+  const perfHandle = readerPerfStart(
+    `runPinnedTranslationsPrefetch: dispatch loop (${pinnedTranslationIds.length} pinned)`,
+  );
   for (const translationId of pinnedTranslationIds) {
     if (!shouldPrefetchTranslation(translationId)) {
       prefetchedTranslationIds.add(translationId);
@@ -64,6 +77,7 @@ export async function runPinnedTranslationsPrefetch(
       null,
     );
   }
+  readerPerfEnd(perfHandle);
 }
 
 /** Pinned ids for prefetch — defaults until favorites finish loading from AsyncStorage. */
