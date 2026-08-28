@@ -212,6 +212,7 @@ export function ChangelogsSheet({
       accessibilityDismissLabel="Dismiss changelogs"
       widthVariant="reading"
       maxHeightRatio={0.9}
+      blurBackdrop
     >
       {loading && markdown === null ? (
         <View style={[styles.stateBox, { minHeight: 160 * scale, gap: 12 * scale }]}>

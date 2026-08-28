@@ -33,9 +33,11 @@ import {
   getInternalIdFromApiId,
   isTranslationId,
 } from "@sinag-bible/core/bible-translations";
-import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { isMobileAppDarkThemeId, type MobileAppThemeBundle } from "@sinag-bible/tokens";
 import type { BibleBookNavItem } from "@sinag-bible/types";
 import { FilterListIcon } from "@/components/icons/FilterListIcon";
+import { SheetBlurBackdrop } from "@/src/components/m3/SheetBlurBackdrop";
+import { useAndroidSheetBackdropSnapshot } from "@/lib/use-android-sheet-backdrop-snapshot";
 import { SheetContentSkeleton } from "@/components/sheet-content-skeleton";
 import {
   NESTED_SHEET_OPEN_DURATION_MS,
@@ -152,6 +154,8 @@ export function TranslationPickerSheet({
   const colors = bundle.ui;
   const rc = bundle.reader;
   const sheetChrome = useMemo(() => getReaderSheetChrome(bundle), [bundle]);
+  const isDark = isMobileAppDarkThemeId(bundle.id);
+  const androidBackdropUri = useAndroidSheetBackdropSnapshot(isOpen);
 
   const resolvedTranslationApiId: string = isTranslationId(resolvedTranslationId)
     ? getExternalApiId(resolvedTranslationId)
@@ -1427,9 +1431,11 @@ export function TranslationPickerSheet({
   return (
     <Modal visible={isOpen} transparent animationType="none" statusBarTranslucent onRequestClose={onBackdropPress}>
       <View style={{ flex: 1 }} pointerEvents="box-none">
-        <Animated.View
-          style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim, opacity: dropOpacityAnim }]}
-          pointerEvents="none"
+        <SheetBlurBackdrop
+          isDark={isDark}
+          androidBackdropUri={androidBackdropUri}
+          tintColor={rc.menuScrim}
+          opacity={dropOpacityAnim}
         />
         <Pressable
           style={StyleSheet.absoluteFill}

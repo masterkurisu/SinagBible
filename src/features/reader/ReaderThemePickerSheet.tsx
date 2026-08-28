@@ -105,6 +105,7 @@ export function ReaderThemePickerSheet({
       contentPaddingBottom={
         useBottomSheet ? Math.max(insets.bottom, 16) * scale : 16 * scale
       }
+      blurBackdrop
     >
       <View style={[styles.grid, { marginBottom: 8 * scale }]} onLayout={handleGridLayout}>
         {mobileAppThemePickerOptions.map((opt, index) => {

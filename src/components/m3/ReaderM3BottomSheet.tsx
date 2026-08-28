@@ -10,9 +10,10 @@ import Reanimated, {
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
-import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { isMobileAppDarkThemeId, type MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { DismissibleModal } from "@/src/components/m3/DismissibleModal";
 import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
+import { useAndroidSheetBackdropSnapshot } from "@/lib/use-android-sheet-backdrop-snapshot";
 import {
   M3_SCRIM_OPACITY,
   animateM3EffectsOpacity,
@@ -52,6 +53,8 @@ export type ReaderM3BottomSheetProps = {
   contentPaddingBottom?: number;
   dismissible?: boolean;
   onBackdropPress?: () => void;
+  /** Blur whatever's behind the sheet instead of a flat scrim. */
+  blurBackdrop?: boolean;
 };
 
 export function ReaderM3BottomSheet({
@@ -71,12 +74,15 @@ export function ReaderM3BottomSheet({
   contentPaddingBottom,
   dismissible = true,
   onBackdropPress,
+  blurBackdrop = false,
 }: ReaderM3BottomSheetProps) {
   const rc = bundle.reader;
   const { width: screenW, height: screenH } = useWindowDimensions();
   const slideProgress = useSharedValue(0);
   const scrimOpacity = useSharedValue(0);
   const sheetOpacity = useSharedValue(0);
+  const isDark = isMobileAppDarkThemeId(bundle.id);
+  const androidBackdropUri = useAndroidSheetBackdropSnapshot(blurBackdrop && isOpen);
 
   const scale = READER_OVERLAY_CONTENT_SCALE;
   const useBottomSheet = !isTabletReaderLayout;
@@ -138,6 +144,7 @@ export function ReaderM3BottomSheet({
       scrimColor="#000000"
       scrimOpacity={scrimOpacity}
       accessibilityDismissLabel={accessibilityDismissLabel}
+      blurBackdrop={blurBackdrop ? { isDark, androidBackdropUri } : undefined}
     >
       <View
         pointerEvents="box-none"

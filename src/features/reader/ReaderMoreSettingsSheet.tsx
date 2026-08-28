@@ -226,6 +226,7 @@ export function ReaderMoreSettingsSheet({
         title="More"
         accessibilityDismissLabel="Dismiss more settings"
         contentPaddingBottom={24 * scale + (useBottomSheet ? insets.bottom : 0)}
+        blurBackdrop
       >
         <View
           style={[

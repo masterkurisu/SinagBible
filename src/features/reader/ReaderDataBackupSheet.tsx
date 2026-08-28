@@ -402,6 +402,7 @@ export function ReaderDataBackupSheet({
         scrollable
         maxHeightRatio={0.68}
         contentPaddingBottom={(useBottomSheet ? Math.max(insets.bottom, 20) : 20) * scale}
+        blurBackdrop
       >
         {step === "menu" ? menuBody : importConfirmBody}
       </ReaderM3BottomSheet>

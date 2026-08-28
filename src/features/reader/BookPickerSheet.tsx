@@ -29,7 +29,9 @@ import {
 } from "react-native-gesture-handler";
 import { getTestament } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
-import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { isMobileAppDarkThemeId, type MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { SheetBlurBackdrop } from "@/src/components/m3/SheetBlurBackdrop";
+import { useAndroidSheetBackdropSnapshot } from "@/lib/use-android-sheet-backdrop-snapshot";
 import { MenuOptionsIcon } from "@/components/icons/MenuOptionsIcon";
 import { BOOK_GENRE_BY_SLUG } from "@/lib/book-genre-by-slug";
 import {
@@ -345,6 +347,8 @@ export function BookPickerSheet({
   const { width: screenW, height: screenH } = useWindowDimensions();
   const isAndroidSheet = Platform.OS === "android";
   const isTablet = isTabletLayout(screenW, screenH);
+  const isDark = isMobileAppDarkThemeId(bundle.id);
+  const androidBackdropUri = useAndroidSheetBackdropSnapshot(isOpen);
   const m3SheetPad = 24;
   const m3SheetBottomPad = nativeTabSheetBottomInsetPx(insets.bottom, 0);
   const m3SheetHeight = Math.max(
@@ -1356,9 +1360,11 @@ export function BookPickerSheet({
     >
       {isAndroidSheet ? (
         <>
-          <Animated.View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim, opacity: dropOpacityAnim }]}
+          <SheetBlurBackdrop
+            isDark={isDark}
+            androidBackdropUri={androidBackdropUri}
+            tintColor={rc.menuScrim}
+            opacity={dropOpacityAnim}
           />
           <Pressable
             accessibilityRole="button"
@@ -1368,12 +1374,15 @@ export function BookPickerSheet({
           />
         </>
       ) : (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Dismiss book picker"
-          onPress={() => animateClose(0, 0)}
-          style={[StyleSheet.absoluteFill, { backgroundColor: rc.menuScrim }]}
-        />
+        <>
+          <SheetBlurBackdrop isDark={isDark} tintColor={rc.menuScrim} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss book picker"
+            onPress={() => animateClose(0, 0)}
+            style={StyleSheet.absoluteFill}
+          />
+        </>
       )}
       <View
         pointerEvents="box-none"

@@ -11,6 +11,7 @@ import {
   DismissibleScrimLayer,
   type ScrimOpacitySource,
 } from "@/src/components/m3/dismissible-scrim-opacity";
+import { SheetBlurBackdrop } from "@/src/components/m3/SheetBlurBackdrop";
 
 export type DismissibleModalProps = {
   visible: boolean;
@@ -27,6 +28,8 @@ export type DismissibleModalProps = {
   scrimOpacity?: ScrimOpacitySource;
   accessibilityDismissLabel?: string;
   contentContainerStyle?: StyleProp<ViewStyle>;
+  /** Opt-in: blur whatever is behind the sheet instead of a flat scrim (`scrimColor` becomes the tint wash). */
+  blurBackdrop?: { isDark: boolean; androidBackdropUri: string | null };
 };
 
 /**
@@ -45,6 +48,7 @@ export function DismissibleModal({
   scrimOpacity,
   accessibilityDismissLabel = "Dismiss",
   contentContainerStyle,
+  blurBackdrop,
 }: DismissibleModalProps) {
   const handleBackdropPress = useCallback(() => {
     if (!dismissible) return;
@@ -67,7 +71,14 @@ export function DismissibleModal({
     >
       <View style={styles.root} pointerEvents="box-none">
         {dismissible && scrimColor != null ? (
-          scrimOpacity != null ? (
+          blurBackdrop != null ? (
+            <SheetBlurBackdrop
+              isDark={blurBackdrop.isDark}
+              androidBackdropUri={blurBackdrop.androidBackdropUri}
+              tintColor={scrimColor}
+              opacity={scrimOpacity}
+            />
+          ) : scrimOpacity != null ? (
             <DismissibleScrimLayer scrimColor={scrimColor} scrimOpacity={scrimOpacity} />
           ) : (
             <View

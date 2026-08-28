@@ -22,11 +22,14 @@ import {
   type JournalNewEntryFormHandle,
   type JournalNewEntryInitialParams,
 } from "@/components/journal-new-entry-form";
+import { isMobileAppDarkThemeId } from "@sinag-bible/tokens";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import {
   nativeFloatingTabBarTopReservePx,
 } from "@/lib/native-tab-chrome";
 import { isTabletLayout, TABLET_NEW_ENTRY_SHEET_MAX_WIDTH_PX } from "@/lib/tablet-layout";
+import { SheetBlurBackdrop } from "@/src/components/m3/SheetBlurBackdrop";
+import { useAndroidSheetBackdropSnapshot } from "@/lib/use-android-sheet-backdrop-snapshot";
 
 import { JOURNAL_NEW_ENTRY_FAB_PX } from "@/src/features/journal/journalFabChrome";
 import { clearDefaultJournalDraft } from "@/lib/journal-draft-index";
@@ -124,6 +127,8 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { bundle } = useMobileAppTheme();
   const j = bundle.journal;
+  const isDark = isMobileAppDarkThemeId(bundle.id);
+  const androidBackdropUri = useAndroidSheetBackdropSnapshot(open);
 
   const [hasDraft, setHasDraft] = useState(false);
   const [draftCloseDialogOpen, setDraftCloseDialogOpen] = useState(false);
@@ -454,9 +459,10 @@ export const JournalNewEntrySheet = forwardRef<JournalNewEntrySheetHandle, Journ
       ]}
     >
       <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-        <View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { backgroundColor: j.newEntryRouteScrim }]}
+        <SheetBlurBackdrop
+          isDark={isDark}
+          androidBackdropUri={androidBackdropUri}
+          tintColor={j.newEntryRouteScrim}
         />
         <Pressable
           accessibilityRole="button"

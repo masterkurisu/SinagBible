@@ -81,6 +81,7 @@ export function CreditsSheet({
       accessibilityDismissLabel="Dismiss credits"
       widthVariant="reading"
       maxHeightRatio={0.9}
+      blurBackdrop
     >
       <View style={styles.content}>
         <Text style={sectionHeadingStyle}>Bible Translations</Text>

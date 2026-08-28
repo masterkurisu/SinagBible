@@ -202,6 +202,7 @@ export function ReaderStudyNotesSheet({
       accessibilityDismissLabel="Dismiss study notes"
       widthVariant="reading"
       maxHeightRatio={0.78}
+      blurBackdrop
     >
       {selectedVerseFeedbackLabel ? (
         <View
