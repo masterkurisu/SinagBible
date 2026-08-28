@@ -13,7 +13,6 @@ import {
 import { canonicalTranslationId } from "@/lib/canonical-translation-id";
 import { isChapterDbOpen } from "@/lib/chapter-db";
 import { getChapterSync, hasChapterSync, getTranslationMetaSync } from "@/lib/chapter-store";
-import { markReaderFirstChapterSettled } from "@/lib/reader-chapter-ready";
 import { yvpPassageToBibleChapter } from "@/lib/yvp-chapter-payload";
 import { type YvpPassage } from "@/lib/youversion-api";
 import {
@@ -129,9 +128,6 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
     if (warmStart) {
       setReaderPayload(warmStart);
       setError(null);
-      // Already showing content from the offline store — no further network/JS
-      // competition expected for this open. See reader-open-stall-findings.md Phase 6.
-      markReaderFirstChapterSettled();
     }
 
     const loadChapter = async () => {
@@ -193,10 +189,6 @@ export function useReaderChapter(bookSlug: string, chapterNumber: number, transl
           setReaderPayload(null);
           setError("load_failed");
         }
-      } finally {
-        // Settled one way or another — network/JS work for this open attempt is done.
-        // See reader-open-stall-findings.md Phase 6.
-        markReaderFirstChapterSettled();
       }
     };
 

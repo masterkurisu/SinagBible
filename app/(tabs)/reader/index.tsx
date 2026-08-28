@@ -50,15 +50,15 @@ export default function ReaderIndexScreen() {
         }
       };
 
-      const isRepeat = readerHubSuccessfulRedirects > 0;
-      if (isRepeat) {
-        const mem = peekReaderLastPosition();
-        if (mem) {
-          navigateToResolved(resolveReaderTarget(mem));
-          return () => {
-            cancelled = true;
-          };
-        }
+      // Tab layout may have already warmed memoryLastPosition on mount — use it
+      // synchronously on every visit (not only "repeat"), since a full JS reload
+      // resets readerHubSuccessfulRedirects but not the in-memory last position.
+      const mem = peekReaderLastPosition();
+      if (mem) {
+        navigateToResolved(resolveReaderTarget(mem));
+        return () => {
+          cancelled = true;
+        };
       }
 
       void (async () => {

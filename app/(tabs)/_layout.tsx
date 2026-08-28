@@ -13,7 +13,7 @@ import {
   NAV_TAB_SF,
 } from "@/lib/android-nav-bar-chrome";
 import { hapticLightImpact } from "@/lib/haptics";
-import { loadReaderLastPosition, peekReaderLastPosition, getPreferredReaderTranslation } from "@/lib/reader-last-position";
+import { loadReaderLastPosition, peekReaderLastPosition } from "@/lib/reader-last-position";
 import {
   ReaderTabBarVisibilityProvider,
   READER_TOOLS_MENU_TAB_BAR_COLOR,
@@ -27,21 +27,10 @@ import { TabBarSearchLayer } from "@/src/features/search/TabBarSearchLayer";
 import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
 import { hasAnyJournalDraft } from "@/lib/journal-draft-index";
 import { refreshLocalEntriesCache } from "@/lib/journal-local";
-import { warmReaderTranslationSearchCache } from "@/lib/bible-search-service";
 import { loadJournalCarouselSettings, peekJournalCarouselSettings } from "@/lib/journal-carousel-settings";
 import { loadCarouselFavorites, peekCarouselFavorites } from "@/lib/journal-carousel-verses";
 import { loadCarouselCardSizes, peekCarouselCardSizes } from "@/lib/journal-carousel-card-sizes";
-import { waitForReaderFirstChapterSettled } from "@/lib/reader-chapter-ready";
-import { readerPerfEnd, readerPerfStart } from "@/lib/reader-open-perf-log";
 import { usePinnedTranslationsPrefetch } from "@/lib/use-pinned-translations-prefetch";
-
-/**
- * Ceiling for deferring the search-cache warm-up when the reader tab is never opened
- * this session (e.g. the user stays on Home/Journal) — otherwise
- * `waitForReaderFirstChapterSettled` would wait forever. When the reader *is* opened,
- * the warm-up fires as soon as it settles, well before this ceiling in the common case.
- */
-const WARM_SEARCH_CACHE_MAX_WAIT_MS = 3000;
 
 /** True when the active reader tab is showing a chapter (not the redirect index). */
 function isReaderChapterRoute(pathname: string | null): boolean {
@@ -110,26 +99,6 @@ function TabLayoutInner() {
     }
     // Warm journal cache so tab-bar search can filter entries without waiting on AsyncStorage.
     void refreshLocalEntriesCache();
-    // Defer KJV JSON parse + keyword index until the reader's first chapter this
-    // session has settled (loaded or failed) — or WARM_SEARCH_CACHE_MAX_WAIT_MS if the
-    // reader is never opened — so it can't compete with the reader's own network/JS
-    // work for the same resources. Previously a fixed 600ms guess; see
-    // reader-open-stall-findings.md Phase 6.
-    let searchWarmCancelled = false;
-    // TEMPORARY (reader-open-stall-findings.md Phase 6) — confirms this now fires
-    // right after the reader settles rather than at a blind fixed delay; remove
-    // alongside the rest of the [reader-perf] logging.
-    const searchWarmPerfHandle = readerPerfStart(
-      "tab layout: waitForReaderFirstChapterSettled (search-cache warm-up gate)",
-    );
-    void waitForReaderFirstChapterSettled(WARM_SEARCH_CACHE_MAX_WAIT_MS).then(() => {
-      readerPerfEnd(searchWarmPerfHandle);
-      if (searchWarmCancelled) return;
-      void getPreferredReaderTranslation().then(warmReaderTranslationSearchCache);
-    });
-    return () => {
-      searchWarmCancelled = true;
-    };
   }, []);
 
   useEffect(() => {

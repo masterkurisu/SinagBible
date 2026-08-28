@@ -14,6 +14,8 @@ import {
 import { BlurView } from "expo-blur";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useTabBarSearch } from "@/lib/tab-bar-search-context";
+import { warmReaderTranslationSearchCache } from "@/lib/bible-search-service";
+import { getPreferredReaderTranslation } from "@/lib/reader-last-position";
 import Animated, {
   cancelAnimation,
   Extrapolation,
@@ -143,6 +145,13 @@ export function TabBarSearchLayer() {
   if (isOpen && !layerMounted) {
     setLayerMounted(true);
   }
+
+  useEffect(() => {
+    if (!isOpen) return;
+    // Warm search index only when the user opens search — not at app startup, where
+    // loading the full KJV JSON blocked the JS thread for tens of seconds on reload.
+    void getPreferredReaderTranslation().then(warmReaderTranslationSearchCache);
+  }, [isOpen]);
 
   useEffect(() => {
     cancelAnimation(progress);
