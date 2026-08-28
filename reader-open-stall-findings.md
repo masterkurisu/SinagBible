@@ -217,7 +217,52 @@ can be justified/prioritized by actual measured cost, not theory.
 **Exit criteria:** a short table of measured ms for each step above, checked into this
 doc, replacing the "theoretical" caveat in the "Dev vs. production severity" section.
 
+#### Captured on-device numbers (Android, Metro dev build)
+
+| Event | Duration | Notes |
+|---|---|---|
+| `reader hub: loadReaderLastPosition (AsyncStorage)` | **45.6ms** | First hub visit after a full reload. |
+| `resolveReaderBooksForTranslation(yvp:111)` | **872.7ms** | Last-read translation was a YouVersion (YVP) API-backed one, not KJV — this is a **network fetch**, not JSON parsing. Ran concurrently with the line below. |
+| `fetchReaderChapterContent(yvp:111, mark 11)` | **871.7ms** | The actual opened chapter's content fetch — same YVP network round trip, this is what the user is staring at the skeleton for. |
+| `fetchReaderChapterContent(yvp:111, mark 9/10/12/13)` | **21–34ms each** | Background ±2 neighbor-chapter prefetches (`runPinnedTranslationsPrefetch`/`prefetchTranslationChaptersForReader`) — fire-and-forget, off the critical path, confirmed cheap. |
+| `loadTranslationData(KJV) [cache miss]` | **494.7ms** | Confirms the original ~4.5MB `kjv.json` parse cost is real (a later reload, once KJV was actually opened). |
+| `buildBookNav(KJV)` | **0.0ms** | Confirms the Phase-0 / root-cause-#1 fix works as intended — building nav no longer re-triggers a KJV load. |
+
+**Key findings, updated from theory:**
+
+1. **The dominant stall in this capture wasn't KJV at all** — it was a ~870ms network
+   round trip to fetch a YouVersion (YVP) API-backed chapter, because the user's last
+   read position was a YVP translation, not a bundled one. This is a real, user-facing
+   contributor to "Opening reader…" taking a while, but it's a **network latency**
+   problem, not the JS-thread-blocking-parse problem root cause #1 was about — no
+   client-side code fix will remove a real network round trip; only things like
+   perceived-loading UX (skeleton copy, optimistic nav) or a persistent chapter cache
+   (already exists for offline reading, per `TRANSLATION_OFFLINE_PREFETCH_DEPTH`) can
+   help here for *repeat* visits to the same chapter.
+2. **Root cause #1's fix is confirmed working on-device**: `buildBookNav(KJV)` logged
+   `0.0ms` immediately after a `loadTranslationData(KJV)` cache-miss load, i.e. it's
+   reusing the already-loaded `data.books` instead of loading KJV a second time.
+3. **`loadTranslationData(KJV) [cache miss]` at 494.7ms confirms the original
+   ~4.5MB-parse estimate was accurate** (not just theoretical Node.js timing) — this
+   cost is real and will still show up once per cold app process the first time KJV
+   is actually opened, as the doc's "Dev vs. production severity" section predicted.
+4. **The reader hub's `AsyncStorage` read took 45.6ms** — real, but modest, and per
+   the Phase 2 investigation below, this call turned out to be **partially redundant**
+   with an existing cache-warming effect elsewhere (see Phase 2).
+5. **Require-cycle warnings (open item #4) reproduced live** in this same capture,
+   confirming they still fire on every full reload:
+   `lib/pinned-translations-prefetch.ts -> lib/reader-chapter-load.ts ->
+   lib/bible-api-service.ts -> lib/pinned-translations-prefetch.ts` and
+   `lib/bible-api-service.ts -> lib/translation-download.ts -> lib/bible-api-service.ts`.
+
+**Decision:** keeping the temporary `[reader-perf]` instrumentation in place for now
+(deviating slightly from step 4's "delete immediately") since Phase 2 below directly
+acts on the `loadReaderLastPosition` timing and benefits from being able to
+re-measure before/after. Will delete once Phase 2 is verified.
+
 ### Phase 2 — Reader hub redirect path (Open item #2)
+
+**Status: fix landed, on-device re-verification pending.**
 
 **Current-code note:** partially already addressed — `app/(tabs)/reader/index.tsx`
 and `lib/reader-last-position.ts` already have a `peekReaderLastPosition()` in-memory
@@ -225,63 +270,205 @@ fast path (`memoryLastPosition`) used on repeat hub visits within the same JS se
 so this only matters for first hub visit after a cold launch/full reload, when the
 memory cache is empty and `loadReaderLastPosition()` must hit `AsyncStorage.getItem`.
 
-1. Confirm with Phase 1 numbers whether the `AsyncStorage.getItem` call itself is
-   slow, or whether the redirect is actually gated on something else (e.g. waiting on
-   `useFocusEffect` timing, router transition cost).
-2. If `AsyncStorage.getItem` is meaningfully slow: check payload size (should be a
-   tiny JSON object — `bookSlug`, `chapter`, `translationId`) and whether other
-   startup code paths are doing their own AsyncStorage reads concurrently and
-   contending for the same underlying store/lock.
-3. Consider priming `memoryLastPosition` earlier in the app boot sequence (e.g. in the
-   root layout, before the reader tab ever mounts) so the hub's first redirect can use
-   the synchronous `peekReaderLastPosition()` path even on a cold start.
+1. ✅ Confirmed with Phase 1 numbers: `AsyncStorage.getItem` itself took **45.6ms** for
+   the hub's own call — real, not huge, but not free either.
+2. ✅ Found something better than "check payload size": step 3's "prime it earlier"
+   already exists — `app/(tabs)/_layout.tsx` (the tab bar layout, mounted once at
+   startup) already runs:
+
+   ```12:20:app/(tabs)/_layout.tsx
+   useEffect(() => {
+     if (peekReaderLastPosition() == null) {
+       // Warm memory cache so /reader can redirect without waiting on AsyncStorage.
+       void loadReaderLastPosition();
+     }
+     ...
+   ```
+
+   The problem: this warm-up and the reader hub's own `loadReaderLastPosition()` call
+   (`app/(tabs)/reader/index.tsx`) are **two independent, undeduplicated calls**. If a
+   user lands on the Reader tab at/near cold start (e.g. it's the default tab, or a
+   fast tap), both effects can fire before either's `AsyncStorage.getItem` resolves —
+   the hub's own call doesn't know the layout's warm-up is already in flight, so it
+   pays its own full ~46ms read instead of piggybacking on the other one. This matches
+   the captured Phase 1 log, which showed the hub's own read completing in 45.6ms
+   rather than being instant.
+3. ✅ **Fix applied** in `lib/reader-last-position.ts`: `loadReaderLastPosition()` now
+   de-dupes concurrent callers onto a single in-flight `AsyncStorage.getItem` promise
+   (`inFlightLoad`, cleared once the read settles so later calls — e.g. after
+   `saveReaderLastPosition` — still re-read fresh state). Whichever caller starts the
+   read pays the real cost once; every other concurrent caller (tab layout warm-up,
+   reader hub redirect, `getPreferredReaderTranslation`, etc.) now awaits the same
+   promise instead of issuing its own redundant `AsyncStorage.getItem`.
+   - Added a temporary `[reader-perf]` log
+     (`loadReaderLastPosition: joined in-flight read (deduped)`) at the join point so
+     the dedupe hitting in practice can be confirmed on-device, consistent with
+     Phase 1's still-active instrumentation.
+   - `./node_modules/.bin/tsc --noEmit -p .` — clean, same 3 pre-existing unrelated
+     errors as before, no new ones.
 
 **Exit criteria:** either confirmed not a meaningful contributor (close the item), or
-a measured ms improvement from priming earlier.
+a measured ms improvement from priming earlier. — **Met, see below.**
+
+#### On-device verification (Phase 2 fix confirmed)
+
+Second capture, same cold-reload scenario as Phase 1:
+
+```
+[reader-perf] ▶ loadReaderLastPosition: joined in-flight read (deduped)   x5
+[reader-perf] ■ loadReaderLastPosition: joined in-flight read (deduped): 1.4ms
+[reader-perf] ■ loadReaderLastPosition: joined in-flight read (deduped): 1.3ms
+[reader-perf] ■ loadReaderLastPosition: joined in-flight read (deduped): 1.3ms
+[reader-perf] ■ loadReaderLastPosition: joined in-flight read (deduped): 1.2ms
+[reader-perf] ■ loadReaderLastPosition: joined in-flight read (deduped): 1.1ms
+```
+
+**The dedupe works as intended, and the real-world fan-out was bigger than expected:**
+on this reload, **5 separate call sites** hit `loadReaderLastPosition()` in the same
+burst near cold start (tab layout's warm-up effect, the reader hub redirect, and
+likely `usePinnedTranslationsPrefetch`'s `resolvePrefetchAnchor` plus one or two
+others reachable from the same tab-mount tick). Before the fix, that would have been
+up to **5 independent `AsyncStorage.getItem` calls** (each ~45-56ms per the Phase 1
+baseline — i.e. up to ~225-280ms of aggregate redundant native-bridge work spread
+across those call sites, even though it's not all on one blocking await chain). After
+the fix: **1 real read + 5 joins at ~1.1-1.4ms each** — the joins are essentially free.
+
+Notably, the hub's own `reader hub: loadReaderLastPosition (AsyncStorage)` label did
+**not** appear in this capture at all — meaning some other caller (not the hub) won
+the race and became the read's initiator this time, and the hub was one of the 5
+"joined" callers instead. This confirms the fix is caller-order-independent: whoever
+gets there first pays the real cost once, everyone else — regardless of which one it
+is — rides along for ~1ms.
+
+(For reference, that same capture's KJV/YVP numbers moved around a bit vs. Phase 1's
+first capture — `loadTranslationData(KJV) [cache miss]` was 353.4ms then 610.2ms in
+two reloads in this session, and the YVP chapter fetch was 269-270ms instead of the
+earlier ~872ms. This is expected run-to-run variance from JIT/JS-engine warmup and
+network conditions, not related to this fix — Phase 1's KJV-parse and YVP-network
+findings stand either way.)
+
+**Phase 2: closed.** Open item #2 is resolved — the reader hub's `AsyncStorage` cost
+is no longer paid redundantly by concurrent startup callers.
+
+**Instrumentation status:** keeping `[reader-perf]` logging in place for now, since
+Phase 4/5 below can reuse it (require-cycle risk-of-`undefined` checks, prefetch CPU
+profiling) rather than re-adding it later. Revisit deleting it once all phases that
+benefit from it are done.
 
 ### Phase 3 — Confirm no reverse "always loaded for nav" bug in other bundled translations (Open item #7)
 
-Cheapest item to close — pure code reading / verification, no behavior change expected.
+**Status: closed — one live recurrence of the anti-pattern found and fixed.**
 
-1. Re-read `buildBookNav` in `packages/core/src/bible-translations.ts` (current
-   version already only calls `getKjvCanonicalBookNav()` — a static table, no JSON —
-   plus `data.books`, which is whatever translation's data was already loaded by the
-   caller). Confirm no other function in the file calls `loadTranslationData` for a
-   translation other than the one being resolved.
-2. Grep the mobile app (`lib/`, `src/`) for any other call sites that resolve one
-   translation's nav/slugs by loading a *different* translation's JSON (the same
-   anti-pattern as root cause #1, just for WEB/ADB1905/OEB instead of KJV).
-3. Add a short code comment or a lightweight dev-only assertion (e.g. in
-   `loadBundledTranslationData`) if useful to prevent regression.
+Cheapest item to close — pure code reading / verification, no behavior change expected
+for the "clean" parts, one small targeted fix for the part that wasn't clean.
+
+1. ✅ Re-read `buildBookNav` and every `loadTranslationData(...)` call site in
+   `packages/core/src/bible-translations.ts`. All resolved cleanly:
+   - `buildBookNav` — uses the static `getKjvCanonicalBookNav()` plus `data.books`
+     (whatever translation was already loaded by the caller). No cross-translation load.
+   - `getBookNavForTranslationData(id)`, `resolveSearchTranslationContext(id)`,
+     `getBookDisplayNameForSlug`, `getChapterBySlugForTranslation`,
+     `resolvePassageBookSlugForTranslation`, `getClosestBookSuggestionForTranslation(s)`,
+     `warmTranslationSearchCache` — every `loadTranslationData(id)` call uses the same
+     `id` that was passed in or already resolved; none of them load a second,
+     different translation just to build nav.
+2. ✅ Grepped the whole app for other `getBookNavForTranslation(...)` /
+   `buildBookNavForTranslationData` / `resolveSearchTranslationContext` call sites:
+   - `lib/reader-chapter-load.ts` has two `getBookNavForTranslation("KJV")` calls —
+     both are **error-path fallbacks** inside `catch` blocks (when a YVP or API book-nav
+     fetch fails), not routine per-open cost. Reviewed and left as-is: this is an
+     acceptable "degrade to a working KJV nav" safety net, structurally different from
+     root cause #1 (which ran unconditionally on every single chapter open).
+   - **`lib/youversion-api.ts`'s `fetchYvpBookNav` — found the same anti-pattern,
+     live, still running today.** Every time a YouVersion (YVP) API translation's book
+     nav is resolved (i.e. every YVP-translation chapter open whose nav isn't already
+     cached — this is exactly what the Phase 1 capture caught in the wild, see the
+     `loadTranslationData(KJV) [cache miss]` line that fired *while reading a `yvp:`
+     translation*), it called `getBookNavForTranslation("KJV")` — which loads the full
+     real `kjv.json` — purely to get KJV book **names/slugs/chapter-counts** for
+     filtering against the YVP Bible's USFM book list. It never touched KJV verse text.
+     This is the exact same anti-pattern as root cause #1, just relocated from
+     `buildBookNav` to this YVP-specific nav resolver.
+3. ✅ **Fix applied** in `lib/youversion-api.ts`: `fetchYvpBookNav` now calls the
+   static `getKjvCanonicalBookNav()` (from `@sinag-bible/core/bible-meta`, already used
+   for root cause #1's fix) instead of `getBookNavForTranslation("KJV")`. Also removed
+   the now-unnecessary `Promise.all` (only one real async call — the YVP `/bibles/{id}`
+   fetch — remains) and the now-unused `getBookNavForTranslation` import. Left an
+   inline comment pointing back to this doc so the reasoning isn't lost.
+   - `./node_modules/.bin/tsc --noEmit -p .` — clean, same 3 pre-existing unrelated
+     errors, no new ones.
+   - Not yet re-verified on-device (no new `[reader-perf]` marker was added here since
+     `getKjvCanonicalBookNav()` is synchronous — a follow-up capture opening a YVP
+     translation chapter should now show **no** `loadTranslationData(KJV) [cache
+     miss]` line at all, unless KJV is separately opened for real).
 
 **Exit criteria:** confirmed clean, or a matching fix filed if the pattern reappears
-elsewhere.
+elsewhere. — **Met:** one recurrence found in `fetchYvpBookNav` and fixed; the rest of
+the codebase checked out clean.
 
 ### Phase 4 — Untangle the require cycles Metro warns about (Open item #4)
 
-Do this after Phases 1–3 so you're not chasing a cycle that turns out to be
-performance-irrelevant; this is primarily a correctness/maintainability risk
-(possible `undefined` from a not-yet-initialized cyclic export) rather than a
-confirmed stall cause.
+**Status: both target cycles fixed; `tsc` clean; static verification done via
+`madge` (no device attached in this session for a live Metro re-capture — see
+"Remaining" below).**
 
-1. `lib/pinned-translations-prefetch.ts → lib/reader-chapter-load.ts →
+1. ✅ `lib/pinned-translations-prefetch.ts → lib/reader-chapter-load.ts →
    lib/bible-api-service.ts → lib/pinned-translations-prefetch.ts`:
-   - Identify the actual symbol(s) each edge needs from the next module.
-   - Likely fix: extract the shared piece `bible-api-service.ts` and
-     `pinned-translations-prefetch.ts` both need (or that `reader-chapter-load.ts`
-     re-exports) into a small standalone module with no back-edge, e.g. a
-     `reader-prefetch-types.ts` or similar, and have both sides import from that
-     instead of from each other.
-2. `lib/bible-api-service.ts → lib/translation-download.ts → lib/bible-api-service.ts`:
-   - Same approach — find the specific shared function/type causing the back-edge and
-     hoist it to a leaf module.
-3. After breaking each cycle, run `./node_modules/.bin/tsc --noEmit -p .` and start
-   Metro fresh to confirm the "Require cycle:" warnings are gone from the dev server
-   log.
-4. Add a regression guard if the repo has (or can cheaply add) a lint rule / madge-style
-   circular-dependency check in CI, so these don't silently reappear.
+   - Root cause: `bible-api-service.ts`'s `clearBibleApiMemoryCaches()` (a
+     cache-clearing aggregator) imported `resetPinnedTranslationsPrefetchSession`
+     just to call it as part of the aggregate reset — that back-edge closed the loop.
+   - **Fix:** removed the import/call from `bible-api-service.ts`. Its single caller,
+     `lib/delete-my-data.ts` (`deleteAllUserData`), now calls
+     `resetPinnedTranslationsPrefetchSession()` directly alongside
+     `clearBibleApiMemoryCaches()`. No new shared module needed — the aggregator
+     simply does one less thing, and the orchestrating caller (which already has no
+     back-edge problem) does it instead.
+2. ✅ `lib/bible-api-service.ts → lib/translation-download.ts → lib/bible-api-service.ts`:
+   - Same root cause, same fix shape: `clearBibleApiMemoryCaches()` also imported
+     `clearTranslationDownloadSession` from `translation-download.ts` just to include
+     it in the aggregate reset. Removed that import/call too; `delete-my-data.ts` now
+     calls `clearTranslationDownloadSession()` directly as well.
+   - `bible-api-service.ts` no longer imports from either module — confirmed via
+     `grep` that both back-edges are gone; `translation-download.ts` and
+     `pinned-translations-prefetch.ts` (via `reader-chapter-load.ts`) still import
+     *forward* from `bible-api-service.ts`, which is fine (one-directional).
+   - Added a comment on `clearBibleApiMemoryCaches()` explaining why those two resets
+     are deliberately excluded, so a future edit doesn't reintroduce the cycle.
+3. ✅ Verification:
+   - `./node_modules/.bin/tsc --noEmit -p .` — clean, same 3 pre-existing unrelated
+     errors, no new ones.
+   - No device was attached in this session to capture a live Metro bundle (the
+     "Require cycle:" warnings only print when a client actually requests a bundle),
+     so used `madge --circular` as a static substitute:
+     `npx madge --circular --extensions ts,tsx --ts-config tsconfig.json app lib
+     packages/core/src src` (needs Node 24 per this repo's `.nvmrc` — `nvm use` first).
+     Confirmed **both target cycles are gone**.
+4. ✅ Added a regression-guard script even though this repo has no CI workflows yet
+   (`.github/workflows` doesn't exist) — cheap to add now, ready to wire into CI
+   later: `"check:circular": "npx --yes madge --circular --extensions ts,tsx
+   --ts-config tsconfig.json app lib packages/core/src src"` in `package.json`
+   (run via `pnpm run check:circular`).
 
-**Exit criteria:** zero require-cycle warnings in a fresh Metro start; `tsc` clean.
+**Found (but out of scope to fix here) — two additional, pre-existing cycles:**
+`madge` also flagged `lib/chapter-store.ts > lib/yvp-keyword-index.ts >
+lib/yvp-chapter-payload.ts > lib/youversion-api.ts` and `lib/yvp-chapter-payload.ts >
+lib/youversion-api.ts`. Investigated: the back-edge in both is
+`lib/yvp-chapter-payload.ts`'s `import type { YvpPassage } from "@/lib/youversion-api"`
+— an **explicit type-only import**, which Babel's TypeScript preset strips entirely at
+compile time, so it produces **no real runtime `require()` cycle** (which is why
+Metro never warned about it — only `madge`'s static import-graph analysis sees it).
+Left as-is since it's benign and outside this doc's original scope (item #4 named two
+specific Metro-observed warnings, not these); worth a note for whoever eventually
+wires `check:circular` into CI, since it will need either an ignore rule for this
+type-only pair or a small refactor (e.g. move `YvpPassage` to a shared types module)
+to pass cleanly.
+
+**Exit criteria:** zero require-cycle warnings in a fresh Metro start; `tsc` clean. —
+`tsc` confirmed clean; the two target cycles confirmed gone via static analysis.
+
+**Remaining to fully close this phase out:** on your next on-device Metro session
+(cold start or full reload), confirm the two `WARN Require cycle: ...` lines that
+appeared in every prior capture (Phases 1–3) no longer appear.
 
 ### Phase 5 — Prefetch impact on perceived responsiveness during startup (Open item #3)
 

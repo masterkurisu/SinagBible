@@ -4,7 +4,9 @@ import { resetChapterDatabase } from "@/lib/chapter-db";
 import { deleteJournalDatabase } from "@/lib/journal-db";
 import { deleteAllJournalImages, prepareJournalStorageForWipe } from "@/lib/journal-local";
 import { ONBOARDING_DONE_STORAGE_KEY, publishOnboardingState } from "@/lib/onboarding-storage";
+import { resetPinnedTranslationsPrefetchSession } from "@/lib/pinned-translations-prefetch";
 import { clearReaderLastPositionMemoryCache } from "@/lib/reader-last-position";
+import { clearTranslationDownloadSession } from "@/lib/translation-download";
 import { clearReaderChapterStorageCache } from "@/lib/use-reader-storage";
 
 /**
@@ -14,6 +16,8 @@ import { clearReaderChapterStorageCache } from "@/lib/use-reader-storage";
 export async function deleteAllUserData(): Promise<void> {
   try {
     clearBibleApiMemoryCaches();
+    resetPinnedTranslationsPrefetchSession();
+    clearTranslationDownloadSession();
     clearReaderLastPositionMemoryCache();
     clearReaderChapterStorageCache();
 

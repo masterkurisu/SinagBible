@@ -4,8 +4,7 @@
  * Authenticate every request with the `X-YVP-App-Key` header.
  * Set `YVP_APP_KEY` in `.env.local` (see `app.config.js`).
  */
-import { getBookSlugFromUsfm, getUsfmBookId } from "@sinag-bible/core/bible-meta";
-import { getBookNavForTranslation } from "@sinag-bible/core/bible-translations";
+import { getBookSlugFromUsfm, getKjvCanonicalBookNav, getUsfmBookId } from "@sinag-bible/core/bible-meta";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import Constants from "expo-constants";
 import { isChapterDbOpen } from "@/lib/chapter-db";
@@ -336,10 +335,13 @@ export function fetchYvpBookNav(bibleId: number): Promise<BibleBookNavItem[]> {
   const p = (async () => {
     void ensureYvpTranslationMeta(bibleId);
 
-    const [bible, kjvNav] = await Promise.all([
-      yvpFetch<YvpBibleDetail>(`/bibles/${bibleId}`),
-      getBookNavForTranslation("KJV"),
-    ]);
+    // Static canonical KJV names/slugs/chapter-counts — only book *metadata* is
+    // needed here (to filter/map against this Bible's USFM book set), never verse
+    // text, so this must not load the real ~4.5MB kjv.json (see
+    // reader-open-stall-findings.md Phase 3 — this was a "reverse" instance of the
+    // same anti-pattern as the original KJV-load stall bug).
+    const kjvNav = getKjvCanonicalBookNav();
+    const bible = await yvpFetch<YvpBibleDetail>(`/bibles/${bibleId}`);
     const bookSet = new Set(bible.books ?? []);
     const navFromKjv = kjvNav.filter((item) => {
       const usfm = getUsfmBookId(item.slug);

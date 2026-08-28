@@ -37,8 +37,6 @@ import {
   hasChapterSync,
   putChapter,
 } from "@/lib/chapter-store";
-import { resetPinnedTranslationsPrefetchSession } from "@/lib/pinned-translations-prefetch";
-import { clearTranslationDownloadSession } from "@/lib/translation-download";
 import { clearYvpMemoryCaches } from "@/lib/youversion-api";
 
 const BIBLE_API_BASE_URL = "https://bible.helloao.org/api";
@@ -472,12 +470,21 @@ export async function clearChapterCache(): Promise<void> {
   chapterFetchCache.clear();
 }
 
+/**
+ * Does *not* reset pinned-translations-prefetch or translation-download session
+ * bookkeeping — callers that need those too (e.g. delete-my-data) should call
+ * `resetPinnedTranslationsPrefetchSession()` (`@/lib/pinned-translations-prefetch`)
+ * and `clearTranslationDownloadSession()` (`@/lib/translation-download`) themselves.
+ * Kept out of this module deliberately to avoid require cycles — both of those
+ * modules import from this one (`pinned-translations-prefetch.ts ->
+ * reader-chapter-load.ts -> bible-api-service.ts`, and `translation-download.ts ->
+ * bible-api-service.ts` directly); importing back from here would close the loop.
+ * See reader-open-stall-findings.md Phase 4.
+ */
 export function clearBibleApiMemoryCaches(): void {
   availableTranslationsCache = null;
   chapterFetchCache.clear();
   translationBooksCache.clear();
   clearChapterStoreMemoryCache();
   clearYvpMemoryCaches();
-  clearTranslationDownloadSession();
-  resetPinnedTranslationsPrefetchSession();
 }

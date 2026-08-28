@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { isTranslationId, type TranslationId } from "@sinag-bible/core/bible-translations";
+import { readerPerfStart, readerPerfEnd } from "@/lib/reader-open-perf-log";
 
 const STORAGE_KEY = "@sinagbible/mobile/reader-last-position";
 
@@ -22,7 +23,15 @@ export function clearReaderLastPositionMemoryCache(): void {
   memoryLastPosition = null;
 }
 
-export async function loadReaderLastPosition(): Promise<ReaderLastPosition | null> {
+/**
+ * De-dupes concurrent callers (e.g. the tab layout's cache-warming effect and the
+ * reader hub's own redirect logic both firing near cold-start) onto a single
+ * `AsyncStorage.getItem` read instead of one each. Cleared once the read settles so a
+ * later call (e.g. after `saveReaderLastPosition`) still re-reads fresh state.
+ */
+let inFlightLoad: Promise<ReaderLastPosition | null> | null = null;
+
+async function readReaderLastPositionFromStorage(): Promise<ReaderLastPosition | null> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) {
@@ -56,6 +65,20 @@ export async function loadReaderLastPosition(): Promise<ReaderLastPosition | nul
     memoryLastPosition = null;
     return null;
   }
+}
+
+export async function loadReaderLastPosition(): Promise<ReaderLastPosition | null> {
+  if (inFlightLoad) {
+    // TEMPORARY (reader-open-stall-findings.md Phase 2) — confirms the dedupe is
+    // actually hit on-device; remove alongside the rest of the [reader-perf] logging.
+    const perfHandle = readerPerfStart("loadReaderLastPosition: joined in-flight read (deduped)");
+    return inFlightLoad.finally(() => readerPerfEnd(perfHandle));
+  }
+  const p = readReaderLastPositionFromStorage().finally(() => {
+    if (inFlightLoad === p) inFlightLoad = null;
+  });
+  inFlightLoad = p;
+  return p;
 }
 
 export async function saveReaderLastPosition(position: ReaderLastPosition): Promise<void> {
