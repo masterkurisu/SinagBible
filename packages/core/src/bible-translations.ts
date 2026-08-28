@@ -41,6 +41,28 @@ import {
 
 type TranslationData = KJVData;
 
+/**
+ * TEMPORARY instrumentation for the reader-open-stall investigation
+ * (see `reader-open-stall-findings.md`, Phase 1). Dev-only, no-op in production —
+ * reads `__DEV__` via `globalThis` (rather than the bare identifier) since this
+ * package has no ambient RN type declarations for it. Delete once on-device
+ * numbers are captured (Phase 1, step 4).
+ */
+const READER_PERF_TAG = "[reader-perf]";
+function isReaderPerfLoggingEnabled(): boolean {
+  return (globalThis as Record<string, unknown>).__DEV__ === true;
+}
+function readerPerfStart(label: string): { label: string; startedAt: number } | null {
+  if (!isReaderPerfLoggingEnabled()) return null;
+  console.log(`${READER_PERF_TAG} \u25b6 ${label}`);
+  return { label, startedAt: performance.now() };
+}
+function readerPerfEnd(handle: { label: string; startedAt: number } | null): void {
+  if (!handle) return;
+  const elapsed = performance.now() - handle.startedAt;
+  console.log(`${READER_PERF_TAG} \u25a0 ${handle.label}: ${elapsed.toFixed(1)}ms`);
+}
+
 /** Loaded translation text + nav used for search (any bundled or helloao API id). */
 export type SearchTranslationContext = {
   searchKey: string;
@@ -186,7 +208,9 @@ function loadTranslationData(id: TranslationId): Promise<TranslationData> {
   const ex = bundledTranslationDataCache.get(id);
   if (ex) return ex;
 
+  const perfHandle = readerPerfStart(`loadTranslationData(${id}) [cache miss]`);
   const p = loadBundledTranslationData(id);
+  void p.finally(() => readerPerfEnd(perfHandle));
   bundledTranslationDataCache.set(id, p, evictBundledTranslationCaches);
   return p;
 }
@@ -486,21 +510,26 @@ function normalizeBookSlug(name: string) {
  * this runs for every translation's nav, so it must not force-parse the 4.5MB KJV file.
  */
 async function buildBookNav(data: TranslationData): Promise<BibleBookNavItem[]> {
-  const kjvCanonicalNav = getKjvCanonicalBookNav();
-  const useKjvSlugs =
-    data.books.length === kjvCanonicalNav.length &&
-    data.books.every(
-      (book, i) => book.chapters.length === kjvCanonicalNav[i]!.chapterCount,
-    );
+  const perfHandle = readerPerfStart(`buildBookNav(${data.translation ?? "?"})`);
+  try {
+    const kjvCanonicalNav = getKjvCanonicalBookNav();
+    const useKjvSlugs =
+      data.books.length === kjvCanonicalNav.length &&
+      data.books.every(
+        (book, i) => book.chapters.length === kjvCanonicalNav[i]!.chapterCount,
+      );
 
-  return data.books.map((book, index) => ({
-    name: book.name,
-    slug:
-      useKjvSlugs && kjvCanonicalNav[index]
-        ? kjvCanonicalNav[index]!.slug
-        : normalizeBookSlug(book.name),
-    chapterCount: book.chapters.length,
-  }));
+    return data.books.map((book, index) => ({
+      name: book.name,
+      slug:
+        useKjvSlugs && kjvCanonicalNav[index]
+          ? kjvCanonicalNav[index]!.slug
+          : normalizeBookSlug(book.name),
+      chapterCount: book.chapters.length,
+    }));
+  } finally {
+    readerPerfEnd(perfHandle);
+  }
 }
 
 const bookNavPromiseCache: Partial<Record<TranslationId, Promise<BibleBookNavItem[]>>> = {};

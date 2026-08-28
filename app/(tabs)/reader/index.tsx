@@ -5,6 +5,7 @@ import { getBookNameFromSlug } from "@sinag-bible/core";
 import { ScreenLoadingSkeleton } from "@/components/loading-skeleton";
 import { READER_INTERNAL_NO_STACK_ANIMATION } from "@/lib/reader-hub-navigation";
 import { loadReaderLastPosition, peekReaderLastPosition, type ReaderLastPosition } from "@/lib/reader-last-position";
+import { readerPerfEnd, readerPerfStart } from "@/lib/reader-open-perf-log";
 
 /** Module scope so tab `JUMP_TO` remounts do not reset — `useRef(0)` would. */
 let readerHubSuccessfulRedirects = 0;
@@ -61,7 +62,9 @@ export default function ReaderIndexScreen() {
       }
 
       void (async () => {
+        const perfHandle = readerPerfStart("reader hub: loadReaderLastPosition (AsyncStorage)");
         const saved = await loadReaderLastPosition();
+        readerPerfEnd(perfHandle);
         if (cancelled) return;
         navigateToResolved(resolveReaderTarget(saved));
       })();

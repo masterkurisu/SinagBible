@@ -162,6 +162,174 @@ session, or Hermes sampling profiler) rather than guessing further from logs:
    only loads `data` for the translation actually being viewed — but worth a
    second pass).
 
+## Recommended phased fix plan for the open items
+
+Ordered by expected impact-per-effort (highest first), with each phase independently
+shippable/revertable. Current-code notes below reflect a re-check of the files as of
+this write-up, so some items are smaller than originally scoped.
+
+### Phase 1 — Get real on-device numbers before doing anything else (Open item #1)
+
+Everything else in this list is a guess without this. Do this first so later phases
+can be justified/prioritized by actual measured cost, not theory.
+
+**Status: instrumentation landed, on-device capture still pending (steps 2-4 below).**
+
+1. ✅ Done — added temporary `performance.now()` markers, gated dev-only and tagged
+   `[reader-perf]` in `console.log`, around:
+   - `loadReaderLastPosition()` call site in `app/(tabs)/reader/index.tsx` (hub redirect).
+   - `resolveReaderBooksForTranslation` and `fetchReaderChapterContent` in
+     `lib/reader-chapter-load.ts`.
+   - `loadTranslationData` (only logs on an actual cache-miss load) and `buildBookNav`
+     in `packages/core/src/bible-translations.ts`.
+
+   New/changed files:
+   - `lib/reader-open-perf-log.ts` (new) — shared `readerPerfStart`/`readerPerfEnd`
+     helpers for the app-side call sites, `__DEV__`-gated.
+   - `packages/core/src/bible-translations.ts` — same pattern inlined locally (this
+     package has no ambient `__DEV__` type, so the guard reads
+     `(globalThis as Record<string, unknown>).__DEV__ === true` instead of the bare
+     identifier).
+   - `app/(tabs)/reader/index.tsx`, `lib/reader-chapter-load.ts` — call the helper
+     around the relevant awaits.
+
+   `./node_modules/.bin/tsc --noEmit -p .` confirmed clean (same pre-existing 3
+   unrelated errors noted in "Verification done" above, no new ones).
+
+2. ⬜ **Next (needs a device/simulator session):** run the app, open the Metro/dev
+   console logs, and capture:
+   - One **cold app launch** → tap into Reader tab → first chapter renders.
+   - One **Metro full reload** (`r` in the CLI, or the in-app dev menu "Reload")
+     while already on the Reader tab.
+   - Do this once for **KJV** (bundled, no network) and once for a **non-KJV**
+     translation (e.g. WEB) to see the cache-miss cost difference.
+   - Prefer a physical device over the simulator — Hermes dev-mode parse cost differs
+     meaningfully from desktop/simulator timing.
+   - Every `[reader-perf]` log line prints `▶ label` on start and `■ label: N.Nms` on
+     completion — just copy the full sequence of lines from each run.
+3. ⬜ Record before/after wall-clock for "tap Reader tab → first chapter content
+   visible" for both KJV and non-KJV, using the captured log timestamps/durations.
+4. ⬜ Once numbers are captured and written up below, delete the temporary
+   instrumentation (`lib/reader-open-perf-log.ts` and its call sites, plus the inline
+   block in `bible-translations.ts`) to keep this out of the shipped dev bundle
+   long-term.
+
+**Exit criteria:** a short table of measured ms for each step above, checked into this
+doc, replacing the "theoretical" caveat in the "Dev vs. production severity" section.
+
+### Phase 2 — Reader hub redirect path (Open item #2)
+
+**Current-code note:** partially already addressed — `app/(tabs)/reader/index.tsx`
+and `lib/reader-last-position.ts` already have a `peekReaderLastPosition()` in-memory
+fast path (`memoryLastPosition`) used on repeat hub visits within the same JS session,
+so this only matters for first hub visit after a cold launch/full reload, when the
+memory cache is empty and `loadReaderLastPosition()` must hit `AsyncStorage.getItem`.
+
+1. Confirm with Phase 1 numbers whether the `AsyncStorage.getItem` call itself is
+   slow, or whether the redirect is actually gated on something else (e.g. waiting on
+   `useFocusEffect` timing, router transition cost).
+2. If `AsyncStorage.getItem` is meaningfully slow: check payload size (should be a
+   tiny JSON object — `bookSlug`, `chapter`, `translationId`) and whether other
+   startup code paths are doing their own AsyncStorage reads concurrently and
+   contending for the same underlying store/lock.
+3. Consider priming `memoryLastPosition` earlier in the app boot sequence (e.g. in the
+   root layout, before the reader tab ever mounts) so the hub's first redirect can use
+   the synchronous `peekReaderLastPosition()` path even on a cold start.
+
+**Exit criteria:** either confirmed not a meaningful contributor (close the item), or
+a measured ms improvement from priming earlier.
+
+### Phase 3 — Confirm no reverse "always loaded for nav" bug in other bundled translations (Open item #7)
+
+Cheapest item to close — pure code reading / verification, no behavior change expected.
+
+1. Re-read `buildBookNav` in `packages/core/src/bible-translations.ts` (current
+   version already only calls `getKjvCanonicalBookNav()` — a static table, no JSON —
+   plus `data.books`, which is whatever translation's data was already loaded by the
+   caller). Confirm no other function in the file calls `loadTranslationData` for a
+   translation other than the one being resolved.
+2. Grep the mobile app (`lib/`, `src/`) for any other call sites that resolve one
+   translation's nav/slugs by loading a *different* translation's JSON (the same
+   anti-pattern as root cause #1, just for WEB/ADB1905/OEB instead of KJV).
+3. Add a short code comment or a lightweight dev-only assertion (e.g. in
+   `loadBundledTranslationData`) if useful to prevent regression.
+
+**Exit criteria:** confirmed clean, or a matching fix filed if the pattern reappears
+elsewhere.
+
+### Phase 4 — Untangle the require cycles Metro warns about (Open item #4)
+
+Do this after Phases 1–3 so you're not chasing a cycle that turns out to be
+performance-irrelevant; this is primarily a correctness/maintainability risk
+(possible `undefined` from a not-yet-initialized cyclic export) rather than a
+confirmed stall cause.
+
+1. `lib/pinned-translations-prefetch.ts → lib/reader-chapter-load.ts →
+   lib/bible-api-service.ts → lib/pinned-translations-prefetch.ts`:
+   - Identify the actual symbol(s) each edge needs from the next module.
+   - Likely fix: extract the shared piece `bible-api-service.ts` and
+     `pinned-translations-prefetch.ts` both need (or that `reader-chapter-load.ts`
+     re-exports) into a small standalone module with no back-edge, e.g. a
+     `reader-prefetch-types.ts` or similar, and have both sides import from that
+     instead of from each other.
+2. `lib/bible-api-service.ts → lib/translation-download.ts → lib/bible-api-service.ts`:
+   - Same approach — find the specific shared function/type causing the back-edge and
+     hoist it to a leaf module.
+3. After breaking each cycle, run `./node_modules/.bin/tsc --noEmit -p .` and start
+   Metro fresh to confirm the "Require cycle:" warnings are gone from the dev server
+   log.
+4. Add a regression guard if the repo has (or can cheaply add) a lint rule / madge-style
+   circular-dependency check in CI, so these don't silently reappear.
+
+**Exit criteria:** zero require-cycle warnings in a fresh Metro start; `tsc` clean.
+
+### Phase 5 — Prefetch impact on perceived responsiveness during startup (Open item #3)
+
+1. With Phase 1 profiling in place, specifically check CPU/network activity from
+   `runPinnedTranslationsPrefetch` (`lib/pinned-translations-prefetch.ts`) during the
+   first few seconds after a cold launch/reload — it fires fire-and-forget chapter
+   prefetches (`prefetchTranslationChaptersForReader` → `primeReaderChapterFetch`) for
+   every pinned non-KJV, non-bundled-featured translation.
+2. If it measurably competes with the JS thread during the stall window (e.g. large
+   `collectPrefetchChapterTargets` fan-out, or synchronous JSON work inside the
+   prefetch chain), consider delaying its kickoff slightly (e.g. until after the first
+   reader chapter has rendered) rather than firing it immediately alongside the hub
+   redirect.
+3. If profiling shows it's already negligible (likely, since it's async/network-bound
+   and skips KJV/bundled-featured translations via `shouldPrefetchTranslation`), close
+   the item with the measurement as evidence.
+
+**Exit criteria:** measured verdict (negligible vs. needs-delay), acted on if needed.
+
+### Phase 6 — Double-check `warmTranslationSearchCache` isn't triggered at startup (Open item #5)
+
+Low-risk verification task, can be folded into Phase 3's profiling pass.
+
+1. Grep all call sites of `warmTranslationSearchCache` (`packages/core/src/bible-translations.ts`,
+   used by `lib/bible-search-service.ts`).
+2. Confirm none are reachable from app-boot / tab-mount code paths (only from actual
+   search-input-triggered actions).
+3. Note the confirmation in this doc; no code change expected unless a bad call site
+   is found.
+
+**Exit criteria:** confirmed list of call sites, all gated behind user-initiated search.
+
+### Phase 7 — App binary size follow-up (Open item #6)
+
+Lowest priority — not a runtime stall, purely a bundle-size/download-size concern.
+Revisit only if app size becomes an actual complaint/metric issue.
+
+1. Measure current bundle contribution of `kjv.json` (~4.5MB source) post-Hermes
+   bytecode compilation (actual shipped size differs from raw JSON size).
+2. If it becomes a priority, evaluate options in order of effort: (a) gzip/brotli
+   compression of the bundled asset if not already applied by the build pipeline, (b)
+   external asset loading (bundle KJV as a static asset file loaded via `fetch`/`FileSystem`
+   instead of inline JS import, trading a small first-read cost for a smaller JS
+   bundle), (c) per-book splitting with lazy per-book loads (bigger refactor, only
+   worth it if (a)/(b) aren't enough).
+
+**Exit criteria:** none required now — revisit trigger is "app size becomes a concern."
+
 ## Relevant files
 
 - `packages/core/src/bible-translations.ts` — `buildBookNav`, `loadTranslationData`,

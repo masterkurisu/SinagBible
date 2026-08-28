@@ -9,6 +9,7 @@ import { getUsfmBookId } from "@sinag-bible/core";
 import type { BibleBookNavItem, BibleChapter } from "@sinag-bible/types";
 import { apiChapterToBibleChapter, fetchChapter as fetchApiChapter, fetchTranslationBookNav } from "@/lib/bible-api-service";
 import { collectPrefetchChapterTargets } from "@/lib/reader-chapter-nav";
+import { readerPerfEnd, readerPerfStart } from "@/lib/reader-open-perf-log";
 import {
   fetchYvpBookNav,
   fetchYvpChapter,
@@ -104,34 +105,41 @@ export async function fetchReaderChapterContent(
   bookSlug: string,
   chapterNumber: number,
 ): Promise<BibleChapter | null> {
-  if (translationId === "KJV") {
-    return getChapterBySlugForTranslation("KJV", bookSlug, chapterNumber);
-  }
+  const perfHandle = readerPerfStart(
+    `fetchReaderChapterContent(${translationId}, ${bookSlug} ${chapterNumber})`,
+  );
+  try {
+    if (translationId === "KJV") {
+      return getChapterBySlugForTranslation("KJV", bookSlug, chapterNumber);
+    }
 
-  const yvpBibleId = parseYvpBibleId(translationId);
-  if (yvpBibleId != null) {
+    const yvpBibleId = parseYvpBibleId(translationId);
+    if (yvpBibleId != null) {
+      try {
+        return await fetchYvpChapter(yvpBibleId, bookSlug, chapterNumber);
+      } catch {
+        return null;
+      }
+    }
+
+    const usfm = getUsfmBookId(bookSlug);
+    if (!usfm) return null;
+
+    const apiId = isTranslationId(translationId)
+      ? getExternalApiId(translationId as TranslationId)
+      : translationId;
+
     try {
-      return await fetchYvpChapter(yvpBibleId, bookSlug, chapterNumber);
+      const apiResult = await fetchApiChapter(apiId, usfm, chapterNumber);
+      return apiChapterToBibleChapter(bookSlug, apiResult);
     } catch {
+      if (isTranslationId(translationId)) {
+        return getChapterBySlugForTranslation(translationId, bookSlug, chapterNumber);
+      }
       return null;
     }
-  }
-
-  const usfm = getUsfmBookId(bookSlug);
-  if (!usfm) return null;
-
-  const apiId = isTranslationId(translationId)
-    ? getExternalApiId(translationId as TranslationId)
-    : translationId;
-
-  try {
-    const apiResult = await fetchApiChapter(apiId, usfm, chapterNumber);
-    return apiChapterToBibleChapter(bookSlug, apiResult);
-  } catch {
-    if (isTranslationId(translationId)) {
-      return getChapterBySlugForTranslation(translationId, bookSlug, chapterNumber);
-    }
-    return null;
+  } finally {
+    readerPerfEnd(perfHandle);
   }
 }
 
@@ -140,20 +148,25 @@ export async function resolveReaderBooksForTranslation(
   cachedBooks: BibleBookNavItem[] | null,
 ): Promise<BibleBookNavItem[]> {
   if (cachedBooks && cachedBooks.length > 0) return cachedBooks;
-  const yvpBibleId = parseYvpBibleId(translationId);
-  if (yvpBibleId != null) {
+  const perfHandle = readerPerfStart(`resolveReaderBooksForTranslation(${translationId})`);
+  try {
+    const yvpBibleId = parseYvpBibleId(translationId);
+    if (yvpBibleId != null) {
+      try {
+        return await fetchYvpBookNav(yvpBibleId);
+      } catch {
+        return getBookNavForTranslation("KJV");
+      }
+    }
+    if (isTranslationId(translationId)) {
+      return getBookNavForTranslation(translationId);
+    }
     try {
-      return await fetchYvpBookNav(yvpBibleId);
+      return await fetchTranslationBookNav(translationId);
     } catch {
       return getBookNavForTranslation("KJV");
     }
-  }
-  if (isTranslationId(translationId)) {
-    return getBookNavForTranslation(translationId);
-  }
-  try {
-    return await fetchTranslationBookNav(translationId);
-  } catch {
-    return getBookNavForTranslation("KJV");
+  } finally {
+    readerPerfEnd(perfHandle);
   }
 }
