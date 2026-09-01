@@ -1,4 +1,4 @@
-import { useState, type RefObject } from "react";
+import { useState, type ReactNode, type RefObject } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from "react-native";
 import { useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
@@ -33,6 +33,9 @@ export type M3OutlinedTextFieldProps = {
   style?: ViewStyle;
   inputRef?: RefObject<TextInput | null>;
   error?: boolean;
+  /** When set, replaces the default TextInput. Parent drives focus chrome via fieldFocused. */
+  children?: ReactNode;
+  fieldFocused?: boolean;
 } & Pick<
   TextInputProps,
   | "accessibilityLabel"
@@ -72,12 +75,15 @@ export function M3OutlinedTextField({
   onKeyPress,
   inputRef,
   error = false,
+  children,
+  fieldFocused,
 }: M3OutlinedTextFieldProps) {
   const sheetChrome = useReaderSheetChrome();
   const [focused, setFocused] = useState(false);
-  const floated = focused || value.length > 0;
-  const borderColor = error ? READER_M3_ERROR : focused ? accentColor : OUTLINE_STROKE_COLOR;
-  const labelColor = error ? READER_M3_ERROR : focused ? accentColor : sheetChrome.onSurfaceVariant;
+  const activeFocus = fieldFocused ?? focused;
+  const floated = activeFocus || value.length > 0;
+  const borderColor = error ? READER_M3_ERROR : activeFocus ? accentColor : OUTLINE_STROKE_COLOR;
+  const labelColor = error ? READER_M3_ERROR : activeFocus ? accentColor : sheetChrome.onSurfaceVariant;
   const fieldMinHeight = minHeight * scale;
   const borderRadius = roundedEnds ? fieldMinHeight / 2 : 4 * scale;
   const placeholderText = placeholder ?? (floated ? undefined : label);
@@ -125,40 +131,42 @@ export function M3OutlinedTextField({
           </View>
         ) : null}
 
-        <TextInput
-          ref={inputRef}
-          multiline={multiline}
-          value={value}
-          onChangeText={onChangeText}
-          onSelectionChange={onSelectionChange}
-          selection={selection}
-          placeholder={placeholderText}
-          placeholderTextColor={sheetChrome.onSurfaceVariant}
-          textAlignVertical={multiline ? "top" : "center"}
-          accessibilityLabel={accessibilityLabel ?? label}
-          returnKeyType={returnKeyType}
-          onSubmitEditing={onSubmitEditing}
-          blurOnSubmit={blurOnSubmit}
-          onFocus={(e) => {
-            setFocused(true);
-            onFocus?.(e);
-          }}
-          onBlur={(e) => {
-            setFocused(false);
-            onBlur?.(e);
-          }}
-          onKeyPress={onKeyPress}
-          style={{
-            minHeight: multiline ? (fieldMinHeight - 28 * scale) : undefined,
-            maxHeight: multiline && maxHeight != null ? maxHeight * scale - 28 * scale : undefined,
-            padding: 0,
-            margin: 0,
-            fontFamily: inputFontFamily,
-            fontSize: READER_M3_BODY_FONT_PX * scale,
-            lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale,
-            color: sheetChrome.onSurface,
-          }}
-        />
+        {children ?? (
+          <TextInput
+            ref={inputRef}
+            multiline={multiline}
+            value={value}
+            onChangeText={onChangeText}
+            onSelectionChange={onSelectionChange}
+            selection={selection}
+            placeholder={placeholderText}
+            placeholderTextColor={sheetChrome.onSurfaceVariant}
+            textAlignVertical={multiline ? "top" : "center"}
+            accessibilityLabel={accessibilityLabel ?? label}
+            returnKeyType={returnKeyType}
+            onSubmitEditing={onSubmitEditing}
+            blurOnSubmit={blurOnSubmit}
+            onFocus={(e) => {
+              setFocused(true);
+              onFocus?.(e);
+            }}
+            onBlur={(e) => {
+              setFocused(false);
+              onBlur?.(e);
+            }}
+            onKeyPress={onKeyPress}
+            style={{
+              minHeight: multiline ? (fieldMinHeight - 28 * scale) : undefined,
+              maxHeight: multiline && maxHeight != null ? maxHeight * scale - 28 * scale : undefined,
+              padding: 0,
+              margin: 0,
+              fontFamily: inputFontFamily,
+              fontSize: READER_M3_BODY_FONT_PX * scale,
+              lineHeight: READER_M3_BODY_LINE_HEIGHT_PX * scale,
+              color: sheetChrome.onSurface,
+            }}
+          />
+        )}
       </View>
     </View>
   );

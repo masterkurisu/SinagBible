@@ -12,7 +12,6 @@ import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { DismissibleDialog } from "@/src/components/m3/DismissibleDialog";
 import { hapticLightImpact } from "@/lib/haptics";
 import { M3Button } from "@/src/components/m3/M3Button";
-import { M3OutlinedTextField } from "@/src/components/m3/M3OutlinedTextField";
 import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
 import {
   M3_EMPHASIZED_DECELERATE_EASING,
@@ -20,6 +19,7 @@ import {
 } from "@/src/components/m3/m3-motion";
 import { READER_M3_BOTTOM_SHEET_RADIUS_PX, READER_OVERLAY_CONTENT_SCALE } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useVerseTagMention } from "@/src/features/verse-tags/useVerseTagMention";
+import { VerseChipInput } from "@/src/features/verse-tags/VerseChipInput";
 import { VerseTagComposerOverlay } from "@/src/features/verse-tags/VerseTagComposerOverlay";
 
 export type ReaderVerseNoteDialogProps = {
@@ -64,7 +64,7 @@ export function ReaderVerseNoteDialog({
     selection,
     inputRef,
     handleChangeText,
-    handleSelectionChange,
+    handleCursorChange,
     handleKeyPress,
     handleBlur,
     confirmSuggestion,
@@ -184,11 +184,11 @@ export function ReaderVerseNoteDialog({
               style={{ marginBottom: 16 * scale }}
             />
 
-            <M3OutlinedTextField
+            <VerseChipInput
               label="Note"
               value={noteDraft}
               onChangeText={handleChangeText}
-              onSelectionChange={handleSelectionChange}
+              onCursorChange={handleCursorChange}
               onKeyPress={handleKeyPress}
               onBlur={handleBlur}
               selection={selection}
@@ -196,11 +196,12 @@ export function ReaderVerseNoteDialog({
               surfaceColor={surfaceColor}
               accentColor={actionAccent}
               scale={scale}
-              multiline
               minHeight={120}
               maxHeight={160}
               error={mentionError != null}
-              blurOnSubmit={false}
+              mentionError={mentionError}
+              bundle={bundle}
+              translationId={contextTranslationId}
             />
 
             {mentionOpen ? (

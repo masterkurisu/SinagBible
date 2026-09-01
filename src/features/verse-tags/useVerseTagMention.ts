@@ -40,8 +40,9 @@ export type UseVerseTagMentionResult = {
   sheetOpen: boolean;
   selection: { start: number; end: number };
   inputRef: React.RefObject<TextInput | null>;
-  handleChangeText: (next: string) => void;
+  handleChangeText: (next: string, cursorIndex?: number) => void;
   handleSelectionChange: (event: TextInputSelectionChangeEvent) => void;
+  handleCursorChange: (selection: { start: number; end: number }) => void;
   handleKeyPress: (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => void;
   handleBlur: () => void;
   insertTag: (ref: VerseTagRef) => void;
@@ -176,8 +177,9 @@ export function useVerseTagMention({
   );
 
   const handleChangeText = useCallback(
-    (next: string) => {
-      const cursor = nextCursorAfterEdit(textRef.current, next, selectionRef.current);
+    (next: string, cursorIndex?: number) => {
+      const cursor =
+        cursorIndex ?? nextCursorAfterEdit(textRef.current, next, selectionRef.current);
       textRef.current = next;
       const result = composerRef.current.push({ type: "change", text: next, cursorIndex: cursor });
       if (result.commit) {
@@ -186,15 +188,18 @@ export function useVerseTagMention({
         return;
       }
       onChangeText(next);
+      if (cursorIndex != null) {
+        selectionRef.current = { start: cursorIndex, end: cursorIndex };
+        setSelection(selectionRef.current);
+      }
       applyResult(result);
       maybePrefetch(result);
     },
     [applyResult, applyText, maybePrefetch, onChangeText],
   );
 
-  const handleSelectionChange = useCallback(
-    (event: TextInputSelectionChangeEvent) => {
-      const next = event.nativeEvent.selection;
+  const handleCursorChange = useCallback(
+    (next: { start: number; end: number }) => {
       selectionRef.current = next;
       setSelection(next);
       const result = composerRef.current.push({
@@ -209,6 +214,13 @@ export function useVerseTagMention({
       maybePrefetch(result);
     },
     [applyResult, applyText, maybePrefetch],
+  );
+
+  const handleSelectionChange = useCallback(
+    (event: TextInputSelectionChangeEvent) => {
+      handleCursorChange(event.nativeEvent.selection);
+    },
+    [handleCursorChange],
   );
 
   const closeOverlay = useCallback(() => {
@@ -390,6 +402,7 @@ export function useVerseTagMention({
       inputRef,
       handleChangeText,
       handleSelectionChange,
+      handleCursorChange,
       handleKeyPress,
       handleBlur,
       insertTag,
@@ -405,6 +418,7 @@ export function useVerseTagMention({
       beginSuggestionPick,
       handleBlur,
       handleChangeText,
+      handleCursorChange,
       handleKeyPress,
       handleSelectionChange,
       insertTag,

@@ -26,6 +26,7 @@ export {
 export { VerseTagMentionSheet } from "./VerseTagMentionSheet";
 export { VerseTagComposerOverlay } from "./VerseTagComposerOverlay";
 export { VerseTagPreviewTooltip } from "./VerseTagPreviewTooltip";
+export { VerseChipInput } from "./VerseChipInput";
 export { VerseTaggedText } from "./VerseTaggedText";
 export { computeVerseTagTooltipPosition } from "./verseTagTooltipLayout";
 export type { VerseTagTooltipPlacement, VerseTagTooltipPosition } from "./verseTagTooltipLayout";
