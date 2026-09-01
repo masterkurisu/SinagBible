@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated,
-  Easing,
-  ScrollView,
   Text,
   TouchableOpacity,
   View,
@@ -10,9 +7,7 @@ import {
   ActivityIndicator,
   Platform,
   useWindowDimensions,
-  Linking,
 } from "react-native";
-import { Image } from "expo-image";
 import * as FileSystem from "expo-file-system";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -22,7 +17,8 @@ import { useLocalSearchParams, Stack, useRouter, usePathname, useNavigation } fr
 import { useFocusEffect } from "expo-router/react-navigation";
 import { formatBookLabel } from "@sinag-bible/core";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
-import { UpCircleIcon } from "@/components/icons/UpCircleIcon";
+import { JournalDetailAndroidAppBar } from "@/src/features/journal/JournalDetailAndroidAppBar";
+import { JournalEntryScrollView } from "@/src/features/journal/JournalEntryScrollView";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -48,19 +44,12 @@ import {
   resolveJournalPassageBookSlug,
 } from "@/lib/journal-verse-preview";
 import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
-import { formatJournalTagLabel } from "@/lib/journal-tags";
 import { useTranslationPicker } from "@/lib/use-translation-picker";
 import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboardingLayer";
 import { useJournalDetailOnboarding } from "@/src/features/journal/useJournalDetailOnboarding";
 import type { JournalDetailOnboardingStepId } from "@/src/features/journal/journalDetailOnboardingSteps";
-import { JournalDetailAndroidAppBar } from "@/src/features/journal/JournalDetailAndroidAppBar";
 import { ReaderM3IconButton } from "@/src/features/reader/ReaderM3IconButton";
 import { READER_M3_APP_BAR_CONTENT_HEIGHT_PX } from "@/src/features/reader/readerSettingsPanelChrome";
-
-const JOURNAL_TITLE_BOTTOM_MARGIN_PX = 10;
-const JOURNAL_DATE_BOTTOM_MARGIN_PX = 10;
-const JOURNAL_PASSAGE_LABEL_BOTTOM_MARGIN_PX = 5;
-const JOURNAL_PASSAGE_REF_BOTTOM_MARGIN_PX = 5;
 
 function formatDate(iso: string): string {
   const parsed = new Date(iso);
@@ -92,16 +81,6 @@ function passageLineForDisplay(entry: PassageLineEntry): { refBold: string } | n
   }
   const tail = ve && ve > vs ? `:${vs}-${ve}` : `:${vs}`;
   return { refBold: `${label} ${ch}${tail}` };
-}
-
-function decodeHtmlEntities(input: string): string {
-  return input
-    .replace(/&nbsp;/g, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
 }
 
 function escapeHtmlAttributeSafeText(text: string): string {
@@ -190,291 +169,6 @@ ${passageSection}
 </html>`;
 }
 
-/**
- * contentEditable / WebView often uses `<span style="font-style: italic">` (and bold via
- * font-weight) instead of `<em>` / `<strong>`. We strip spans later for plain text, so convert
- * these first or italic/bold is lost on the journal detail screen. Patterns allow oblique and
- * flexible spaces around `:` (iOS/Android WebViews differ).
- */
-const SPAN_FONT_ITALIC = String.raw`font-style\s*:\s*(?:italic|oblique)`;
-const SPAN_FONT_BOLD = String.raw`font-weight\s*:\s*(?:bold|700|bolder|[6-9]00)`;
-
-function normalizeStyleSpansForInline(html: string): string {
-  let s = html;
-  for (let n = 0; n < 20; n++) {
-    const prev = s;
-    s = s
-      .replace(
-        new RegExp(
-          `<span\\b[^>]*\\b${SPAN_FONT_ITALIC}[^>]*\\b${SPAN_FONT_BOLD}[^>]*>([\\s\\S]*?)<\\/span>`,
-          "gi",
-        ),
-        "<strong><em>$1</em></strong>",
-      )
-      .replace(
-        new RegExp(
-          `<span\\b[^>]*\\b${SPAN_FONT_BOLD}[^>]*\\b${SPAN_FONT_ITALIC}[^>]*>([\\s\\S]*?)<\\/span>`,
-          "gi",
-        ),
-        "<strong><em>$1</em></strong>",
-      )
-      .replace(
-        new RegExp(`<span\\b[^>]*\\b${SPAN_FONT_BOLD}[^>]*>([\\s\\S]*?)<\\/span>`, "gi"),
-        "<strong>$1</strong>",
-      )
-      .replace(
-        new RegExp(`<span\\b[^>]*\\b${SPAN_FONT_ITALIC}[^>]*>([\\s\\S]*?)<\\/span>`, "gi"),
-        "<em>$1</em>",
-      );
-    if (s === prev) break;
-  }
-  return s;
-}
-
-function renderInlineHtml(input: string, linkColor = "#8B7E6A"): React.ReactNode[] {
-  const nodes: React.ReactNode[] = [];
-  const styleStack: Array<"strong" | "em"> = [];
-  const hrefStack: string[] = [];
-  const normalized = normalizeStyleSpansForInline(input)
-    .replace(/<(\/?)b(\s[^>]*)?>/gi, "<$1strong$2>")
-    .replace(/<(\/?)i(\s[^>]*)?>/gi, "<$1em$2>");
-  const tokenRegex =
-    /<a\s+href=(["'])([^"']*)\1[^>]*>|<\/a>|<\/?strong(?:\s[^>]*)?>|<\/?em(?:\s[^>]*)?>|<br\s*\/?>/gi;
-  let last = 0;
-  let part = 0;
-
-  const pushText = (text: string) => {
-    if (!text) return;
-    const hasStrong = styleStack.includes("strong");
-    const hasEm = styleStack.includes("em");
-    let fontFamily = "Lora_400Regular";
-    if (hasStrong && hasEm) fontFamily = "Lora_700Bold_Italic";
-    else if (hasStrong) fontFamily = "Lora_700Bold";
-    else if (hasEm) fontFamily = "Lora_400Regular_Italic";
-    const href = hrefStack[hrefStack.length - 1];
-    nodes.push(
-      <Text
-        key={`t-${part++}`}
-        style={
-          href
-            ? { fontFamily, color: linkColor, textDecorationLine: "underline" as const }
-            : { fontFamily }
-        }
-        {...(href
-          ? {
-              suppressHighlighting: true,
-              onPress: () => {
-                void Linking.openURL(href).catch(() => {});
-              },
-            }
-          : null)}
-      >
-        {decodeHtmlEntities(text)}
-      </Text>,
-    );
-  };
-
-  for (const match of normalized.matchAll(tokenRegex)) {
-    const idx = match.index ?? 0;
-    const raw = normalized
-      .slice(last, idx)
-      .replace(/<\/?(?:p|div|span|font|u)\b[^>]*>/gi, "");
-    pushText(raw);
-    const tok = match[0] ?? "";
-    if (/^<a\b/i.test(tok)) {
-      hrefStack.push(decodeHtmlEntities(match[2] ?? ""));
-    } else if (/^<\/a>/i.test(tok)) {
-      hrefStack.pop();
-    } else if (/^<strong\b/i.test(tok)) styleStack.push("strong");
-    else if (/^<\/strong\b/i.test(tok)) {
-      const i = styleStack.lastIndexOf("strong");
-      if (i >= 0) styleStack.splice(i, 1);
-    } else if (/^<em\b/i.test(tok)) styleStack.push("em");
-    else if (/^<\/em\b/i.test(tok)) {
-      const i = styleStack.lastIndexOf("em");
-      if (i >= 0) styleStack.splice(i, 1);
-    } else {
-      nodes.push(
-        <Text key={`br-${part++}`}>
-          {"\n"}
-        </Text>,
-      );
-    }
-    last = idx + (match[0]?.length ?? 0);
-  }
-
-  pushText(normalized.slice(last).replace(/<\/?(?:p|div|span|font|u)\b[^>]*>/gi, ""));
-  return nodes;
-}
-
-function renderSavedReflection(
-  contentHtml: string | null | undefined,
-  bodyColor: string,
-  linkColor = "#8B7E6A",
-): React.ReactNode[] {
-  const html = typeof contentHtml === "string" ? contentHtml : "";
-  const blocks = html.match(/<(p|div|ul|ol|h1|h2)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
-  if (blocks.length === 0 && html.trim()) {
-    const forInline = html
-      .replace(/<\/?p\b[^>]*>/gi, "\n")
-      .replace(/<\/?div\b[^>]*>/gi, "\n")
-      .trim();
-    return [
-      <Text
-        key="fallback"
-        className="text-[17px] leading-8 mb-2"
-        style={{ fontFamily: "Lora_400Regular", color: bodyColor }}
-      >
-        {renderInlineHtml(forInline, linkColor)}
-      </Text>,
-    ];
-  }
-
-  const nodes: React.ReactNode[] = [];
-  const normalizeListItemBody = (html: string) =>
-    html
-      .replace(/<\/?(?:p|div)\b[^>]*>/gi, "")
-      .replace(/^(?:\s|<br\s*\/?>)+/gi, "")
-      .replace(/(?:\s|<br\s*\/?>)+$/gi, "");
-
-  const appendListNodes = (listBlock: string, keyPrefix: string) => {
-    const ordered = /^<ol\b/i.test(listBlock);
-    const checklist = /^<ul\b[^>]*\bdata-checklist=["']true["']/i.test(listBlock);
-    const listItems = Array.from(listBlock.matchAll(/<li([^>]*)>([\s\S]*?)<\/li>/gi));
-    listItems.forEach((li, j) => {
-      const attrs = li[1] ?? "";
-      const checked = checklist && /data-checked=["']true["']/i.test(attrs);
-      // Checklist glyphs (\u2610/\u2611) are embedded directly in the saved HTML text, so no marker here.
-      const marker = checklist ? "" : ordered ? `${j + 1}. ` : "\u2022 ";
-      const body = normalizeListItemBody(li[2] ?? "");
-      nodes.push(
-        <Text
-          key={`${keyPrefix}-${j}`}
-          className="text-[17px] leading-8"
-          style={{
-            fontFamily: "Lora_400Regular",
-            marginBottom: j < listItems.length - 1 ? 4 : 0,
-            color: bodyColor,
-            opacity: checked ? 0.6 : 1,
-            textDecorationLine: checked ? "line-through" : "none",
-          }}
-        >
-          {marker}
-          {renderInlineHtml(body, linkColor)}
-        </Text>,
-      );
-    });
-  };
-
-  blocks.forEach((block, i) => {
-    if (/^<h1\b/i.test(block)) {
-      const body = block.replace(/^<h1[^>]*>/i, "").replace(/<\/h1>$/i, "");
-      const plain = decodeHtmlEntities(body.replace(/<[^>]*>/g, "").trim());
-      if (!plain) return;
-      nodes.push(
-        <Text
-          key={`h1-${i}`}
-          style={{
-            fontFamily: "Lora_400Regular",
-            fontSize: 26,
-            lineHeight: 32,
-            marginTop: i === 0 ? 0 : 10,
-            marginBottom: 6,
-            color: bodyColor,
-          }}
-        >
-          {renderInlineHtml(body, linkColor)}
-        </Text>,
-      );
-      return;
-    }
-    if (/^<h2\b/i.test(block)) {
-      const body = block.replace(/^<h2[^>]*>/i, "").replace(/<\/h2>$/i, "");
-      const plain = decodeHtmlEntities(body.replace(/<[^>]*>/g, "").trim());
-      if (!plain) return;
-      nodes.push(
-        <Text
-          key={`h2-${i}`}
-          style={{
-            fontFamily: "Lora_700Bold",
-            fontSize: 20,
-            lineHeight: 27,
-            marginTop: i === 0 ? 0 : 8,
-            marginBottom: 4,
-            color: bodyColor,
-          }}
-        >
-          {renderInlineHtml(body, linkColor)}
-        </Text>,
-      );
-      return;
-    }
-    if (/^<(?:p|div)\b/i.test(block)) {
-      const imgMatch = /<img\b[^>]*src="([^"]+)"[^>]*>/i.exec(block);
-      if (imgMatch?.[1]) {
-        nodes.push(
-          <Image
-            key={`img-${i}`}
-            source={{ uri: decodeHtmlEntities(imgMatch[1]) }}
-            placeholder="L6PZfSi_.AyE_3t7t7R**0o#DgR4"
-            style={{
-              width: "100%",
-              height: 220,
-              borderRadius: 14,
-              backgroundColor: "rgba(255,255,255,0.35)",
-              marginBottom: 12,
-            }}
-            contentFit="contain"
-          />,
-        );
-        const bodyAfterImg = block
-          .replace(/^<(?:p|div)[^>]*>/i, "")
-          .replace(/<\/(?:p|div)>$/i, "")
-          .replace(/<img\b[^>]*>/gi, "")
-          .replace(/&nbsp;/gi, " ");
-        const plainAfterImg = decodeHtmlEntities(bodyAfterImg.replace(/<[^>]*>/g, "").trim());
-        if (plainAfterImg) {
-          nodes.push(
-            <Text
-              key={`p-after-img-${i}`}
-              className="text-[17px] leading-8 mb-2"
-              style={{ fontFamily: "Lora_400Regular", color: bodyColor }}
-            >
-              {renderInlineHtml(bodyAfterImg, linkColor)}
-            </Text>,
-          );
-        }
-        return;
-      }
-      const body = block
-        .replace(/^<(?:p|div)[^>]*>/i, "")
-        .replace(/<\/(?:p|div)>$/i, "")
-        .replace(/&nbsp;/gi, " ");
-      const nestedLists = body.match(/<(ul|ol)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
-      if (nestedLists.length > 0) {
-        nestedLists.forEach((listBlock, listIndex) => {
-          appendListNodes(listBlock, `li-${i}-${listIndex}`);
-        });
-        return;
-      }
-      const plainBody = decodeHtmlEntities(body.replace(/<[^>]*>/g, "").trim());
-      if (!plainBody) return;
-      nodes.push(
-        <Text
-          key={`p-${i}`}
-          className="text-[17px] leading-8 mb-2"
-          style={{ fontFamily: "Lora_400Regular", color: bodyColor }}
-        >
-          {renderInlineHtml(body, linkColor)}
-        </Text>,
-      );
-      return;
-    }
-
-    appendListNodes(block, `li-${i}`);
-  });
-  return nodes;
-}
 
 export default function JournalEntryScreen() {
   const router = useRouter();
@@ -506,8 +200,8 @@ export default function JournalEntryScreen() {
     (Array.isArray(noStackAnimationParam) && noStackAnimationParam[0] === "1");
   const enteredWithoutStackAnimation = noStackAnimation || bridgedEntryOnMount.current != null;
 
-  const scrollRef = useRef<ScrollView>(null);
   const shareCaptureRef = useRef<View>(null);
+  const captureReadyResolveRef = useRef<(() => void) | null>(null);
   const shareActionRef = useRef<View>(null);
   const saveActionRef = useRef<View>(null);
   const pdfActionRef = useRef<View>(null);
@@ -520,10 +214,8 @@ export default function JournalEntryScreen() {
     }),
     [],
   );
-  const [showScrollToTop, setShowScrollToTop] = useState(false);
   const [exportAction, setExportAction] = useState<null | "share" | "save" | "pdf">(null);
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const translateAnim = useRef(new Animated.Value(6)).current;
+  const [capturePass, setCapturePass] = useState(false);
 
   const [entry, setEntry] = useState<MobileJournalListItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -629,51 +321,6 @@ export default function JournalEntryScreen() {
     };
   }, [entry]);
 
-  const showHideThresholds = useMemo(
-    () => ({
-      showDistancePx: 30,
-      hideDistancePx: 55,
-    }),
-    [],
-  );
-
-  const handleScroll = (e: {
-    nativeEvent: {
-      contentOffset: { y: number };
-      layoutMeasurement: { height: number };
-      contentSize: { height: number };
-    };
-  }) => {
-    const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
-    const bottomDistance = contentSize.height - (contentOffset.y + layoutMeasurement.height);
-
-    setShowScrollToTop((prev) => {
-      const canScroll = contentSize.height > layoutMeasurement.height + 10;
-      if (!canScroll) return false;
-      if (prev) {
-        return bottomDistance <= showHideThresholds.hideDistancePx;
-      }
-      return bottomDistance <= showHideThresholds.showDistancePx;
-    });
-  };
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacityAnim, {
-        toValue: showScrollToTop ? 1 : 0,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateAnim, {
-        toValue: showScrollToTop ? 0 : 6,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [opacityAnim, translateAnim, showScrollToTop]);
-
   const passageLine = useMemo(() => {
     if (!entry || !entry.book || entry.chapter < 1) return null;
     return passageLineForDisplay({
@@ -683,30 +330,6 @@ export default function JournalEntryScreen() {
       verse_end: entry.verse_end,
     });
   }, [entry]);
-
-  const renderedBody = useMemo(() => {
-    if (!entry) return null;
-    try {
-      return renderSavedReflection(entry.content, colors.brown800, colors.gold);
-    } catch (e) {
-      if (__DEV__) {
-        console.error(e);
-      }
-      return [
-        <Text
-          key="reflection-fallback"
-          className="text-[17px] leading-8 mb-2"
-          style={{ fontFamily: "Lora_400Regular", color: colors.brown800 }}
-        >
-          {decodeHtmlEntities(
-            typeof entry.content === "string"
-              ? entry.content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
-              : "",
-          )}
-        </Text>,
-      ];
-    }
-  }, [colors.brown800, colors.gold, entry]);
 
   const confirmDelete = () => {
     if (!entry || !id) return;
@@ -737,11 +360,26 @@ export default function JournalEntryScreen() {
     }
   };
 
+  const onCaptureTreeReady = useCallback(() => {
+    captureReadyResolveRef.current?.();
+    captureReadyResolveRef.current = null;
+  }, []);
+
   const captureEntryPngUri = useCallback(async (): Promise<string | null> => {
+    const ready = new Promise<void>((resolve) => {
+      captureReadyResolveRef.current = resolve;
+    });
+    setCapturePass(true);
+    const timeout = setTimeout(() => {
+      captureReadyResolveRef.current?.();
+      captureReadyResolveRef.current = null;
+    }, 500);
+    await ready;
+    clearTimeout(timeout);
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
     const node = shareCaptureRef.current;
-    if (!node) return null;
     try {
+      if (!node) return null;
       return await captureRef(node, {
         format: "png",
         quality: 1,
@@ -752,6 +390,8 @@ export default function JournalEntryScreen() {
         console.error(e);
       }
       return null;
+    } finally {
+      setCapturePass(false);
     }
   }, []);
 
@@ -1114,136 +754,27 @@ export default function JournalEntryScreen() {
           </View>
         ) : (
           <>
-            <ScrollView
-              ref={scrollRef}
-              className="flex-1"
-              style={{ backgroundColor: j.listPageBackground }}
-              contentContainerClassName="pb-36 pt-[4px]"
-              scrollEventThrottle={16}
-              onScroll={handleScroll}
-            >
-              <View
-                ref={shareCaptureRef}
-                collapsable={false}
-                className="px-5"
-                style={{
-                  paddingTop: 20,
-                  paddingBottom: 20,
-                  marginBottom: 4,
-                  backgroundColor: j.listPageBackground,
-                }}
-              >
-                {entry.title?.trim() ? (
-                  <Text
-                    style={{
-                      fontFamily: "Lora_400Regular",
-                      marginBottom: JOURNAL_TITLE_BOTTOM_MARGIN_PX,
-                      fontSize: 36,
-                      lineHeight: 42,
-                      color: colors.brown800,
-                    }}
-                  >
-                    {entry.title.trim()}
-                  </Text>
-                ) : null}
-                <Text
-                  style={{
-                    fontFamily: "Inter_400Regular",
-                    marginBottom: JOURNAL_DATE_BOTTOM_MARGIN_PX,
-                    fontSize: 14,
-                    color: colors.tan200,
-                  }}
-                >
-                  {formatDate(entry.created_at)}
-                </Text>
-                {entry.tags && entry.tags.length > 0 ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      flexWrap: "wrap",
-                      gap: 8,
-                      marginBottom: 16,
-                    }}
-                  >
-                    {entry.tags.map((tag) => (
-                      <View
-                        key={tag}
-                        style={{
-                          borderWidth: 1,
-                          borderColor: colors.tan200,
-                          borderRadius: 8,
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontFamily: "Inter_500Medium",
-                            fontSize: 12,
-                            color: colors.tan200,
-                          }}
-                        >
-                          {formatJournalTagLabel(tag)}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-
-                {passageLine || verseText ? (
-                  <>
-                    <Text
-                      className="text-xs tracking-[2px] uppercase"
-                      style={{
-                        fontFamily: "Inter_400Regular",
-                        marginBottom: JOURNAL_PASSAGE_LABEL_BOTTOM_MARGIN_PX,
-                        color: colors.gold,
-                      }}
-                    >
-                      Passage
-                    </Text>
-                    {passageLine ? (
-                      <Text
-                        style={{
-                          fontFamily: "Lora_400Regular",
-                          fontWeight: "500",
-                          marginBottom: JOURNAL_PASSAGE_REF_BOTTOM_MARGIN_PX,
-                          fontSize: 17,
-                          lineHeight: 28,
-                          color: colors.brown800,
-                        }}
-                      >
-                        <Text style={{ fontFamily: "Lora_700Bold" }}>{passageLine.refBold}</Text>
-                        {entry.bible_translation?.trim()
-                          ? ` (${bibleTranslationDisplay})`
-                          : ""}
-                      </Text>
-                    ) : null}
-                    {verseText ? (
-                      <Text
-                        style={{
-                          fontFamily: "Lora_400Regular_Italic",
-                          fontSize: 16,
-                          lineHeight: 24,
-                          marginBottom: 32,
-                          color: colors.brown800,
-                        }}
-                      >
-                        {verseText}
-                      </Text>
-                    ) : null}
-                  </>
-                ) : null}
-
-                <Text
-                  className="text-xs tracking-[2px] uppercase mb-2"
-                  style={{ fontFamily: "Inter_400Regular", color: colors.gold }}
-                >
-                  Reflection
-                </Text>
-                {renderedBody}
-              </View>
-            </ScrollView>
+            <JournalEntryScrollView
+              key={id}
+              title={entry.title?.trim() ?? ""}
+              dateLine={formatDate(entry.created_at)}
+              tags={entry.tags}
+              passageLine={passageLine}
+              bibleTranslationDisplay={bibleTranslationDisplay}
+              hasBibleTranslation={Boolean(entry.bible_translation?.trim())}
+              verseText={verseText}
+              reserveVerseSlot={passageLine != null}
+              contentHtml={entry.content}
+              capturePass={capturePass}
+              shareCaptureRef={shareCaptureRef}
+              onCaptureTreeReady={onCaptureTreeReady}
+              colors={{
+                brown800: colors.brown800,
+                gold: colors.gold,
+                tan200: colors.tan200,
+              }}
+              pageBackgroundColor={j.listPageBackground}
+            />
 
             <View
               pointerEvents="box-none"
@@ -1319,36 +850,6 @@ export default function JournalEntryScreen() {
                 </TouchableOpacity>
               </View>
             ) : null}
-
-            <Animated.View
-              pointerEvents={showScrollToTop ? "auto" : "none"}
-              style={{
-                position: "absolute",
-                bottom: 92,
-                right: 24,
-                zIndex: 10,
-                opacity: opacityAnim,
-                transform: [{ translateY: translateAnim }],
-              }}
-            >
-              <TouchableOpacity
-                accessibilityRole="button"
-                onPress={() => {
-                  scrollRef.current?.scrollTo({ y: 0, animated: false });
-                  setShowScrollToTop(false);
-                }}
-                activeOpacity={0.85}
-                style={{
-                  width: 44,
-                  height: 44,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 999,
-                }}
-              >
-                <UpCircleIcon size={29} color={colors.brown800} />
-              </TouchableOpacity>
-            </Animated.View>
           </>
         )}
       </View>
