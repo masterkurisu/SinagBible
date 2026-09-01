@@ -1278,8 +1278,7 @@ export default function ReaderChapterScreen() {
   });
 
   const {
-    opacityAnim: chapterNavArrowsOpacityAnim,
-    scaleAnim: chapterNavArrowsScaleAnim,
+    opacitySV: chapterNavArrowsOpacitySV,
     pointerEventsEnabled: chapterNavArrowsPointerEventsEnabled,
     onScrollBeginDrag: onChapterNavArrowsScrollBeginDrag,
     onScrollEndDrag: onChapterNavArrowsScrollEndDrag,
@@ -1293,8 +1292,7 @@ export default function ReaderChapterScreen() {
   );
 
   const {
-    opacityAnim: scrollToTopFabOpacityAnim,
-    scaleAnim: scrollToTopFabScaleAnim,
+    opacitySV: scrollToTopFabOpacitySV,
     pointerEventsEnabled: scrollToTopFabPointerEventsEnabled,
     onScrollBeginDrag: onScrollToTopFabScrollBeginDrag,
     onScrollEndDrag: onScrollToTopFabScrollEndDrag,
@@ -1821,8 +1819,7 @@ export default function ReaderChapterScreen() {
       </Animated.View>
 
       <ReaderChapterNavArrows
-        opacityAnim={chapterNavArrowsOpacityAnim}
-        scaleAnim={chapterNavArrowsScaleAnim}
+        opacitySV={chapterNavArrowsOpacitySV}
         pointerEventsEnabled={
           chapterNavArrowsPointerEventsEnabled || readerFeatureOnboarding.forceChapterNavArrowsVisible
         }
@@ -1835,8 +1832,7 @@ export default function ReaderChapterScreen() {
       />
 
       <ReaderScrollToTopFab
-        opacityAnim={scrollToTopFabOpacityAnim}
-        scaleAnim={scrollToTopFabScaleAnim}
+        opacitySV={scrollToTopFabOpacitySV}
         pointerEventsEnabled={scrollToTopFabPointerEventsEnabled}
         onPress={scrollReaderToTop}
         onPressIn={onScrollToTopFabPressIn}

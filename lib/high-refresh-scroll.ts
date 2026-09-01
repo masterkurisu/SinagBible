@@ -1,5 +1,6 @@
 import { ScrollView } from "react-native";
 import Animated, {
+  cancelAnimation,
   runOnJS,
   useAnimatedScrollHandler,
   useSharedValue,
@@ -85,9 +86,10 @@ export function useHighRefreshScrollHandler({
 export function animateM3ScrollChromeVisibility(
   opacity: SharedValue<number>,
   visible: boolean,
+  visibleOpacity = 1,
 ): void {
   const reduced = isM3ReducedMotion();
-  opacity.value = withTiming(visible ? 1 : 0, {
+  opacity.value = withTiming(visible ? visibleOpacity : 0, {
     duration: reduced
       ? M3_REDUCED_MOTION_CROSSFADE_MS
       : visible
@@ -95,4 +97,10 @@ export function animateM3ScrollChromeVisibility(
         : M3_MOTION_DURATION_SHORT3_MS,
     easing: visible ? M3_EMPHASIZED_DECELERATE_REANIMATED : M3_EMPHASIZED_ACCELERATE_REANIMATED,
   });
+}
+
+/** Immediate opacity write after cancel — used when chrome must stay put (press, already visible). */
+export function snapM3ScrollChromeOpacity(opacity: SharedValue<number>, value: number): void {
+  cancelAnimation(opacity);
+  opacity.value = value;
 }

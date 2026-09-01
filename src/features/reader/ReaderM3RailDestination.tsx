@@ -1,6 +1,5 @@
 import { useCallback, useRef, type ComponentType } from "react";
 import {
-  Animated,
   Platform,
   Pressable,
   StyleSheet,
@@ -8,9 +7,11 @@ import {
   View,
   type LayoutRectangle,
 } from "react-native";
+import Reanimated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { hapticLightImpact, hapticSoftPop } from "@/lib/haptics";
 import { useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
+import { animateM3PressScale } from "@/src/components/m3/m3-motion";
 import {
   READER_M3_ERROR,
   READER_M3_ERROR_CONTAINER,
@@ -55,7 +56,10 @@ export function ReaderM3RailDestination({
   onShowTooltip,
 }: ReaderM3RailDestinationProps) {
   const sheetChrome = useReaderSheetChrome();
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scale = useSharedValue(1);
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
   const rowMeasureRef = useRef<View | null>(null);
   const iconColor = destructive ? READER_M3_ERROR : sheetChrome.onSurfaceVariant;
   const labelColor = destructive ? READER_M3_ON_ERROR_CONTAINER : sheetChrome.onSurface;
@@ -68,22 +72,12 @@ export function ReaderM3RailDestination({
   }, [onPress]);
 
   const handlePressIn = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.98,
-      friction: 8,
-      tension: 320,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+    animateM3PressScale(scale, 0.98);
+  }, [scale]);
 
   const handlePressOut = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 6,
-      tension: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+    animateM3PressScale(scale, 1);
+  }, [scale]);
 
   const handleLongPress = useCallback(() => {
     if (!tooltipTitle || !onShowTooltip) return;
@@ -130,20 +124,20 @@ export function ReaderM3RailDestination({
             : { backgroundColor: sheetChrome.surfaceContainer }),
       ]}
     >
-      <Animated.View
+      <Reanimated.View
         ref={rowMeasureRef}
         collapsable={false}
         style={[
           styles.railItemInner,
           { paddingLeft: 16 + contentPaddingLeft },
-          useM3Press ? { transform: [{ scale: scaleAnim }] } : null,
+          useM3Press ? scaleStyle : null,
         ]}
       >
         <Icon size={iconSize} color={iconColor} />
         <Text style={[styles.railLabel, { color: labelColor }]} numberOfLines={1}>
           {label}
         </Text>
-      </Animated.View>
+      </Reanimated.View>
     </Pressable>
   );
 }

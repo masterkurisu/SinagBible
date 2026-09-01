@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import {
-  Animated,
-  Easing,
   Platform,
   StyleSheet,
   View,
@@ -9,9 +7,15 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
+import Reanimated, {
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from "react-native-reanimated";
 import { Pressable } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { hapticLightImpact } from "@/lib/haptics";
+import { animateM3ScrollChromeVisibility } from "@/lib/high-refresh-scroll";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 
 /** Same diameter as the back-to-top control. */
@@ -42,8 +46,7 @@ const READER_CHAPTER_NAV_ARROW_FLING_VELOCITY_PX_S = 50;
 type ChapterNavTarget = { slug: string; chapter: number };
 
 type ReaderChapterNavArrowsProps = {
-  opacityAnim: Animated.Value;
-  scaleAnim: Animated.Value;
+  opacitySV: SharedValue<number>;
   pointerEventsEnabled: boolean;
   prevChapter: ChapterNavTarget | null;
   nextChapter: ChapterNavTarget | null;
@@ -149,8 +152,7 @@ function chapterNavArrowScreenTopPx(
 }
 
 export function ReaderChapterNavArrows({
-  opacityAnim,
-  scaleAnim,
+  opacitySV,
   pointerEventsEnabled,
   prevChapter,
   nextChapter,
@@ -170,10 +172,9 @@ export function ReaderChapterNavArrows({
   const leftInset = READER_CHAPTER_NAV_ARROW_EDGE_INSET_PX;
   const rightInset = READER_CHAPTER_NAV_ARROW_RIGHT_EDGE_INSET_PX;
   const circlePx = READER_CHAPTER_NAV_ARROW_CIRCLE_PX;
-  const arrowMotionStyle = {
-    opacity: opacityAnim,
-    transform: [{ scale: scaleAnim }],
-  };
+  const arrowMotionStyle = useAnimatedStyle(() => ({
+    opacity: opacitySV.value,
+  }));
 
   const measureOverlayInWindow = useCallback(() => {
     overlayRef.current?.measureInWindow((x, y, width, height) => {
@@ -235,20 +236,20 @@ export function ReaderChapterNavArrows({
       style={[StyleSheet.absoluteFill, styles.overlay]}
     >
       {prevChapter ? (
-        <Animated.View
+        <Reanimated.View
           pointerEvents="box-none"
           style={[styles.sideSlot, { left: screenInsets.left }, arrowVerticalStyle, arrowMotionStyle]}
         >
           {renderArrow("prev", onPrev, "Previous chapter", prevArrowRef)}
-        </Animated.View>
+        </Reanimated.View>
       ) : null}
       {nextChapter ? (
-        <Animated.View
+        <Reanimated.View
           pointerEvents="box-none"
           style={[styles.sideSlot, { right: screenInsets.right }, arrowVerticalStyle, arrowMotionStyle]}
         >
           {renderArrow("next", onNext, "Next chapter", nextArrowRef)}
-        </Animated.View>
+        </Reanimated.View>
       ) : null}
     </View>
   );
@@ -283,8 +284,7 @@ export function useReaderChapterNavArrowsVisibility(
   enabled: boolean,
   forceVisible = false,
 ) {
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE)).current;
+  const opacitySV = useSharedValue(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isUserScrollActiveRef = useRef(false);
   const arrowsShownRef = useRef(false);
@@ -310,25 +310,10 @@ export function useReaderChapterNavArrowsVisibility(
 
   const animateVisibility = useCallback(
     (visible: boolean, targetOpacity = READER_CHAPTER_NAV_ARROW_VISIBLE_OPACITY) => {
-      opacityAnim.stopAnimation();
-      scaleAnim.stopAnimation();
-      Animated.parallel([
-        Animated.timing(opacityAnim, {
-          toValue: visible ? targetOpacity : 0,
-          duration: READER_CHAPTER_NAV_ARROW_FADE_MS,
-          easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: visible ? READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE : READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE,
-          duration: READER_CHAPTER_NAV_ARROW_FADE_MS,
-          easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      animateM3ScrollChromeVisibility(opacitySV, visible, targetOpacity);
       arrowsShownRef.current = visible;
     },
-    [opacityAnim, scaleAnim],
+    [opacitySV],
   );
 
   const scheduleIdleHide = useCallback(() => {
@@ -443,8 +428,7 @@ export function useReaderChapterNavArrowsVisibility(
   }, [clearChapterSwipeMotionTimer, hideArrows, showArrows]);
 
   return {
-    opacityAnim,
-    scaleAnim,
+    opacitySV,
     pointerEventsEnabled: enabled,
     onScrollBeginDrag,
     onScrollEndDrag,

@@ -8,7 +8,9 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
+import Reanimated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { hapticLightImpact } from "@/lib/haptics";
+import { animateM3PressScale } from "@/src/components/m3/m3-motion";
 import {
   READER_M3_APP_BAR_ICON_BUTTON_PX,
   READER_M3_ICON_BUTTON_RIPPLE,
@@ -62,7 +64,10 @@ export function ReaderM3IconButton({
   children,
 }: ReaderM3IconButtonProps) {
   const selectedAnim = useRef(new Animated.Value(selected ? 1 : 0)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scale = useSharedValue(1);
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
   const jigglePhase = useRef(new Animated.Value(0)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
   const jiggleLoopRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -126,23 +131,13 @@ export function ReaderM3IconButton({
 
   const handlePressIn = useCallback(() => {
     if (jiggleOnPress) return;
-    Animated.spring(scaleAnim, {
-      toValue: 0.9,
-      friction: 8,
-      tension: 320,
-      useNativeDriver: true,
-    }).start();
-  }, [jiggleOnPress, scaleAnim]);
+    animateM3PressScale(scale, 0.9);
+  }, [jiggleOnPress, scale]);
 
   const handlePressOut = useCallback(() => {
     if (jiggleOnPress) return;
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 6,
-      tension: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [jiggleOnPress, scaleAnim]);
+    animateM3PressScale(scale, 1);
+  }, [jiggleOnPress, scale]);
 
   const selectedBgOpacity = selectedAnim.interpolate({
     inputRange: [0, 1],
@@ -209,15 +204,19 @@ export function ReaderM3IconButton({
             },
           ]}
         />
-        <Animated.View
-          style={{
-            transform: jiggleOnPress
-              ? [{ translateX: jiggleTranslateX }, { rotate: busyRotation }]
-              : [{ scale: scaleAnim }, { rotate: busyRotation }],
-          }}
-        >
-          {children}
-        </Animated.View>
+        {jiggleOnPress ? (
+          <Animated.View
+            style={{
+              transform: [{ translateX: jiggleTranslateX }, { rotate: busyRotation }],
+            }}
+          >
+            {children}
+          </Animated.View>
+        ) : (
+          <Reanimated.View style={scaleStyle}>
+            <Animated.View style={{ transform: [{ rotate: busyRotation }] }}>{children}</Animated.View>
+          </Reanimated.View>
+        )}
       </Pressable>
     </View>
   );

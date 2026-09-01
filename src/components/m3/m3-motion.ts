@@ -172,3 +172,12 @@ export function animateM3SpatialProgress(
 
   value.value = withSpring(target, springConfig);
 }
+
+/** Press scale — fast spatial spring, 150 ms timing on reduced motion. */
+export function animateM3PressScale(value: SharedValue<number>, target: number): void {
+  if (isM3ReducedMotion()) {
+    value.value = withTiming(target, { duration: M3_REDUCED_MOTION_CROSSFADE_MS });
+    return;
+  }
+  value.value = withSpring(target, M3_SPRING_FAST_SPATIAL);
+}

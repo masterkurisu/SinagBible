@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import {
-  Animated,
-  Easing,
   Platform,
   StyleSheet,
   TouchableOpacity,
@@ -9,15 +7,16 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
+import Reanimated, {
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from "react-native-reanimated";
 import { Pressable } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { hapticLightImpact } from "@/lib/haptics";
-import {
-  READER_CHAPTER_NAV_ARROW_FADE_MS,
-  READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE,
-  READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS,
-  READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE,
-} from "@/src/features/reader/ReaderChapterNavArrows";
+import { animateM3ScrollChromeVisibility, snapM3ScrollChromeOpacity } from "@/lib/high-refresh-scroll";
+import { READER_CHAPTER_NAV_ARROW_IDLE_HIDE_MS } from "@/src/features/reader/ReaderChapterNavArrows";
 
 /** Tap target diameter for the back-to-top control. */
 export const READER_SCROLL_TO_TOP_FAB_CIRCLE_PX = 59;
@@ -39,8 +38,7 @@ const READER_SCROLL_TO_TOP_FAB_SCROLL_MOTION_THRESHOLD_PX = 6;
 const READER_SCROLL_TO_TOP_FAB_FLING_VELOCITY_PX_S = 50;
 
 type ReaderScrollToTopFabProps = {
-  opacityAnim: Animated.Value;
-  scaleAnim: Animated.Value;
+  opacitySV: SharedValue<number>;
   pointerEventsEnabled: boolean;
   onPress: () => void;
   onPressIn: () => void;
@@ -54,8 +52,7 @@ type ReaderScrollToTopFabProps = {
 };
 
 export function ReaderScrollToTopFab({
-  opacityAnim,
-  scaleAnim,
+  opacitySV,
   pointerEventsEnabled,
   onPress,
   onPressIn,
@@ -70,10 +67,9 @@ export function ReaderScrollToTopFab({
   const circlePx = READER_SCROLL_TO_TOP_FAB_CIRCLE_PX;
   const hitSlop = READER_SCROLL_TO_TOP_FAB_HIT_SLOP_PX;
   const circleRadius = circlePx / 2;
-  const visibilityMotionStyle = {
-    opacity: opacityAnim,
-    transform: [{ scale: scaleAnim }],
-  };
+  const visibilityMotionStyle = useAnimatedStyle(() => ({
+    opacity: opacitySV.value,
+  }));
   const circleChromeStyle = {
     backgroundColor: buttonBackgroundColor,
     ...Platform.select({
@@ -147,7 +143,7 @@ export function ReaderScrollToTopFab({
       pointerEvents={pointerEventsEnabled ? "box-none" : "none"}
       style={[StyleSheet.absoluteFill, styles.overlay]}
     >
-      <Animated.View
+      <Reanimated.View
         pointerEvents="box-none"
         style={[
           styles.slot,
@@ -163,14 +159,13 @@ export function ReaderScrollToTopFab({
         <View ref={fabRef} collapsable={false} style={styles.circle}>
           {pressable}
         </View>
-      </Animated.View>
+      </Reanimated.View>
     </View>
   );
 }
 
 export function useReaderScrollToTopFabVisibility(chapterRouteKey: string, enabled: boolean) {
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE)).current;
+  const opacitySV = useSharedValue(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isUserScrollActiveRef = useRef(false);
   const isPressingRef = useRef(false);
@@ -202,26 +197,15 @@ export function useReaderScrollToTopFabVisibility(chapterRouteKey: string, enabl
         return;
       }
 
-      opacityAnim.stopAnimation();
-      scaleAnim.stopAnimation();
-      Animated.parallel([
-        Animated.timing(opacityAnim, {
-          toValue: visible ? targetOpacity : 0,
-          duration: READER_CHAPTER_NAV_ARROW_FADE_MS,
-          easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: visible ? READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE : READER_CHAPTER_NAV_ARROW_HIDDEN_SCALE,
-          duration: READER_CHAPTER_NAV_ARROW_FADE_MS,
-          easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      animateM3ScrollChromeVisibility(
+        opacitySV,
+        visible,
+        visible ? targetOpacity : 0,
+      );
       fabShownRef.current = visible;
       syncTouchTarget(visible);
     },
-    [enabled, opacityAnim, scaleAnim, syncTouchTarget],
+    [opacitySV, syncTouchTarget],
   );
 
   const scheduleIdleHide = useCallback(() => {
@@ -244,14 +228,11 @@ export function useReaderScrollToTopFabVisibility(chapterRouteKey: string, enabl
     if (!fabShownRef.current) {
       animateVisibility(true);
     } else {
-      opacityAnim.stopAnimation();
-      scaleAnim.stopAnimation();
-      opacityAnim.setValue(READER_SCROLL_TO_TOP_FAB_VISIBLE_OPACITY);
-      scaleAnim.setValue(READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE);
+      snapM3ScrollChromeOpacity(opacitySV, READER_SCROLL_TO_TOP_FAB_VISIBLE_OPACITY);
       syncTouchTarget(true);
     }
     scheduleIdleHide();
-  }, [animateVisibility, enabled, opacityAnim, scaleAnim, scheduleIdleHide, syncTouchTarget]);
+  }, [animateVisibility, enabled, opacitySV, scheduleIdleHide, syncTouchTarget]);
 
   const syncFromScrollOffset = useCallback(
     (y: number, options?: { revealWhenIdle?: boolean }) => {
@@ -321,13 +302,10 @@ export function useReaderScrollToTopFabVisibility(chapterRouteKey: string, enabl
   const onFabPressIn = useCallback(() => {
     isPressingRef.current = true;
     clearIdleTimer();
-    opacityAnim.stopAnimation();
-    scaleAnim.stopAnimation();
-    opacityAnim.setValue(READER_SCROLL_TO_TOP_FAB_VISIBLE_OPACITY);
-    scaleAnim.setValue(READER_CHAPTER_NAV_ARROW_VISIBLE_SCALE);
+    snapM3ScrollChromeOpacity(opacitySV, READER_SCROLL_TO_TOP_FAB_VISIBLE_OPACITY);
     fabShownRef.current = true;
     syncTouchTarget(true);
-  }, [clearIdleTimer, opacityAnim, scaleAnim, syncTouchTarget]);
+  }, [clearIdleTimer, opacitySV, syncTouchTarget]);
 
   const onFabPressOut = useCallback(() => {
     isPressingRef.current = false;
@@ -385,8 +363,7 @@ export function useReaderScrollToTopFabVisibility(chapterRouteKey: string, enabl
   }, [enabled, hideFab]);
 
   return {
-    opacityAnim,
-    scaleAnim,
+    opacitySV,
     pointerEventsEnabled: enabled && touchTargetActive,
     onScrollBeginDrag,
     onScrollEndDrag,

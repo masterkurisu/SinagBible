@@ -21,6 +21,7 @@ import {
 import { hapticMediumImpact, hapticWarning } from "@/lib/haptics";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { JOURNAL_M3_ELEVATED_CARD_RADIUS_PX } from "@/src/features/journal/journalCardChrome";
+import { M3_SPRING_DEFAULT_SPATIAL } from "@/src/components/m3/m3-motion";
 
 const MAX_DRAG = 110;
 const THRESHOLD = 56;
@@ -30,7 +31,11 @@ const PAN_ACTIVATE_PX = 12;
 const PAN_FAIL_VERTICAL_PX = 24;
 const TAP_SLOP_PX = 10;
 /** Overdamped — snap back without horizontal overshoot past center. */
-const PAN_SPRING = { damping: 47.6, stiffness: 180, mass: 1 };
+const PAN_SPRING = {
+  damping: M3_SPRING_DEFAULT_SPATIAL.damping,
+  stiffness: 180,
+  mass: 1,
+};
 
 type Props = {
   children: ReactNode;

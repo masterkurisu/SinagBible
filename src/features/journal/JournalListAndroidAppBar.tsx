@@ -10,16 +10,14 @@ import {
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { MaterialIcons } from "@expo/vector-icons";
 import Reanimated, {
-  Easing as ReanimatedEasing,
   Extrapolation,
   cancelAnimation,
   interpolate,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
 } from "react-native-reanimated";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
+import { animateM3EffectsOpacity, animateM3SpatialProgress } from "@/src/components/m3/m3-motion";
 import { ReaderM3IconButton } from "@/src/features/reader/ReaderM3IconButton";
 import { JournalListM3TitleBlock } from "@/src/features/journal/JournalListM3TitleBlock";
 import {
@@ -32,11 +30,6 @@ import {
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
 const SEARCH_BAR_HEIGHT_PX = 48;
-const SEARCH_OPEN_MS = 420;
-const SEARCH_CLOSE_MS = 380;
-
-const REANIMATED_M3_ENTER_EASING = ReanimatedEasing.bezier(0.05, 0.7, 0.1, 1);
-const REANIMATED_M3_EXIT_EASING = ReanimatedEasing.bezier(0.3, 0, 0.8, 0.15);
 
 export type JournalListAndroidAppBarProps = {
   topInsetPx: number;
@@ -78,7 +71,8 @@ export function JournalListAndroidAppBar({
   const s = bundle.search;
   const chrome = bundle.chrome;
   const inputRef = useRef<TextInputType | null>(null);
-  const searchProgress = useSharedValue(0);
+  const searchSpatial = useSharedValue(0);
+  const searchEffects = useSharedValue(0);
   const focusAfterOpenRef = useRef(false);
 
   const paddingLeft = Math.max(insets.left, 4);
@@ -112,53 +106,46 @@ export function JournalListAndroidAppBar({
       focusAfterOpenRef.current = true;
     }
 
-    cancelAnimation(searchProgress);
-    searchProgress.value = withTiming(
-      searchOpen ? 1 : 0,
-      {
-        duration: searchOpen ? SEARCH_OPEN_MS : SEARCH_CLOSE_MS,
-        easing: searchOpen ? REANIMATED_M3_ENTER_EASING : REANIMATED_M3_EXIT_EASING,
-      },
-      (finished) => {
-        if (finished && searchOpen && focusAfterOpenRef.current) {
-          focusAfterOpenRef.current = false;
-          runOnJS(focusSearchInput)();
-        }
-      },
-    );
-  }, [focusSearchInput, searchOpen, searchProgress]);
+    cancelAnimation(searchSpatial);
+    cancelAnimation(searchEffects);
+    animateM3SpatialProgress(searchSpatial, searchOpen ? 1 : 0, searchOpen);
+    animateM3EffectsOpacity(searchEffects, searchOpen ? 1 : 0, searchOpen, () => {
+      if (searchOpen && focusAfterOpenRef.current) {
+        focusAfterOpenRef.current = false;
+        focusSearchInput();
+      }
+    });
+  }, [focusSearchInput, searchEffects, searchOpen, searchSpatial]);
 
   const searchShellStyle = useAnimatedStyle(() => {
-    const progress = searchProgress.value;
     const scaleX = interpolate(
-      progress,
+      searchSpatial.value,
       [0, 1],
       [collapsedSearchScaleX, 1],
       Extrapolation.CLAMP,
     );
-    const opacity = interpolate(progress, [0, 0.18, 1], [0, 1, 1], Extrapolation.CLAMP);
     const translateX = (expandedSearchWidth * (1 - scaleX)) / 2;
 
     return {
-      opacity,
+      opacity: searchEffects.value,
       transform: [{ translateX }, { scaleX }],
     };
   }, [collapsedSearchScaleX, expandedSearchWidth]);
 
   const searchIconStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(searchProgress.value, [0, 0.42, 1], [1, 0, 0], Extrapolation.CLAMP),
+    opacity: 1 - searchEffects.value,
   }));
 
   const inputStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(searchProgress.value, [0, 0.28, 0.62, 1], [0, 0, 1, 1], Extrapolation.CLAMP),
+    opacity: searchEffects.value,
   }));
 
   const actionsStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(searchProgress.value, [0, 0.48, 0.78, 1], [0, 0, 1, 1], Extrapolation.CLAMP),
+    opacity: searchEffects.value,
   }));
 
   const titleStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(searchProgress.value, [0, 0.35, 1], [1, 0, 0], Extrapolation.CLAMP),
+    opacity: 1 - searchEffects.value,
   }));
 
   const showClear = searchQuery.length > 0;

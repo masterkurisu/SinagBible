@@ -10,13 +10,12 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import Reanimated, {
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { hapticLightImpact } from "@/lib/haptics";
 import { useTabBarSearch } from "@/lib/tab-bar-search-context";
-import { M3_SPRING_FAST_SPATIAL } from "@/src/components/m3/m3-motion";
+import { animateM3PressScale } from "@/src/components/m3/m3-motion";
 import {
   TAB_BAR_SEARCH_FAB_ELEVATION_PX,
   TAB_BAR_SEARCH_FAB_ICON_PX,
@@ -62,12 +61,12 @@ export function TabBarSearchFab({
 
   const handlePressIn = useCallback(() => {
     setPressed(true);
-    scale.value = withSpring(0.94, M3_SPRING_FAST_SPATIAL);
+    animateM3PressScale(scale, 0.94);
   }, [scale]);
 
   const handlePressOut = useCallback(() => {
     setPressed(false);
-    scale.value = withSpring(1, M3_SPRING_FAST_SPATIAL);
+    animateM3PressScale(scale, 1);
   }, [scale]);
 
   if (isOpen) {

@@ -1,7 +1,9 @@
-import { useCallback, useRef } from "react";
-import { Animated, Platform, Pressable, Text, View, type ViewStyle } from "react-native";
+import { useCallback } from "react";
+import { Platform, Pressable, Text, View, type ViewStyle } from "react-native";
+import Reanimated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { animateM3PressScale } from "@/src/components/m3/m3-motion";
 import { READER_M3_ON_SURFACE } from "@/src/features/reader/readerSettingsPanelChrome";
 import {
   HOME_M3_CTA_HEIGHT_PX,
@@ -47,7 +49,10 @@ export function HomeM3CtaButton({
   const primary = bundle.chrome.tabTint;
   const rippleColor = bundle.chrome.androidRipple;
   const isFilled = variant === "filled";
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scale = useSharedValue(1);
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   const backgroundColor = isFilled ? primary : bundle.chrome.androidIndicator;
   const contentColor = isFilled ? onPrimaryLabelColor(primary) : primary;
@@ -57,22 +62,12 @@ export function HomeM3CtaButton({
   const borderWidth = isFilled ? 0 : 1;
 
   const handlePressIn = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      friction: 8,
-      tension: 320,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+    animateM3PressScale(scale, 0.97);
+  }, [scale]);
 
   const handlePressOut = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 6,
-      tension: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+    animateM3PressScale(scale, 1);
+  }, [scale]);
 
   return (
     <Pressable
@@ -96,19 +91,21 @@ export function HomeM3CtaButton({
         style,
       ]}
     >
-      <Animated.View
-        style={{
-          minHeight: HOME_M3_CTA_HEIGHT_PX,
-          borderRadius: HOME_M3_CTA_RADIUS_PX,
-          paddingHorizontal: HOME_M3_CTA_PADDING_H_PX,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          backgroundColor,
-          borderColor,
-          borderWidth,
-          transform: [{ scale: scaleAnim }],
-        }}
+      <Reanimated.View
+        style={[
+          {
+            minHeight: HOME_M3_CTA_HEIGHT_PX,
+            borderRadius: HOME_M3_CTA_RADIUS_PX,
+            paddingHorizontal: HOME_M3_CTA_PADDING_H_PX,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor,
+            borderColor,
+            borderWidth,
+          },
+          scaleStyle,
+        ]}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
           <MaterialIcons name={icon} size={22} color={iconColor} />
@@ -125,7 +122,7 @@ export function HomeM3CtaButton({
           </Text>
         </View>
         <MaterialIcons name="arrow-forward" size={20} color={iconColor} />
-      </Animated.View>
+      </Reanimated.View>
     </Pressable>
   );
 }

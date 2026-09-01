@@ -1,7 +1,5 @@
 import { useCallback, useRef, type ReactNode, type RefObject } from "react";
 import {
-  Animated,
-  Easing,
   Platform,
   Pressable,
   TouchableOpacity,
@@ -9,7 +7,9 @@ import {
   type LayoutRectangle,
   type ViewStyle,
 } from "react-native";
+import Reanimated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { hapticLightImpact, hapticSoftPop } from "@/lib/haptics";
+import { animateM3PressScale } from "@/src/components/m3/m3-motion";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import { ReaderM3IconButton } from "@/src/features/reader/ReaderM3IconButton";
 import {
@@ -151,7 +151,10 @@ export function ReaderActionBarJournalButton({
   tooltipDescription,
   onShowTooltip,
 }: ReaderActionBarJournalButtonProps) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scale = useSharedValue(1);
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
   const size = READER_ACTION_BAR_BUTTON_PX;
   const { handleLongPress, hasTooltip, measureRef } = useActionBarLongPressTooltip({
     buttonRef,
@@ -166,22 +169,12 @@ export function ReaderActionBarJournalButton({
   }, [onPress]);
 
   const handlePressIn = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.92,
-      friction: 8,
-      tension: 320,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+    animateM3PressScale(scale, 0.92);
+  }, [scale]);
 
   const handlePressOut = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 6,
-      tension: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+    animateM3PressScale(scale, 1);
+  }, [scale]);
 
   if (Platform.OS === "android") {
     return (
@@ -210,7 +203,7 @@ export function ReaderActionBarJournalButton({
             overflow: "hidden",
           }}
         >
-          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>{children}</Animated.View>
+          <Reanimated.View style={scaleStyle}>{children}</Reanimated.View>
         </Pressable>
       </View>
     );

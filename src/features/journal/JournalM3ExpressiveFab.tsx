@@ -1,6 +1,8 @@
-import { useCallback, useRef, useState, type Ref } from "react";
+import { useCallback, useState, type Ref } from "react";
 import { Animated, Platform, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
+import Reanimated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { MaterialIcons } from "@expo/vector-icons";
+import { animateM3PressScale } from "@/src/components/m3/m3-motion";
 import {
   JOURNAL_M3_FAB_ELEVATION_PX,
   JOURNAL_M3_FAB_SIZE_PX,
@@ -32,8 +34,11 @@ export function JournalM3ExpressiveFab({
   buttonRef,
   style,
 }: JournalM3ExpressiveFabProps) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scale = useSharedValue(1);
   const [pressed, setPressed] = useState(false);
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   const handlePress = useCallback(() => {
     onPress();
@@ -41,23 +46,13 @@ export function JournalM3ExpressiveFab({
 
   const handlePressIn = useCallback(() => {
     setPressed(true);
-    Animated.spring(scaleAnim, {
-      toValue: 0.94,
-      friction: 8,
-      tension: 320,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+    animateM3PressScale(scale, 0.94);
+  }, [scale]);
 
   const handlePressOut = useCallback(() => {
     setPressed(false);
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 6,
-      tension: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleAnim]);
+    animateM3PressScale(scale, 1);
+  }, [scale]);
 
   const iconRotate = iconOpenProgress.interpolate({
     inputRange: [0, 1],
@@ -70,7 +65,7 @@ export function JournalM3ExpressiveFab({
   const elevationPx = pressed ? JOURNAL_M3_FAB_ELEVATION_PX + 6 : JOURNAL_M3_FAB_ELEVATION_PX;
 
   return (
-    <Animated.View
+    <View
       ref={buttonRef}
       collapsable={false}
       style={[
@@ -101,11 +96,13 @@ export function JournalM3ExpressiveFab({
           overflow: "hidden",
         }}
       >
-        <Animated.View style={{ transform: [{ scale: scaleAnim }, { rotate: iconRotate }] }}>
-          <MaterialIcons name="add" size={24} color={onContainerColor} />
-        </Animated.View>
+        <Reanimated.View style={scaleStyle}>
+          <Animated.View style={{ transform: [{ rotate: iconRotate }] }}>
+            <MaterialIcons name="add" size={24} color={onContainerColor} />
+          </Animated.View>
+        </Reanimated.View>
       </Pressable>
-    </Animated.View>
+    </View>
   );
 }
 

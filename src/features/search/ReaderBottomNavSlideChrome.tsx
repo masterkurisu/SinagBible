@@ -1,22 +1,21 @@
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, Platform } from "react-native";
 import { usePathname } from "expo-router";
 import Reanimated, {
-  Easing,
   useAnimatedStyle,
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Platform } from "react-native";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import { mixHexColors } from "@/lib/mix-hex-color";
 import { tabHapticKeyFromPathname } from "@/lib/tab-route-key";
 import { TabBarSearchFab } from "@/src/features/search/TabBarSearchFab";
 import { androidBottomNavChromeHideSlidePx } from "@/src/features/search/tabBarSearchFabChrome";
-
-/** Short smoothing tween chasing the raw scroll-driven fade target — see `fadeAnimatedStyle`. */
-const TAB_BAR_FADE_SMOOTHING_MS = 120;
+import {
+  M3_MOTION_DURATION_SHORT3_MS,
+  M3_STANDARD_DECELERATE_REANIMATED,
+} from "@/src/components/m3/m3-motion";
 
 /** True when the active reader tab is showing a chapter (not the redirect index). */
 function isReaderChapterRoute(pathname: string | null): boolean {
@@ -75,8 +74,8 @@ export function ReaderBottomNavSlideChrome({
     // frames — the higher the panel's refresh rate (90/120Hz), the more of those extra
     // frames get rendered, making the cross-fade read as smoother rather than faster.
     opacity: withTiming(1 - tabBarSlideProgressSV.value, {
-      duration: TAB_BAR_FADE_SMOOTHING_MS,
-      easing: Easing.out(Easing.quad),
+      duration: M3_MOTION_DURATION_SHORT3_MS,
+      easing: M3_STANDARD_DECELERATE_REANIMATED,
     }),
   }));
 
