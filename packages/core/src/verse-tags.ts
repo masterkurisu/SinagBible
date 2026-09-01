@@ -55,6 +55,19 @@ function isWhitespace(char: string): boolean {
   return char === " " || char === "\n" || char === "\r" || char === "\t";
 }
 
+function isNewline(char: string): boolean {
+  return char === "\n" || char === "\r";
+}
+
+/** Letters, digits, colon, hyphen, and spaces — not newlines or punctuation. */
+function isMentionBufferChar(char: string): boolean {
+  return /[A-Za-z0-9: \t-]/.test(char);
+}
+
+function isTrailingMentionDelimiter(char: string): boolean {
+  return /[.,;!?)\]]/.test(char);
+}
+
 function findVerseTagTokenRanges(text: string): Array<{ start: number; end: number }> {
   const ranges: Array<{ start: number; end: number }> = [];
   let index = 0;
@@ -86,7 +99,12 @@ function findActiveMentionAt(text: string, cursorIndex: number): { atIndex: numb
     return null;
   }
 
-  for (let index = cursorIndex - 1; index >= 0; index -= 1) {
+  let index = cursorIndex - 1;
+  if (index >= 0 && isTrailingMentionDelimiter(text[index]!)) {
+    index -= 1;
+  }
+
+  for (; index >= 0; index -= 1) {
     const char = text[index]!;
     if (char === "@") {
       if (index > 0 && !isWhitespace(text[index - 1]!)) {
@@ -97,7 +115,7 @@ function findActiveMentionAt(text: string, cursorIndex: number): { atIndex: numb
       }
       return { atIndex: index };
     }
-    if (isWhitespace(char)) {
+    if (isNewline(char) || !isMentionBufferChar(char)) {
       return null;
     }
   }
@@ -287,14 +305,25 @@ export function isVerseTagMentionTrigger(text: string, cursorIndex: number): boo
   return true;
 }
 
-/** Active mention query between @ and cursor, or null. */
-export function extractActiveVerseTagMention(text: string, cursorIndex: number): string | null {
+/** Active mention from a word-boundary `@` to the cursor. Spaces are allowed; newlines cancel. */
+export function getActiveVerseTagMention(
+  text: string,
+  cursorIndex: number,
+): { atIndex: number; buffer: string } | null {
   const mention = findActiveMentionAt(text, cursorIndex);
   if (!mention) {
     return null;
   }
 
-  return text.slice(mention.atIndex + 1, cursorIndex);
+  return {
+    atIndex: mention.atIndex,
+    buffer: text.slice(mention.atIndex + 1, cursorIndex),
+  };
+}
+
+/** Active mention query between @ and cursor, or null. */
+export function extractActiveVerseTagMention(text: string, cursorIndex: number): string | null {
+  return getActiveVerseTagMention(text, cursorIndex)?.buffer ?? null;
 }
 
 /** Replace active @mention with encoded token. */
