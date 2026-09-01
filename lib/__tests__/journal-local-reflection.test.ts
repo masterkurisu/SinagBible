@@ -10,6 +10,8 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
 vi.mock("expo-sqlite", () => expoSqliteMock);
 
 import { reflectionMarkdownToContent } from "@/lib/journal-local";
+import { htmlToReflectionMarkdown } from "@/lib/journal-reflection-html";
+import { stripHtmlPreview } from "@/lib/journal-preview";
 
 describe("reflectionMarkdownToContent", () => {
   it("keeps existing bold/italic/list behavior unchanged", () => {
@@ -68,5 +70,34 @@ describe("reflectionMarkdownToContent", () => {
     expect(reflectionMarkdownToContent("**[bold link](https://x.com)**", {})).toBe(
       '<p><strong><a href="https://x.com">bold link</a></strong></p>',
     );
+  });
+
+  it("writes data-verse-ref spans for [@...] tokens before markdown links", () => {
+    expect(reflectionMarkdownToContent("See [@john:3:16] today.", {})).toBe(
+      '<p>See <span data-verse-ref="john:3:16">John 3:16</span> today.</p>',
+    );
+    expect(reflectionMarkdownToContent("[@john:3:16](not a link)", {})).toBe(
+      '<p><span data-verse-ref="john:3:16">John 3:16</span>(not a link)</p>',
+    );
+    expect(reflectionMarkdownToContent("see [@john:3:16].", {})).toBe(
+      '<p>see <span data-verse-ref="john:3:16">John 3:16</span>.</p>',
+    );
+  });
+
+  it("keeps [image:id] as images and [@john:3:16] as verse tags", () => {
+    expect(
+      reflectionMarkdownToContent("see [@john:3:16]\n[image:img-0]\n", {
+        "img-0": "file:///tmp/a.jpg",
+      }),
+    ).toBe(
+      '<p>see <span data-verse-ref="john:3:16">John 3:16</span></p><p><img src="file:///tmp/a.jpg" alt="" /></p>',
+    );
+    expect(reflectionMarkdownToContent("see [@image:id]", {})).toBe("<p>see [@image:id]</p>");
+  });
+
+  it("round-trips verse-tag spans back to tokens and keeps inner text for search", () => {
+    const html = reflectionMarkdownToContent("See [@john:3:16] today.", {});
+    expect(htmlToReflectionMarkdown(html)).toBe("See [@john:3:16] today.");
+    expect(stripHtmlPreview(html, 600)).toContain("John 3:16");
   });
 });

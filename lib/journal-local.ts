@@ -4,6 +4,7 @@
  */
 
 import type { LocalJournalEntry } from "@sinag-bible/types";
+import { parseVerseTagToken, verseTagToHtml } from "@sinag-bible/core/verse-tags";
 import {
   deleteAllJournalImages,
   deleteEntryImages,
@@ -224,9 +225,9 @@ function escapeXmlAttr(s: string): string {
 }
 
 /**
- * Recursive inline-markdown scanner: bold, italic, and `[text](url)` links, nestable in either
- * direction (e.g. `**[text](url)**` or `_[text](url)_`). Replaces the old separate
- * applyBold/applyItalic pair, which only supported italic-inside-bold, not the reverse.
+ * Recursive inline-markdown scanner: verse tags, bold, italic, and `[text](url)` links.
+ * `[@book:ch:v]` is detected before `[text](url)` / `[image:id]` so a following `(…)` is
+ * not treated as a markdown link.
  */
 function applyInlineFormatting(s: string): string {
   let out = "";
@@ -246,6 +247,18 @@ function applyInlineFormatting(s: string): string {
         out += "<em>" + applyInlineFormatting(s.slice(i + 1, j)) + "</em>";
         i = j + 1;
         continue;
+      }
+    }
+    if (s[i] === "[" && s[i + 1] === "@") {
+      const close = s.indexOf("]", i + 2);
+      if (close !== -1) {
+        const raw = s.slice(i, close + 1);
+        const ref = parseVerseTagToken(raw);
+        if (ref) {
+          out += verseTagToHtml(ref);
+          i = close + 1;
+          continue;
+        }
       }
     }
     if (s[i] === "[") {

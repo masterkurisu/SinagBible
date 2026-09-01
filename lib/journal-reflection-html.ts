@@ -3,6 +3,8 @@
  * See verse-tagging-editor-plan.md (Phase 0).
  */
 
+import { encodeVerseTag, parseVerseTagFromHtmlAttrs } from "@sinag-bible/core/verse-tags";
+
 const SPAN_FONT_ITALIC = String.raw`font-style\s*:\s*(?:italic|oblique)`;
 const SPAN_FONT_BOLD = String.raw`font-weight\s*:\s*(?:bold|700|bolder|[6-9]00)`;
 
@@ -77,8 +79,36 @@ function replaceImgTagsWithTokens(fragment: string, imageMap: Record<string, str
   });
 }
 
+export function maskVerseTagHtmlSpans(html: string): { html: string; spans: string[] } {
+  const spans: string[] = [];
+  const next = html.replace(
+    /<span\b[^>]*\bdata-verse-ref=[^>]*>[\s\S]*?<\/span>/gi,
+    (full) => {
+      const index = spans.push(full) - 1;
+      return `%%VERSE_TAG_${index}%%`;
+    },
+  );
+  return { html: next, spans };
+}
+
+export function unmaskVerseTagHtmlSpans(html: string, spans: string[]): string {
+  return html.replace(/%%VERSE_TAG_(\d+)%%/g, (_full, index: string) => spans[Number(index)] ?? "");
+}
+
+function replaceVerseTagSpansWithTokens(fragment: string): string {
+  return fragment.replace(
+    /<span\b[^>]*\bdata-verse-ref=(["'])([^"']+)\1[^>]*>[\s\S]*?<\/span>/gi,
+    (full, _quote: string, dataRef: string) => {
+      const translation = /\bdata-translation=(["'])([^"']+)\1/i.exec(full)?.[2] ?? null;
+      const ref = parseVerseTagFromHtmlAttrs(dataRef, translation);
+      if (!ref) return full;
+      return encodeVerseTag(ref);
+    },
+  );
+}
+
 function inlineHtmlToMarkdown(fragment: string): string {
-  let s = fragment;
+  let s = replaceVerseTagSpansWithTokens(fragment);
   s = s.replace(/<br\s*\/?>/gi, "\n");
   for (let pass = 0; pass < 8; pass++) {
     const prev = s;
@@ -142,9 +172,13 @@ export function htmlToReflectionMarkdown(
   const trimmed = html.trim();
   if (!trimmed) return "";
 
-  const normalized = normalizeStyleSpansForReflectionHtml(trimmed)
-    .replace(/<(\/?)b(\s[^>]*)?>/gi, "<$1strong$2>")
-    .replace(/<(\/?)i(\s[^>]*)?>/gi, "<$1em$2>");
+  const masked = maskVerseTagHtmlSpans(trimmed);
+  const normalized = unmaskVerseTagHtmlSpans(
+    normalizeStyleSpansForReflectionHtml(masked.html)
+      .replace(/<(\/?)b(\s[^>]*)?>/gi, "<$1strong$2>")
+      .replace(/<(\/?)i(\s[^>]*)?>/gi, "<$1em$2>"),
+    masked.spans,
+  );
 
   const blocks =
     normalized.match(/<(p|div|ul|ol|h1|h2)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];

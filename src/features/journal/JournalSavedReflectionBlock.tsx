@@ -1,13 +1,38 @@
-import { memo, type ReactNode } from "react";
-import { Linking, StyleSheet, Text } from "react-native";
+import { memo, useCallback, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Linking, StyleSheet, Text, type LayoutRectangle, type StyleProp, type TextStyle, type View } from "react-native";
 import { Image } from "expo-image";
+import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import type { VerseTagRef } from "@sinag-bible/types";
+import { getBookNameFromSlug } from "@sinag-bible/core/bible-meta";
+import { formatVerseTagLabel, parseVerseTagFromHtmlAttrs } from "@sinag-bible/core/verse-tags";
+import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
+import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
+import {
+  getJournalVersePreview,
+  resolveJournalPassageBookSlug,
+} from "@/lib/journal-verse-preview";
 import {
   decodeHtmlEntities,
   type SavedReflectionBlock,
 } from "@/src/features/journal/journalSavedReflectionBlocks";
+import {
+  maskVerseTagHtmlSpans,
+  unmaskVerseTagHtmlSpans,
+} from "@/lib/journal-reflection-html";
+import {
+  formatVerseTagChipAccessibilityLabel,
+  formatVerseTagTooltipTitle,
+} from "@/src/features/verse-tags/verseTagChipCopy";
+import { focusVerseTagElement } from "@/src/features/verse-tags/verseTagFocus";
+import { VerseTagChip } from "@/src/features/verse-tags/VerseTagChip";
+import { VerseTagPreviewTooltip } from "@/src/features/verse-tags/VerseTagPreviewTooltip";
+import { openVerseTagInReader } from "@/src/features/verse-tags/openVerseTagInReader";
 
 const SPAN_FONT_ITALIC = String.raw`font-style\s*:\s*(?:italic|oblique)`;
 const SPAN_FONT_BOLD = String.raw`font-weight\s*:\s*(?:bold|700|bolder|[6-9]00)`;
+
+const VERSE_TAG_SPAN_RE =
+  /^<span\b[^>]*\bdata-verse-ref=(["'])([^"']+)\1[^>]*>[\s\S]*<\/span>$/i;
 
 function normalizeStyleSpansForInline(html: string): string {
   let s = html;
@@ -41,15 +66,53 @@ function normalizeStyleSpansForInline(html: string): string {
   return s;
 }
 
-export function renderJournalReflectionInline(input: string, linkColor: string): ReactNode[] {
+function parseVerseTagSpan(html: string): { ref: VerseTagRef; label: string } | null {
+  const refMatch = /\bdata-verse-ref=(["'])([^"']+)\1/i.exec(html);
+  if (!refMatch) return null;
+  const translation = /\bdata-translation=(["'])([^"']+)\1/i.exec(html)?.[2] ?? null;
+  const ref = parseVerseTagFromHtmlAttrs(refMatch[2] ?? "", translation);
+  if (!ref) return null;
+  const inner = html.replace(/^<span\b[^>]*>/i, "").replace(/<\/span>$/i, "");
+  const label =
+    decodeHtmlEntities(inner.replace(/<[^>]*>/g, "").trim()) ||
+    formatVerseTagLabel(ref, getBookNameFromSlug(ref.book) ?? undefined);
+  return { ref, label };
+}
+
+type ActiveTagState = {
+  key: string;
+  ref: VerseTagRef;
+  title: string;
+  anchor: LayoutRectangle;
+};
+
+type JournalReflectionInlineOptions = {
+  linkColor: string;
+  bundle: MobileAppThemeBundle;
+  textStyle?: StyleProp<TextStyle>;
+  getChipRef: (key: string) => RefObject<View | null>;
+  onVerseTagPress: (ref: VerseTagRef, label: string, key: string) => void;
+  onVerseTagLongPress: (ref: VerseTagRef) => void;
+};
+
+export function renderJournalReflectionInline(
+  input: string,
+  options: JournalReflectionInlineOptions,
+): ReactNode[] {
+  const { linkColor, bundle, textStyle, getChipRef, onVerseTagPress, onVerseTagLongPress } = options;
+
   const nodes: ReactNode[] = [];
   const styleStack: ("strong" | "em")[] = [];
   const hrefStack: string[] = [];
-  const normalized = normalizeStyleSpansForInline(input)
-    .replace(/<(\/?)b(\s[^>]*)?>/gi, "<$1strong$2>")
-    .replace(/<(\/?)i(\s[^>]*)?>/gi, "<$1em$2>");
+  const masked = maskVerseTagHtmlSpans(input);
+  const normalized = unmaskVerseTagHtmlSpans(
+    normalizeStyleSpansForInline(masked.html)
+      .replace(/<(\/?)b(\s[^>]*)?>/gi, "<$1strong$2>")
+      .replace(/<(\/?)i(\s[^>]*)?>/gi, "<$1em$2>"),
+    masked.spans,
+  );
   const tokenRegex =
-    /<a\s+href=(["'])([^"']*)\1[^>]*>|<\/a>|<\/?strong(?:\s[^>]*)?>|<\/?em(?:\s[^>]*)?>|<br\s*\/?>/gi;
+    /<span\b[^>]*\bdata-verse-ref=(["'])([^"']+)\1[^>]*>[\s\S]*?<\/span>|<a\s+href=(["'])([^"']*)\3[^>]*>|<\/a>|<\/?strong(?:\s[^>]*)?>|<\/?em(?:\s[^>]*)?>|<br\s*\/?>/gi;
   let last = 0;
   let part = 0;
 
@@ -91,8 +154,37 @@ export function renderJournalReflectionInline(input: string, linkColor: string):
       .replace(/<\/?(?:p|div|span|font|u)\b[^>]*>/gi, "");
     pushText(raw);
     const tok = match[0] ?? "";
-    if (/^<a\b/i.test(tok)) {
-      hrefStack.push(decodeHtmlEntities(match[2] ?? ""));
+    if (VERSE_TAG_SPAN_RE.test(tok)) {
+      VERSE_TAG_SPAN_RE.lastIndex = 0;
+      const parsed = parseVerseTagSpan(tok);
+      if (parsed) {
+        const bookLabel = getBookNameFromSlug(parsed.ref.book);
+        const label =
+          parsed.label || formatVerseTagLabel(parsed.ref, bookLabel ?? undefined);
+        const key = `verse-${part++}`;
+        const chipRef = getChipRef(key);
+        nodes.push(
+          <VerseTagChip
+            key={key}
+            variant="inline"
+            bundle={bundle}
+            chipRef={chipRef}
+            label={label}
+            textStyle={textStyle}
+            accessibilityLabel={formatVerseTagChipAccessibilityLabel(
+              parsed.ref,
+              bookLabel ?? undefined,
+            )}
+            onPress={() => onVerseTagPress(parsed.ref, label, key)}
+            onLongPress={() => onVerseTagLongPress(parsed.ref)}
+          />,
+        );
+      } else {
+        pushText(tok.replace(/<[^>]*>/g, ""));
+      }
+    } else if (/^<a\b/i.test(tok)) {
+      const href = /href=(["'])([^"']*)\1/i.exec(tok)?.[2] ?? "";
+      hrefStack.push(decodeHtmlEntities(href));
     } else if (/^<\/a>/i.test(tok)) {
       hrefStack.pop();
     } else if (/^<strong\b/i.test(tok)) styleStack.push("strong");
@@ -115,6 +207,142 @@ export function renderJournalReflectionInline(input: string, linkColor: string):
 
   pushText(normalized.slice(last).replace(/<\/?(?:p|div|span|font|u)\b[^>]*>/gi, ""));
   return nodes;
+}
+
+function JournalReflectionRichText({
+  html,
+  style,
+  linkColor,
+  bundle,
+  translationId,
+  leading,
+}: {
+  html: string;
+  style: StyleProp<TextStyle>;
+  linkColor: string;
+  bundle: MobileAppThemeBundle;
+  translationId: string;
+  leading?: string;
+}) {
+  const chipRefs = useRef(new Map<string, RefObject<View | null>>());
+  const [activeTag, setActiveTag] = useState<ActiveTagState | null>(null);
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewPending, setPreviewPending] = useState(false);
+  const versionAbbreviation = useMemo(
+    () => getTranslationDisplayAbbreviation(translationId),
+    [translationId],
+  );
+
+  const getChipRef = useCallback((key: string) => {
+    const existing = chipRefs.current.get(key);
+    if (existing) return existing;
+    const next = { current: null } as RefObject<View | null>;
+    chipRefs.current.set(key, next);
+    return next;
+  }, []);
+
+  const loadPreview = useCallback(
+    async (ref: VerseTagRef) => {
+      setPreviewPending(true);
+      setPreviewText(null);
+      try {
+        const canonicalBook = await resolveJournalPassageBookSlug(translationId, ref.book);
+        if (!canonicalBook) {
+          setPreviewText(null);
+          return;
+        }
+        const preview = await getJournalVersePreview(
+          translationId,
+          canonicalBook,
+          ref.chapter,
+          ref.verseStart,
+          ref.verseEnd ?? null,
+        );
+        setPreviewText(preview);
+      } finally {
+        setPreviewPending(false);
+      }
+    },
+    [translationId],
+  );
+
+  const openTooltip = useCallback(
+    async (ref: VerseTagRef, label: string, key: string) => {
+      const chipRef = getChipRef(key);
+      const anchor = await measureOnboardingTarget(chipRef, {
+        waitForInteractions: false,
+        retries: 2,
+      });
+      if (!anchor) return;
+      setActiveTag({
+        key,
+        ref,
+        title: formatVerseTagTooltipTitle(label, versionAbbreviation),
+        anchor,
+      });
+      void loadPreview(ref);
+    },
+    [getChipRef, loadPreview, versionAbbreviation],
+  );
+
+  const dismissTooltip = useCallback(() => {
+    const chipRef = activeTag ? chipRefs.current.get(activeTag.key) : undefined;
+    setActiveTag(null);
+    setPreviewText(null);
+    setPreviewPending(false);
+    requestAnimationFrame(() => {
+      focusVerseTagElement(chipRef);
+    });
+  }, [activeTag]);
+
+  const handleOpenInReader = useCallback(() => {
+    if (!activeTag) return;
+    openVerseTagInReader(activeTag.ref, translationId);
+    dismissTooltip();
+  }, [activeTag, dismissTooltip, translationId]);
+
+  const handleLongPress = useCallback(
+    (ref: VerseTagRef) => {
+      openVerseTagInReader(ref, translationId);
+    },
+    [translationId],
+  );
+
+  const nodes = renderJournalReflectionInline(html, {
+    linkColor,
+    bundle,
+    textStyle: style,
+    getChipRef,
+    onVerseTagPress: (ref, label, key) => {
+      void openTooltip(ref, label, key);
+    },
+    onVerseTagLongPress: handleLongPress,
+  });
+
+  return (
+    <>
+      <Text style={style}>
+        {leading}
+        {nodes}
+      </Text>
+      <VerseTagPreviewTooltip
+        visible={activeTag != null}
+        anchor={activeTag?.anchor ?? { x: 0, y: 0, width: 0, height: 0 }}
+        title={activeTag?.title ?? ""}
+        description={
+          previewPending
+            ? "Loading verse..."
+            : previewText?.trim()
+              ? previewText
+              : "Verse not found"
+        }
+        canOpenInReader={Boolean(previewText?.trim()) && !previewPending}
+        bundle={bundle}
+        onDismiss={dismissTooltip}
+        onOpenInReader={handleOpenInReader}
+      />
+    </>
+  );
 }
 
 export const journalSavedReflectionStyles = StyleSheet.create({
@@ -154,12 +382,16 @@ type JournalSavedReflectionBlockProps = {
   block: SavedReflectionBlock;
   bodyColor: string;
   linkColor: string;
+  bundle: MobileAppThemeBundle;
+  translationId: string;
 };
 
 export const JournalSavedReflectionBlock = memo(function JournalSavedReflectionBlock({
   block,
   bodyColor,
   linkColor,
+  bundle,
+  translationId,
 }: JournalSavedReflectionBlockProps) {
   if (block.kind === "image") {
     return (
@@ -174,33 +406,39 @@ export const JournalSavedReflectionBlock = memo(function JournalSavedReflectionB
 
   if (block.kind === "heading1") {
     return (
-      <Text
+      <JournalReflectionRichText
+        html={block.html}
         style={[
           journalSavedReflectionStyles.heading1,
           { marginTop: block.isFirst ? 0 : 10, color: bodyColor },
         ]}
-      >
-        {renderJournalReflectionInline(block.html, linkColor)}
-      </Text>
+        linkColor={linkColor}
+        bundle={bundle}
+        translationId={translationId}
+      />
     );
   }
 
   if (block.kind === "heading2") {
     return (
-      <Text
+      <JournalReflectionRichText
+        html={block.html}
         style={[
           journalSavedReflectionStyles.heading2,
           { marginTop: block.isFirst ? 0 : 8, color: bodyColor },
         ]}
-      >
-        {renderJournalReflectionInline(block.html, linkColor)}
-      </Text>
+        linkColor={linkColor}
+        bundle={bundle}
+        translationId={translationId}
+      />
     );
   }
 
   if (block.kind === "list-item") {
     return (
-      <Text
+      <JournalReflectionRichText
+        html={block.html}
+        leading={block.marker}
         style={[
           journalSavedReflectionStyles.listItem,
           {
@@ -210,16 +448,20 @@ export const JournalSavedReflectionBlock = memo(function JournalSavedReflectionB
             textDecorationLine: block.checked ? "line-through" : "none",
           },
         ]}
-      >
-        {block.marker}
-        {renderJournalReflectionInline(block.html, linkColor)}
-      </Text>
+        linkColor={linkColor}
+        bundle={bundle}
+        translationId={translationId}
+      />
     );
   }
 
   return (
-    <Text style={[journalSavedReflectionStyles.paragraph, { color: bodyColor }]}>
-      {renderJournalReflectionInline(block.html, linkColor)}
-    </Text>
+    <JournalReflectionRichText
+      html={block.html}
+      style={[journalSavedReflectionStyles.paragraph, { color: bodyColor }]}
+      linkColor={linkColor}
+      bundle={bundle}
+      translationId={translationId}
+    />
   );
 });

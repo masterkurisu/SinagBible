@@ -19,6 +19,7 @@ import { formatBookLabel } from "@sinag-bible/core";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { JournalDetailAndroidAppBar } from "@/src/features/journal/JournalDetailAndroidAppBar";
 import { JournalEntryScrollView } from "@/src/features/journal/JournalEntryScrollView";
+import { peekReaderLastPosition } from "@/lib/reader-last-position";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -774,6 +775,12 @@ export default function JournalEntryScreen() {
                 tan200: colors.tan200,
               }}
               pageBackgroundColor={j.listPageBackground}
+              bundle={bundle}
+              activeTranslationId={
+                peekReaderLastPosition()?.translationId?.trim() ||
+                entry.bible_translation?.trim() ||
+                "KJV"
+              }
             />
 
             <View

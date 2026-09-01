@@ -54,4 +54,23 @@ describe("htmlToReflectionMarkdown", () => {
       "Visit [here](https://example.com) now.",
     );
   });
+
+  it("round-trips data-verse-ref spans back to [@...] tokens", () => {
+    expect(
+      htmlToReflectionMarkdown('<p>See <span data-verse-ref="john:3:16">John 3:16</span> today.</p>'),
+    ).toBe("See [@john:3:16] today.");
+    expect(
+      htmlToReflectionMarkdown(
+        '<p><span data-translation="KJV" data-verse-ref="john:3:16">John 3:16</span></p>',
+      ),
+    ).toBe("[@john:3:16@KJV]");
+  });
+
+  it("does not treat a verse span followed by parens as a markdown link", () => {
+    expect(
+      htmlToReflectionMarkdown(
+        '<p><span data-verse-ref="john:3:16">John 3:16</span>(not a link)</p>',
+      ),
+    ).toBe("[@john:3:16](not a link)");
+  });
 });

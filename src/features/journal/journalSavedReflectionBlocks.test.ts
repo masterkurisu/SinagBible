@@ -36,6 +36,20 @@ describe("splitSavedReflectionHtml", () => {
     ]);
   });
 
+  it("keeps paragraphs whose only visible text is a verse-tag span", () => {
+    expect(
+      splitSavedReflectionHtml(
+        '<p>See <span data-verse-ref="john:3:16">John 3:16</span>.</p>',
+      ),
+    ).toEqual([
+      {
+        key: "p-0",
+        kind: "paragraph",
+        html: 'See <span data-verse-ref="john:3:16">John 3:16</span>.',
+      },
+    ]);
+  });
+
   it("skips empty headings", () => {
     expect(splitSavedReflectionHtml("<h1>   </h1><p>Keep</p>")).toEqual([
       { key: "p-1", kind: "paragraph", html: "Keep" },

@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import Animated, { useSharedValue } from "react-native-reanimated";
 import { FlashList, type FlashListRef, type ListRenderItemInfo } from "@shopify/flash-list";
+import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { UpCircleIcon } from "@/components/icons/UpCircleIcon";
 import { formatJournalTagLabel } from "@/lib/journal-tags";
 import { READER_FLASH_LIST_DRAW_DISTANCE_PX } from "@/lib/device-capability";
@@ -57,6 +58,9 @@ export type JournalEntryScrollViewProps = {
   onCaptureTreeReady?: () => void;
   colors: { brown800: string; gold: string; tan200: string };
   pageBackgroundColor: string;
+  bundle: MobileAppThemeBundle;
+  /** Live reader translation for chip tooltips (not the entry's stored version). */
+  activeTranslationId: string;
 };
 
 function JournalEntryHeader({
@@ -131,6 +135,8 @@ function JournalEntryCaptureDocument({
   blocks,
   bodyColor,
   linkColor,
+  bundle,
+  translationId,
   captureRef,
   collapsable,
   backgroundColor,
@@ -139,6 +145,8 @@ function JournalEntryCaptureDocument({
   blocks: SavedReflectionBlock[];
   bodyColor: string;
   linkColor: string;
+  bundle: MobileAppThemeBundle;
+  translationId: string;
   captureRef: RefObject<View | null>;
   collapsable?: boolean;
   backgroundColor: string;
@@ -156,6 +164,8 @@ function JournalEntryCaptureDocument({
           block={block}
           bodyColor={bodyColor}
           linkColor={linkColor}
+          bundle={bundle}
+          translationId={translationId}
         />
       ))}
     </View>
@@ -177,6 +187,8 @@ export function JournalEntryScrollView({
   onCaptureTreeReady,
   colors,
   pageBackgroundColor,
+  bundle,
+  activeTranslationId,
 }: JournalEntryScrollViewProps) {
   const { width: screenW } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
@@ -250,9 +262,11 @@ export function JournalEntryScrollView({
         block={item}
         bodyColor={colors.brown800}
         linkColor={colors.gold}
+        bundle={bundle}
+        translationId={activeTranslationId}
       />
     ),
-    [colors.brown800, colors.gold],
+    [colors.brown800, colors.gold, bundle, activeTranslationId],
   );
 
   const scrollToTop = useCallback(() => {
@@ -314,6 +328,8 @@ export function JournalEntryScrollView({
             blocks={reflectionBlocks}
             bodyColor={colors.brown800}
             linkColor={colors.gold}
+            bundle={bundle}
+            translationId={activeTranslationId}
             captureRef={shareCaptureRef}
             collapsable={capturePass ? false : undefined}
             backgroundColor={pageBackgroundColor}
@@ -331,6 +347,8 @@ export function JournalEntryScrollView({
             blocks={reflectionBlocks}
             bodyColor={colors.brown800}
             linkColor={colors.gold}
+            bundle={bundle}
+            translationId={activeTranslationId}
             captureRef={shareCaptureRef}
             collapsable={false}
             backgroundColor={pageBackgroundColor}
