@@ -919,6 +919,7 @@ export default function JournalIndexScreen() {
       openFrom(rowRef, {
         ...previews,
         sourceBorderRadius: JOURNAL_TILE_RADIUS_PX,
+        scrim: false,
         onMeasureFailed: () => {
           dismissInstantly();
         },
@@ -969,6 +970,7 @@ export default function JournalIndexScreen() {
       openFrom(rowRef, {
         ...previews,
         sourceBorderRadius: JOURNAL_TILE_RADIUS_PX,
+        scrim: false,
         startExpanded: true,
         onSettled: () => {
           close();

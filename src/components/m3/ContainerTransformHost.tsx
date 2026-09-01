@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect } from "react";
 import {
   BackHandler,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -69,13 +70,13 @@ export function ContainerTransformHost() {
   ]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !session?.scrimEnabled) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       close();
       return true;
     });
     return () => sub.remove();
-  }, [close, isOpen]);
+  }, [close, isOpen, session?.scrimEnabled]);
 
   const shellStyle = useAnimatedStyle(() => {
     "worklet";
@@ -131,6 +132,28 @@ export function ContainerTransformHost() {
     return null;
   }
 
+  const passThroughTouches = !session.scrimEnabled;
+  const morphShell = (
+    <Reanimated.View pointerEvents="none" style={shellStyle}>
+      {session.renderSource ? (
+        <Reanimated.View style={[StyleSheet.absoluteFill, outgoingStyle]} pointerEvents="none">
+          {session.renderSource}
+        </Reanimated.View>
+      ) : null}
+      <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, incomingStyle]}>
+        {session.renderExpanded}
+      </Reanimated.View>
+    </Reanimated.View>
+  );
+
+  if (passThroughTouches) {
+    return (
+      <View style={styles.passThroughHost} pointerEvents="none">
+        {morphShell}
+      </View>
+    );
+  }
+
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={close}>
       <View style={styles.root} pointerEvents="box-none">
@@ -142,17 +165,7 @@ export function ContainerTransformHost() {
         >
           <Reanimated.View pointerEvents="none" style={[styles.scrim, scrimStyle]} />
         </Pressable>
-
-        <Reanimated.View pointerEvents="box-none" style={shellStyle}>
-          {session.renderSource ? (
-            <Reanimated.View style={[StyleSheet.absoluteFill, outgoingStyle]} pointerEvents="none">
-              {session.renderSource}
-            </Reanimated.View>
-          ) : null}
-          <Reanimated.View style={[StyleSheet.absoluteFill, incomingStyle]}>
-            {session.renderExpanded}
-          </Reanimated.View>
-        </Reanimated.View>
+        {morphShell}
       </View>
     </Modal>
   );
@@ -161,6 +174,13 @@ export function ContainerTransformHost() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  passThroughHost: {
+    ...StyleSheet.absoluteFillObject,
+    ...Platform.select({
+      android: { elevation: 9999 },
+      default: { zIndex: 9999 },
+    }),
   },
   scrim: {
     ...StyleSheet.absoluteFill,

@@ -72,6 +72,8 @@ export type ContainerTransformOpenOptions = {
   targetBounds?: ContainerBounds;
   /** When set, `useContainerTransformBackgroundStyle(ref)` dims this subtree (scale 0.95, opacity 0.9). */
   backgroundRef?: RefObject<View | null>;
+  /** M3 scrim behind the morph shell. Default true; set false for navigation handoffs (e.g. journal list → detail). */
+  scrim?: boolean;
   sourceBorderRadius?: number;
   onClose?: () => void;
   /** Fired when `measureInWindow` fails — overlay never opens. */
@@ -89,6 +91,7 @@ export type ContainerTransformSession = {
   renderSource: ReactNode;
   renderExpanded: ReactNode;
   backgroundRef: RefObject<View | null> | null;
+  scrimEnabled: boolean;
   onClose?: () => void;
   skipMorph: boolean;
   spatialSpring: M3SpringConfig;
@@ -228,7 +231,9 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
     cancelAnimation(scrimOpacity);
     cancelAnimation(backgroundDim);
 
-    animateM3EffectsOpacity(scrimOpacity, 0, false);
+    if (active.scrimEnabled) {
+      animateM3EffectsOpacity(scrimOpacity, 0, false);
+    }
     if (active.backgroundRef) {
       animateM3EffectsOpacity(backgroundDim, 0, false);
     }
@@ -268,6 +273,7 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
         renderSource: null,
         renderExpanded: options.renderExpanded,
         backgroundRef: null,
+        scrimEnabled: true,
         onClose: options.onClose,
         skipMorph,
         spatialSpring,
@@ -316,6 +322,7 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
         };
 
         const onSettled = options.onSettled;
+        const scrimEnabled = options.scrim !== false;
         const nextSession: ContainerTransformSession = {
           sourceRef,
           startBounds,
@@ -323,6 +330,7 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
           renderSource: options.renderSource ?? null,
           renderExpanded: options.renderExpanded,
           backgroundRef: options.backgroundRef ?? null,
+          scrimEnabled,
           onClose: options.onClose,
           skipMorph,
           spatialSpring,
@@ -345,7 +353,7 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
 
         if (options.startExpanded) {
           progress.value = 1;
-          scrimOpacity.value = M3_SCRIM_OPACITY;
+          scrimOpacity.value = scrimEnabled ? M3_SCRIM_OPACITY : 0;
           if (options.backgroundRef) {
             backgroundDim.value = 1;
           }
@@ -362,7 +370,9 @@ export function ContainerTransformProvider({ children }: { children: ReactNode }
           skipMorph,
           invokeEnterComplete,
         );
-        animateM3EffectsOpacity(scrimOpacity, M3_SCRIM_OPACITY, true);
+        if (scrimEnabled) {
+          animateM3EffectsOpacity(scrimOpacity, M3_SCRIM_OPACITY, true);
+        }
         if (options.backgroundRef) {
           animateM3EffectsOpacity(backgroundDim, 1, true);
         }
