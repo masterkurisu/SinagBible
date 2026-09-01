@@ -99,6 +99,7 @@ type ParagraphVerseTypography = {
 type RenderParagraphVerseParams = {
   verse: ReaderVerseFlashVerse;
   isLastInRun: boolean;
+  verseTextAlign: ReaderVerseTextAlignProp;
   selectedVerseNumbers: ReadonlySet<number>;
   annotations: Record<number, VerseAnnotation | undefined>;
   isDarkTheme: boolean;
@@ -118,6 +119,7 @@ type RenderParagraphVerseParams = {
 function renderParagraphVerseText({
   verse,
   isLastInRun,
+  verseTextAlign,
   selectedVerseNumbers,
   annotations,
   isDarkTheme,
@@ -165,6 +167,7 @@ function renderParagraphVerseText({
         fontSize: typography.readerVerseFontSize,
         lineHeight: typography.readerVerseLineHeight,
         color: textCol,
+        textAlign: verseTextAlign,
         backgroundColor: isSelected ? selectionBackground : highlightBg ?? "transparent",
         textDecorationLine: underlineColor ? "underline" : "none",
         textDecorationColor: underlineColor,
@@ -252,27 +255,16 @@ function ReaderVerseParagraphBlockInner({
 
   return (
     <View style={styles.wrap}>
-      {runs.map((run, runIndex) => {
-        const lastVerseIndexInRun = run.verses[run.verses.length - 1]?.verseIndex;
-        return (
+      {runs.map((run, runIndex) => (
         <View key={`run-${run.verses[0]?.verseIndex ?? runIndex}`}>
-          <Text
-            style={{
-              fontFamily: readerVerseBodyFontFamily,
-              fontSize: readerVerseFontSize,
-              lineHeight: readerVerseLineHeight,
-              color: bodyTextColor,
-              textAlign: verseTextAlign,
-            }}
-          >
-            {run.verses.map((verse) =>
-              renderParagraphVerseText({
-                verse,
-                isLastInRun: verse.verseIndex === lastVerseIndexInRun,
-                ...verseRenderParams,
-              }),
-            )}
-          </Text>
+          {run.verses.map((verse) =>
+            renderParagraphVerseText({
+              verse,
+              isLastInRun: false,
+              ...verseRenderParams,
+              verseTextAlign,
+            }),
+          )}
           {run.noteVerseNum != null && run.noteText ? (
             <Pressable
               onLongPress={() => onNoteLongPress?.(run.noteVerseNum!)}
@@ -295,8 +287,7 @@ function ReaderVerseParagraphBlockInner({
             </Pressable>
           ) : null}
         </View>
-        );
-      })}
+      ))}
     </View>
   );
 }

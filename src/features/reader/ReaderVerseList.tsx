@@ -284,32 +284,34 @@ export function ReaderVerseList({
       : readerVerseEstimatedItemSize;
 
   const paragraphScrollView = (
-    <AnimatedReaderChapterScrollView
-      key={readerScrollLayoutKey}
-      ref={scrollViewRef}
-      {...chapterSwipePanHandlers}
-      style={listStyle}
-      scrollEventThrottle={READER_SCROLL_EVENT_THROTTLE}
-      onScroll={
-        onScroll as NonNullable<ComponentProps<typeof AnimatedReaderChapterScrollView>["onScroll"]>
-      }
-      onScrollBeginDrag={onScrollBeginDrag}
-      onScrollEndDrag={onScrollEndDrag}
-      onMomentumScrollEnd={onMomentumScrollEnd}
-      onContentSizeChange={onListContentSizeChange}
-      onLayout={
-        onListLayoutHeight
-          ? (event) => onListLayoutHeight(event.nativeEvent.layout.height)
-          : undefined
-      }
-      contentContainerStyle={scrollContentContainerStyle}
-      removeClippedSubviews={false}
-      showsVerticalScrollIndicator
-    >
-      {listHeaderNode}
-      {renderParagraphContent?.()}
-      {readerChapterFlashListFooter()}
-    </AnimatedReaderChapterScrollView>
+    <View style={listStyle} {...chapterSwipePanHandlers}>
+      <AnimatedReaderChapterScrollView
+        key={readerScrollLayoutKey}
+        ref={scrollViewRef}
+        style={readerFlashListChromeStyles.list}
+        scrollEventThrottle={READER_SCROLL_EVENT_THROTTLE}
+        onScroll={
+          onScroll as NonNullable<ComponentProps<typeof AnimatedReaderChapterScrollView>["onScroll"]>
+        }
+        onScrollBeginDrag={onScrollBeginDrag}
+        onScrollEndDrag={onScrollEndDrag}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        onContentSizeChange={onListContentSizeChange}
+        onLayout={
+          onListLayoutHeight
+            ? (event) => onListLayoutHeight(event.nativeEvent.layout.height)
+            : undefined
+        }
+        contentContainerStyle={scrollContentContainerStyle}
+        removeClippedSubviews={false}
+        showsVerticalScrollIndicator
+        nestedScrollEnabled
+      >
+        {listHeaderNode}
+        {renderParagraphContent?.()}
+        {readerChapterFlashListFooter()}
+      </AnimatedReaderChapterScrollView>
+    </View>
   );
 
   const flashList = (

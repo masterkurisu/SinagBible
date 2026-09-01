@@ -48,11 +48,19 @@ describe("buildReaderVerseFlashListData", () => {
     ]);
   });
 
-  it("splits paragraph layout into two column blocks", () => {
+  it("keeps paragraph layout in one block even when two-column is requested", () => {
     const items = buildReaderVerseFlashListData(["v1", "v2", "v3", "v4", "v5"], true, 3, undefined, "paragraph");
-    expect(items.map((item) => (item.kind === "paragraph" ? item.verses.map((v) => v.verseIndex) : item.kind))).toEqual([
-      [0, 1, 2],
-      [3, 4],
+    expect(items).toEqual([
+      {
+        kind: "paragraph",
+        verses: [
+          { verseIndex: 0, verseText: "v1", verseInlineContent: undefined },
+          { verseIndex: 1, verseText: "v2", verseInlineContent: undefined },
+          { verseIndex: 2, verseText: "v3", verseInlineContent: undefined },
+          { verseIndex: 3, verseText: "v4", verseInlineContent: undefined },
+          { verseIndex: 4, verseText: "v5", verseInlineContent: undefined },
+        ],
+      },
     ]);
   });
 
@@ -90,7 +98,7 @@ describe("findFlashListIndexForVerseNumber", () => {
   it("finds a verse inside a paragraph block", () => {
     const items = buildReaderVerseFlashListData(["v1", "v2", "v3", "v4"], true, 2, undefined, "paragraph");
     expect(findFlashListIndexForVerseNumber(items, 1)).toBe(0);
-    expect(findFlashListIndexForVerseNumber(items, 4)).toBe(1);
+    expect(findFlashListIndexForVerseNumber(items, 4)).toBe(0);
   });
 });
 

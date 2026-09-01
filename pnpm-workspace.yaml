@@ -1,6 +1,9 @@
 packages:
   - .
   - packages/*
+# App lives at the workspace root; allow `pnpm add` / `expo install` here.
+# pnpm 11 reads this from pnpm-workspace.yaml, not .npmrc.
+ignoreWorkspaceRootCheck: true
 allowBuilds:
   '@sentry/cli': true
   esbuild: true

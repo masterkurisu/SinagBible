@@ -43,6 +43,8 @@ import {
 } from "@/src/features/reader/ReaderVerseList";
 import type { ReaderChapterScrollHandle } from "@/src/features/reader/readerChapterScrollRef";
 import type { ReaderVerseFlashItem } from "@/src/features/reader/useReaderGestures";
+import type { BibleVerseInlineItem } from "@sinag-bible/types";
+import type { ReaderVerseFlashVerse } from "./readerVerseFlashListData";
 import type { ReaderVerseLayout } from "@/src/features/reader/useReaderPreferences";
 import { useReaderSelection } from "@/src/features/reader/useReaderSelection";
 import { ReaderAnnotationSheet } from "@/src/features/reader/ReaderAnnotationSheet";
@@ -593,6 +595,7 @@ export type ReaderSelectionLayerProps = {
     chapterNumber: number;
     verses: readonly string[];
     bookSlug: string;
+    verseInlineContent?: readonly BibleVerseInlineItem[][];
   };
   resolvedTranslationId: string;
   annotations: Record<number, VerseAnnotation | undefined>;
@@ -992,30 +995,72 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     [interactionData, stableVisualData],
   );
 
+  const paragraphScrollVerses = useMemo((): ReaderVerseFlashVerse[] => {
+    return chapter.verses.map((verseText, verseIndex) => {
+      const inline = chapter.verseInlineContent?.[verseIndex];
+      return {
+        verseIndex,
+        verseText,
+        verseInlineContent: inline && inline.length > 0 ? [...inline] : undefined,
+      };
+    });
+  }, [chapter.verses, chapter.verseInlineContent]);
+
   const renderParagraphContent = useCallback(() => {
-    const item = verseFlashListDataForList.find(
-      (row): row is Extract<ReaderVerseFlashItem, { kind: "paragraph" }> => row.kind === "paragraph",
-    );
-    if (!item) return null;
+    if (paragraphScrollVerses.length === 0) return null;
     return (
-      <MemoizedReaderParagraphFlashRow
-        item={item}
-        index={0}
-        interactionData={interactionData}
-        stableVisualData={stableVisualData}
-        readerTabletLandscapeTwoColumn={false}
-        onVersePress={handleVerseTapForOnboarding}
-        onVerseLongPress={handleVerseLongPressForOnboarding}
-        onNoteLongPress={handleNoteLongPress}
-      />
+      <View style={readerVerseListStyles.flashItemBase}>
+        <ReaderVerseParagraphBlock
+          verses={paragraphScrollVerses}
+          selectedVerseNumbers={selectedVerseNumbers}
+          annotations={annotations}
+          notes={notes}
+          themeId={themeId}
+          selectionBackground={rc.selectionBackground}
+          selectionText={rc.selectionText}
+          verseNumberColor={rc.verseNumberColor}
+          noteBelowVerseBackground={rc.noteBelowVerseBackground}
+          bodyTextColor={colors.brown800}
+          readerVerseFontSize={readerVerseFontSize}
+          readerVerseLineHeight={readerVerseLineHeight}
+          readerVerseBodyFontFamily={readerVerseBodyFontFamily}
+          verseTextAlign={verseTextAlign}
+          onVersePress={handleVerseTapForOnboarding}
+          onVerseLongPress={handleVerseLongPressForOnboarding}
+          onNoteLongPress={handleNoteLongPress}
+          translationId={resolvedTranslationId}
+          bundle={bundle}
+          verseTagChipBackground={colors.parchmentMid}
+          verseTagChipBorder={colors.tan300}
+          yvpFootnotes={yvpFootnotes}
+          onYvpFootnotePress={onYvpFootnotePress}
+        />
+      </View>
     );
   }, [
-    verseFlashListDataForList,
-    interactionData,
-    stableVisualData,
+    paragraphScrollVerses,
+    selectedVerseNumbers,
+    annotations,
+    notes,
+    themeId,
+    rc.selectionBackground,
+    rc.selectionText,
+    rc.verseNumberColor,
+    rc.noteBelowVerseBackground,
+    colors.brown800,
+    colors.parchmentMid,
+    colors.tan300,
+    readerVerseFontSize,
+    readerVerseLineHeight,
+    readerVerseBodyFontFamily,
+    verseTextAlign,
     handleVerseTapForOnboarding,
     handleVerseLongPressForOnboarding,
     handleNoteLongPress,
+    resolvedTranslationId,
+    bundle,
+    yvpFootnotes,
+    onYvpFootnotePress,
   ]);
 
   const renderReaderVerseFlashItem = useCallback(

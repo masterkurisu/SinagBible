@@ -54,6 +54,7 @@ const nativewindPackage = path.resolve(projectRoot, "node_modules/nativewind");
 const cssInteropPackage = path.resolve(projectRoot, "node_modules/react-native-css-interop");
 const pellRichEditorPackage = path.resolve(projectRoot, "node_modules/react-native-pell-rich-editor");
 const webviewPackage = path.resolve(projectRoot, "node_modules/react-native-webview");
+const reactNativeWebPackage = path.resolve(projectRoot, "node_modules/react-native-web");
 const expoRouterPackage = path.resolve(projectRoot, "node_modules/expo-router");
 const expoHapticsPackage = path.resolve(projectRoot, "node_modules/expo-haptics");
 const expoPrintPackage = path.resolve(projectRoot, "node_modules/expo-print");
@@ -81,6 +82,8 @@ config.resolver.extraNodeModules = {
   "react-native-css-interop": cssInteropPackage,
   "react-native-pell-rich-editor": pellRichEditorPackage,
   "react-native-webview": webviewPackage,
+  /** Expo Router SSR/web (`expo-modules-core` → `react-native-web/dist/exports/Platform`). */
+  "react-native-web": reactNativeWebPackage,
   /** Single copy so LinkPreviewContext matches ExpoRoot (avoids useLinkPreviewContext crash). */
   "expo-router": expoRouterPackage,
   /** pnpm + monorepo: ensure Metro resolves the app-linked native module (not a missing hoisted path). */

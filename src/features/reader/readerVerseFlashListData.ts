@@ -57,24 +57,12 @@ export function buildReaderVerseFlashListData(
 ): ReaderVerseFlashItem[] {
   if (verseLayout === "paragraph") {
     if (verses.length === 0) return [];
-    if (!twoColumn) {
-      return [
-        {
-          kind: "paragraph",
-          verses: verses.map((_, i) => verseFlashAt(verses, verseInlineContent, i)),
-        },
-      ];
-    }
-    const left = verses
-      .slice(0, splitIndex)
-      .map((_, i) => verseFlashAt(verses, verseInlineContent, i));
-    const right = verses
-      .slice(splitIndex)
-      .map((_, i) => verseFlashAt(verses, verseInlineContent, splitIndex + i));
-    const out: ReaderVerseFlashItem[] = [];
-    if (left.length > 0) out.push({ kind: "paragraph", verses: left });
-    if (right.length > 0) out.push({ kind: "paragraph", verses: right });
-    return out;
+    return [
+      {
+        kind: "paragraph",
+        verses: verses.map((_, i) => verseFlashAt(verses, verseInlineContent, i)),
+      },
+    ];
   }
 
   if (!twoColumn) {
