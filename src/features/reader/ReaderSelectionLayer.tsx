@@ -405,8 +405,6 @@ type ReaderVerseStableVisualData = {
   verseTextAlign: ReaderVerseTextAlign;
   translationId: string;
   bundle: MobileAppThemeBundle;
-  verseTagChipBackground: string;
-  verseTagChipBorder: string;
   yvpFootnotes?: Record<number, { label: string; body: string }>;
   onYvpFootnotePress?: (noteId: number) => void;
 };
@@ -475,8 +473,6 @@ const MemoizedReaderVerseFlashRow = memo(
           onNoteLongPress={onNoteLongPress}
           translationId={vd.translationId}
           bundle={vd.bundle}
-          verseTagChipBackground={vd.verseTagChipBackground}
-          verseTagChipBorder={vd.verseTagChipBorder}
           yvpFootnotes={vd.yvpFootnotes}
           onYvpFootnotePress={vd.onYvpFootnotePress}
         />
@@ -547,8 +543,6 @@ const MemoizedReaderParagraphFlashRow = memo(
           onNoteLongPress={onNoteLongPress}
           translationId={vd.translationId}
           bundle={vd.bundle}
-          verseTagChipBackground={vd.verseTagChipBackground}
-          verseTagChipBorder={vd.verseTagChipBorder}
           yvpFootnotes={vd.yvpFootnotes}
           onYvpFootnotePress={vd.onYvpFootnotePress}
         />
@@ -956,8 +950,6 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
       verseTextAlign,
       translationId: resolvedTranslationId,
       bundle,
-      verseTagChipBackground: colors.parchmentMid,
-      verseTagChipBorder: colors.tan300,
       yvpFootnotes,
       onYvpFootnotePress,
     }),
@@ -968,8 +960,6 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
       rc.verseNumberColor,
       rc.noteBelowVerseBackground,
       colors.brown800,
-      colors.parchmentMid,
-      colors.tan300,
       readerVerseFontSize,
       readerVerseLineHeight,
       readerVerseBodyFontFamily,
@@ -1030,8 +1020,6 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
           onNoteLongPress={handleNoteLongPress}
           translationId={resolvedTranslationId}
           bundle={bundle}
-          verseTagChipBackground={colors.parchmentMid}
-          verseTagChipBorder={colors.tan300}
           yvpFootnotes={yvpFootnotes}
           onYvpFootnotePress={onYvpFootnotePress}
         />

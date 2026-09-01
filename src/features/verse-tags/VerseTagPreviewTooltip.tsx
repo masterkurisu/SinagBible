@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Modal,
   Pressable,
@@ -10,14 +10,13 @@ import {
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { M3RichTooltipCard } from "@/src/components/m3/M3RichTooltipCard";
 import { M3Button } from "@/src/components/m3/M3Button";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
+import { focusVerseTagElement } from "@/src/features/verse-tags/verseTagFocus";
 import {
-  computeM3RichTooltipPosition,
-  M3_RICH_TOOLTIP_EST_HEIGHT_PX,
-  M3_RICH_TOOLTIP_WIDTH_PX,
-} from "@/src/components/m3/m3-rich-tooltip-layout";
-import {
-  READER_M3_ON_SURFACE_VARIANT,
-} from "@/src/features/reader/readerSettingsPanelChrome";
+  computeVerseTagTooltipPosition,
+  VERSE_TAG_TOOLTIP_EST_HEIGHT_PX,
+  VERSE_TAG_TOOLTIP_WIDTH_PX,
+} from "@/src/features/verse-tags/verseTagTooltipLayout";
 
 export type VerseTagPreviewTooltipProps = {
   visible: boolean;
@@ -41,23 +40,33 @@ export function VerseTagPreviewTooltip({
   onOpenInReader,
 }: VerseTagPreviewTooltipProps) {
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const cardRef = useRef<View | null>(null);
+  const chrome = getReaderSheetChrome(bundle);
   const rc = bundle.reader;
 
   const layout = useMemo(
     () =>
-      computeM3RichTooltipPosition(
+      computeVerseTagTooltipPosition(
         anchor,
         screenW,
         screenH,
-        M3_RICH_TOOLTIP_WIDTH_PX,
-        M3_RICH_TOOLTIP_EST_HEIGHT_PX + 56,
+        VERSE_TAG_TOOLTIP_WIDTH_PX,
+        VERSE_TAG_TOOLTIP_EST_HEIGHT_PX,
       ),
     [anchor, screenH, screenW],
   );
 
+  useEffect(() => {
+    if (!visible) return;
+    const frame = requestAnimationFrame(() => {
+      focusVerseTagElement(cardRef);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [visible, title, description]);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
-      <View style={styles.root} pointerEvents="box-none">
+      <View style={styles.root} pointerEvents="box-none" accessibilityViewIsModal>
         <Pressable
           style={StyleSheet.absoluteFill}
           accessibilityRole="button"
@@ -74,21 +83,29 @@ export function VerseTagPreviewTooltip({
             },
           ]}
         >
-          <M3RichTooltipCard
-            title={title}
-            description={description}
-            width={layout.width}
-            backgroundColor={rc.popoverSurface}
-            titleColor={bundle.ui.brown800}
-            descriptionColor={READER_M3_ON_SURFACE_VARIANT}
-          />
+          <View
+            ref={cardRef}
+            accessible
+            accessibilityRole="summary"
+            accessibilityLabel={`${title}. ${description}`}
+            accessibilityLiveRegion="polite"
+          >
+            <M3RichTooltipCard
+              title={title}
+              description={description}
+              width={layout.width}
+              backgroundColor={rc.popoverSurface}
+              titleColor={chrome.onSurface}
+              descriptionColor={chrome.onSurfaceVariant}
+            />
+          </View>
           <View style={styles.actionRow}>
             <M3Button
               label="Open in Reader"
               variant="filled"
               onPress={onOpenInReader}
               bundle={bundle}
-              accentColor={bundle.ui.brown800}
+              accentColor={chrome.onSurface}
               disabled={!canOpenInReader}
               fullWidth
             />

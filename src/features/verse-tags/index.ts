@@ -17,6 +17,13 @@ export type {
   VerseTagComposerState,
 } from "./verseTagComposer";
 export { VerseTagChip } from "./VerseTagChip";
+export type { VerseTagChipVariant } from "./VerseTagChip";
+export {
+  formatVerseTagChipAccessibilityLabel,
+  formatVerseTagTooltipTitle,
+} from "./verseTagChipCopy";
 export { VerseTagMentionSheet } from "./VerseTagMentionSheet";
 export { VerseTagPreviewTooltip } from "./VerseTagPreviewTooltip";
 export { VerseTaggedText } from "./VerseTaggedText";
+export { computeVerseTagTooltipPosition } from "./verseTagTooltipLayout";
+export type { VerseTagTooltipPlacement, VerseTagTooltipPosition } from "./verseTagTooltipLayout";

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Text,
   type LayoutRectangle,
@@ -11,10 +11,16 @@ import type { VerseTagRef } from "@sinag-bible/types";
 import { getBookNameFromSlug } from "@sinag-bible/core/bible-meta";
 import { formatVerseTagLabel, splitTextWithVerseTags } from "@sinag-bible/core";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
+import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
 import {
   getJournalVersePreview,
   resolveJournalPassageBookSlug,
 } from "@/lib/journal-verse-preview";
+import {
+  formatVerseTagChipAccessibilityLabel,
+  formatVerseTagTooltipTitle,
+} from "@/src/features/verse-tags/verseTagChipCopy";
+import { focusVerseTagElement } from "@/src/features/verse-tags/verseTagFocus";
 import { VerseTagChip } from "@/src/features/verse-tags/VerseTagChip";
 import { VerseTagPreviewTooltip } from "@/src/features/verse-tags/VerseTagPreviewTooltip";
 import { openVerseTagInReader } from "@/src/features/verse-tags/openVerseTagInReader";
@@ -23,16 +29,14 @@ export type VerseTaggedTextProps = {
   text: string;
   textStyle: StyleProp<TextStyle>;
   textColor: string;
-  chipBackgroundColor: string;
-  chipBorderColor: string;
-  chipTextColor: string;
   translationId: string;
   bundle: MobileAppThemeBundle;
 };
 
 type ActiveTagState = {
+  key: string;
   ref: VerseTagRef;
-  label: string;
+  title: string;
   anchor: LayoutRectangle;
 };
 
@@ -40,22 +44,23 @@ export function VerseTaggedText({
   text,
   textStyle,
   textColor,
-  chipBackgroundColor,
-  chipBorderColor,
-  chipTextColor,
   translationId,
   bundle,
 }: VerseTaggedTextProps) {
   const segments = useMemo(() => splitTextWithVerseTags(text), [text]);
-  const chipRefs = useRef(new Map<string, React.RefObject<Text | null>>());
+  const chipRefs = useRef(new Map<string, React.RefObject<View | null>>());
   const [activeTag, setActiveTag] = useState<ActiveTagState | null>(null);
   const [previewText, setPreviewText] = useState<string | null>(null);
   const [previewPending, setPreviewPending] = useState(false);
+  const versionAbbreviation = useMemo(
+    () => getTranslationDisplayAbbreviation(translationId),
+    [translationId],
+  );
 
   const getChipRef = useCallback((key: string) => {
     const existing = chipRefs.current.get(key);
     if (existing) return existing;
-    const next = { current: null } as React.RefObject<Text | null>;
+    const next = { current: null } as React.RefObject<View | null>;
     chipRefs.current.set(key, next);
     return next;
   }, []);
@@ -88,22 +93,31 @@ export function VerseTaggedText({
   const openTooltip = useCallback(
     async (ref: VerseTagRef, label: string, key: string) => {
       const chipRef = getChipRef(key);
-      const anchor = await measureOnboardingTarget(chipRef as RefObject<View | null>, {
+      const anchor = await measureOnboardingTarget(chipRef, {
         waitForInteractions: false,
         retries: 2,
       });
       if (!anchor) return;
-      setActiveTag({ ref, label, anchor });
+      setActiveTag({
+        key,
+        ref,
+        title: formatVerseTagTooltipTitle(label, versionAbbreviation),
+        anchor,
+      });
       void loadPreview(ref);
     },
-    [getChipRef, loadPreview],
+    [getChipRef, loadPreview, versionAbbreviation],
   );
 
   const dismissTooltip = useCallback(() => {
+    const chipRef = activeTag ? chipRefs.current.get(activeTag.key) : undefined;
     setActiveTag(null);
     setPreviewText(null);
     setPreviewPending(false);
-  }, []);
+    requestAnimationFrame(() => {
+      focusVerseTagElement(chipRef);
+    });
+  }, [activeTag]);
 
   const handleOpenInReader = useCallback(() => {
     if (!activeTag) return;
@@ -116,23 +130,6 @@ export function VerseTaggedText({
       openVerseTagInReader(ref, translationId);
     },
     [translationId],
-  );
-
-  const chipStyle = useMemo(
-    () => ({
-      color: chipTextColor,
-      backgroundColor: chipBackgroundColor,
-      borderColor: chipBorderColor,
-      borderWidth: 1,
-      borderRadius: 999,
-      overflow: "hidden" as const,
-      paddingHorizontal: 8,
-      paddingVertical: 1,
-      fontFamily: "Inter_500Medium",
-      fontSize: 13,
-      lineHeight: 18,
-    }),
-    [chipBackgroundColor, chipBorderColor, chipTextColor],
   );
 
   return (
@@ -163,11 +160,15 @@ export function VerseTaggedText({
           return (
             <VerseTagChip
               key={key}
+              variant="inline"
+              bundle={bundle}
               chipRef={chipRef}
               label={label}
               textStyle={textStyle}
-              chipStyle={chipStyle}
-              accessibilityLabel={`${label}, opens verse preview`}
+              accessibilityLabel={formatVerseTagChipAccessibilityLabel(
+                segment.ref,
+                bookLabel ?? undefined,
+              )}
               onPress={() => {
                 void openTooltip(segment.ref!, label, key);
               }}
@@ -180,7 +181,7 @@ export function VerseTaggedText({
       <VerseTagPreviewTooltip
         visible={activeTag != null}
         anchor={activeTag?.anchor ?? { x: 0, y: 0, width: 0, height: 0 }}
-        title={activeTag?.label ?? ""}
+        title={activeTag?.title ?? ""}
         description={
           previewPending
             ? "Loading verse..."

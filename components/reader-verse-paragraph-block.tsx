@@ -57,8 +57,6 @@ export type ReaderVerseParagraphBlockProps = {
   onNoteLongPress?: (verseNum: number) => void;
   translationId: string;
   bundle: MobileAppThemeBundle;
-  verseTagChipBackground: string;
-  verseTagChipBorder: string;
   yvpFootnotes?: Record<number, { label: string; body: string }>;
   onYvpFootnotePress?: (noteId: number) => void;
 };
@@ -219,8 +217,6 @@ function ReaderVerseParagraphBlockInner({
   onNoteLongPress,
   translationId,
   bundle,
-  verseTagChipBackground,
-  verseTagChipBorder,
   yvpFootnotes,
   onYvpFootnotePress,
 }: ReaderVerseParagraphBlockProps) {
@@ -278,9 +274,6 @@ function ReaderVerseParagraphBlockInner({
                 text={run.noteText}
                 textStyle={styles.noteText}
                 textColor={bodyTextColor}
-                chipBackgroundColor={verseTagChipBackground}
-                chipBorderColor={verseTagChipBorder}
-                chipTextColor={bodyTextColor}
                 translationId={translationId}
                 bundle={bundle}
               />
@@ -318,8 +311,6 @@ export const ReaderVerseParagraphBlock = memo(ReaderVerseParagraphBlockInner, (p
   if (prev.onNoteLongPress !== next.onNoteLongPress) return false;
   if (prev.translationId !== next.translationId) return false;
   if (prev.bundle !== next.bundle) return false;
-  if (prev.verseTagChipBackground !== next.verseTagChipBackground) return false;
-  if (prev.verseTagChipBorder !== next.verseTagChipBorder) return false;
   if (prev.yvpFootnotes !== next.yvpFootnotes) return false;
   if (prev.onYvpFootnotePress !== next.onYvpFootnotePress) return false;
 
