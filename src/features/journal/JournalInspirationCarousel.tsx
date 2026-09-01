@@ -37,6 +37,7 @@ import {
 } from "@/lib/carousel-card-image-actions";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { hapticLightImpact, hapticWarning } from "@/lib/haptics";
+import { SCROLL_EVENT_THROTTLE } from "@/lib/high-refresh-scroll";
 import { JournalCarouselCardContextMenu } from "@/src/features/journal/JournalCarouselCardContextMenu";
 
 /** M3 uncontained carousel — large shape (28dp). */
@@ -368,6 +369,7 @@ export const JournalInspirationCarousel = memo(function JournalInspirationCarous
           showsHorizontalScrollIndicator={false}
           decelerationRate="normal"
           nestedScrollEnabled={Platform.OS === "android"}
+          scrollEventThrottle={SCROLL_EVENT_THROTTLE}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={CarouselSeparator}
           accessibilityRole="list"

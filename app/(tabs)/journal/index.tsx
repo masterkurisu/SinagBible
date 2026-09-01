@@ -67,6 +67,7 @@ import {
 import { JournalSwipeableListRow } from "@/components/journal-swipeable-list-row";
 import { registerTabScrollRef } from "@/lib/tab-scroll-to-top";
 import { hapticLightImpact } from "@/lib/haptics";
+import { SCROLL_EVENT_THROTTLE } from "@/lib/high-refresh-scroll";
 import { JournalOnboardingLayer } from "@/src/features/journal/JournalOnboardingLayer";
 import { useJournalOnboarding } from "@/src/features/journal/useJournalOnboarding";
 import type { JournalOnboardingStepId } from "@/src/features/journal/journalOnboardingSteps";
@@ -1263,7 +1264,7 @@ export default function JournalIndexScreen() {
         <GestureDetector gesture={journalListScrollGesture}>
           <FlatList
             ref={listRef}
-            className="flex-1 px-4"
+            style={styles.list}
             data={rows}
             extraData={getJournalListRevision()}
             keyExtractor={keyExtractor}
@@ -1273,7 +1274,7 @@ export default function JournalIndexScreen() {
             windowSize={10}
             maxToRenderPerBatch={8}
             initialNumToRender={6}
-            scrollEventThrottle={16}
+            scrollEventThrottle={SCROLL_EVENT_THROTTLE}
             nestedScrollEnabled={Platform.OS === "android"}
             refreshControl={refreshControl}
             contentContainerStyle={journalListContentStyle}
@@ -1461,6 +1462,10 @@ export default function JournalIndexScreen() {
 }
 
 const styles = StyleSheet.create({
+  list: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
   toastWrap: {
     position: "absolute",
     left: 24,

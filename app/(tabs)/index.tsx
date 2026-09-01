@@ -1,10 +1,11 @@
 import { useCallback } from "react";
-import { Platform, ScrollView, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
 import { useSbTabScreenPadding } from "@/lib/use-sb-bottom-padding";
 import { hapticLightImpact } from "@/lib/haptics";
+import { SCROLL_EVENT_THROTTLE } from "@/lib/high-refresh-scroll";
 import { loadReaderLastPosition, peekReaderLastPosition } from "@/lib/reader-last-position";
 import { READER_INTERNAL_NO_STACK_ANIMATION } from "@/lib/reader-hub-navigation";
 import { HomeM3HeroSection } from "@/src/features/home/HomeM3HeroSection";
@@ -51,18 +52,16 @@ export default function HomeScreen() {
   }, [router]);
 
   return (
-    <View className="flex-1" style={{ backgroundColor: h.pageBackground }}>
+    <View style={[styles.screen, { backgroundColor: h.pageBackground }]}>
       <ScrollView
-        className="flex-1"
+        style={styles.scroll}
         contentContainerStyle={{
           paddingBottom: bottomPad + androidHomeBottomCompensation,
         }}
+        scrollEventThrottle={SCROLL_EVENT_THROTTLE}
         showsVerticalScrollIndicator={false}
       >
-        <View
-          className="w-full max-w-[680px] self-center"
-          style={{ paddingHorizontal: HOME_M3_HORIZONTAL_PADDING_PX }}
-        >
+        <View style={[styles.content, { paddingHorizontal: HOME_M3_HORIZONTAL_PADDING_PX }]}>
           <View style={{ paddingTop: Math.max(10, insets.top) }}>
             <HomeM3HeroSection
               bundle={bundle}
@@ -79,3 +78,17 @@ export default function HomeScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  content: {
+    width: "100%",
+    maxWidth: 680,
+    alignSelf: "center",
+  },
+});

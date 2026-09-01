@@ -1,14 +1,22 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   Keyboard,
   Pressable,
-  ScrollView,
-  SectionList,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { FlashList, type ListRenderItemInfo } from "@shopify/flash-list";
+import { PICKER_FLASH_LIST_DRAW_DISTANCE_PX } from "@/lib/device-capability";
+import {
+  AnimatedHighRefreshScrollView,
+  SCROLL_EVENT_THROTTLE,
+} from "@/lib/high-refresh-scroll";
+import {
+  flattenSearchSections,
+  type SearchFlashRow,
+} from "@/src/features/search/searchFlashListRows";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { type Href, Link } from "expo-router";
 import type { BookSuggestion, LocalJournalEntry, SearchResult } from "@sinag-bible/types";
@@ -300,6 +308,14 @@ function createSearchBodyStyles(md: SearchOverlayChrome) {
   });
 }
 
+const SEARCH_FLASH_LIST_ESTIMATED_ITEM_SIZE_PX = 88;
+
+const searchFlashListPerfProps = {
+  drawDistance: Math.max(PICKER_FLASH_LIST_DRAW_DISTANCE_PX * 2, 800),
+  scrollEventThrottle: SCROLL_EVENT_THROTTLE,
+  removeClippedSubviews: false,
+};
+
 type SearchState = ReturnType<typeof useBibleSearch>;
 
 export type SearchResultsBodyProps = {
@@ -428,6 +444,80 @@ export function SearchResultsBody({
       </View>
     ) : null;
 
+  const flashRows = useMemo(
+    () => flattenSearchSections(search.searchSections),
+    [search.searchSections],
+  );
+
+  const renderFlashItem = useCallback(
+    ({ item }: ListRenderItemInfo<SearchFlashRow>) => {
+      if (item.kind === "header") {
+        return (
+          <Text style={[styles.sectionLabel, styles.resultsSectionHeader]}>{item.title}</Text>
+        );
+      }
+      if (item.kind === "journal") {
+        const entry = item.entry;
+        return (
+          <Link
+            href={`/journal/${entry.id}` as Href}
+            asChild
+            onPress={() => {
+              hapticLightImpact();
+              Keyboard.dismiss();
+              onNavigateResult();
+            }}
+          >
+            <TouchableOpacity activeOpacity={0.75} style={styles.row}>
+              <Text style={styles.refText}>{journalSearchRowTitle(entry)}</Text>
+              {formatJournalTagList(entry.tags) ? (
+                <Text style={styles.journalTags} numberOfLines={1}>
+                  {formatJournalTagList(entry.tags)}
+                </Text>
+              ) : null}
+              <Text style={styles.snippet} numberOfLines={2}>
+                {stripHtmlPreview(entry.content, 160)}
+              </Text>
+            </TouchableOpacity>
+          </Link>
+        );
+      }
+      const result = item.result;
+      return (
+        <Link
+          href={search.readerHrefForResult(result)}
+          asChild
+          onPress={() => {
+            hapticLightImpact();
+            Keyboard.dismiss();
+            search.onOpenVerseResult(result);
+            onNavigateResult();
+          }}
+        >
+          <TouchableOpacity activeOpacity={0.75} style={styles.row}>
+            <Text style={styles.refText}>
+              {result.bookName} {result.chapterNumber}:{result.verseNumber}
+            </Text>
+            {formatReaderMarkCaption(result) || result.strongsLabel ? (
+              <Text style={styles.journalTags} numberOfLines={1}>
+                {formatReaderMarkCaption(result) ?? result.strongsLabel}
+              </Text>
+            ) : null}
+            <BibleVerseSnippet
+              result={result}
+              query={search.snippetQuery}
+              snippetStyle={styles.snippet}
+              highlightStyle={styles.snippetHighlight}
+              neighborStyle={styles.snippetNeighbor}
+              alsoStyle={styles.snippetAlso}
+            />
+          </TouchableOpacity>
+        </Link>
+      );
+    },
+    [onNavigateResult, search, styles],
+  );
+
   if (search.showSearchLoading) {
     return (
       <Pressable style={styles.bodyTapDismiss} onPress={Keyboard.dismiss}>
@@ -450,8 +540,9 @@ export function SearchResultsBody({
 
   if (search.showEmptyState) {
     return (
-      <ScrollView
+      <AnimatedHighRefreshScrollView
         style={styles.scroll}
+        scrollEventThrottle={SCROLL_EVENT_THROTTLE}
         keyboardShouldPersistTaps="always"
         keyboardDismissMode="on-drag"
         contentContainerStyle={[styles.emptyScrollContent, styles.bodyScrollGrow]}
@@ -493,7 +584,7 @@ export function SearchResultsBody({
           </>
         ) : null}
         <Pressable style={styles.tapToDismissFiller} onPress={Keyboard.dismiss} accessibilityRole="none" />
-      </ScrollView>
+      </AnimatedHighRefreshScrollView>
     );
   }
 
@@ -524,25 +615,20 @@ export function SearchResultsBody({
   }
 
   return (
-    <SectionList
+    <FlashList
       style={styles.scroll}
-      sections={search.searchSections}
-      keyExtractor={(item, index) =>
-        "verseNumber" in item
-          ? `v-${item.bookSlug}-${item.chapterNumber}-${item.verseNumber}-${index}`
-          : `j-${item.id}`
-      }
+      data={flashRows}
+      extraData={md}
+      renderItem={renderFlashItem}
+      keyExtractor={(item) => item.key}
+      getItemType={(item) => item.kind}
       ListHeaderComponent={
         <>
           {renderScopeChips()}
           {suggestionBanner}
         </>
       }
-      renderSectionHeader={({ section: { title } }) => (
-        <Text style={[styles.sectionLabel, styles.resultsSectionHeader]}>{title}</Text>
-      )}
-      stickySectionHeadersEnabled={false}
-      contentContainerStyle={[styles.listContent, styles.bodyScrollGrow]}
+      contentContainerStyle={{ ...styles.listContent, ...styles.bodyScrollGrow }}
       keyboardShouldPersistTaps="always"
       keyboardDismissMode="on-drag"
       ListFooterComponent={
@@ -561,62 +647,8 @@ export function SearchResultsBody({
           <Pressable style={styles.tapToDismissFiller} onPress={Keyboard.dismiss} accessibilityRole="none" />
         </>
       }
-      renderItem={({ item, section }) =>
-        section.title === "Journal" ? (
-          <Link
-            href={`/journal/${(item as LocalJournalEntry).id}` as Href}
-            asChild
-            onPress={() => {
-              hapticLightImpact();
-              Keyboard.dismiss();
-              onNavigateResult();
-            }}
-          >
-            <TouchableOpacity activeOpacity={0.75} style={styles.row}>
-              <Text style={styles.refText}>{journalSearchRowTitle(item as LocalJournalEntry)}</Text>
-              {formatJournalTagList((item as LocalJournalEntry).tags) ? (
-                <Text style={styles.journalTags} numberOfLines={1}>
-                  {formatJournalTagList((item as LocalJournalEntry).tags)}
-                </Text>
-              ) : null}
-              <Text style={styles.snippet} numberOfLines={2}>
-                {stripHtmlPreview((item as LocalJournalEntry).content, 160)}
-              </Text>
-            </TouchableOpacity>
-          </Link>
-        ) : (
-          <Link
-            href={search.readerHrefForResult(item as SearchResult)}
-            asChild
-            onPress={() => {
-              hapticLightImpact();
-              Keyboard.dismiss();
-              search.onOpenVerseResult(item as SearchResult);
-              onNavigateResult();
-            }}
-          >
-            <TouchableOpacity activeOpacity={0.75} style={styles.row}>
-              <Text style={styles.refText}>
-                {(item as SearchResult).bookName} {(item as SearchResult).chapterNumber}:
-                {(item as SearchResult).verseNumber}
-              </Text>
-              {formatReaderMarkCaption(item as SearchResult) || (item as SearchResult).strongsLabel ? (
-                <Text style={styles.journalTags} numberOfLines={1}>
-                  {formatReaderMarkCaption(item as SearchResult) ?? (item as SearchResult).strongsLabel}
-                </Text>
-              ) : null}
-              <BibleVerseSnippet
-                result={item as SearchResult}
-                query={search.snippetQuery}
-                snippetStyle={styles.snippet}
-                highlightStyle={styles.snippetHighlight}
-                neighborStyle={styles.snippetNeighbor}
-                alsoStyle={styles.snippetAlso}
-              />
-            </TouchableOpacity>
-          </Link>
-        )
-      }
+      {...({ estimatedItemSize: SEARCH_FLASH_LIST_ESTIMATED_ITEM_SIZE_PX } as Record<string, unknown>)}
+      {...searchFlashListPerfProps}
     />
   );
 }
