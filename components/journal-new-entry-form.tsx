@@ -80,6 +80,7 @@ import {
 } from "@/lib/journal-verse-preview";
 import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
 import { hapticLightImpact, hapticSelection } from "@/lib/haptics";
+import { SCROLL_EVENT_THROTTLE } from "@/lib/high-refresh-scroll";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -1750,18 +1751,16 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       >
         {mergedFormScrollMode ? (
           <ScrollView
-            style={{ flex: 1, minHeight: 0 }}
-            contentContainerStyle={{
-              paddingTop: 0,
-              paddingBottom: 8,
-            }}
+            style={styles.formOuterScroll}
+            contentContainerStyle={styles.formOuterScrollContent}
+            scrollEventThrottle={SCROLL_EVENT_THROTTLE}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode={FORM_SCROLL_KEYBOARD_DISMISS_MODE}
-            nestedScrollEnabled
+            nestedScrollEnabled={Platform.OS === "android"}
             showsVerticalScrollIndicator
           >
             <View style={{ paddingLeft: padLeft, paddingRight: padRight }}>
-              <View className="gap-2.5 pb-0">
+              <View style={styles.formLeadingStack}>
                 {formLeadingSections}
                 {formReflectionSection}
               </View>
@@ -1785,17 +1784,19 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               */}
               <ScrollView
                 ref={sheetFormScrollRef}
-                style={{ flex: 1, minHeight: 0 }}
-                contentContainerStyle={sheetNeedsScroll ? { paddingBottom: 8 } : { flexGrow: 1 }}
+                style={styles.formOuterScroll}
+                contentContainerStyle={
+                  sheetNeedsScroll ? styles.sheetScrollContent : styles.sheetScrollContentFill
+                }
+                scrollEventThrottle={SCROLL_EVENT_THROTTLE}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode={FORM_SCROLL_KEYBOARD_DISMISS_MODE}
-                nestedScrollEnabled
+                nestedScrollEnabled={Platform.OS === "android"}
                 showsVerticalScrollIndicator={sheetNeedsScroll}
                 scrollEnabled={sheetNeedsScroll}
               >
                 <View
-                  className="gap-2.5 pb-0"
-                  style={{ flexShrink: 0 }}
+                  style={[styles.formLeadingStack, { flexShrink: 0 }]}
                   onLayout={onTopFieldsLayout}
                 >
                   {formLeadingSections}
@@ -1824,18 +1825,15 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             }}
           >
             <ScrollView
-              style={{
-                flexGrow: 0,
-                flexShrink: 1,
-                maxHeight: newEntryTopFieldsMaxScrollHeight,
-              }}
-              contentContainerStyle={{ flexGrow: 0, paddingBottom: 8 }}
+              style={[styles.splitTopScroll, { maxHeight: newEntryTopFieldsMaxScrollHeight }]}
+              contentContainerStyle={styles.splitTopScrollContent}
+              scrollEventThrottle={SCROLL_EVENT_THROTTLE}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode={FORM_SCROLL_KEYBOARD_DISMISS_MODE}
-              nestedScrollEnabled
+              nestedScrollEnabled={Platform.OS === "android"}
               showsVerticalScrollIndicator
             >
-              <View className="gap-2.5 pb-0">{formLeadingSections}</View>
+              <View style={styles.formLeadingStack}>{formLeadingSections}</View>
             </ScrollView>
             <View style={{ flex: 1, minHeight: 0 }}>{formReflectionSection}</View>
           </View>
@@ -1971,6 +1969,32 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 });
 
 const styles = StyleSheet.create({
+  formOuterScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  formOuterScrollContent: {
+    paddingTop: 0,
+    paddingBottom: 8,
+  },
+  sheetScrollContent: {
+    paddingBottom: 8,
+  },
+  sheetScrollContentFill: {
+    flexGrow: 1,
+  },
+  formLeadingStack: {
+    gap: 10,
+    paddingBottom: 0,
+  },
+  splitTopScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  splitTopScrollContent: {
+    flexGrow: 0,
+    paddingBottom: 8,
+  },
   floatingToolbarAnchorInline: {
     position: "absolute",
     bottom: FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX,
