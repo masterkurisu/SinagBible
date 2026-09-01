@@ -32,6 +32,7 @@ export type VerseTagComposerState = {
   buffer: string;
   atIndex: number | null;
   confirmedBook: VerseTagComposerConfirmedBook | null;
+  chapter: number | null;
   error: VerseTagComposerError | null;
 };
 
@@ -44,7 +45,8 @@ export type VerseTagComposerCommit = {
 export type VerseTagComposerEvent =
   | { type: "change"; text: string; cursorIndex: number }
   | { type: "blur"; text: string; cursorIndex: number }
-  | { type: "escape"; text: string; cursorIndex: number };
+  | { type: "escape"; text: string; cursorIndex: number }
+  | { type: "commit"; text: string; cursorIndex: number };
 
 export type VerseTagComposerResult = {
   state: VerseTagComposerState;
@@ -69,6 +71,7 @@ const IDLE_STATE: VerseTagComposerState = {
   buffer: "",
   atIndex: null,
   confirmedBook: null,
+  chapter: null,
   error: null,
 };
 
@@ -448,6 +451,7 @@ function mentioningState(
     buffer,
     atIndex,
     confirmedBook,
+    chapter: parsed.chapter,
     error,
   };
 }
@@ -502,7 +506,9 @@ export function createVerseTagComposer(options: VerseTagComposerOptions = {}) {
       validated.error == null &&
       !parsed.crossChapter &&
       !parsed.commaList &&
-      (event.type === "blur" || isCommitDelimiter(parsed.trailingDelimiter));
+      (event.type === "blur" ||
+        event.type === "commit" ||
+        (event.type === "change" && isCommitDelimiter(parsed.trailingDelimiter)));
 
     if (event.type === "blur" && !shouldCommit) {
       lastConfirmedSlug = null;

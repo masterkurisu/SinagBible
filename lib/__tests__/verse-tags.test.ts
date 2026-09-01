@@ -445,4 +445,23 @@ describe("verseTagComposer", () => {
     expect(next.state.phase).toBe("idle");
     expect(next.commit).toBeNull();
   });
+
+  it("commits a complete valid ref on an explicit commit event without a delimiter", () => {
+    const composer = createTestComposer();
+    typeBuffer(composer, "@mark 11:22");
+    const committed = composer.push({
+      type: "commit",
+      text: "@mark 11:22",
+      cursorIndex: "@mark 11:22".length,
+    });
+    expect(committed.commit?.ref).toEqual({ book: "mark", chapter: 11, verseStart: 22 });
+    expect(committed.state.phase).toBe("idle");
+  });
+
+  it("exposes the typed chapter after book-confirm so prefetch can start", () => {
+    const composer = createTestComposer();
+    expect(typeBuffer(composer, "@mark ").last.state.chapter).toBeNull();
+    expect(typeBuffer(composer, "@mark 11").last.state.chapter).toBe(11);
+    expect(typeBuffer(composer, "@mark 11").last.state.confirmedBook?.slug).toBe("mark");
+  });
 });

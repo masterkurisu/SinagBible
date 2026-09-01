@@ -1,24 +1,15 @@
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { StyleSheet, View } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import type { VerseTagRef } from "@sinag-bible/types";
 import { ReaderM3BottomSheet } from "@/src/components/m3/ReaderM3BottomSheet";
 import { M3OutlinedTextField } from "@/src/components/m3/M3OutlinedTextField";
-import {
-  READER_M3_ON_SURFACE,
-  READER_M3_ON_SURFACE_VARIANT,
-  READER_OVERLAY_CONTENT_SCALE,
-} from "@/src/features/reader/readerSettingsPanelChrome";
+import { READER_OVERLAY_CONTENT_SCALE } from "@/src/features/reader/readerSettingsPanelChrome";
 import {
   searchVerseTagSuggestions,
   type VerseTagSuggestion,
 } from "@/src/features/verse-tags/searchVerseTagSuggestions";
+import { VerseTagSuggestionList } from "@/src/features/verse-tags/VerseTagSuggestionList";
 
 export type VerseTagMentionSheetProps = {
   isOpen: boolean;
@@ -110,54 +101,15 @@ export function VerseTagMentionSheet({
       />
 
       <View style={[styles.results, { marginTop: 12 * scale, minHeight: 120 * scale }]}>
-        {pending ? (
-          <ActivityIndicator color={bundle.ui.brown800} style={styles.loader} />
-        ) : suggestions.length === 0 ? (
-          <Text style={[styles.empty, { color: READER_M3_ON_SURFACE_VARIANT, fontSize: 14 * scale }]}>
-            {query.trim() ? "No matching verses yet." : "Search for a verse reference."}
-          </Text>
-        ) : (
-          suggestions.map((item) => (
-            <Pressable
-              key={item.kind === "ref" ? item.label : item.query}
-              onPress={() => handlePick(item)}
-              style={({ pressed }) => [
-                styles.row,
-                {
-                  paddingVertical: 12 * scale,
-                  paddingHorizontal: 4 * scale,
-                  opacity: pressed ? 0.72 : 1,
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={item.label}
-            >
-              <Text style={[styles.rowTitle, { color: READER_M3_ON_SURFACE, fontSize: 16 * scale }]}>
-                {item.label}
-              </Text>
-              {item.kind === "ref" && item.preview ? (
-                <Text
-                  style={[
-                    styles.rowPreview,
-                    { color: READER_M3_ON_SURFACE_VARIANT, fontSize: 14 * scale },
-                  ]}
-                  numberOfLines={3}
-                >
-                  {item.preview}
-                </Text>
-              ) : item.kind === "query" && item.subtitle ? (
-                <Text
-                  style={[
-                    styles.rowPreview,
-                    { color: READER_M3_ON_SURFACE_VARIANT, fontSize: 13 * scale },
-                  ]}
-                >
-                  {item.subtitle}
-                </Text>
-              ) : null}
-            </Pressable>
-          ))
-        )}
+        <VerseTagSuggestionList
+          suggestions={suggestions}
+          pending={pending}
+          query={query}
+          selectedIndex={0}
+          bundle={bundle}
+          scale={scale}
+          onSelect={handlePick}
+        />
       </View>
     </ReaderM3BottomSheet>
   );
@@ -166,26 +118,5 @@ export function VerseTagMentionSheet({
 const styles = StyleSheet.create({
   results: {
     width: "100%",
-  },
-  loader: {
-    marginTop: 24,
-  },
-  empty: {
-    fontFamily: "Inter_400Regular",
-    lineHeight: 20,
-    paddingTop: 8,
-  },
-  row: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(121, 116, 126, 0.28)",
-  },
-  rowTitle: {
-    fontFamily: "Inter_600SemiBold",
-    lineHeight: 22,
-  },
-  rowPreview: {
-    fontFamily: "Inter_400Regular",
-    lineHeight: 20,
-    marginTop: 4,
   },
 });

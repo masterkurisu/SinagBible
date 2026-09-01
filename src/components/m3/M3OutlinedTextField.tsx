@@ -4,6 +4,7 @@ import { useReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
+  READER_M3_ERROR,
   READER_M3_LABEL_FONT_PX,
   READER_M3_LABEL_LETTER_SPACING,
   READER_M3_LABEL_LINE_HEIGHT_PX,
@@ -31,6 +32,7 @@ export type M3OutlinedTextFieldProps = {
   inputFontFamily?: string;
   style?: ViewStyle;
   inputRef?: RefObject<TextInput | null>;
+  error?: boolean;
 } & Pick<
   TextInputProps,
   | "accessibilityLabel"
@@ -41,6 +43,7 @@ export type M3OutlinedTextFieldProps = {
   | "blurOnSubmit"
   | "onSelectionChange"
   | "selection"
+  | "onKeyPress"
 >;
 
 /** M3 outlined text field — floating label on the top border. */
@@ -66,13 +69,15 @@ export function M3OutlinedTextField({
   blurOnSubmit,
   onSelectionChange,
   selection,
+  onKeyPress,
   inputRef,
+  error = false,
 }: M3OutlinedTextFieldProps) {
   const sheetChrome = useReaderSheetChrome();
   const [focused, setFocused] = useState(false);
   const floated = focused || value.length > 0;
-  const borderColor = focused ? accentColor : OUTLINE_STROKE_COLOR;
-  const labelColor = focused ? accentColor : sheetChrome.onSurfaceVariant;
+  const borderColor = error ? READER_M3_ERROR : focused ? accentColor : OUTLINE_STROKE_COLOR;
+  const labelColor = error ? READER_M3_ERROR : focused ? accentColor : sheetChrome.onSurfaceVariant;
   const fieldMinHeight = minHeight * scale;
   const borderRadius = roundedEnds ? fieldMinHeight / 2 : 4 * scale;
   const placeholderText = placeholder ?? (floated ? undefined : label);
@@ -142,6 +147,7 @@ export function M3OutlinedTextField({
             setFocused(false);
             onBlur?.(e);
           }}
+          onKeyPress={onKeyPress}
           style={{
             minHeight: multiline ? (fieldMinHeight - 28 * scale) : undefined,
             maxHeight: multiline && maxHeight != null ? maxHeight * scale - 28 * scale : undefined,

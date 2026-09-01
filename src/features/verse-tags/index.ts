@@ -20,10 +20,17 @@ export { VerseTagChip } from "./VerseTagChip";
 export type { VerseTagChipVariant } from "./VerseTagChip";
 export {
   formatVerseTagChipAccessibilityLabel,
+  formatVerseTagComposerError,
   formatVerseTagTooltipTitle,
 } from "./verseTagChipCopy";
 export { VerseTagMentionSheet } from "./VerseTagMentionSheet";
+export { VerseTagComposerOverlay } from "./VerseTagComposerOverlay";
 export { VerseTagPreviewTooltip } from "./VerseTagPreviewTooltip";
 export { VerseTaggedText } from "./VerseTaggedText";
 export { computeVerseTagTooltipPosition } from "./verseTagTooltipLayout";
 export type { VerseTagTooltipPlacement, VerseTagTooltipPosition } from "./verseTagTooltipLayout";
+export { computeVerseTagOverlayMetrics } from "./verseTagOverlayLayout";
+export {
+  createVerseTagChapterCache,
+  resolveVerseTagPrefetchTarget,
+} from "./verseTagChapterCache";

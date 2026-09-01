@@ -20,7 +20,7 @@ import {
 } from "@/src/components/m3/m3-motion";
 import { READER_M3_BOTTOM_SHEET_RADIUS_PX, READER_OVERLAY_CONTENT_SCALE } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useVerseTagMention } from "@/src/features/verse-tags/useVerseTagMention";
-import { VerseTagMentionSheet } from "@/src/features/verse-tags/VerseTagMentionSheet";
+import { VerseTagComposerOverlay } from "@/src/features/verse-tags/VerseTagComposerOverlay";
 
 export type ReaderVerseNoteDialogProps = {
   isOpen: boolean;
@@ -47,7 +47,6 @@ export function ReaderVerseNoteDialog({
   contextTranslationId,
   bundle,
   insets,
-  isTabletReaderLayout = false,
 }: ReaderVerseNoteDialogProps) {
   const rc = bundle.reader;
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -58,11 +57,18 @@ export function ReaderVerseNoteDialog({
   const {
     mentionOpen,
     mentionQuery,
+    mentionError,
+    suggestions,
+    suggestionsPending,
+    selectedSuggestionIndex,
     selection,
     inputRef,
     handleChangeText,
     handleSelectionChange,
-    insertTag,
+    handleKeyPress,
+    handleBlur,
+    confirmSuggestion,
+    beginSuggestionPick,
     closeMention,
   } = useVerseTagMention({
     text: noteDraft,
@@ -183,6 +189,8 @@ export function ReaderVerseNoteDialog({
               value={noteDraft}
               onChangeText={handleChangeText}
               onSelectionChange={handleSelectionChange}
+              onKeyPress={handleKeyPress}
+              onBlur={handleBlur}
               selection={selection}
               inputRef={inputRef}
               surfaceColor={surfaceColor}
@@ -191,7 +199,29 @@ export function ReaderVerseNoteDialog({
               multiline
               minHeight={120}
               maxHeight={160}
+              error={mentionError != null}
+              blurOnSubmit={false}
             />
+
+            {mentionOpen ? (
+              <View style={{ marginTop: 8 * scale }}>
+                <VerseTagComposerOverlay
+                  visible={mentionOpen}
+                  query={mentionQuery}
+                  error={mentionError}
+                  suggestions={suggestions}
+                  pending={suggestionsPending}
+                  selectedIndex={selectedSuggestionIndex}
+                  bundle={bundle}
+                  insets={insets}
+                  keyboardHeight={keyboardHeight}
+                  placement="inline"
+                  onSelect={confirmSuggestion}
+                  onSelectStart={beginSuggestionPick}
+                  onDismiss={closeMention}
+                />
+              </View>
+            ) : null}
 
             <View style={[styles.actionsBar, { marginTop: 20 * scale, gap: 12 * scale }]}>
               <M3Button
@@ -214,17 +244,6 @@ export function ReaderVerseNoteDialog({
           </View>
         </Animated.View>
       </DismissibleDialog>
-
-      <VerseTagMentionSheet
-        isOpen={mentionOpen}
-        onClose={closeMention}
-        initialQuery={mentionQuery}
-        translationId={contextTranslationId}
-        bundle={bundle}
-        insets={insets}
-        isTabletReaderLayout={isTabletReaderLayout}
-        onPick={insertTag}
-      />
     </>
   );
 }
