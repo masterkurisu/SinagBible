@@ -68,7 +68,7 @@ import {
   readerActionBarBottomPx,
   READER_CHAPTER_FOOTER_ABOVE_TAB_BAR_PX,
 } from "@/lib/native-tab-chrome";
-import { READER_SCROLL_JS_BRIDGE_DELTA_PX } from "@/lib/device-capability";
+import { shouldFireHighRefreshJsBridge } from "@/lib/high-refresh-scroll";
 import { useReaderTabBarScrollHidden, useRegisterReaderSettingsSlideProgress } from "@/lib/reader-tab-bar-visibility-context";
 import {
   READER_SETTINGS_MENU_SPRING_CLOSE,
@@ -1419,8 +1419,7 @@ export default function ReaderChapterScreen() {
       viewportHeightSV.value = event.layoutMeasurement.height;
       const contentHeight = event.contentSize.height;
       const viewportHeight = event.layoutMeasurement.height;
-      const dy = Math.abs(y - lastScrollBridgeY.value);
-      if (lastScrollBridgeY.value < 0 || dy >= READER_SCROLL_JS_BRIDGE_DELTA_PX) {
+      if (shouldFireHighRefreshJsBridge(y, lastScrollBridgeY.value)) {
         lastScrollBridgeY.value = y;
         runOnJS(onReaderScrollSideEffects)(y, contentHeight, viewportHeight);
       }

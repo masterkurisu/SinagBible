@@ -21,7 +21,10 @@ export const motionTier: MotionTier = isLowEndDevice ? "reduced" : "standard";
 
 export const READER_FLASH_LIST_DRAW_DISTANCE_PX = motionTier === "reduced" ? 200 : 500;
 
-/** FlashList scrollEventThrottle — fewer JS bridge crossings on low-RAM Android. */
+/**
+ * FlashList scrollEventThrottle — fewer JS bridge crossings on low-RAM Android.
+ * Scroll surfaces should import `SCROLL_EVENT_THROTTLE` from `lib/high-refresh-scroll.ts`.
+ */
 export const READER_SCROLL_EVENT_THROTTLE = motionTier === "reduced" ? 32 : 8;
 
 /** Book picker grid view — 3-column FlashList layout. */
@@ -33,10 +36,16 @@ export const CHAPTER_PICKER_GRID_COLUMNS = 5;
 /** Sheet picker FlashList draw distance — mirrors reader chapter list tuning. */
 export const PICKER_FLASH_LIST_DRAW_DISTANCE_PX = READER_FLASH_LIST_DRAW_DISTANCE_PX;
 
-/** Sheet picker scroll throttle — mirrors reader chapter list tuning. */
+/**
+ * Sheet picker scroll throttle — mirrors reader chapter list tuning.
+ * Prefer `SCROLL_EVENT_THROTTLE` from `lib/high-refresh-scroll.ts`.
+ */
 export const PICKER_SCROLL_EVENT_THROTTLE = READER_SCROLL_EVENT_THROTTLE;
 
-/** Min scroll delta (px) before runOnJS nav-arrow side effects fire. */
+/**
+ * Min scroll delta (px) before runOnJS nav-arrow side effects fire.
+ * Scroll surfaces should import `SCROLL_JS_BRIDGE_DELTA_PX` from `lib/high-refresh-scroll.ts`.
+ */
 export const READER_SCROLL_JS_BRIDGE_DELTA_PX = motionTier === "reduced" ? 24 : 8;
 
 /** Primary bottom-sheet slide-in duration. */

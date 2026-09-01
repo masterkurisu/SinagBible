@@ -22,10 +22,8 @@ import type { FlashListRef, ListRenderItemInfo } from "@shopify/flash-list";
 import {
   READER_ACTION_BAR_SELECTION_CLEARANCE_DEFAULT_PX,
 } from "@/src/features/reader/readerActionBarOnboardingSteps";
-import {
-  READER_FLASH_LIST_DRAW_DISTANCE_PX,
-  READER_SCROLL_EVENT_THROTTLE,
-} from "@/lib/device-capability";
+import { READER_FLASH_LIST_DRAW_DISTANCE_PX } from "@/lib/device-capability";
+import { SCROLL_EVENT_THROTTLE } from "@/lib/high-refresh-scroll";
 import type { ReaderVerseLayout } from "@/src/features/reader/useReaderPreferences";
 import type { ReaderChapterScrollHandle } from "@/src/features/reader/readerChapterScrollRef";
 import {
@@ -289,7 +287,7 @@ export function ReaderVerseList({
         key={readerScrollLayoutKey}
         ref={scrollViewRef}
         style={readerFlashListChromeStyles.list}
-        scrollEventThrottle={READER_SCROLL_EVENT_THROTTLE}
+        scrollEventThrottle={SCROLL_EVENT_THROTTLE}
         onScroll={
           onScroll as NonNullable<ComponentProps<typeof AnimatedReaderChapterScrollView>["onScroll"]>
         }
@@ -321,7 +319,7 @@ export function ReaderVerseList({
       {...chapterSwipePanHandlers}
       {...({ estimatedItemSize } as Record<string, unknown>)}
       style={listStyle}
-      scrollEventThrottle={READER_SCROLL_EVENT_THROTTLE}
+      scrollEventThrottle={SCROLL_EVENT_THROTTLE}
       drawDistance={READER_FLASH_LIST_DRAW_DISTANCE_PX}
       onScroll={onScroll}
       onScrollBeginDrag={onScrollBeginDrag}
