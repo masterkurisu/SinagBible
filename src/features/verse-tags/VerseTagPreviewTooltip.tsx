@@ -11,6 +11,7 @@ import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { M3RichTooltipCard } from "@/src/components/m3/M3RichTooltipCard";
 import { M3Button } from "@/src/components/m3/M3Button";
 import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
+import { getVerseTagTooltipColors } from "@/src/features/verse-tags/verseTagTooltipChrome";
 import { focusVerseTagElement } from "@/src/features/verse-tags/verseTagFocus";
 import {
   computeVerseTagTooltipPosition,
@@ -42,7 +43,7 @@ export function VerseTagPreviewTooltip({
   const { width: screenW, height: screenH } = useWindowDimensions();
   const cardRef = useRef<View | null>(null);
   const chrome = getReaderSheetChrome(bundle);
-  const rc = bundle.reader;
+  const tooltipColors = useMemo(() => getVerseTagTooltipColors(bundle), [bundle]);
 
   const layout = useMemo(
     () =>
@@ -94,9 +95,10 @@ export function VerseTagPreviewTooltip({
               title={title}
               description={description}
               width={layout.width}
-              backgroundColor={rc.popoverSurface}
-              titleColor={chrome.onSurface}
-              descriptionColor={chrome.onSurfaceVariant}
+              backgroundColor={tooltipColors.backgroundColor}
+              titleColor={tooltipColors.titleColor}
+              descriptionColor={tooltipColors.descriptionColor}
+              borderColor={tooltipColors.borderColor}
             />
           </View>
           <View style={styles.actionRow}>

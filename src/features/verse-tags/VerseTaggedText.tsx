@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Text,
+  View,
+  StyleSheet,
   type LayoutRectangle,
   type StyleProp,
   type TextStyle,
-  type View,
 } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import type { VerseTagRef } from "@sinag-bible/types";
@@ -114,11 +115,11 @@ export function VerseTaggedText({
 
   return (
     <>
-      <Text style={textStyle}>
+      <View style={styles.inlineFlow}>
         {segments.map((segment, index) => {
           if (segment.kind === "text") {
             return (
-              <Text key={`text-${index}`} style={{ color: textColor }}>
+              <Text key={`text-${index}`} style={[textStyle, { color: textColor }]}>
                 {segment.value}
               </Text>
             );
@@ -126,7 +127,7 @@ export function VerseTaggedText({
 
           if (!segment.ref) {
             return (
-              <Text key={`raw-${index}`} style={{ color: textColor }}>
+              <Text key={`raw-${index}`} style={[textStyle, { color: textColor }]}>
                 {segment.raw}
               </Text>
             );
@@ -140,7 +141,7 @@ export function VerseTaggedText({
           return (
             <VerseTagChip
               key={key}
-              variant="inline"
+              variant="inline-pressable"
               bundle={bundle}
               chipRef={chipRef}
               label={label}
@@ -156,7 +157,7 @@ export function VerseTaggedText({
             />
           );
         })}
-      </Text>
+      </View>
 
       <VerseTagPreviewTooltip
         visible={activeTag != null}
@@ -171,3 +172,11 @@ export function VerseTaggedText({
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  inlineFlow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "baseline",
+  },
+});

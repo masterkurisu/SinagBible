@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Linking, StyleSheet, Text, type LayoutRectangle, type StyleProp, type TextStyle, type View } from "react-native";
+import { Linking, StyleSheet, Text, View, type LayoutRectangle, type StyleProp, type TextStyle } from "react-native";
 import { Image } from "expo-image";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import type { VerseTagRef } from "@sinag-bible/types";
@@ -129,8 +129,8 @@ export function renderJournalReflectionInline(
         key={`t-${part++}`}
         style={
           href
-            ? { fontFamily, color: linkColor, textDecorationLine: "underline" as const }
-            : { fontFamily }
+            ? [textStyle, { fontFamily, color: linkColor, textDecorationLine: "underline" as const }]
+            : [textStyle, { fontFamily }]
         }
         {...(href
           ? {
@@ -165,7 +165,7 @@ export function renderJournalReflectionInline(
         nodes.push(
           <VerseTagChip
             key={key}
-            variant="inline"
+            variant="inline-pressable"
             bundle={bundle}
             chipRef={chipRef}
             label={label}
@@ -195,11 +195,7 @@ export function renderJournalReflectionInline(
       const i = styleStack.lastIndexOf("em");
       if (i >= 0) styleStack.splice(i, 1);
     } else {
-      nodes.push(
-        <Text key={`br-${part++}`}>
-          {"\n"}
-        </Text>,
-      );
+      nodes.push(<View key={`br-${part++}`} style={journalSavedReflectionStyles.lineBreak} />);
     }
     last = idx + (match[0]?.length ?? 0);
   }
@@ -301,10 +297,10 @@ function JournalReflectionRichText({
 
   return (
     <>
-      <Text style={style}>
-        {leading}
+      <View style={[journalSavedReflectionStyles.inlineFlow, style]}>
+        {leading ? <Text style={style}>{leading}</Text> : null}
         {nodes}
-      </Text>
+      </View>
       <VerseTagPreviewTooltip
         visible={activeTag != null}
         anchor={activeTag?.anchor ?? { x: 0, y: 0, width: 0, height: 0 }}
@@ -320,6 +316,15 @@ function JournalReflectionRichText({
 }
 
 export const journalSavedReflectionStyles = StyleSheet.create({
+  inlineFlow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "baseline",
+  },
+  lineBreak: {
+    width: "100%",
+    height: 0,
+  },
   paragraph: {
     fontFamily: "Lora_400Regular",
     fontSize: 17,

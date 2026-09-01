@@ -1261,6 +1261,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const handleSave = async () => {
     hapticLightImpact();
+    // Commit a pending @mention before reading markdown — blur from dismissKeyboard is async.
+    handleBlur();
     dismissJournalKeyboard();
 
     const { markdown, content } = buildReflectionPayloadForSave();

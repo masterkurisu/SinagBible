@@ -12,7 +12,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 
-export type VerseTagChipVariant = "inline" | "input";
+export type VerseTagChipVariant = "inline" | "inline-pressable" | "input";
 
 export type VerseTagChipProps = {
   label: string;
@@ -39,6 +39,47 @@ export function VerseTagChip({
   chipRef,
 }: VerseTagChipProps) {
   const chrome = getReaderSheetChrome(bundle);
+
+  if (variant === "inline-pressable") {
+    return (
+      <Pressable
+        ref={chipRef}
+        collapsable={false}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={420}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        android_ripple={
+          Platform.OS === "android"
+            ? { color: chrome.iconRipple, borderless: false, foreground: true }
+            : undefined
+        }
+        style={[styles.inlinePressableChip, { backgroundColor: chrome.secondaryContainer }]}
+      >
+        {({ pressed }) => (
+          <>
+            {pressed ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  StyleSheet.absoluteFill,
+                  styles.inlinePressableStateLayer,
+                  { backgroundColor: chrome.onSecondaryContainer },
+                ]}
+              />
+            ) : null}
+            <Text
+              numberOfLines={1}
+              style={[styles.inlinePressableLabel, { color: chrome.onSecondaryContainer }]}
+            >
+              {label}
+            </Text>
+          </>
+        )}
+      </Pressable>
+    );
+  }
 
   if (variant === "input") {
     return (
@@ -119,6 +160,31 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     fontSize: 13,
     lineHeight: 18,
+  },
+  inlinePressableChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    minHeight: 20,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginHorizontal: 1,
+    marginVertical: 1,
+    overflow: "hidden",
+  },
+  inlinePressableStateLayer: {
+    opacity: 0.1,
+    borderRadius: 999,
+  },
+  inlinePressableLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+    lineHeight: 16,
+    textAlign: "center",
+    ...(Platform.OS === "android" ? { includeFontPadding: false } : null),
   },
   inputChip: {
     flexDirection: "row",

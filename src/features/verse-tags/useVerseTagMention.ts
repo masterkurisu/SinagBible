@@ -53,7 +53,8 @@ export type UseVerseTagMentionResult = {
   closeMentionSheet: () => void;
 };
 
-function nextCursorAfterEdit(
+/** Infer caret position when a TextInput onChange omits selection (e.g. MarkdownTextInput). */
+export function inferCursorAfterTextEdit(
   prevText: string,
   nextText: string,
   selection: { start: number; end: number },
@@ -186,7 +187,7 @@ export function useVerseTagMention({
   const handleChangeText = useCallback(
     (next: string, cursorIndex?: number) => {
       const cursor =
-        cursorIndex ?? nextCursorAfterEdit(textRef.current, next, selectionRef.current);
+        cursorIndex ?? inferCursorAfterTextEdit(textRef.current, next, selectionRef.current);
       textRef.current = next;
       const result = composerRef.current.push({ type: "change", text: next, cursorIndex: cursor });
       if (result.commit) {
@@ -194,11 +195,9 @@ export function useVerseTagMention({
         applyResult(result);
         return;
       }
-      onChangeText(next, cursorIndex);
-      if (cursorIndex != null) {
-        selectionRef.current = { start: cursorIndex, end: cursorIndex };
-        setSelection(selectionRef.current);
-      }
+      selectionRef.current = { start: cursor, end: cursor };
+      setSelection(selectionRef.current);
+      onChangeText(next, cursor);
       applyResult(result);
       maybePrefetch(result);
     },

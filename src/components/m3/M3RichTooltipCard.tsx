@@ -16,6 +16,7 @@ export type M3RichTooltipCardProps = {
   backgroundColor?: string;
   titleColor?: string;
   descriptionColor?: string;
+  borderColor?: string;
 };
 
 export function M3RichTooltipCard({
@@ -28,6 +29,7 @@ export function M3RichTooltipCard({
   backgroundColor = READER_M3_SURFACE_CONTAINER_HIGH,
   titleColor = READER_M3_ON_SURFACE,
   descriptionColor = READER_M3_ON_SURFACE_VARIANT,
+  borderColor,
 }: M3RichTooltipCardProps) {
   return (
     <View
@@ -38,6 +40,7 @@ export function M3RichTooltipCard({
         paddingTop != null ? { paddingTop } : null,
         paddingBottom != null ? { paddingBottom } : null,
         { backgroundColor },
+        borderColor ? { borderWidth: 1, borderColor } : null,
       ]}
     >
       <Text style={[styles.title, { color: titleColor }]}>{title}</Text>

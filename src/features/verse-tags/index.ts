@@ -1,7 +1,7 @@
 export { openVerseTagInReader } from "./openVerseTagInReader";
 export { searchVerseTagSuggestions } from "./searchVerseTagSuggestions";
 export type { VerseTagSuggestion } from "./searchVerseTagSuggestions";
-export { useVerseTagMention } from "./useVerseTagMention";
+export { useVerseTagMention, inferCursorAfterTextEdit } from "./useVerseTagMention";
 export type { UseVerseTagMentionOptions, UseVerseTagMentionResult } from "./useVerseTagMention";
 export { createVerseTagComposer, matchVerseTagComposerBook } from "./verseTagComposer";
 export type {
@@ -31,6 +31,7 @@ export { VerseTagPreviewTooltip } from "./VerseTagPreviewTooltip";
 export { loadVerseTagPreview } from "./verseTagPreview";
 export { VerseChipInput } from "./VerseChipInput";
 export { VerseTaggedText } from "./VerseTaggedText";
+export { getVerseTagTooltipColors } from "./verseTagTooltipChrome";
 export { computeVerseTagTooltipPosition } from "./verseTagTooltipLayout";
 export type { VerseTagTooltipPlacement, VerseTagTooltipPosition } from "./verseTagTooltipLayout";
 export { computeVerseTagOverlayMetrics } from "./verseTagOverlayLayout";
