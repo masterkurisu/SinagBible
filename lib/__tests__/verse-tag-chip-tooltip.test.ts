@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   formatVerseTagChipAccessibilityLabel,
+  formatVerseTagComposerError,
+  formatVerseTagTooltipDescription,
   formatVerseTagTooltipTitle,
 } from "@/src/features/verse-tags/verseTagChipCopy";
 import {
@@ -9,6 +11,8 @@ import {
   VERSE_TAG_TOOLTIP_GAP_PX,
   VERSE_TAG_TOOLTIP_WIDTH_PX,
 } from "@/src/features/verse-tags/verseTagTooltipLayout";
+import { getMobileAppThemeBundle, MOBILE_APP_THEME_IDS } from "@sinag-bible/tokens";
+import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 
 describe("formatVerseTagChipAccessibilityLabel", () => {
   it("announces a full spoken chip label for a single verse", () => {
@@ -36,6 +40,81 @@ describe("formatVerseTagChipAccessibilityLabel", () => {
 describe("formatVerseTagTooltipTitle", () => {
   it("appends the active version abbreviation", () => {
     expect(formatVerseTagTooltipTitle("Mark 11:22", "KJV")).toBe("Mark 11:22 (KJV)");
+  });
+
+  it("updates the title when the active translation abbreviation changes", () => {
+    expect(formatVerseTagTooltipTitle("John 3:16", "WEB")).toBe("John 3:16 (WEB)");
+  });
+});
+
+describe("formatVerseTagTooltipDescription", () => {
+  it("uses distinct loading, offline, error, and not-found copy", () => {
+    expect(formatVerseTagTooltipDescription({ kind: "loading" })).toBe("Loading verse…");
+    expect(formatVerseTagTooltipDescription({ kind: "offline" })).toBe(
+      "This verse isn't available offline.",
+    );
+    expect(formatVerseTagTooltipDescription({ kind: "error" })).toBe(
+      "Couldn't load this verse. Try again.",
+    );
+    expect(formatVerseTagTooltipDescription({ kind: "not-found" })).toBe("Verse not found.");
+    expect(
+      formatVerseTagTooltipDescription({ kind: "ready", text: "For God so loved the world" }),
+    ).toBe("For God so loved the world");
+  });
+});
+
+describe("formatVerseTagComposerError", () => {
+  it("explains invalid chapter, verse, and range", () => {
+    expect(formatVerseTagComposerError("invalid-chapter")).toBe(
+      "That chapter is not in this translation.",
+    );
+    expect(formatVerseTagComposerError("invalid-verse")).toBe("That verse is not in this chapter.");
+    expect(formatVerseTagComposerError("invalid-range")).toBe(
+      "Only same-chapter ranges can be tagged.",
+    );
+  });
+});
+
+function hexToRgb(hex: string): [number, number, number] {
+  const normalized = hex.replace("#", "");
+  return [
+    Number.parseInt(normalized.slice(0, 2), 16),
+    Number.parseInt(normalized.slice(2, 4), 16),
+    Number.parseInt(normalized.slice(4, 6), 16),
+  ];
+}
+
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const channel = (value: number) => {
+    const s = value / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const lighter = Math.max(relativeLuminance(hexToRgb(foreground)), relativeLuminance(hexToRgb(background)));
+  const darker = Math.min(relativeLuminance(hexToRgb(foreground)), relativeLuminance(hexToRgb(background)));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+describe("verse-tag chip theme contrast", () => {
+  it("keeps chip label contrast at WCAG AA for default, dark, night, and rose", () => {
+    for (const id of ["default", "dark", "night", "rose"] as const) {
+      const chrome = getReaderSheetChrome(getMobileAppThemeBundle(id));
+      expect(contrastRatio(chrome.onSecondaryContainer, chrome.secondaryContainer)).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
+  });
+
+  it("keeps chip label contrast at WCAG AA across every shipped theme", () => {
+    for (const id of MOBILE_APP_THEME_IDS) {
+      const chrome = getReaderSheetChrome(getMobileAppThemeBundle(id));
+      expect(contrastRatio(chrome.onSecondaryContainer, chrome.secondaryContainer)).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
   });
 });
 

@@ -14,7 +14,7 @@ import {
   parseJournalSearchDateRange,
   rankLocalJournalEntriesForOverlay,
 } from "@/lib/journal-local-search";
-import { normalizeJournalTags } from "@/lib/journal-tags";
+import { normalizeJournalTag, normalizeJournalTags } from "@/lib/journal-tags";
 
 function entry(overrides: Partial<LocalJournalEntry> & Pick<LocalJournalEntry, "id">): LocalJournalEntry {
   return {
@@ -40,6 +40,12 @@ describe("normalizeJournalTags", () => {
       "gratitude",
       "forgiveness",
     ]);
+  });
+
+  it("does not treat verse-tag tokens or @mentions as category tags", () => {
+    expect(normalizeJournalTag("[@john:3:16]")).toBeNull();
+    expect(normalizeJournalTag("@john")).toBeNull();
+    expect(normalizeJournalTags(["gratitude", "[@john:3:16]", "@mark"])).toEqual(["gratitude"]);
   });
 });
 

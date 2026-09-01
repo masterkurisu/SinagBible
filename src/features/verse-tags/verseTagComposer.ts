@@ -345,6 +345,13 @@ function validateRef(
   parsed: ParsedBuffer,
   getVerseCount?: VerseTagComposerOptions["getVerseCount"],
 ): { ref: VerseTagRef; error: VerseTagComposerError | null } | { ref: null; error: VerseTagComposerError | null } {
+  if (parsed.crossChapter || parsed.commaList) {
+    if (parsed.bookMatch.kind === "unique" && parsed.bookReady) {
+      return { ref: null, error: "invalid-range" };
+    }
+    return { ref: null, error: null };
+  }
+
   if (parsed.bookMatch.kind !== "unique" || !parsed.bookReady) {
     return { ref: null, error: null };
   }

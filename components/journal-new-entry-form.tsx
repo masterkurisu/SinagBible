@@ -1707,8 +1707,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           placeholder="Write your reflection…"
           placeholderTextColor={colors.tan200}
           scrollEnabled
-          autoCorrect
-          spellCheck
+          autoCorrect={!mentionOpen}
+          spellCheck={!mentionOpen}
         />
         {imageIds.length > 0 ? (
           <ScrollView

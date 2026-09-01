@@ -63,7 +63,11 @@ export function VerseTagComposerOverlay({
       ]}
     >
       {error ? (
-        <Text style={[styles.error, { color: READER_M3_ERROR, fontSize: 13 * scale }]}>
+        <Text
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
+          style={[styles.error, { color: READER_M3_ERROR, fontSize: 13 * scale }]}
+        >
           {formatVerseTagComposerError(error)}
         </Text>
       ) : null}

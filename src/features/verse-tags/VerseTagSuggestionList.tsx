@@ -50,6 +50,9 @@ export function VerseTagSuggestionList({
             onPressIn={onSelectStart}
             accessibilityRole="button"
             accessibilityLabel={item.label}
+            accessibilityHint={
+              item.kind === "ref" ? "Inserts a verse tag" : "Continues this book name"
+            }
             accessibilityState={{ selected }}
             style={({ pressed }) => [
               styles.row,

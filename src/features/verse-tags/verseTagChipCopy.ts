@@ -32,3 +32,26 @@ export function formatVerseTagComposerError(error: VerseTagComposerError): strin
       return "Only same-chapter ranges can be tagged.";
   }
 }
+
+export type VerseTagPreviewStatus =
+  | { kind: "loading" }
+  | { kind: "ready"; text: string }
+  | { kind: "not-found" }
+  | { kind: "offline" }
+  | { kind: "error" };
+
+/** Tooltip body copy for loading, verse text, offline, and fetch failures. */
+export function formatVerseTagTooltipDescription(status: VerseTagPreviewStatus): string {
+  switch (status.kind) {
+    case "loading":
+      return "Loading verse…";
+    case "ready":
+      return status.text;
+    case "offline":
+      return "This verse isn't available offline.";
+    case "error":
+      return "Couldn't load this verse. Try again.";
+    case "not-found":
+      return "Verse not found.";
+  }
+}

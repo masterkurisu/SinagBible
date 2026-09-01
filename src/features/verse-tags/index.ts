@@ -21,11 +21,14 @@ export type { VerseTagChipVariant } from "./VerseTagChip";
 export {
   formatVerseTagChipAccessibilityLabel,
   formatVerseTagComposerError,
+  formatVerseTagTooltipDescription,
   formatVerseTagTooltipTitle,
 } from "./verseTagChipCopy";
+export type { VerseTagPreviewStatus } from "./verseTagChipCopy";
 export { VerseTagMentionSheet } from "./VerseTagMentionSheet";
 export { VerseTagComposerOverlay } from "./VerseTagComposerOverlay";
 export { VerseTagPreviewTooltip } from "./VerseTagPreviewTooltip";
+export { loadVerseTagPreview } from "./verseTagPreview";
 export { VerseChipInput } from "./VerseChipInput";
 export { VerseTaggedText } from "./VerseTaggedText";
 export { computeVerseTagTooltipPosition } from "./verseTagTooltipLayout";

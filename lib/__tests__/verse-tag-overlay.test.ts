@@ -22,6 +22,16 @@ describe("computeVerseTagOverlayMetrics", () => {
     expect(metrics.maxHeight).toBeLessThanOrEqual(VERSE_TAG_OVERLAY_MAX_HEIGHT_PX);
     expect(metrics.bottom + metrics.maxHeight + 47).toBeLessThanOrEqual(844);
   });
+
+  it("shrinks instead of overflowing a short landscape screen", () => {
+    const metrics = computeVerseTagOverlayMetrics({
+      screenHeight: 390,
+      keyboardHeight: 280,
+      statusBarInset: 20,
+    });
+    expect(metrics.bottom + metrics.maxHeight + 20).toBeLessThanOrEqual(390);
+    expect(metrics.maxHeight).toBeGreaterThan(0);
+  });
 });
 
 describe("resolveVerseTagPrefetchTarget", () => {

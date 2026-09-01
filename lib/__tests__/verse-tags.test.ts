@@ -426,12 +426,27 @@ describe("verseTagComposer", () => {
     expect(deleted.state.buffer).toBe("");
   });
 
-  it("leaves cross-chapter ranges and comma lists as plain text", () => {
+  it("leaves cross-chapter ranges as plain text with a visible range error", () => {
     const cross = createTestComposer();
-    expect(typeBuffer(cross, "@john 3:16-4:2 ").last.commit).toBeNull();
+    const crossResult = typeBuffer(cross, "@john 3:16-4:2 ");
+    expect(crossResult.last.commit).toBeNull();
+    expect(crossResult.last.state.error).toBe("invalid-range");
+    expect(crossResult.text).toBe("@john 3:16-4:2 ");
+  });
 
+  it("leaves comma lists as plain text because a comma ends the mention", () => {
     const comma = createTestComposer();
-    expect(typeBuffer(comma, "@john 3:16,18 ").last.commit).toBeNull();
+    const commaResult = typeBuffer(comma, "@john 3:16,18 ");
+    expect(commaResult.last.commit).toBeNull();
+    expect(commaResult.text).toBe("@john 3:16,18 ");
+  });
+
+  it("shows an invalid-range error for a reversed same-chapter range", () => {
+    const composer = createTestComposer();
+    const result = typeBuffer(composer, "@john 3:18-16 ");
+    expect(result.last.commit).toBeNull();
+    expect(result.last.state.phase).toBe("invalid");
+    expect(result.last.state.error).toBe("invalid-range");
   });
 
   it("cancels on newline without deleting the typed mention", () => {

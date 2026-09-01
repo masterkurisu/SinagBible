@@ -16,11 +16,10 @@ export function computeVerseTagOverlayMetrics(options: {
 }): VerseTagOverlayMetrics {
   const gap = options.gap ?? VERSE_TAG_OVERLAY_GAP_PX;
   const bottom = Math.max(options.keyboardHeight, 0) + gap;
-  const available =
-    options.screenHeight - bottom - Math.max(options.statusBarInset, 0) - gap;
-  const maxHeight = Math.max(
-    VERSE_TAG_OVERLAY_MIN_HEIGHT_PX,
-    Math.min(VERSE_TAG_OVERLAY_MAX_HEIGHT_PX, available),
+  const available = Math.max(
+    0,
+    options.screenHeight - bottom - Math.max(options.statusBarInset, 0) - gap,
   );
+  const maxHeight = Math.min(VERSE_TAG_OVERLAY_MAX_HEIGHT_PX, available);
   return { bottom, maxHeight };
 }

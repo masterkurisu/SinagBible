@@ -13,17 +13,16 @@ import { formatVerseTagLabel, splitTextWithVerseTags } from "@sinag-bible/core";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
 import {
-  getJournalVersePreview,
-  resolveJournalPassageBookSlug,
-} from "@/lib/journal-verse-preview";
-import {
   formatVerseTagChipAccessibilityLabel,
+  formatVerseTagTooltipDescription,
   formatVerseTagTooltipTitle,
+  type VerseTagPreviewStatus,
 } from "@/src/features/verse-tags/verseTagChipCopy";
 import { focusVerseTagElement } from "@/src/features/verse-tags/verseTagFocus";
 import { VerseTagChip } from "@/src/features/verse-tags/VerseTagChip";
 import { VerseTagPreviewTooltip } from "@/src/features/verse-tags/VerseTagPreviewTooltip";
 import { openVerseTagInReader } from "@/src/features/verse-tags/openVerseTagInReader";
+import { loadVerseTagPreview } from "@/src/features/verse-tags/verseTagPreview";
 
 export type VerseTaggedTextProps = {
   text: string;
@@ -50,8 +49,7 @@ export function VerseTaggedText({
   const segments = useMemo(() => splitTextWithVerseTags(text), [text]);
   const chipRefs = useRef(new Map<string, React.RefObject<View | null>>());
   const [activeTag, setActiveTag] = useState<ActiveTagState | null>(null);
-  const [previewText, setPreviewText] = useState<string | null>(null);
-  const [previewPending, setPreviewPending] = useState(false);
+  const [previewStatus, setPreviewStatus] = useState<VerseTagPreviewStatus>({ kind: "not-found" });
   const versionAbbreviation = useMemo(
     () => getTranslationDisplayAbbreviation(translationId),
     [translationId],
@@ -67,25 +65,8 @@ export function VerseTaggedText({
 
   const loadPreview = useCallback(
     async (ref: VerseTagRef) => {
-      setPreviewPending(true);
-      setPreviewText(null);
-      try {
-        const canonicalBook = await resolveJournalPassageBookSlug(translationId, ref.book);
-        if (!canonicalBook) {
-          setPreviewText(null);
-          return;
-        }
-        const preview = await getJournalVersePreview(
-          translationId,
-          canonicalBook,
-          ref.chapter,
-          ref.verseStart,
-          ref.verseEnd ?? null,
-        );
-        setPreviewText(preview);
-      } finally {
-        setPreviewPending(false);
-      }
+      setPreviewStatus({ kind: "loading" });
+      setPreviewStatus(await loadVerseTagPreview(translationId, ref));
     },
     [translationId],
   );
@@ -112,8 +93,7 @@ export function VerseTaggedText({
   const dismissTooltip = useCallback(() => {
     const chipRef = activeTag ? chipRefs.current.get(activeTag.key) : undefined;
     setActiveTag(null);
-    setPreviewText(null);
-    setPreviewPending(false);
+    setPreviewStatus({ kind: "not-found" });
     requestAnimationFrame(() => {
       focusVerseTagElement(chipRef);
     });
@@ -182,14 +162,8 @@ export function VerseTaggedText({
         visible={activeTag != null}
         anchor={activeTag?.anchor ?? { x: 0, y: 0, width: 0, height: 0 }}
         title={activeTag?.title ?? ""}
-        description={
-          previewPending
-            ? "Loading verse..."
-            : previewText?.trim()
-              ? previewText
-              : "Verse not found"
-        }
-        canOpenInReader={Boolean(previewText?.trim()) && !previewPending}
+        description={formatVerseTagTooltipDescription(previewStatus)}
+        canOpenInReader={previewStatus.kind === "ready"}
         bundle={bundle}
         onDismiss={dismissTooltip}
         onOpenInReader={handleOpenInReader}

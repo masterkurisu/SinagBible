@@ -18,17 +18,19 @@ import { formatVerseTagLabel } from "@sinag-bible/core/verse-tags";
 import { M3OutlinedTextField } from "@/src/components/m3/M3OutlinedTextField";
 import { measureOnboardingTarget } from "@/src/components/feature-onboarding/measureOnboardingTarget";
 import { getTranslationDisplayAbbreviation } from "@/lib/translation-display-label";
-import {
-  getJournalVersePreview,
-  resolveJournalPassageBookSlug,
-} from "@/lib/journal-verse-preview";
 import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import {
   READER_M3_BODY_FONT_PX,
   READER_M3_BODY_LINE_HEIGHT_PX,
   READER_M3_ERROR,
 } from "@/src/features/reader/readerSettingsPanelChrome";
-import { formatVerseTagChipAccessibilityLabel, formatVerseTagTooltipTitle } from "@/src/features/verse-tags/verseTagChipCopy";
+import {
+  formatVerseTagChipAccessibilityLabel,
+  formatVerseTagTooltipDescription,
+  formatVerseTagTooltipTitle,
+  type VerseTagPreviewStatus,
+} from "@/src/features/verse-tags/verseTagChipCopy";
+import { loadVerseTagPreview } from "@/src/features/verse-tags/verseTagPreview";
 import { focusVerseTagElement } from "@/src/features/verse-tags/verseTagFocus";
 import { VerseTagChip } from "@/src/features/verse-tags/VerseTagChip";
 import { VerseTagPreviewTooltip } from "@/src/features/verse-tags/VerseTagPreviewTooltip";
@@ -111,8 +113,7 @@ export function VerseChipInput({
     end: number;
   } | null>(null);
   const [activeTag, setActiveTag] = useState<ActiveTagState | null>(null);
-  const [previewText, setPreviewText] = useState<string | null>(null);
-  const [previewPending, setPreviewPending] = useState(false);
+  const [previewStatus, setPreviewStatus] = useState<VerseTagPreviewStatus>({ kind: "not-found" });
 
   const fontSize = READER_M3_BODY_FONT_PX * scale;
   const lineHeight = READER_M3_BODY_LINE_HEIGHT_PX * scale;
@@ -243,25 +244,8 @@ export function VerseChipInput({
 
   const loadPreview = useCallback(
     async (ref: VerseTagRef) => {
-      setPreviewPending(true);
-      setPreviewText(null);
-      try {
-        const canonicalBook = await resolveJournalPassageBookSlug(translationId, ref.book);
-        if (!canonicalBook) {
-          setPreviewText(null);
-          return;
-        }
-        const preview = await getJournalVersePreview(
-          translationId,
-          canonicalBook,
-          ref.chapter,
-          ref.verseStart,
-          ref.verseEnd ?? null,
-        );
-        setPreviewText(preview);
-      } finally {
-        setPreviewPending(false);
-      }
+      setPreviewStatus({ kind: "loading" });
+      setPreviewStatus(await loadVerseTagPreview(translationId, ref));
     },
     [translationId],
   );
@@ -288,8 +272,7 @@ export function VerseChipInput({
   const dismissTooltip = useCallback(() => {
     const chipRef = activeTag ? chipRefs.current.get(activeTag.key) : undefined;
     setActiveTag(null);
-    setPreviewText(null);
-    setPreviewPending(false);
+    setPreviewStatus({ kind: "not-found" });
     requestAnimationFrame(() => {
       focusVerseTagElement(chipRef);
     });
@@ -426,14 +409,8 @@ export function VerseChipInput({
         visible={activeTag != null}
         anchor={activeTag?.anchor ?? { x: 0, y: 0, width: 0, height: 0 }}
         title={activeTag?.title ?? ""}
-        description={
-          previewPending
-            ? "Loading verse..."
-            : previewText?.trim()
-              ? previewText
-              : "Verse not found"
-        }
-        canOpenInReader={Boolean(previewText?.trim()) && !previewPending}
+        description={formatVerseTagTooltipDescription(previewStatus)}
+        canOpenInReader={previewStatus.kind === "ready"}
         bundle={bundle}
         onDismiss={dismissTooltip}
         onOpenInReader={handleOpenInReader}

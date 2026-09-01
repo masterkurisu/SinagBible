@@ -242,7 +242,7 @@ const defaultThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     chipInactiveText: "#6f6455",
     chipActiveBackground: "#efe3c2",
     chipActiveBorder: "#c9a96e",
-    chipActiveText: "#8c6a2f",
+    chipActiveText: "#6b4e1f",
     emptyStateBackground: "#fdfbf7",
     emptyStateBorder: "#ddd8ce",
     emptyStateText: "#6b5e4b",
