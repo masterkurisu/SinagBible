@@ -101,6 +101,8 @@ const styles = StyleSheet.create({
   absoluteRoot: {
     ...StyleSheet.absoluteFill,
     justifyContent: "flex-end",
+    zIndex: 60,
+    elevation: 60,
   },
   dismissHit: {
     flex: 1,

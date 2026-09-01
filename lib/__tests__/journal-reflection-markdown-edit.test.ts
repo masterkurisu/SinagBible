@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { parseReflectionLiveMarkdown } from "@/lib/journal-reflection-live-markdown-parser";
 import {
   applyReflectionToolbarAction,
+  deleteAtomicVerseTagOnEdit,
   insertReflectionImageToken,
+  insertReflectionVerseTag,
   listReflectionImageIds,
   toggleLinePrefix,
   wrapMarkdownMarker,
@@ -134,6 +136,56 @@ describe("applyReflectionToolbarAction", () => {
   });
 });
 
+describe("insertReflectionVerseTag", () => {
+  const john316 = { book: "john", chapter: 3, verseStart: 16 };
+
+  it("inserts [@john:3:16] and a trailing space at the caret", () => {
+    expect(insertReflectionVerseTag("see ", { start: 4, end: 4 }, john316, "KJV")).toEqual({
+      text: "see [@john:3:16] ",
+      selection: { start: 17, end: 17 },
+    });
+  });
+
+  it("replaces an active @mention instead of inserting beside it", () => {
+    expect(insertReflectionVerseTag("see @john", { start: 9, end: 9 }, john316, "KJV")).toEqual({
+      text: "see [@john:3:16] ",
+      selection: { start: 17, end: 17 },
+    });
+  });
+});
+
+describe("deleteAtomicVerseTagOnEdit", () => {
+  const text = "see [@john:3:16] now";
+  const tokenStart = text.indexOf("[@");
+  const tokenEnd = text.indexOf("]") + 1;
+
+  it("expands backspace at the token end into a whole-token delete", () => {
+    const next = text.slice(0, tokenEnd - 1) + text.slice(tokenEnd);
+    expect(deleteAtomicVerseTagOnEdit(text, next)).toEqual({
+      text: "see  now",
+      selection: { start: tokenStart, end: tokenStart },
+    });
+  });
+
+  it("expands a deletion inside the token into a whole-token delete", () => {
+    const inner = text.indexOf("john");
+    const next = text.slice(0, inner) + text.slice(inner + 1);
+    expect(deleteAtomicVerseTagOnEdit(text, next)).toEqual({
+      text: "see  now",
+      selection: { start: tokenStart, end: tokenStart },
+    });
+  });
+
+  it("leaves a native whole-token delete unchanged", () => {
+    const next = text.slice(0, tokenStart) + text.slice(tokenEnd);
+    expect(deleteAtomicVerseTagOnEdit(text, next)).toBeNull();
+  });
+
+  it("does not treat ordinary backspace as a verse-token delete", () => {
+    expect(deleteAtomicVerseTagOnEdit("hello", "hell")).toBeNull();
+  });
+});
+
 describe("toolbar output live-parses", () => {
   it("paints bold / italic / heading / lists / checklist / link / image immediately", () => {
     const doc = "Keep the first line.\n\nEdit this word here.";
@@ -167,5 +219,13 @@ describe("toolbar output live-parses", () => {
 
     const image = insertReflectionImageToken("before", { start: 6, end: 6 }, "img-9").text;
     expect(hasType(image, "syntax")).toBe(true);
+
+    const verse = insertReflectionVerseTag("before", { start: 6, end: 6 }, {
+      book: "john",
+      chapter: 3,
+      verseStart: 16,
+    }, "KJV").text;
+    expect(hasType(verse, "link")).toBe(true);
+    expect(verse).toContain("[@john:3:16]");
   });
 });

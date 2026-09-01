@@ -25,7 +25,7 @@ import {
 
 export type UseVerseTagMentionOptions = {
   text: string;
-  onChangeText: (text: string) => void;
+  onChangeText: (text: string, cursorIndex?: number) => void;
   contextTranslation?: string;
 };
 
@@ -50,6 +50,7 @@ export type UseVerseTagMentionResult = {
   beginSuggestionPick: () => void;
   openMentionSheet: () => void;
   closeMention: () => void;
+  closeMentionSheet: () => void;
 };
 
 function nextCursorAfterEdit(
@@ -166,10 +167,16 @@ export function useVerseTagMention({
     [prefetchChapter],
   );
 
+  const releaseSuggestionPick = useCallback(() => {
+    setTimeout(() => {
+      pickingRef.current = false;
+    }, 0);
+  }, []);
+
   const applyText = useCallback(
     (nextText: string, cursorIndex: number) => {
       textRef.current = nextText;
-      onChangeText(nextText);
+      onChangeText(nextText, cursorIndex);
       selectionRef.current = { start: cursorIndex, end: cursorIndex };
       setSelection(selectionRef.current);
     },
@@ -187,7 +194,7 @@ export function useVerseTagMention({
         applyResult(result);
         return;
       }
-      onChangeText(next);
+      onChangeText(next, cursorIndex);
       if (cursorIndex != null) {
         selectionRef.current = { start: cursorIndex, end: cursorIndex };
         setSelection(selectionRef.current);
@@ -250,9 +257,9 @@ export function useVerseTagMention({
         }),
       );
       setSheetOpen(false);
-      pickingRef.current = false;
+      releaseSuggestionPick();
     },
-    [applyResult, applyText, translation],
+    [applyResult, applyText, releaseSuggestionPick, translation],
   );
 
   const confirmSuggestion = useCallback(
@@ -276,9 +283,9 @@ export function useVerseTagMention({
       });
       applyResult(result);
       maybePrefetch(result);
-      pickingRef.current = false;
+      releaseSuggestionPick();
     },
-    [applyResult, applyText, insertTag, maybePrefetch],
+    [applyResult, applyText, insertTag, maybePrefetch, releaseSuggestionPick],
   );
 
   const handleKeyPress = useCallback(
@@ -351,11 +358,18 @@ export function useVerseTagMention({
   }, [applyResult, applyText]);
 
   const openMentionSheet = useCallback(() => {
+    pickingRef.current = true;
     setSheetOpen(true);
   }, []);
 
+  const closeMentionSheet = useCallback(() => {
+    setSheetOpen(false);
+    releaseSuggestionPick();
+  }, [releaseSuggestionPick]);
+
   const closeMention = useCallback(() => {
     setSheetOpen(false);
+    pickingRef.current = false;
     closeOverlay();
   }, [closeOverlay]);
 
@@ -410,9 +424,11 @@ export function useVerseTagMention({
       beginSuggestionPick,
       openMentionSheet,
       closeMention,
+      closeMentionSheet,
     }),
     [
       closeMention,
+      closeMentionSheet,
       composerPhase,
       confirmSuggestion,
       beginSuggestionPick,

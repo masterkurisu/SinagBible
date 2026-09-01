@@ -16,6 +16,7 @@ import type { MarkdownRange } from "@expensify/react-native-live-markdown";
  * | `- ` / `1. ` lists         | `syntax` on the prefix               |
  * | `- [ ] ` / `- [x] `        | `syntax` on the prefix               |
  * | `[label](url)`             | `link` on label; `syntax` on markup  |
+ * | `[@book:ch:v]`             | `syntax` on `[@` / `]`; `link` inner |
  * | `[image:id]`               | `syntax` on the whole token          |
  *
  * Checklists and image tokens cannot live-render as widgets — only as dimmed
@@ -62,6 +63,15 @@ export function parseReflectionLiveMarkdown(input: string): MarkdownRange[] {
     return close + 1;
   };
 
+  // Closed `[@…]` only. Keep this a character loop — worklets cannot import parseVerseTagToken.
+  const matchVerseTagToken = (from: number, to: number) => {
+    if (!startsWith(from, to, "[@")) return -1;
+    const close = indexOfDelim(from + 2, to, "]");
+    if (close === -1) return -1;
+    if (close === from + 2) return -1;
+    return close + 1;
+  };
+
   const matchLink = (from: number, to: number) => {
     if (input[from] !== "[") return null;
     let labelEnd = from + 1;
@@ -93,6 +103,18 @@ export function parseReflectionLiveMarkdown(input: string): MarkdownRange[] {
         if (imageEnd !== -1) {
           ranges.push({ type: "syntax", start: i, length: imageEnd - i });
           i = imageEnd;
+          continue;
+        }
+        // Verse tokens must win over `[label](url)` so `[@john:3:16](…)` stays a tag.
+        const verseEnd = matchVerseTagToken(i, to);
+        if (verseEnd !== -1) {
+          ranges.push({ type: "syntax", start: i, length: 2 });
+          const innerLen = verseEnd - i - 3;
+          if (innerLen > 0) {
+            ranges.push({ type: "link", start: i + 2, length: innerLen });
+          }
+          ranges.push({ type: "syntax", start: verseEnd - 1, length: 1 });
+          i = verseEnd;
           continue;
         }
         const link = matchLink(i, to);

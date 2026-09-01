@@ -2,8 +2,64 @@
  * Native markdown reflection editor helpers (toolbar insert/wrap).
  */
 
+import { encodeVerseTag, insertVerseTagAtMention, parseVerseTagToken } from "@sinag-bible/core/verse-tags";
+import type { VerseTagRef } from "@sinag-bible/types";
+
 export type ReflectionTextSelection = { start: number; end: number };
 export type ReflectionMarkdownEditResult = { text: string; selection: ReflectionTextSelection };
+
+function findClosedVerseTagRanges(text: string): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+  let index = 0;
+  while (index < text.length) {
+    const start = text.indexOf("[@", index);
+    if (start === -1) break;
+    const close = text.indexOf("]", start + 2);
+    if (close === -1) break;
+    const raw = text.slice(start, close + 1);
+    if (parseVerseTagToken(raw)) {
+      ranges.push({ start, end: close + 1 });
+    }
+    index = close + 1;
+  }
+  return ranges;
+}
+
+/** Count of valid closed `[@…]` tokens. Used to checkpoint auto-insert / atomic delete as one undo step. */
+export function countReflectionVerseTagTokens(text: string): number {
+  return findClosedVerseTagRanges(text).length;
+}
+
+/**
+ * Expand a native deletion that intersects a closed verse token into a whole-token delete.
+ * Returns `null` when the edit is not a simple deletion, misses every token, or already removed
+ * a whole token (so the caller can keep `nextText`).
+ */
+export function deleteAtomicVerseTagOnEdit(
+  prevText: string,
+  nextText: string,
+): ReflectionMarkdownEditResult | null {
+  if (nextText.length >= prevText.length) return null;
+
+  let i = 0;
+  const maxCommon = Math.min(prevText.length, nextText.length);
+  while (i < maxCommon && prevText[i] === nextText[i]) i += 1;
+
+  const deletedLen = prevText.length - nextText.length;
+  if (deletedLen <= 0) return null;
+  if (prevText.slice(i + deletedLen) !== nextText.slice(i)) return null;
+
+  const delStart = i;
+  const delEnd = i + deletedLen;
+  const hit = findClosedVerseTagRanges(prevText).find(
+    (range) => delStart < range.end && delEnd > range.start,
+  );
+  if (!hit) return null;
+  if (delStart === hit.start && delEnd === hit.end) return null;
+
+  const text = prevText.slice(0, hit.start) + prevText.slice(hit.end);
+  return { text, selection: { start: hit.start, end: hit.start } };
+}
 
 const CHECKLIST_PREFIX_RE = /^-\s\[[ xX]\]\s/;
 const BULLET_PREFIX_RE = /^-\s(?!\[)/;
@@ -131,6 +187,29 @@ function insertTextAtSelection(
   const next = text.slice(0, start) + insert + text.slice(end);
   const cursor = start + insert.length;
   return { text: next, selection: { start: cursor, end: cursor } };
+}
+
+/**
+ * Insert an encoded verse token (plus a trailing space) at the caret. Replaces an active `@`
+ * mention when one is open so toolbar Insert verse and overlay confirm share one path.
+ */
+export function insertReflectionVerseTag(
+  text: string,
+  selection: ReflectionTextSelection,
+  ref: VerseTagRef,
+  contextTranslation?: string,
+): ReflectionMarkdownEditResult {
+  const atMention = insertVerseTagAtMention(text, selection.end, ref, contextTranslation);
+  if (atMention.text !== text) {
+    const needsSpace = atMention.text[atMention.cursorIndex] !== " ";
+    const nextText = needsSpace
+      ? `${atMention.text.slice(0, atMention.cursorIndex)} ${atMention.text.slice(atMention.cursorIndex)}`
+      : atMention.text;
+    const cursor = atMention.cursorIndex + (needsSpace ? 1 : 0);
+    return { text: nextText, selection: { start: cursor, end: cursor } };
+  }
+  const token = encodeVerseTag(ref, contextTranslation);
+  return insertTextAtSelection(text, selection, `${token} `);
 }
 
 /**

@@ -48,7 +48,10 @@ import { resolveReflectionMarkdownForEdit } from "@/lib/journal-reflection-edit"
 import {
   applyReflectionToolbarAction,
   continueListOnNewline,
+  countReflectionVerseTagTokens,
+  deleteAtomicVerseTagOnEdit,
   insertReflectionImageToken,
+  insertReflectionVerseTag,
   listReflectionImageIds,
   reflectionMarkdownHasContent,
   type ReflectionMarkdownEditResult,
@@ -115,6 +118,10 @@ import {
   readerM3FloatingToolbarPillStyle,
 } from "@/src/features/reader/readerActionBarChrome";
 import { READER_M3_ON_SURFACE_VARIANT } from "@/src/features/reader/readerSettingsPanelChrome";
+import { useVerseTagMention } from "@/src/features/verse-tags/useVerseTagMention";
+import { VerseTagComposerOverlay } from "@/src/features/verse-tags/VerseTagComposerOverlay";
+import { VerseTagMentionSheet } from "@/src/features/verse-tags/VerseTagMentionSheet";
+import type { VerseTagRef } from "@sinag-bible/types";
 
 const VERSE_PREVIEW_LIMIT = 150;
 const TOOLBAR_BTN_SIZE = 40;
@@ -506,8 +513,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const reflectionTypingHapticLastRef = useRef(0);
 
-  const onReflectionMarkdownChange = useCallback(
-    (text: string) => {
+  const persistReflectionMarkdown = useCallback(
+    (text: string, cursorIndex?: number) => {
       markActiveFormField("reflection");
       const t = Date.now();
       if (t - reflectionTypingHapticLastRef.current >= 48) {
@@ -515,7 +522,12 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         hapticSelection();
       }
       const prev = reflectionMarkdownRef.current;
-      scheduleReflectionUndoCheckpoint(prev);
+      if (countReflectionVerseTagTokens(prev) !== countReflectionVerseTagTokens(text)) {
+        flushTypingUndoCheckpoint();
+        pushReflectionUndoValue(prev);
+      } else {
+        scheduleReflectionUndoCheckpoint(prev);
+      }
 
       // Enter at the end of a "- "/"1. "/"- [ ] " line continues the list on the new line (or, on
       // an empty item, exits it) instead of leaving the user to type the prefix by hand each time.
@@ -531,8 +543,50 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
       reflectionMarkdownRef.current = text;
       setReflectionMarkdown(text);
+      if (cursorIndex != null) {
+        const sel = { start: cursorIndex, end: cursorIndex };
+        reflectionSelectionRef.current = sel;
+        setReflectionSelection(sel);
+        setReflectionSelectionOverride(sel);
+      }
     },
-    [scheduleReflectionUndoCheckpoint],
+    [flushTypingUndoCheckpoint, pushReflectionUndoValue, scheduleReflectionUndoCheckpoint],
+  );
+
+  const {
+    mentionOpen,
+    mentionQuery,
+    mentionError,
+    suggestions,
+    suggestionsPending,
+    selectedSuggestionIndex,
+    sheetOpen,
+    handleChangeText,
+    handleCursorChange,
+    handleKeyPress,
+    handleBlur,
+    confirmSuggestion,
+    beginSuggestionPick,
+    openMentionSheet,
+    closeMention,
+    closeMentionSheet,
+  } = useVerseTagMention({
+    text: reflectionMarkdown,
+    onChangeText: persistReflectionMarkdown,
+    contextTranslation: journalTranslationId,
+  });
+
+  const onReflectionMarkdownChange = useCallback(
+    (text: string) => {
+      const prev = reflectionMarkdownRef.current;
+      const atomic = deleteAtomicVerseTagOnEdit(prev, text);
+      if (atomic) {
+        handleChangeText(atomic.text, atomic.selection.end);
+        return;
+      }
+      handleChangeText(text);
+    },
+    [handleChangeText],
   );
 
   const hasReflectionInput = reflectionMarkdownHasContent(reflectionMarkdown);
@@ -701,6 +755,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   };
 
   const onReflectionEditorBlur = () => {
+    handleBlur();
     flushTypingUndoCheckpoint();
     if (suppressReflectionBlurRef.current || reflectionFullscreenOpen) return;
     if (keyboardHeight > 0) return;
@@ -710,6 +765,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const showReflectionFloatingToolbar =
     activeFormField === "reflection" &&
+    !mentionOpen &&
     (journalKeyboardOpen || reflectionFullscreenOpen);
 
   const measureReflectionToolbarBottomPx = useCallback(() => {
@@ -880,6 +936,27 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       applyReflectionToolbarAction(reflectionMarkdownRef.current, selection, action),
     );
     // Focus after the edit so a pre-apply focus() cannot clobber the caret we just used.
+    requestAnimationFrame(() => getActiveReflectionInput()?.focus());
+  };
+
+  const openInsertVerseSheet = () => {
+    hapticLightImpact();
+    beginSuggestionPick();
+    openMentionSheet();
+  };
+
+  const insertPickedVerseTag = (ref: VerseTagRef) => {
+    const selection = toolbarPressSelectionRef.current ?? reflectionSelectionRef.current;
+    releaseToolbarSelectionSnapshot();
+    applyReflectionEdit(
+      insertReflectionVerseTag(
+        reflectionMarkdownRef.current,
+        selection,
+        ref,
+        journalTranslationId,
+      ),
+    );
+    closeMention();
     requestAnimationFrame(() => getActiveReflectionInput()?.focus());
   };
 
@@ -1375,6 +1452,19 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         </TouchableOpacity>
         <TouchableOpacity
           accessibilityRole="button"
+          accessibilityLabel="Insert verse"
+          onPressIn={() => {
+            snapshotReflectionSelectionForToolbar();
+            beginSuggestionPick();
+          }}
+          onPress={openInsertVerseSheet}
+          activeOpacity={0.85}
+          style={floatingToolbarIconButtonStyle}
+        >
+          <Ionicons name="book-outline" size={20} color={toolbarIconColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
           accessibilityLabel="Attach image"
           onPressIn={snapshotReflectionSelectionForToolbar}
           onPress={() => void attachReflectionImage()}
@@ -1562,6 +1652,25 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     </>
   );
 
+  const renderVerseTagOverlay = () =>
+    mentionOpen ? (
+      <VerseTagComposerOverlay
+        visible
+        query={mentionQuery}
+        error={mentionError}
+        suggestions={suggestions}
+        pending={suggestionsPending}
+        selectedIndex={selectedSuggestionIndex}
+        bundle={bundle}
+        insets={insets}
+        keyboardHeight={keyboardHeight}
+        placement="absolute"
+        onSelect={confirmSuggestion}
+        onSelectStart={beginSuggestionPick}
+        onDismiss={closeMention}
+      />
+    ) : null;
+
   /**
    * One live `MarkdownTextInput` for the whole reflection document — natively self-scrolling,
    * no per-block swap. Nested `ScrollView` around this field previously broke scrolling because
@@ -1589,9 +1698,11 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             setReflectionSelection(next);
             reflectionSelectionRef.current = next;
             if (reflectionSelectionOverride != null) setReflectionSelectionOverride(null);
+            handleCursorChange(next);
           }}
           onFocus={onReflectionEditorFocus}
           onBlur={onReflectionEditorBlur}
+          onKeyPress={handleKeyPress}
           style={[reflectionInputStyle, { flex: 1, minHeight: 0 }]}
           placeholder="Write your reflection…"
           placeholderTextColor={colors.tan200}
@@ -1858,6 +1969,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           {renderReflectionFloatingToolbar()}
         </View>
       ) : null}
+      {!reflectionFullscreenOpen ? renderVerseTagOverlay() : null}
       </View>
     </View>
 
@@ -1952,10 +2064,21 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             {renderReflectionFloatingToolbar()}
           </View>
         ) : null}
+        {renderVerseTagOverlay()}
           </View>
         </KeyboardAvoidingView>
       </View>
     </Modal>
+
+    <VerseTagMentionSheet
+      isOpen={sheetOpen}
+      onClose={closeMentionSheet}
+      translationId={journalTranslationId}
+      bundle={bundle}
+      insets={insets}
+      isTabletReaderLayout={isTabletForm}
+      onPick={insertPickedVerseTag}
+    />
 
     {saveToastMessage ? (
       <Animated.View pointerEvents="none" style={[styles.saveToastWrap, { opacity: saveToastOpacity }]}>

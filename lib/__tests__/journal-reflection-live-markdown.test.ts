@@ -93,6 +93,34 @@ describe("parseReflectionLiveMarkdown", () => {
     ]);
   });
 
+  it("styles closed verse-tag tokens without treating them as markdown links", () => {
+    const input = "[@john:3:16]";
+    expect(byType(input, "syntax")).toEqual([
+      { type: "syntax", start: 0, length: 2 },
+      { type: "syntax", start: 11, length: 1 },
+    ]);
+    expect(byType(input, "link")).toEqual([{ type: "link", start: 2, length: 9 }]);
+  });
+
+  it("keeps [@john:3:16](not a link) as a verse token plus plain parens", () => {
+    const input = "[@john:3:16](not a link)";
+    expect(byType(input, "link")).toEqual([{ type: "link", start: 2, length: 9 }]);
+    expect(byType(input, "syntax")).toEqual([
+      { type: "syntax", start: 0, length: 2 },
+      { type: "syntax", start: 11, length: 1 },
+    ]);
+  });
+
+  it("does not parse [@john:3:16](https://example.com) as a markdown link", () => {
+    const input = "[@john:3:16](https://example.com)";
+    expect(byType(input, "link")).toEqual([{ type: "link", start: 2, length: 9 }]);
+    expect(input.slice(2, 11)).toBe("john:3:16");
+  });
+
+  it("leaves empty [@] unstyled", () => {
+    expect(parseReflectionLiveMarkdown("[@]")).toEqual([]);
+  });
+
   it("parses inline markup inside a heading", () => {
     const input = "# Hello **there**";
     expect(byType(input, "h1")[0]).toMatchObject({ start: 2, length: 15 });
