@@ -110,13 +110,8 @@ import {
 } from "@/components/journal-reflection-toolbar-icons";
 import { isTabletLayout, TABLET_NEW_ENTRY_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 import { M3OutlinedTextField } from "@/src/components/m3/M3OutlinedTextField";
-import { JournalM3FilterChip } from "@/src/features/journal/JournalM3FilterChip";
-import {
-  formatJournalTagLabel,
-  JOURNAL_TAG_SUGGESTIONS,
-  normalizeJournalTag,
-  normalizeJournalTags,
-} from "@/lib/journal-tags";
+import { JournalTagSection } from "@/src/features/journal/JournalTagSection";
+import { normalizeJournalTag, normalizeJournalTags } from "@/lib/journal-tags";
 import { m3SettingsSheetTitleStyle } from "@/src/components/m3/M3SettingsSheetTitle";
 import {
   JOURNAL_M3_ELEVATED_CARD_ELEVATION_PX,
@@ -685,9 +680,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     (notesSurfaceEnabled && enrichedPlainText.trim().length > 0);
   const hasDraftInput =
     passage.trim().length > 0 || title.trim().length > 0 || tags.length > 0 || hasReflectionInput;
-  const customTags = tags.filter(
-    (tag) => !(JOURNAL_TAG_SUGGESTIONS as readonly string[]).includes(tag),
-  );
 
   const toggleTag = (tag: string) => {
     hapticSelection();
@@ -1883,67 +1875,16 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         />
       </View>
 
-      <View collapsable={false} style={{ backgroundColor: modalSurfaceColor, marginTop: 12 }}>
-        <Text
-          style={{
-            fontFamily: "Inter_400Regular",
-            fontSize: 12,
-            color: READER_M3_ON_SURFACE_VARIANT,
-            marginBottom: 8,
-          }}
-        >
-          Tags (optional)
-        </Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {JOURNAL_TAG_SUGGESTIONS.map((tag) => (
-            <JournalM3FilterChip
-              key={tag}
-              label={formatJournalTagLabel(tag)}
-              selected={tags.includes(tag)}
-              onPress={() => toggleTag(tag)}
-              bundle={bundle}
-            />
-          ))}
-          {customTags.map((tag) => (
-            <JournalM3FilterChip
-              key={tag}
-              label={formatJournalTagLabel(tag)}
-              selected
-              onPress={() => toggleTag(tag)}
-              bundle={bundle}
-              accessibilityLabel={`Remove tag ${formatJournalTagLabel(tag)}`}
-            />
-          ))}
-        </View>
-        {tags.length < 8 ? (
-          <View style={{ marginTop: 8 }}>
-            <M3OutlinedTextField
-              label="Add a tag"
-              value={tagDraft}
-              onChangeText={(text) => {
-                if (text.includes(",")) {
-                  const [head, ...rest] = text.split(",");
-                  if (commitTagDraft(head)) {
-                    setTagDraft(rest.join(",").replace(/^\s+/, ""));
-                    return;
-                  }
-                }
-                setTagDraft(text);
-              }}
-              surfaceColor={modalSurfaceColor}
-              accentColor={colors.brown800}
-              roundedEnds
-              minHeight={52}
-              inputFontFamily="Inter_400Regular"
-              returnKeyType="done"
-              blurOnSubmit
-              onSubmitEditing={() => {
-                if (commitTagDraft(tagDraft)) setTagDraft("");
-              }}
-            />
-          </View>
-        ) : null}
-      </View>
+      <JournalTagSection
+        tags={tags}
+        tagDraft={tagDraft}
+        onTagDraftChange={setTagDraft}
+        onToggleTag={toggleTag}
+        onCommitTagDraft={commitTagDraft}
+        bundle={bundle}
+        surfaceColor={modalSurfaceColor}
+        accentColor={colors.brown800}
+      />
     </>
   );
 

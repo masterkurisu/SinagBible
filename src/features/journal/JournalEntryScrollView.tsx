@@ -13,7 +13,6 @@ import Animated, { useSharedValue } from "react-native-reanimated";
 import { FlashList, type FlashListRef, type ListRenderItemInfo } from "@shopify/flash-list";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { UpCircleIcon } from "@/components/icons/UpCircleIcon";
-import { formatJournalTagLabel } from "@/lib/journal-tags";
 import { READER_FLASH_LIST_DRAW_DISTANCE_PX } from "@/lib/device-capability";
 import {
   AnimatedHighRefreshScrollView,
@@ -21,6 +20,7 @@ import {
   useHighRefreshScrollHandler,
 } from "@/lib/high-refresh-scroll";
 import { JournalSavedReflectionBlock } from "@/src/features/journal/JournalSavedReflectionBlock";
+import { JournalEntryTagRow } from "@/src/features/journal/JournalEntryTagRow";
 import {
   splitSavedReflectionHtml,
   shouldVirtualizeJournalReflection,
@@ -73,6 +73,7 @@ function JournalEntryHeader({
   verseText,
   reserveVerseSlot,
   colors,
+  bundle,
 }: {
   title: string;
   dateLine: string;
@@ -83,6 +84,7 @@ function JournalEntryHeader({
   verseText: string | null;
   reserveVerseSlot: boolean;
   colors: { brown800: string; gold: string; tan200: string };
+  bundle: MobileAppThemeBundle;
 }) {
   const showPassage = passageLine != null || verseText != null || reserveVerseSlot;
   return (
@@ -93,17 +95,7 @@ function JournalEntryHeader({
       {dateLine ? (
         <Text style={[styles.date, { color: colors.tan200 }]}>{dateLine}</Text>
       ) : null}
-      {tags && tags.length > 0 ? (
-        <View style={styles.tagsRow}>
-          {tags.map((tag) => (
-            <View key={tag} style={[styles.tagChip, { borderColor: colors.tan200 }]}>
-              <Text style={[styles.tagLabel, { color: colors.tan200 }]}>
-                {formatJournalTagLabel(tag)}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
+      {tags && tags.length > 0 ? <JournalEntryTagRow tags={tags} bundle={bundle} /> : null}
       {showPassage ? (
         <>
           <Text style={[styles.sectionLabel, { color: colors.gold }]}>Passage</Text>
@@ -231,6 +223,7 @@ export function JournalEntryScrollView({
         verseText={verseText}
         reserveVerseSlot={reserveVerseSlot}
         colors={colors}
+        bundle={bundle}
       />
     ),
     [
@@ -243,6 +236,7 @@ export function JournalEntryScrollView({
       verseText,
       reserveVerseSlot,
       colors,
+      bundle,
     ],
   );
 
@@ -416,22 +410,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginBottom: JOURNAL_DATE_BOTTOM_MARGIN_PX,
     fontSize: 14,
-  },
-  tagsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 16,
-  },
-  tagChip: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  tagLabel: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 12,
   },
   sectionLabel: {
     fontFamily: "Inter_400Regular",
