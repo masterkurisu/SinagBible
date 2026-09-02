@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { hapticSelection } from "@/lib/haptics";
 import {
   formatJournalTagLabel,
   JOURNAL_TAG_SUGGESTIONS,
+  normalizeJournalTag,
+  normalizeJournalTags,
 } from "@/lib/journal-tags";
-import { M3OutlinedTextField } from "@/src/components/m3/M3OutlinedTextField";
+import { JournalEntryAddTagChip } from "@/src/features/journal/JournalEntryAddTagChip";
+import { JournalEntryEditableTagChip } from "@/src/features/journal/JournalEntryEditableTagChip";
 import { JournalEntryTagChip } from "@/src/features/journal/JournalEntryTagChip";
 import { READER_M3_ON_SURFACE_VARIANT } from "@/src/features/reader/readerSettingsPanelChrome";
 
@@ -14,9 +18,9 @@ const MAX_TAGS_PER_ENTRY = 8;
 
 export type JournalTagSectionProps = {
   tags: string[];
+  onTagsChange: (tags: string[]) => void;
   tagDraft: string;
   onTagDraftChange: (text: string) => void;
-  onToggleTag: (tag: string) => void;
   onCommitTagDraft: (raw: string) => boolean;
   bundle: MobileAppThemeBundle;
   surfaceColor: string;
@@ -24,23 +28,128 @@ export type JournalTagSectionProps = {
 };
 
 /**
- * Journal form tag row: disclosure header (default expanded), pill chips, add field.
- * Phase 1 keeps tap-to-toggle and the outlined add field; Phase 2 replaces those.
+ * Journal form tag row: disclosure header, suggestion chips, editable applied tags, add chip.
  */
 export function JournalTagSection({
   tags,
+  onTagsChange,
   tagDraft,
   onTagDraftChange,
-  onToggleTag,
   onCommitTagDraft,
   bundle,
   surfaceColor,
   accentColor,
 }: JournalTagSectionProps) {
   const [expanded, setExpanded] = useState(true);
-  const customTags = tags.filter(
-    (tag) => !(JOURNAL_TAG_SUGGESTIONS as readonly string[]).includes(tag),
+  const [renamingTag, setRenamingTag] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [addExpanded, setAddExpanded] = useState(false);
+
+  const unselectedSuggestions = useMemo(
+    () => JOURNAL_TAG_SUGGESTIONS.filter((tag) => !tags.includes(tag)),
+    [tags],
   );
+
+  const cancelRename = useCallback(() => {
+    setRenamingTag(null);
+    setRenameDraft("");
+  }, []);
+
+  const collapseAdd = useCallback(() => {
+    setAddExpanded(false);
+    onTagDraftChange("");
+  }, [onTagDraftChange]);
+
+  const startRename = useCallback(
+    (tag: string) => {
+      collapseAdd();
+      setRenamingTag(tag);
+      setRenameDraft(formatJournalTagLabel(tag));
+    },
+    [collapseAdd],
+  );
+
+  const removeTag = useCallback(
+    (tag: string) => {
+      hapticSelection();
+      onTagsChange(tags.filter((item) => item !== tag));
+      if (renamingTag === tag) cancelRename();
+    },
+    [cancelRename, onTagsChange, renamingTag, tags],
+  );
+
+  const addSuggestion = useCallback(
+    (tag: string) => {
+      hapticSelection();
+      onTagsChange(normalizeJournalTags([...tags, tag]));
+    },
+    [onTagsChange, tags],
+  );
+
+  const renameError = useMemo(() => {
+    if (!renamingTag) return false;
+    const trimmed = renameDraft.trim();
+    if (!trimmed) return false;
+    const normalized = normalizeJournalTag(renameDraft);
+    if (!normalized) return true;
+    return tags.some((tag) => tag !== renamingTag && tag === normalized);
+  }, [renameDraft, renamingTag, tags]);
+
+  const commitRename = useCallback(() => {
+    if (!renamingTag) return;
+    if (renameError) {
+      cancelRename();
+      return;
+    }
+    const normalized = normalizeJournalTag(renameDraft);
+    if (!normalized || normalized === renamingTag) {
+      cancelRename();
+      return;
+    }
+    hapticSelection();
+    onTagsChange(tags.map((tag) => (tag === renamingTag ? normalized : tag)));
+    cancelRename();
+  }, [cancelRename, onTagsChange, renameDraft, renameError, renamingTag, tags]);
+
+  const expandAdd = useCallback(() => {
+    cancelRename();
+    setAddExpanded(true);
+  }, [cancelRename]);
+
+  const handleTagDraftChange = useCallback(
+    (text: string) => {
+      if (text.includes(",")) {
+        const [head, ...rest] = text.split(",");
+        if (onCommitTagDraft(head)) {
+          const tail = rest.join(",").replace(/^\s+/, "");
+          onTagDraftChange(tail);
+          if (!tail.trim()) setAddExpanded(false);
+          return;
+        }
+      }
+      onTagDraftChange(text);
+    },
+    [onCommitTagDraft, onTagDraftChange],
+  );
+
+  const commitAddDraft = useCallback(() => {
+    if (!tagDraft.trim()) {
+      collapseAdd();
+      return;
+    }
+    if (onCommitTagDraft(tagDraft)) {
+      hapticSelection();
+      onTagDraftChange("");
+      setAddExpanded(false);
+      return;
+    }
+    collapseAdd();
+  }, [collapseAdd, onCommitTagDraft, onTagDraftChange, tagDraft]);
+
+  const addError = useMemo(() => {
+    if (!addExpanded || !tagDraft.trim()) return false;
+    return normalizeJournalTag(tagDraft) == null;
+  }, [addExpanded, tagDraft]);
 
   return (
     <View collapsable={false} style={{ backgroundColor: surfaceColor, marginTop: 12 }}>
@@ -59,57 +168,46 @@ export function JournalTagSection({
         />
       </Pressable>
       {expanded ? (
-        <>
-          <View style={styles.chips}>
-            {JOURNAL_TAG_SUGGESTIONS.map((tag) => (
-              <JournalEntryTagChip
-                key={tag}
-                label={formatJournalTagLabel(tag)}
-                selected={tags.includes(tag)}
-                onPress={() => onToggleTag(tag)}
-                bundle={bundle}
-              />
-            ))}
-            {customTags.map((tag) => (
-              <JournalEntryTagChip
-                key={tag}
-                label={formatJournalTagLabel(tag)}
-                selected
-                onPress={() => onToggleTag(tag)}
-                bundle={bundle}
-                accessibilityLabel={`Remove tag ${formatJournalTagLabel(tag)}`}
-              />
-            ))}
-          </View>
+        <View style={styles.chips}>
+          {unselectedSuggestions.map((tag) => (
+            <JournalEntryTagChip
+              key={tag}
+              label={formatJournalTagLabel(tag)}
+              selected={false}
+              onPress={() => addSuggestion(tag)}
+              bundle={bundle}
+              accessibilityLabel={`Add tag ${formatJournalTagLabel(tag)}`}
+            />
+          ))}
+          {tags.map((tag) => (
+            <JournalEntryEditableTagChip
+              key={tag}
+              label={formatJournalTagLabel(tag)}
+              bundle={bundle}
+              editing={renamingTag === tag}
+              editValue={renamingTag === tag ? renameDraft : formatJournalTagLabel(tag)}
+              error={renamingTag === tag && renameError}
+              onStartEdit={() => startRename(tag)}
+              onEditValueChange={setRenameDraft}
+              onCommitEdit={commitRename}
+              onCancelEdit={cancelRename}
+              onRemove={() => removeTag(tag)}
+            />
+          ))}
           {tags.length < MAX_TAGS_PER_ENTRY ? (
-            <View style={styles.addField}>
-              <M3OutlinedTextField
-                label="Add a tag"
-                value={tagDraft}
-                onChangeText={(text) => {
-                  if (text.includes(",")) {
-                    const [head, ...rest] = text.split(",");
-                    if (onCommitTagDraft(head)) {
-                      onTagDraftChange(rest.join(",").replace(/^\s+/, ""));
-                      return;
-                    }
-                  }
-                  onTagDraftChange(text);
-                }}
-                surfaceColor={surfaceColor}
-                accentColor={accentColor}
-                roundedEnds
-                minHeight={52}
-                inputFontFamily="Inter_400Regular"
-                returnKeyType="done"
-                blurOnSubmit
-                onSubmitEditing={() => {
-                  if (onCommitTagDraft(tagDraft)) onTagDraftChange("");
-                }}
-              />
-            </View>
+            <JournalEntryAddTagChip
+              bundle={bundle}
+              expanded={addExpanded}
+              value={tagDraft}
+              error={addError}
+              accentColor={accentColor}
+              onExpand={expandAdd}
+              onCollapse={collapseAdd}
+              onChangeText={handleTagDraftChange}
+              onCommit={commitAddDraft}
+            />
           ) : null}
-        </>
+        </View>
       ) : null}
     </View>
   );
@@ -132,8 +230,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-  },
-  addField: {
-    marginTop: 8,
   },
 });

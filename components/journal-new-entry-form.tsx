@@ -681,13 +681,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const hasDraftInput =
     passage.trim().length > 0 || title.trim().length > 0 || tags.length > 0 || hasReflectionInput;
 
-  const toggleTag = (tag: string) => {
-    hapticSelection();
-    setTags((prev) =>
-      prev.includes(tag) ? prev.filter((item) => item !== tag) : normalizeJournalTags([...prev, tag]),
-    );
-  };
-
   const commitTagDraft = (raw: string) => {
     const tag = normalizeJournalTag(raw);
     if (!tag) return false;
@@ -1877,9 +1870,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
       <JournalTagSection
         tags={tags}
+        onTagsChange={setTags}
         tagDraft={tagDraft}
         onTagDraftChange={setTagDraft}
-        onToggleTag={toggleTag}
         onCommitTagDraft={commitTagDraft}
         bundle={bundle}
         surfaceColor={modalSurfaceColor}
