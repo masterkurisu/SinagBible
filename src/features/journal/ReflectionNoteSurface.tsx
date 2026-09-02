@@ -24,7 +24,6 @@ type Props = {
   ribbon: ReactNode;
   verseTagOverlay?: ReactNode;
   parchment: string;
-  parchmentDark: string;
   brown800: string;
   tan300: string;
 };

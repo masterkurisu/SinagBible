@@ -24,7 +24,6 @@ export type JournalTagSectionProps = {
   onCommitTagDraft: (raw: string) => boolean;
   bundle: MobileAppThemeBundle;
   surfaceColor: string;
-  accentColor: string;
 };
 
 /**
@@ -38,7 +37,6 @@ export function JournalTagSection({
   onCommitTagDraft,
   bundle,
   surfaceColor,
-  accentColor,
 }: JournalTagSectionProps) {
   const [expanded, setExpanded] = useState(true);
   const [renamingTag, setRenamingTag] = useState<string | null>(null);
@@ -200,7 +198,6 @@ export function JournalTagSection({
               expanded={addExpanded}
               value={tagDraft}
               error={addError}
-              accentColor={accentColor}
               onExpand={expandAdd}
               onCollapse={collapseAdd}
               onChangeText={handleTagDraftChange}

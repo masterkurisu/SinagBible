@@ -1431,7 +1431,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         alignSelf: "stretch" as const,
         width: "100%" as const,
         borderRadius: 0,
-        backgroundColor: colors.parchmentDark,
+        backgroundColor: j.reflectionFieldBackground,
       }
     : mergedFormScrollMode
       ? {
@@ -1441,7 +1441,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           alignSelf: "stretch" as const,
           width: "100%" as const,
           borderRadius: 0,
-          backgroundColor: colors.parchmentDark,
+          backgroundColor: j.reflectionFieldBackground,
         }
       : {
           flex: 1,
@@ -1449,8 +1449,13 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           alignSelf: "stretch" as const,
           width: "100%" as const,
           borderRadius: 0,
-          backgroundColor: colors.parchmentDark,
+          backgroundColor: j.reflectionFieldBackground,
         };
+  const reflectionCompactFieldChrome = {
+    backgroundColor: j.reflectionFieldBackground,
+    borderColor: j.reflectionFieldOutline,
+    borderWidth: 1,
+  } as const;
 
   const handleSave = async () => {
     hapticLightImpact();
@@ -1876,7 +1881,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         onCommitTagDraft={commitTagDraft}
         bundle={bundle}
         surfaceColor={modalSurfaceColor}
-        accentColor={colors.brown800}
       />
     </>
   );
@@ -2021,7 +2025,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         markdown={reflectionMarkdown}
         imageMap={reflectionImages}
         onPress={openReflectionNoteSurface}
-        parchmentDark={colors.parchmentDark}
+        fieldBackground={j.reflectionFieldBackground}
+        fieldOutline={j.reflectionFieldOutline}
       />
     </View>
   ) : (
@@ -2062,7 +2067,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           </View>
           <View
             className="rounded-2xl overflow-hidden"
-            style={[reflectionParchmentStyle, { backgroundColor: colors.parchmentDark }]}
+            style={[reflectionParchmentStyle, reflectionCompactFieldChrome]}
           >
             <View style={reflectionInnerPadStyle}>
               {renderReflectionInput(reflectionInputRef, reflectionInputLayoutStyle, reflectionFieldRef)}
@@ -2270,7 +2275,6 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         passageStrip={formatReflectionPassageStrip(passage, journalTranslationId)}
         versePreview={passagePreview}
         parchment={colors.parchment}
-        parchmentDark={colors.parchmentDark}
         brown800={colors.brown800}
         tan300={colors.tan300}
         editor={
@@ -2280,7 +2284,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               minHeight: 0,
               borderRadius: 16,
               overflow: "hidden",
-              backgroundColor: colors.parchmentDark,
+              backgroundColor: colors.parchment,
             }}
           >
             {!reflectionNoteSurfaceOpen ? null : !noteSurfaceUsesLegacyEditor ? (
@@ -2317,7 +2321,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                 mentionColor={colors.brown800}
                 mentionBackgroundColor={j.chipActiveBackground ?? colors.goldLight}
                 checkboxColor={colors.brown800}
-                backgroundColor={colors.parchmentDark}
+                backgroundColor={colors.parchment}
               />
             ) : (
               renderReflectionInput(
@@ -2328,7 +2332,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                   alignSelf: "stretch",
                   width: "100%",
                   borderRadius: 0,
-                  backgroundColor: colors.parchmentDark,
+                  backgroundColor: colors.parchment,
                   paddingHorizontal: 8,
                   paddingTop: 16,
                   paddingBottom: 19,
@@ -2425,7 +2429,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                   minHeight: 0,
                   borderRadius: 16,
                   overflow: "hidden",
-                  backgroundColor: colors.parchmentDark,
+                  backgroundColor: colors.parchment,
                 }}
               >
                 {renderReflectionInput(fullscreenReflectionInputRef, {
@@ -2434,7 +2438,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                   alignSelf: "stretch",
                   width: "100%",
                   borderRadius: 0,
-                  backgroundColor: colors.parchmentDark,
+                  backgroundColor: colors.parchment,
                   paddingHorizontal: 8,
                   paddingTop: 16,
                   paddingBottom: 19,

@@ -62,11 +62,9 @@ function appendListItems(
   });
 }
 
-/** Splits saved reflection HTML into renderable blocks (ScrollView children or FlashList `data`). */
-export function splitSavedReflectionHtml(
-  contentHtml: string | null | undefined,
-): SavedReflectionBlock[] {
-  const html = typeof contentHtml === "string" ? contentHtml : "";
+/** Parses owned reflection HTML into renderable blocks (saved detail, compact preview). */
+export function parseOwnedReflectionHtml(contentHtml: string): SavedReflectionBlock[] {
+  const html = contentHtml;
   const tagged = html.match(/<(p|div|ul|ol|h1|h2)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
   if (tagged.length === 0 && html.trim()) {
     const forInline = html
@@ -129,6 +127,13 @@ export function splitSavedReflectionHtml(
     appendListItems(out, block, `li-${i}`);
   });
   return out;
+}
+
+/** Splits saved reflection HTML into renderable blocks (ScrollView children or FlashList `data`). */
+export function splitSavedReflectionHtml(
+  contentHtml: string | null | undefined,
+): SavedReflectionBlock[] {
+  return parseOwnedReflectionHtml(typeof contentHtml === "string" ? contentHtml : "");
 }
 
 export function shouldVirtualizeJournalReflection(

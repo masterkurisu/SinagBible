@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   JOURNAL_DETAIL_FLASH_LIST_MIN_BLOCKS,
+  parseOwnedReflectionHtml,
   splitSavedReflectionHtml,
   shouldVirtualizeJournalReflection,
 } from "./journalSavedReflectionBlocks";
@@ -54,6 +55,18 @@ describe("splitSavedReflectionHtml", () => {
     expect(splitSavedReflectionHtml("<h1>   </h1><p>Keep</p>")).toEqual([
       { key: "p-1", kind: "paragraph", html: "Keep" },
     ]);
+  });
+});
+
+describe("parseOwnedReflectionHtml", () => {
+  it("matches splitSavedReflectionHtml for non-empty HTML", () => {
+    const html = "<h1>Title</h1><p>Hello</p>";
+    expect(parseOwnedReflectionHtml(html)).toEqual(splitSavedReflectionHtml(html));
+  });
+
+  it("returns an empty array for empty HTML", () => {
+    expect(parseOwnedReflectionHtml("")).toEqual([]);
+    expect(splitSavedReflectionHtml("")).toEqual([]);
   });
 });
 

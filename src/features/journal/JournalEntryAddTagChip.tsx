@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
-import { M3_OUTLINE_STROKE } from "@/src/components/m3/M3OutlinedTextField";
 import { READER_M3_ERROR } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type JournalEntryAddTagChipProps = {
@@ -18,7 +17,6 @@ export type JournalEntryAddTagChipProps = {
   expanded: boolean;
   value: string;
   error?: boolean;
-  accentColor: string;
   onExpand: () => void;
   onCollapse: () => void;
   onChangeText: (text: string) => void;
@@ -33,7 +31,6 @@ export function JournalEntryAddTagChip({
   expanded,
   value,
   error = false,
-  accentColor,
   onExpand,
   onCollapse,
   onChangeText,
@@ -77,7 +74,11 @@ export function JournalEntryAddTagChip({
     );
   }
 
-  const borderColor = error ? READER_M3_ERROR : value.length > 0 ? accentColor : M3_OUTLINE_STROKE;
+  const borderColor = error
+    ? READER_M3_ERROR
+    : value.length > 0
+      ? j.reflectionFieldOutlineFocused
+      : j.reflectionFieldOutline;
 
   const handleBlur = () => {
     if (!value.trim()) {

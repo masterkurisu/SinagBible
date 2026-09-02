@@ -144,6 +144,12 @@ export type MobileAppThemeBundle = {
     saveReflectionGradientSaving: readonly [string, string];
     /** Full-screen new entry route (`journal/new`) scrim */
     newEntryRouteScrim: string;
+    /** Compact reflection preview / legacy inline editor well — M3 surfaceContainerLow vs sheet */
+    reflectionFieldBackground: string;
+    /** Hairline around the compact reflection field */
+    reflectionFieldOutline: string;
+    /** Focused outline for compact field and add-tag chip input */
+    reflectionFieldOutlineFocused: string;
   };
   home: {
     pageBackground: string;
@@ -259,6 +265,9 @@ const defaultThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#3a2f1f", "#1f170d"],
     saveReflectionGradientSaving: ["#6a5a42", "#5a4b35"],
     newEntryRouteScrim: "rgba(36, 36, 35, 0.42)",
+    reflectionFieldBackground: defaultUi.parchmentMid,
+    reflectionFieldOutline: defaultUi.borderSolid,
+    reflectionFieldOutlineFocused: defaultUi.brown800,
   },
   home: {
     pageBackground: defaultUi.parchmentMid,
@@ -372,6 +381,9 @@ const darkThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#8a6b45", "#4a3826"],
     saveReflectionGradientSaving: ["#5c4a38", "#3d3228"],
     newEntryRouteScrim: "rgba(0, 0, 0, 0.55)",
+    reflectionFieldBackground: "#332e28",
+    reflectionFieldOutline: "#484038",
+    reflectionFieldOutlineFocused: "#c9a96e",
   },
   home: {
     pageBackground: "#332e28",
@@ -485,6 +497,9 @@ const nightThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#7a5c38", "#3d2e1a"],
     saveReflectionGradientSaving: ["#4a3a28", "#2a2018"],
     newEntryRouteScrim: "rgba(0, 0, 0, 0.65)",
+    reflectionFieldBackground: "#141210",
+    reflectionFieldOutline: "#2a2520",
+    reflectionFieldOutlineFocused: "#b8945a",
   },
   home: {
     pageBackground: "#0d0b09",
@@ -598,6 +613,9 @@ const monoThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#222222", "#111111"],
     saveReflectionGradientSaving: ["#555555", "#444444"],
     newEntryRouteScrim: "rgba(0, 0, 0, 0.42)",
+    reflectionFieldBackground: "#f8f8f6",
+    reflectionFieldOutline: "#e0e0e0",
+    reflectionFieldOutlineFocused: "#222222",
   },
   home: {
     pageBackground: "#f8f8f6",
@@ -711,6 +729,9 @@ const sageThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#3d5236", "#1e2a1e"],
     saveReflectionGradientSaving: ["#6b8a55", "#5a6e52"],
     newEntryRouteScrim: "rgba(30, 42, 30, 0.42)",
+    reflectionFieldBackground: "#f2f4f0",
+    reflectionFieldOutline: "#c8d4be",
+    reflectionFieldOutlineFocused: "#2e3d2a",
   },
   home: {
     pageBackground: "#f2f4f0",
@@ -825,6 +846,9 @@ const spectrumThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#3c4043", "#202124"],
     saveReflectionGradientSaving: ["#669df6", "#4285f4"],
     newEntryRouteScrim: "rgba(32, 33, 36, 0.42)",
+    reflectionFieldBackground: "#fafafa",
+    reflectionFieldOutline: "#e8eaed",
+    reflectionFieldOutlineFocused: "#3c4043",
   },
   home: {
     pageBackground: "#fafafa",
@@ -939,6 +963,9 @@ const noirThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#6a6a6a", "#333333"],
     saveReflectionGradientSaving: ["#444444", "#282828"],
     newEntryRouteScrim: "rgba(0, 0, 0, 0.65)",
+    reflectionFieldBackground: "#121212",
+    reflectionFieldOutline: "#2a2a2a",
+    reflectionFieldOutlineFocused: "#e8e8e8",
   },
   home: {
     pageBackground: "#0c0c0c",
@@ -1053,6 +1080,9 @@ const velvetThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#483a61", "#241c33"],
     saveReflectionGradientSaving: ["#7d6a9e", "#695c82"],
     newEntryRouteScrim: "rgba(36, 28, 51, 0.42)",
+    reflectionFieldBackground: "#f5f3fa",
+    reflectionFieldOutline: "#d9d2e6",
+    reflectionFieldOutlineFocused: "#352a49",
   },
   home: {
     pageBackground: "#f5f3fa",
@@ -1167,6 +1197,9 @@ const roseThemeBody: Omit<MobileAppThemeBundle, "id"> = {
     saveReflectionGradient: ["#5c3c4a", "#332028"],
     saveReflectionGradientSaving: ["#a8788c", "#96707e"],
     newEntryRouteScrim: "rgba(51, 32, 40, 0.42)",
+    reflectionFieldBackground: "#faf3f5",
+    reflectionFieldOutline: "#e8d3db",
+    reflectionFieldOutlineFocused: "#462d38",
   },
   home: {
     pageBackground: "#faf3f5",
