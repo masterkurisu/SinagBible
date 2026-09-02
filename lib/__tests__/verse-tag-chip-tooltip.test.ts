@@ -60,6 +60,13 @@ describe("formatVerseTagTooltipDescription", () => {
     expect(
       formatVerseTagTooltipDescription({ kind: "ready", text: "For God so loved the world" }),
     ).toBe("For God so loved the world");
+    expect(
+      formatVerseTagTooltipDescription({
+        kind: "ready",
+        text: "Have faith in God",
+        truncated: true,
+      }),
+    ).toBe("Have faith in God…");
   });
 });
 
@@ -143,5 +150,28 @@ describe("computeVerseTagTooltipPosition", () => {
     const layout = computeVerseTagTooltipPosition(nearRight, screenW, screenH);
     expect(layout.left + layout.width).toBeLessThanOrEqual(screenW - 16);
     expect(layout.left).toBeGreaterThanOrEqual(16);
+  });
+
+  it("flips below when safe-area top leaves too little room above the chip", () => {
+    const nearStatusBar = { x: 16, y: 220, width: 88, height: 20 };
+    const withoutSafe = computeVerseTagTooltipPosition(
+      nearStatusBar,
+      screenW,
+      screenH,
+      VERSE_TAG_TOOLTIP_WIDTH_PX,
+      VERSE_TAG_TOOLTIP_EST_HEIGHT_PX,
+    );
+    expect(withoutSafe.placement).toBe("above");
+
+    const withSafe = computeVerseTagTooltipPosition(
+      nearStatusBar,
+      screenW,
+      screenH,
+      VERSE_TAG_TOOLTIP_WIDTH_PX,
+      VERSE_TAG_TOOLTIP_EST_HEIGHT_PX,
+      { top: 48 },
+    );
+    expect(withSafe.placement).toBe("below");
+    expect(withSafe.top).toBe(nearStatusBar.y + nearStatusBar.height + VERSE_TAG_TOOLTIP_GAP_PX);
   });
 });

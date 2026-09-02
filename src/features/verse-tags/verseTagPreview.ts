@@ -5,6 +5,7 @@ import {
   resolveJournalPassageBookSlug,
 } from "@/lib/journal-verse-preview";
 import type { VerseTagPreviewStatus } from "@/src/features/verse-tags/verseTagChipCopy";
+import { clampVerseTagPreviewRange } from "@/src/features/verse-tags/verseTagPreviewLimits";
 
 async function previewLooksOffline(): Promise<boolean> {
   try {
@@ -24,14 +25,17 @@ export async function loadVerseTagPreview(
     if (!canonicalBook) {
       return (await previewLooksOffline()) ? { kind: "offline" } : { kind: "not-found" };
     }
+    const range = clampVerseTagPreviewRange(ref.verseStart, ref.verseEnd ?? null);
     const preview = await getJournalVersePreview(
       translationId,
       canonicalBook,
       ref.chapter,
-      ref.verseStart,
-      ref.verseEnd ?? null,
+      range.verseStart,
+      range.verseEnd,
     );
-    if (preview?.trim()) return { kind: "ready", text: preview.trim() };
+    if (preview?.trim()) {
+      return { kind: "ready", text: preview.trim(), truncated: range.truncated };
+    }
     return (await previewLooksOffline()) ? { kind: "offline" } : { kind: "not-found" };
   } catch {
     return (await previewLooksOffline()) ? { kind: "offline" } : { kind: "error" };

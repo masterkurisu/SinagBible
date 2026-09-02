@@ -5,6 +5,7 @@ import {
 } from "@/src/features/verse-tags/verseTagChapterCache";
 import {
   computeVerseTagOverlayMetrics,
+  estimateVerseTagCaretAnchor,
   VERSE_TAG_OVERLAY_GAP_PX,
   VERSE_TAG_OVERLAY_MAX_HEIGHT_PX,
 } from "@/src/features/verse-tags/verseTagOverlayLayout";
@@ -31,6 +32,49 @@ describe("computeVerseTagOverlayMetrics", () => {
     });
     expect(metrics.bottom + metrics.maxHeight + 20).toBeLessThanOrEqual(390);
     expect(metrics.maxHeight).toBeGreaterThan(0);
+  });
+
+  it("does not add keyboard height when the host already excluded it", () => {
+    const metrics = computeVerseTagOverlayMetrics({
+      screenHeight: 844,
+      keyboardHeight: 336,
+      statusBarInset: 47,
+      containerHeight: 500,
+    });
+    expect(metrics.bottom).toBe(VERSE_TAG_OVERLAY_GAP_PX);
+  });
+
+  it("docks just above the caret line inside a keyboard-avoided host", () => {
+    const metrics = computeVerseTagOverlayMetrics({
+      screenHeight: 844,
+      keyboardHeight: 336,
+      statusBarInset: 47,
+      containerHeight: 500,
+      caretYInContainer: 180,
+    });
+    expect(metrics.bottom).toBe(500 - 180 + VERSE_TAG_OVERLAY_GAP_PX);
+  });
+});
+
+describe("estimateVerseTagCaretAnchor", () => {
+  it("places the caret on the typed line and clamps to the visible input", () => {
+    const input = { x: 12, y: 200, width: 360, height: 120 };
+    const thirdLine = estimateVerseTagCaretAnchor({
+      input,
+      text: "Test\n\n@mark",
+      cursorIndex: "Test\n\n@mark".length,
+      lineHeight: 28,
+    });
+    expect(thirdLine.y).toBe(200 + 28 * 2);
+    expect(thirdLine.height).toBe(28);
+
+    const scrolled = estimateVerseTagCaretAnchor({
+      input,
+      text: `${"line\n".repeat(20)}@mark`,
+      cursorIndex: `${"line\n".repeat(20)}@mark`.length,
+      lineHeight: 28,
+    });
+    expect(scrolled.y).toBe(input.y + input.height - 28);
   });
 });
 

@@ -35,7 +35,7 @@ export function formatVerseTagComposerError(error: VerseTagComposerError): strin
 
 export type VerseTagPreviewStatus =
   | { kind: "loading" }
-  | { kind: "ready"; text: string }
+  | { kind: "ready"; text: string; truncated?: boolean }
   | { kind: "not-found" }
   | { kind: "offline" }
   | { kind: "error" };
@@ -46,7 +46,7 @@ export function formatVerseTagTooltipDescription(status: VerseTagPreviewStatus):
     case "loading":
       return "Loading verse…";
     case "ready":
-      return status.text;
+      return status.truncated ? `${status.text}…` : status.text;
     case "offline":
       return "This verse isn't available offline.";
     case "error":

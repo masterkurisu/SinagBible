@@ -397,6 +397,27 @@ describe("verseTagComposer", () => {
     });
   });
 
+  it("keeps an incomplete mention active on blur so keyboard dismiss can resume tagging", () => {
+    const composer = createTestComposer();
+    typeBuffer(composer, "@mark");
+    const blur = composer.push({
+      type: "blur",
+      text: "@mark",
+      cursorIndex: "@mark".length,
+    });
+    expect(blur.commit).toBeNull();
+    expect(blur.state.phase).toBe("mentioning");
+    expect(blur.state.buffer).toBe("mark");
+
+    const continued = composer.push({
+      type: "change",
+      text: "@mark 11",
+      cursorIndex: "@mark 11".length,
+    });
+    expect(continued.state.phase).toBe("bookConfirmed");
+    expect(continued.state.chapter).toBe(11);
+  });
+
   it("aborts to idle on Escape without deleting typed text", () => {
     const composer = createTestComposer();
     const typed = typeBuffer(composer, "@mark 11:22");

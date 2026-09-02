@@ -34,7 +34,11 @@ export { VerseTaggedText } from "./VerseTaggedText";
 export { getVerseTagTooltipColors } from "./verseTagTooltipChrome";
 export { computeVerseTagTooltipPosition } from "./verseTagTooltipLayout";
 export type { VerseTagTooltipPlacement, VerseTagTooltipPosition } from "./verseTagTooltipLayout";
-export { computeVerseTagOverlayMetrics } from "./verseTagOverlayLayout";
+export { computeVerseTagOverlayMetrics, estimateVerseTagCaretAnchor } from "./verseTagOverlayLayout";
+export {
+  clampVerseTagPreviewRange,
+  computeVerseTagTooltipWidth,
+} from "./verseTagPreviewLimits";
 export {
   createVerseTagChapterCache,
   resolveVerseTagPrefetchTarget,

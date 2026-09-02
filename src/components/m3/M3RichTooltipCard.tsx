@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import type { ReactNode } from "react";
 import {
   READER_M3_ON_SURFACE,
   READER_M3_ON_SURFACE_VARIANT,
@@ -11,12 +12,17 @@ export type M3RichTooltipCardProps = {
   description: string;
   width?: number;
   height?: number;
+  maxHeight?: number;
+  descriptionMaxHeight?: number;
   paddingTop?: number;
   paddingBottom?: number;
+  paddingRight?: number;
   backgroundColor?: string;
   titleColor?: string;
   descriptionColor?: string;
   borderColor?: string;
+  children?: ReactNode;
+  style?: StyleProp<ViewStyle>;
 };
 
 export function M3RichTooltipCard({
@@ -24,33 +30,59 @@ export function M3RichTooltipCard({
   description,
   width,
   height,
+  maxHeight,
+  descriptionMaxHeight,
   paddingTop,
   paddingBottom,
+  paddingRight,
   backgroundColor = READER_M3_SURFACE_CONTAINER_HIGH,
   titleColor = READER_M3_ON_SURFACE,
   descriptionColor = READER_M3_ON_SURFACE_VARIANT,
   borderColor,
+  children,
+  style,
 }: M3RichTooltipCardProps) {
+  const descriptionText = (
+    <Text style={[styles.description, { color: descriptionColor }]}>{description}</Text>
+  );
+
   return (
     <View
       style={[
         styles.card,
-        width != null ? { width } : null,
+        width != null ? { width, maxWidth: width } : null,
         height != null ? { height } : null,
+        maxHeight != null ? { maxHeight } : null,
         paddingTop != null ? { paddingTop } : null,
         paddingBottom != null ? { paddingBottom } : null,
+        paddingRight != null ? { paddingRight } : null,
         { backgroundColor },
         borderColor ? { borderWidth: 1, borderColor } : null,
+        style,
       ]}
     >
       <Text style={[styles.title, { color: titleColor }]}>{title}</Text>
-      <Text style={[styles.description, { color: descriptionColor }]}>{description}</Text>
+      {descriptionMaxHeight != null ? (
+        <ScrollView
+          style={{ maxHeight: descriptionMaxHeight }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+          bounces={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {descriptionText}
+        </ScrollView>
+      ) : (
+        descriptionText
+      )}
+      {children}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
+    position: "relative",
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -61,6 +93,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 8,
     elevation: 6,
+    overflow: "visible",
   },
   title: {
     fontFamily: "Inter_600SemiBold",

@@ -518,9 +518,16 @@ export function createVerseTagComposer(options: VerseTagComposerOptions = {}) {
         (event.type === "change" && isCommitDelimiter(parsed.trailingDelimiter)));
 
     if (event.type === "blur" && !shouldCommit) {
-      lastConfirmedSlug = null;
-      state = IDLE_STATE;
-      return idleResult();
+      // Keep an incomplete @mention alive so dismissing the keyboard does not
+      // force the user to delete and retype the tag.
+      state = mentioningState(
+        mention.buffer,
+        mention.atIndex,
+        parsed,
+        translation,
+        validated.error,
+      );
+      return { state, commit: null, bookConfirmed: emitBookConfirmed(state) };
     }
 
     if (shouldCommit && validated.ref) {

@@ -1,4 +1,12 @@
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type LayoutRectangle,
+} from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { getReaderSheetChrome } from "@/lib/reader-sheet-chrome";
 import { formatVerseTagComposerError } from "@/src/features/verse-tags/verseTagChipCopy";
@@ -18,6 +26,8 @@ export type VerseTagComposerOverlayProps = {
   bundle: MobileAppThemeBundle;
   insets: { top: number; bottom: number };
   keyboardHeight: number;
+  /** Window-space rect of the line being typed, used to dock the list just above it. */
+  caretAnchor?: LayoutRectangle | null;
   /** Inline under a field (notes dialog). Absolute docks above the keyboard. */
   placement?: "inline" | "absolute";
   onSelect: (item: VerseTagSuggestion) => void;
@@ -35,6 +45,7 @@ export function VerseTagComposerOverlay({
   bundle,
   insets,
   keyboardHeight,
+  caretAnchor = null,
   placement = "absolute",
   onSelect,
   onDismiss,
@@ -43,10 +54,27 @@ export function VerseTagComposerOverlay({
   const { height: screenH } = useWindowDimensions();
   const chrome = getReaderSheetChrome(bundle);
   const scale = READER_OVERLAY_CONTENT_SCALE;
+  const hostRef = useRef<View>(null);
+  const [host, setHost] = useState({ height: 0, windowY: 0 });
+
+  const handleHostLayout = useCallback(() => {
+    hostRef.current?.measureInWindow((_x, y, _w, h) => {
+      if (h <= 0) return;
+      setHost((prev) => (prev.height === h && prev.windowY === y ? prev : { height: h, windowY: y }));
+    });
+  }, []);
+
+  const caretYInContainer =
+    placement === "absolute" && caretAnchor != null && host.height > 0
+      ? caretAnchor.y - host.windowY
+      : undefined;
+
   const metrics = computeVerseTagOverlayMetrics({
     screenHeight: screenH,
     keyboardHeight: placement === "inline" ? 0 : keyboardHeight,
     statusBarInset: insets.top,
+    containerHeight: placement === "inline" ? undefined : host.height || undefined,
+    caretYInContainer,
   });
 
   if (!visible) return null;
@@ -89,7 +117,13 @@ export function VerseTagComposerOverlay({
   }
 
   return (
-    <View style={styles.absoluteRoot} pointerEvents="box-none">
+    <View
+      ref={hostRef}
+      collapsable={false}
+      style={styles.absoluteRoot}
+      pointerEvents="box-none"
+      onLayout={handleHostLayout}
+    >
       <Pressable
         style={styles.dismissHit}
         onPress={onDismiss}

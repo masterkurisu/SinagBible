@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
   type KeyboardEvent,
   type LayoutChangeEvent,
+  type LayoutRectangle,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -62,6 +63,7 @@ import { parseReflectionLiveMarkdown } from "@/lib/journal-reflection-live-markd
 import {
   createReflectionLiveMarkdownInputStyle,
   createReflectionLiveMarkdownStyle,
+  REFLECTION_LIVE_BODY_LINE_HEIGHT,
 } from "@/lib/journal-reflection-live-markdown-style";
 import {
   clearDefaultJournalDraft,
@@ -119,6 +121,7 @@ import {
 } from "@/src/features/reader/readerActionBarChrome";
 import { READER_M3_ON_SURFACE_VARIANT } from "@/src/features/reader/readerSettingsPanelChrome";
 import { useVerseTagMention } from "@/src/features/verse-tags/useVerseTagMention";
+import { estimateVerseTagCaretAnchor } from "@/src/features/verse-tags/verseTagOverlayLayout";
 import { VerseTagComposerOverlay } from "@/src/features/verse-tags/VerseTagComposerOverlay";
 import { VerseTagMentionSheet } from "@/src/features/verse-tags/VerseTagMentionSheet";
 import type { VerseTagRef } from "@sinag-bible/types";
@@ -317,6 +320,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const draftHydrationDoneRef = useRef(editDraft != null);
   const reflectionInputRef = useRef<ComponentRef<typeof MarkdownTextInput>>(null);
   const fullscreenReflectionInputRef = useRef<ComponentRef<typeof MarkdownTextInput>>(null);
+  const reflectionFieldRef = useRef<View>(null);
+  const fullscreenReflectionFieldRef = useRef<View>(null);
+  const [mentionCaretAnchor, setMentionCaretAnchor] = useState<LayoutRectangle | null>(null);
   const sheetFormScrollRef = useRef<ScrollView>(null);
   const toolbarAnchorRef = useRef<View>(null);
   const fullscreenToolbarAnchorRef = useRef<View>(null);
@@ -575,6 +581,36 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     onChangeText: persistReflectionMarkdown,
     contextTranslation: journalTranslationId,
   });
+
+  const measureMentionCaretAnchor = useCallback(() => {
+    const node = reflectionFullscreenOpen
+      ? fullscreenReflectionFieldRef.current
+      : reflectionFieldRef.current;
+    if (!node || !mentionOpen) {
+      setMentionCaretAnchor(null);
+      return;
+    }
+    node.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) return;
+      setMentionCaretAnchor(
+        estimateVerseTagCaretAnchor({
+          input: { x, y, width, height },
+          text: reflectionMarkdownRef.current,
+          cursorIndex: reflectionSelectionRef.current.end,
+          lineHeight: REFLECTION_LIVE_BODY_LINE_HEIGHT,
+        }),
+      );
+    });
+  }, [mentionOpen, reflectionFullscreenOpen]);
+
+  useEffect(() => {
+    if (!mentionOpen) {
+      setMentionCaretAnchor(null);
+      return;
+    }
+    const frame = requestAnimationFrame(measureMentionCaretAnchor);
+    return () => cancelAnimationFrame(frame);
+  }, [measureMentionCaretAnchor, mentionOpen, reflectionMarkdown, reflectionSelection]);
 
   const onReflectionMarkdownChange = useCallback(
     (text: string) => {
@@ -1666,6 +1702,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         bundle={bundle}
         insets={insets}
         keyboardHeight={keyboardHeight}
+        caretAnchor={mentionCaretAnchor}
         placement="absolute"
         onSelect={confirmSuggestion}
         onSelectStart={beginSuggestionPick}
@@ -1681,11 +1718,20 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const renderReflectionInput = (
     inputRef: RefObject<ComponentRef<typeof MarkdownTextInput> | null>,
     layoutStyle: StyleProp<ViewStyle>,
+    fieldWrapperRef?: RefObject<View | null>,
   ) => {
     const imageIds = listReflectionImageIds(reflectionMarkdown).filter((id) => reflectionImages[id]);
     return (
       <View style={[{ minHeight: sheetFormLayout ? 120 : 200 }, layoutStyle]}>
-        <MarkdownTextInput
+        <View
+          ref={fieldWrapperRef}
+          collapsable={false}
+          style={{ flex: 1, minHeight: 0 }}
+          onLayout={() => {
+            if (mentionOpen) measureMentionCaretAnchor();
+          }}
+        >
+          <MarkdownTextInput
           ref={inputRef}
           multiline
           value={reflectionMarkdown}
@@ -1697,6 +1743,15 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             // Ignore blur-driven resets while a toolbar press is in flight.
             if (toolbarPressSelectionRef.current != null) return;
             const next = e.nativeEvent.selection;
+            const previous = reflectionSelectionRef.current;
+            if (
+              mentionOpen &&
+              next.start === 0 &&
+              next.end === 0 &&
+              previous.end > 0
+            ) {
+              return;
+            }
             setReflectionSelection(next);
             reflectionSelectionRef.current = next;
             if (reflectionSelectionOverride != null) setReflectionSelectionOverride(null);
@@ -1712,6 +1767,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           autoCorrect={!mentionOpen}
           spellCheck={!mentionOpen}
         />
+        </View>
         {imageIds.length > 0 ? (
           <ScrollView
             horizontal
@@ -1781,7 +1837,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             style={[reflectionParchmentStyle, { backgroundColor: colors.parchmentDark }]}
           >
             <View style={reflectionInnerPadStyle}>
-              {renderReflectionInput(reflectionInputRef, reflectionInputLayoutStyle)}
+              {renderReflectionInput(reflectionInputRef, reflectionInputLayoutStyle, reflectionFieldRef)}
             </View>
           </View>
         </View>
@@ -2053,7 +2109,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                   paddingHorizontal: 8,
                   paddingTop: 16,
                   paddingBottom: 19,
-                })}
+                }, fullscreenReflectionFieldRef)}
               </View>
             </View>
           </View>

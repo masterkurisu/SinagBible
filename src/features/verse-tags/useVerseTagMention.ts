@@ -206,6 +206,17 @@ export function useVerseTagMention({
 
   const handleCursorChange = useCallback(
     (next: { start: number; end: number }) => {
+      // MarkdownTextInput often reports {0,0} on blur. Ignore that reset while a
+      // mention is still in progress so typing can resume without deleting.
+      const previous = selectionRef.current;
+      if (
+        next.start === 0 &&
+        next.end === 0 &&
+        previous.end > 0 &&
+        getActiveVerseTagMention(textRef.current, previous.end)
+      ) {
+        return;
+      }
       selectionRef.current = next;
       setSelection(next);
       const result = composerRef.current.push({
