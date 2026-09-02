@@ -6,7 +6,7 @@ import {
   READER_M3_SURFACE_CONTAINER_HIGH,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
-/** M3 expressive rich tooltip — rounded container, title + supporting text. */
+/** M3 expressive rich tooltip — rounded container, title + supporting text + optional footer. */
 export type M3RichTooltipCardProps = {
   title: string;
   description: string;
@@ -93,7 +93,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 8,
     elevation: 6,
-    overflow: "visible",
   },
   title: {
     fontFamily: "Inter_600SemiBold",

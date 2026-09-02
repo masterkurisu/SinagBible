@@ -24,7 +24,6 @@ import {
 } from "@/src/features/verse-tags/verseTagTooltipLayout";
 import {
   computeVerseTagTooltipWidth,
-  VERSE_TAG_TOOLTIP_ACTION_INSET_PX,
   VERSE_TAG_TOOLTIP_ACTION_SIZE_PX,
   VERSE_TAG_TOOLTIP_MAX_BODY_HEIGHT_PX,
 } from "@/src/features/verse-tags/verseTagPreviewLimits";
@@ -72,7 +71,6 @@ export function VerseTagPreviewTooltip({
     [description.length, screenW],
   );
   const estimatedHeight = Math.max(measuredHeight, estimateVerseTagTooltipHeight(description));
-  const actionReserve = VERSE_TAG_TOOLTIP_ACTION_SIZE_PX + VERSE_TAG_TOOLTIP_ACTION_INSET_PX;
 
   const layout = useMemo(
     () =>
@@ -94,7 +92,10 @@ export function VerseTagPreviewTooltip({
 
   const bodyMaxHeight = Math.max(
     40,
-    Math.min(VERSE_TAG_TOOLTIP_MAX_BODY_HEIGHT_PX, layout.maxHeight - 48 - actionReserve),
+    Math.min(
+      VERSE_TAG_TOOLTIP_MAX_BODY_HEIGHT_PX,
+      layout.maxHeight - 48 - VERSE_TAG_TOOLTIP_ACTION_SIZE_PX,
+    ),
   );
 
   useEffect(() => {
@@ -126,6 +127,8 @@ export function VerseTagPreviewTooltip({
           onPress={onDismiss}
         />
         <View
+          ref={cardRef}
+          collapsable={false}
           onLayout={handleCardLayout}
           style={[
             styles.tooltipWrap,
@@ -133,57 +136,56 @@ export function VerseTagPreviewTooltip({
               top: layout.top,
               left: layout.left,
               width: layout.width,
-              maxHeight: layout.maxHeight,
             },
           ]}
         >
-          <View
-            ref={cardRef}
-            accessible
-            accessibilityRole="summary"
-            accessibilityLabel={`${title}. ${description}`}
-            accessibilityLiveRegion="polite"
+          <M3RichTooltipCard
+            title={title}
+            description={description}
+            width={layout.width}
+            descriptionMaxHeight={bodyMaxHeight}
+            backgroundColor={tooltipColors.backgroundColor}
+            titleColor={tooltipColors.titleColor}
+            descriptionColor={tooltipColors.descriptionColor}
+            borderColor={tooltipColors.borderColor}
           >
-            <M3RichTooltipCard
-              title={title}
-              description={description}
-              width={layout.width}
-              maxHeight={layout.maxHeight}
-              descriptionMaxHeight={bodyMaxHeight}
-              paddingBottom={16 + 8}
-              paddingRight={16 + actionReserve}
-              backgroundColor={tooltipColors.backgroundColor}
-              titleColor={tooltipColors.titleColor}
-              descriptionColor={tooltipColors.descriptionColor}
-              borderColor={tooltipColors.borderColor}
-            >
-              <Pressable
-                onPress={() => {
-                  if (!canOpenInReader) return;
-                  hapticLightImpact();
-                  onOpenInReader();
-                }}
-                disabled={!canOpenInReader}
-                accessibilityRole="button"
-                accessibilityLabel="Open in Reader"
-                accessibilityState={{ disabled: !canOpenInReader }}
-                android_ripple={
-                  Platform.OS === "android"
-                    ? { color: "rgba(255,255,255,0.18)", borderless: true, radius: VERSE_TAG_TOOLTIP_ACTION_SIZE_PX / 2 }
-                    : undefined
-                }
-                style={({ pressed }) => [
-                  styles.actionButton,
+            <View style={styles.actionRow}>
+              <View
+                collapsable={false}
+                style={[
+                  styles.actionCircle,
                   {
                     backgroundColor: actionBackground,
-                    opacity: !canOpenInReader ? 0.38 : pressed ? 0.88 : 1,
+                    opacity: canOpenInReader ? 1 : 0.38,
                   },
                 ]}
               >
-                <MaterialIcons name="menu-book" size={20} color={actionIconColor} />
-              </Pressable>
-            </M3RichTooltipCard>
-          </View>
+                <Pressable
+                  onPress={() => {
+                    if (!canOpenInReader) return;
+                    hapticLightImpact();
+                    onOpenInReader();
+                  }}
+                  disabled={!canOpenInReader}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open in Reader"
+                  accessibilityState={{ disabled: !canOpenInReader }}
+                  android_ripple={
+                    Platform.OS === "android"
+                      ? {
+                          color: chrome.iconRipple,
+                          borderless: false,
+                          radius: VERSE_TAG_TOOLTIP_ACTION_SIZE_PX / 2,
+                        }
+                      : undefined
+                  }
+                  style={styles.actionPressable}
+                >
+                  <MaterialIcons name="menu-book" size={22} color={actionIconColor} />
+                </Pressable>
+              </View>
+            </View>
+          </M3RichTooltipCard>
         </View>
       </View>
     </Modal>
@@ -197,20 +199,21 @@ const styles = StyleSheet.create({
   tooltipWrap: {
     position: "absolute",
   },
-  actionButton: {
-    position: "absolute",
-    right: VERSE_TAG_TOOLTIP_ACTION_INSET_PX,
-    bottom: VERSE_TAG_TOOLTIP_ACTION_INSET_PX,
+  actionRow: {
+    alignSelf: "stretch",
+    alignItems: "flex-end",
+    marginTop: 10,
+  },
+  actionCircle: {
     width: VERSE_TAG_TOOLTIP_ACTION_SIZE_PX,
     height: VERSE_TAG_TOOLTIP_ACTION_SIZE_PX,
     borderRadius: VERSE_TAG_TOOLTIP_ACTION_SIZE_PX / 2,
+    overflow: "hidden",
+  },
+  actionPressable: {
+    width: VERSE_TAG_TOOLTIP_ACTION_SIZE_PX,
+    height: VERSE_TAG_TOOLTIP_ACTION_SIZE_PX,
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 2,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
   },
 });
