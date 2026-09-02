@@ -17,6 +17,7 @@ import {
   dbSelectById,
   dbUpsert,
   dbCount,
+  dbCapturePreEnrichedSnapshotOnce,
   migrateJournalBlobIfNeeded,
 } from "@/lib/journal-db";
 import {
@@ -419,6 +420,22 @@ async function prepareEntryForStorage(entry: LocalJournalEntry): Promise<LocalJo
     ...entry,
     content: await externalizeContentImages(entry.content, entry.id),
   };
+}
+
+/** First Enriched save of an existing id: snapshot current row once, before the write. */
+export async function capturePreEnrichedSnapshotOnce(opts: {
+  id: string;
+  content: string;
+  content_markdown: string | null;
+}): Promise<boolean> {
+  await ensureStorageReady();
+  return enqueue(async () => {
+    try {
+      return await dbCapturePreEnrichedSnapshotOnce(opts);
+    } catch (error) {
+      throw new JournalLocalStorageError("Could not snapshot journal entry.", "write", error);
+    }
+  });
 }
 
 export async function saveLocalEntry(

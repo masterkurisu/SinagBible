@@ -10,6 +10,8 @@ type JournalRow = {
   title: string | null;
   content: string;
   content_markdown: string | null;
+  content_format: string | null;
+  editor_version: string | null;
   created_at: string;
   is_favorite: number;
   tags: string | null;
@@ -28,9 +30,19 @@ const JOURNAL_TABLE_COLUMNS = [
   { name: "created_at" },
   { name: "is_favorite" },
   { name: "tags" },
+  { name: "content_format" },
+  { name: "editor_version" },
 ];
 
+type SnapshotRow = {
+  id: string;
+  content: string;
+  content_markdown: string | null;
+  captured_at: string;
+};
+
 const rows = new Map<string, JournalRow>();
+const snapshots = new Map<string, SnapshotRow>();
 const asyncStore = new Map<string, string>();
 
 function rowFromParams(params: (string | number | null)[]): JournalRow {
@@ -47,6 +59,8 @@ function rowFromParams(params: (string | number | null)[]): JournalRow {
     created_at: String(params[9]),
     is_favorite: Number(params[10]),
     tags: (params[11] as string | null) ?? null,
+    content_format: (params[12] as string | null) ?? null,
+    editor_version: (params[13] as string | null) ?? null,
   };
 }
 
@@ -87,6 +101,17 @@ function createDbHandle() {
         rows.set(row.id, row);
         return { changes: 1 };
       }
+      if (sql.includes("INSERT OR IGNORE INTO journal_entry_pre_enriched_snapshots") && params) {
+        const id = String(params[0]);
+        if (snapshots.has(id)) return { changes: 0 };
+        snapshots.set(id, {
+          id,
+          content: String(params[1]),
+          content_markdown: (params[2] as string | null) ?? null,
+          captured_at: String(params[3]),
+        });
+        return { changes: 1 };
+      }
       return { changes: 0 };
     },
     withExclusiveTransactionAsync: async (
@@ -104,11 +129,16 @@ function createDbHandle() {
 
 export function resetJournalStorageMocks(): void {
   rows.clear();
+  snapshots.clear();
   asyncStore.clear();
 }
 
 export function getMockJournalRows(): Map<string, JournalRow> {
   return rows;
+}
+
+export function getMockPreEnrichedSnapshots(): Map<string, SnapshotRow> {
+  return snapshots;
 }
 
 export function getMockAsyncStorage(): Map<string, string> {

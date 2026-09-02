@@ -30,8 +30,7 @@ type Props = {
 };
 
 /**
- * Phase 1 note-surface chrome: shrink header, editor slot, docked format ribbon.
- * Editor slot stays `MarkdownTextInput` until Phase 2 (Enriched).
+ * Phase 2 note-surface chrome: shrink header, editor slot (Enriched or legacy), docked ribbon.
  */
 export function ReflectionNoteSurface({
   visible,
@@ -43,7 +42,6 @@ export function ReflectionNoteSurface({
   verseTagOverlay,
   parchment,
   brown800,
-  tan200,
   tan300,
 }: Props) {
   const insets = useSafeAreaInsets();

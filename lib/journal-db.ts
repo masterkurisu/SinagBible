@@ -33,12 +33,20 @@ const INIT_SQL = `
     title TEXT,
     content TEXT NOT NULL,
     content_markdown TEXT,
+    content_format TEXT,
+    editor_version TEXT,
     created_at TEXT NOT NULL,
     is_favorite INTEGER NOT NULL DEFAULT 0,
     tags TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_journal_created_at
     ON journal_entries(created_at DESC, id DESC);
+  CREATE TABLE IF NOT EXISTS journal_entry_pre_enriched_snapshots (
+    id TEXT PRIMARY KEY,
+    content TEXT NOT NULL,
+    content_markdown TEXT,
+    captured_at TEXT NOT NULL
+  );
 `;
 
 async function migrateJournalSchema(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -50,6 +58,20 @@ async function migrateJournalSchema(db: SQLite.SQLiteDatabase): Promise<void> {
   if (!names.has("tags")) {
     await db.execAsync("ALTER TABLE journal_entries ADD COLUMN tags TEXT");
   }
+  if (!names.has("content_format")) {
+    await db.execAsync("ALTER TABLE journal_entries ADD COLUMN content_format TEXT");
+  }
+  if (!names.has("editor_version")) {
+    await db.execAsync("ALTER TABLE journal_entries ADD COLUMN editor_version TEXT");
+  }
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS journal_entry_pre_enriched_snapshots (
+      id TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      content_markdown TEXT,
+      captured_at TEXT NOT NULL
+    );
+  `);
 }
 
 function databaseOpenErrorMessage(error: unknown): string {
@@ -203,6 +225,8 @@ type JournalRow = {
   title: string | null;
   content: string;
   content_markdown: string | null;
+  content_format: string | null;
+  editor_version: string | null;
   created_at: string;
   is_favorite: number;
   tags: string | null;
@@ -222,6 +246,8 @@ function rowToEntry(row: JournalRow): LocalJournalEntry {
     created_at: row.created_at,
     is_favorite: row.is_favorite === 1,
     tags: parseJournalTagsJson(row.tags),
+    ...(row.content_format ? { content_format: row.content_format } : {}),
+    ...(row.editor_version ? { editor_version: row.editor_version } : {}),
   };
 }
 
@@ -239,14 +265,17 @@ function entryToParams(entry: LocalJournalEntry): (string | number | null)[] {
     entry.created_at,
     entry.is_favorite ? 1 : 0,
     serializeJournalTags(entry.tags),
+    entry.content_format ?? null,
+    entry.editor_version ?? null,
   ];
 }
 
 const INSERT_SQL = `
   INSERT OR REPLACE INTO journal_entries
     (id, book, chapter, verse_start, verse_end, bible_translation,
-     title, content, content_markdown, created_at, is_favorite, tags)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     title, content, content_markdown, created_at, is_favorite, tags,
+     content_format, editor_version)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /** Newest-first; ISO-8601 strings sort correctly lexicographically. */
@@ -275,6 +304,32 @@ export async function dbCount(): Promise<number> {
 
 export async function dbUpsert(entry: LocalJournalEntry): Promise<void> {
   await withJournalDb((db) => db.runAsync(INSERT_SQL, entryToParams(entry)));
+}
+
+const SNAPSHOT_INSERT_SQL = `
+  INSERT OR IGNORE INTO journal_entry_pre_enriched_snapshots
+    (id, content, content_markdown, captured_at)
+  VALUES (?, ?, ?, ?)
+`;
+
+/**
+ * Copy current `content` + `content_markdown` once, before the first Enriched
+ * write of an existing id. INSERT OR IGNORE — never overwrites.
+ */
+export async function dbCapturePreEnrichedSnapshotOnce(opts: {
+  id: string;
+  content: string;
+  content_markdown: string | null;
+}): Promise<boolean> {
+  const result = await withJournalDb((db) =>
+    db.runAsync(SNAPSHOT_INSERT_SQL, [
+      opts.id,
+      opts.content,
+      opts.content_markdown,
+      new Date().toISOString(),
+    ]),
+  );
+  return result.changes > 0;
 }
 
 /** Returns number of rows deleted (0 or 1). */

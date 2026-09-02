@@ -29,6 +29,10 @@ export type LocalJournalEntry = {
   content: string;
   /** Markdown source for the reflection editor; HTML lives in `content`. */
   content_markdown?: string | null;
+  /** `'enriched-html'` after a real Enriched edit; omitted/null otherwise. */
+  content_format?: string | null;
+  /** Composite `enriched-html@<pin>+md<converterRev>` on real Enriched edits only. */
+  editor_version?: string | null;
   created_at: string;
   title?: string | null;
   is_favorite?: boolean;

@@ -61,6 +61,8 @@ describe("enriched HTML fixture golden (converter revision " + REFLECTION_MARKDO
       "img",
       "anchor",
       "verse-tag",
+      "verse-tag-mention",
+      "checkbox-native",
       "null-markdown",
       "long",
       "nested-list",

@@ -180,6 +180,20 @@ export const ENRICHED_HTML_FIXTURES: EnrichedFixture[] = [
     markdown: "[@john:3:16](not a link)",
   },
   {
+    id: "enriched-mention",
+    kind: "round-trip",
+    branch: "verse-tag-mention",
+    html: '<p>See <mention indicator="@" text="John 3:16" data-verse-ref="john:3:16">John 3:16</mention> today.</p>',
+    markdown: "See [@john:3:16] today.",
+  },
+  {
+    id: "enriched-checkbox",
+    kind: "round-trip",
+    branch: "checkbox-native",
+    html: '<ul data-type="checkbox"><li>todo one</li><li checked>done one</li></ul>',
+    markdown: "- [ ] todo one\n- [x] done one",
+  },
+  {
     id: "null-markdown-html-source",
     kind: "round-trip",
     branch: "null-markdown",

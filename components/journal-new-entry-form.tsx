@@ -12,12 +12,17 @@ import {
   Keyboard,
   ScrollView,
   useWindowDimensions,
+  AccessibilityInfo,
   type KeyboardEvent,
   type LayoutChangeEvent,
   type LayoutRectangle,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import {
+  type EnrichedTextInputInstance,
+  type OnChangeStateEvent,
+} from "react-native-enriched-html";
 import { MarkdownTextInput } from "@expensify/react-native-live-markdown";
 import { useRouter } from "expo-router";
 import {
@@ -44,7 +49,9 @@ import {
   saveLocalEntry,
   updateLocalEntry,
   reflectionMarkdownToContent,
+  capturePreEnrichedSnapshotOnce,
 } from "@/lib/journal-local";
+import { htmlToReflectionMarkdown } from "@/lib/journal-reflection-html";
 import { resolveReflectionMarkdownForEdit } from "@/lib/journal-reflection-edit";
 import {
   applyReflectionToolbarAction,
@@ -126,7 +133,15 @@ import { VerseTagComposerOverlay } from "@/src/features/verse-tags/VerseTagCompo
 import { VerseTagMentionSheet } from "@/src/features/verse-tags/VerseTagMentionSheet";
 import type { VerseTagRef } from "@sinag-bible/types";
 import { JOURNAL_NOTES_SURFACE_ENABLED } from "@/lib/journal-notes-surface-flag";
+import { shouldMountLegacyReflectionEditor } from "@/lib/journal-reflection-legacy-route";
+import {
+  planEnrichedReflectionSave,
+  resolveEnrichedSeedHtml,
+} from "@/lib/journal-reflection-enriched-session";
 import { ReflectionCompactPreview } from "@/src/features/journal/ReflectionCompactPreview";
+import { ReflectionEnrichedEditor } from "@/src/features/journal/ReflectionEnrichedEditor";
+import { ReflectionEnrichedRibbon } from "@/src/features/journal/ReflectionEnrichedRibbon";
+import { useEnrichedVerseMention } from "@/src/features/journal/useEnrichedVerseMention";
 import { ReflectionFormatRibbon } from "@/src/features/journal/ReflectionFormatRibbon";
 import { ReflectionNoteSurface } from "@/src/features/journal/ReflectionNoteSurface";
 import { formatReflectionPassageStrip } from "@/src/features/journal/formatReflectionPassageStrip";
@@ -335,6 +350,34 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const suppressReflectionBlurRef = useRef(false);
   const [reflectionFullscreenOpen, setReflectionFullscreenOpen] = useState(false);
   const [reflectionNoteSurfaceOpen, setReflectionNoteSurfaceOpen] = useState(false);
+  const [noteSurfaceUsesLegacyEditor, setNoteSurfaceUsesLegacyEditor] = useState(false);
+  const [enrichedSeedHtml, setEnrichedSeedHtml] = useState("<p></p>");
+  const [enrichedSurfaceSession, setEnrichedSurfaceSession] = useState(0);
+  const [enrichedStyleState, setEnrichedStyleState] = useState<OnChangeStateEvent | null>(null);
+  const [enrichedPlainText, setEnrichedPlainText] = useState("");
+  const enrichedEditorRef = useRef<EnrichedTextInputInstance>(null);
+  const enrichedHtmlRef = useRef("");
+  const draftHtmlRef = useRef("");
+  const enrichedOpenedThisSessionRef = useRef(false);
+  const noteSurfaceOpenedRef = useRef(false);
+  const {
+    mentionOpen: enrichedMentionOpen,
+    mentionQuery: enrichedMentionQuery,
+    suggestions: enrichedSuggestions,
+    suggestionsPending: enrichedSuggestionsPending,
+    selectedSuggestionIndex: enrichedSelectedSuggestionIndex,
+    beginSuggestionPick: beginEnrichedSuggestionPick,
+    closeMention: closeEnrichedMention,
+    handleStartMention,
+    handleChangeMention,
+    handleEndMention,
+    confirmSuggestion: confirmEnrichedSuggestion,
+    insertVerseMention,
+  } = useEnrichedVerseMention({
+    enabled: notesSurfaceEnabled && !noteSurfaceUsesLegacyEditor,
+    translationId: journalTranslationId,
+    getEditor: () => enrichedEditorRef.current,
+  });
   const reflectionExpandedOpen = notesSurfaceEnabled
     ? reflectionNoteSurfaceOpen
     : reflectionFullscreenOpen;
@@ -637,7 +680,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     [handleChangeText],
   );
 
-  const hasReflectionInput = reflectionMarkdownHasContent(reflectionMarkdown);
+  const hasReflectionInput =
+    reflectionMarkdownHasContent(reflectionMarkdown) ||
+    (notesSurfaceEnabled && enrichedPlainText.trim().length > 0);
   const hasDraftInput =
     passage.trim().length > 0 || title.trim().length > 0 || tags.length > 0 || hasReflectionInput;
   const customTags = tags.filter(
@@ -661,7 +706,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   useEffect(() => {
     if (editDraft) return;
     let cancelled = false;
-    void loadDefaultJournalDraft().then((draft) => {
+    void loadDefaultJournalDraft({ convertEnrichedForLegacy: !notesSurfaceEnabled }).then((draft) => {
       if (cancelled) return;
       if (draft) {
         if (draft.passage.trim()) setPassage(draft.passage);
@@ -671,13 +716,17 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           reflectionMarkdownRef.current = draft.reflectionMarkdown;
           setReflectionMarkdown(draft.reflectionMarkdown);
         }
+        if (draft.reflectionHtml?.trim()) {
+          draftHtmlRef.current = draft.reflectionHtml;
+          enrichedHtmlRef.current = draft.reflectionHtml;
+        }
       }
       draftHydrationDoneRef.current = true;
     });
     return () => {
       cancelled = true;
     };
-  }, [editDraft]);
+  }, [editDraft, notesSurfaceEnabled]);
 
   useEffect(() => {
     if (editDraft || !draftHydrationDoneRef.current) return;
@@ -686,6 +735,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       return;
     }
     const timer = setTimeout(() => {
+      const usedEnrichedDraft =
+        notesSurfaceEnabled && !noteSurfaceUsesLegacyEditor && Boolean(enrichedHtmlRef.current);
       void registerJournalDraft(
         DEFAULT_JOURNAL_DRAFT_ID,
         JSON.stringify({
@@ -693,6 +744,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           title,
           tags,
           reflectionMarkdown: reflectionMarkdownRef.current,
+          reflectionHtml: usedEnrichedDraft ? enrichedHtmlRef.current : undefined,
+          reflectionEditor: usedEnrichedDraft ? "enriched-html" : "markdown",
           journalTranslationId,
           initialParams,
           updatedAt: new Date().toISOString(),
@@ -709,6 +762,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     reflectionMarkdown,
     journalTranslationId,
     initialParams,
+    notesSurfaceEnabled,
+    noteSurfaceUsesLegacyEditor,
   ]);
 
   useEffect(() => {
@@ -832,21 +887,84 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     });
   }, [keyboardHeight, reflectionExpandedOpen, windowHeight]);
 
+  const syncEnrichedDocument = useCallback(async () => {
+    const html = await enrichedEditorRef.current?.getHTML();
+    if (html == null) return null;
+    enrichedHtmlRef.current = html;
+    draftHtmlRef.current = html;
+    const markdown = htmlToReflectionMarkdown(html, reflectionImagesRef.current);
+    reflectionMarkdownRef.current = markdown;
+    setReflectionMarkdown(markdown);
+    return html;
+  }, []);
+
+  useEffect(() => {
+    if (
+      !notesSurfaceEnabled ||
+      noteSurfaceUsesLegacyEditor ||
+      !reflectionNoteSurfaceOpen ||
+      !enrichedOpenedThisSessionRef.current
+    ) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      void syncEnrichedDocument();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [
+    enrichedPlainText,
+    notesSurfaceEnabled,
+    noteSurfaceUsesLegacyEditor,
+    reflectionNoteSurfaceOpen,
+    syncEnrichedDocument,
+  ]);
+
   const openReflectionNoteSurface = () => {
     hapticLightImpact();
     markActiveFormField("reflection");
     setJournalKeyboardOpen(true);
-    setReflectionNoteSurfaceOpen(true);
-    requestAnimationFrame(() => fullscreenReflectionInputRef.current?.focus());
+    void (async () => {
+      const screenReaderEnabled = await AccessibilityInfo.isScreenReaderEnabled();
+      const seedHtml = resolveEnrichedSeedHtml({
+        storedHtml: editDraft?.content,
+        draftHtml: draftHtmlRef.current || enrichedHtmlRef.current,
+        draftMarkdown: reflectionMarkdownRef.current,
+        images: reflectionImagesRef.current,
+        markdownToHtml: reflectionMarkdownToContent,
+      });
+      const useLegacy = shouldMountLegacyReflectionEditor({
+        html: seedHtml,
+        screenReaderEnabled,
+      });
+      setNoteSurfaceUsesLegacyEditor(useLegacy);
+      setEnrichedSeedHtml(seedHtml);
+      noteSurfaceOpenedRef.current = true;
+      if (!useLegacy) {
+        enrichedOpenedThisSessionRef.current = true;
+        setEnrichedStyleState(null);
+        setEnrichedSurfaceSession((n) => n + 1);
+      }
+      setReflectionNoteSurfaceOpen(true);
+      if (useLegacy) {
+        requestAnimationFrame(() => fullscreenReflectionInputRef.current?.focus());
+      }
+    })();
   };
 
   const closeReflectionNoteSurface = () => {
     hapticLightImpact();
-    Keyboard.dismiss();
-    fullscreenReflectionInputRef.current?.blur();
-    markActiveFormField(null);
-    setJournalKeyboardOpen(false);
-    setReflectionNoteSurfaceOpen(false);
+    void (async () => {
+      if (!noteSurfaceUsesLegacyEditor) {
+        await syncEnrichedDocument();
+        enrichedEditorRef.current?.blur();
+      } else {
+        fullscreenReflectionInputRef.current?.blur();
+      }
+      Keyboard.dismiss();
+      markActiveFormField(null);
+      setJournalKeyboardOpen(false);
+      setReflectionNoteSurfaceOpen(false);
+    })();
   };
 
   const openReflectionFullscreen = () => {
@@ -1007,11 +1125,20 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
 
   const openInsertVerseSheet = () => {
     hapticLightImpact();
+    if (notesSurfaceEnabled && !noteSurfaceUsesLegacyEditor && reflectionNoteSurfaceOpen) {
+      closeEnrichedMention();
+      openMentionSheet();
+      return;
+    }
     beginSuggestionPick();
     openMentionSheet();
   };
 
   const insertPickedVerseTag = (ref: VerseTagRef) => {
+    if (notesSurfaceEnabled && !noteSurfaceUsesLegacyEditor && reflectionNoteSurfaceOpen) {
+      insertVerseMention(ref);
+      return;
+    }
     const selection = toolbarPressSelectionRef.current ?? reflectionSelectionRef.current;
     releaseToolbarSelectionSnapshot();
     applyReflectionEdit(
@@ -1069,6 +1196,17 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       const nextImages = { ...reflectionImagesRef.current, [imageId]: dataUrl };
       reflectionImagesRef.current = nextImages;
       setReflectionImages(nextImages);
+
+      if (notesSurfaceEnabled && !noteSurfaceUsesLegacyEditor && reflectionNoteSurfaceOpen) {
+        releaseToolbarSelectionSnapshot();
+        enrichedEditorRef.current?.setImage(
+          dataUrl,
+          manipulated.width || 800,
+          manipulated.height || 800,
+        );
+        requestAnimationFrame(() => enrichedEditorRef.current?.focus());
+        return;
+      }
 
       const inserted = insertReflectionImageToken(
         reflectionMarkdownRef.current,
@@ -1335,8 +1473,30 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     handleBlur();
     dismissJournalKeyboard();
 
-    const { markdown, content } = buildReflectionPayloadForSave();
-    if (!reflectionMarkdownHasContent(markdown)) {
+    const usedEnriched =
+      notesSurfaceEnabled &&
+      enrichedOpenedThisSessionRef.current &&
+      !noteSurfaceUsesLegacyEditor;
+    const skipReflectionWrite =
+      notesSurfaceEnabled && editDraft != null && !noteSurfaceOpenedRef.current;
+
+    if (usedEnriched) {
+      const html = (await enrichedEditorRef.current?.getHTML()) ?? enrichedHtmlRef.current;
+      if (html) {
+        enrichedHtmlRef.current = html;
+        const nextMarkdown = htmlToReflectionMarkdown(html, reflectionImagesRef.current);
+        reflectionMarkdownRef.current = nextMarkdown;
+        setReflectionMarkdown(nextMarkdown);
+      }
+    }
+
+    const { markdown, content } = usedEnriched
+      ? {
+          markdown: reflectionMarkdownRef.current.trim(),
+          content: enrichedHtmlRef.current || "<p></p>",
+        }
+      : buildReflectionPayloadForSave();
+    if (!skipReflectionWrite && !reflectionMarkdownHasContent(markdown)) {
       Alert.alert("Reflection required", "Please write a reflection before saving.");
       return;
     }
@@ -1353,16 +1513,48 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
       const tagsNormalized = normalizeJournalTags(tags);
 
       if (editDraft) {
+        let reflectionPatch: {
+          content?: string;
+          content_markdown?: string | null;
+          content_format?: string | null;
+          editor_version?: string | null;
+        } = {};
+        if (!skipReflectionWrite) {
+          if (usedEnriched) {
+            const plan = planEnrichedReflectionSave({
+              editorHtml: content,
+              storedMarkdown: editDraft.content_markdown,
+              storedHtml: editDraft.content,
+              isExistingEntry: true,
+            });
+            if (plan.kind === "write") {
+              if (plan.captureSnapshot) {
+                await capturePreEnrichedSnapshotOnce({
+                  id: editDraft.id,
+                  content: editDraft.content,
+                  content_markdown: editDraft.content_markdown ?? null,
+                });
+              }
+              reflectionPatch = {
+                content: plan.content,
+                content_markdown: plan.content_markdown,
+                content_format: plan.content_format,
+                editor_version: plan.editor_version,
+              };
+            }
+          } else {
+            reflectionPatch = { content, content_markdown: markdown };
+          }
+        }
         const updated = await updateLocalEntry(editDraft.id, {
           book,
           chapter,
           verse_start,
           verse_end,
           bible_translation: hasPassage ? journalTranslationId : null,
-          content,
-          content_markdown: markdown,
           title: titleTrim,
           tags: tagsNormalized,
+          ...reflectionPatch,
         });
         if (!updated) {
           throw new Error("Journal entry not found");
@@ -1374,8 +1566,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           verse_start,
           verse_end,
           bible_translation: hasPassage ? journalTranslationId : null,
-          content,
-          content_markdown: markdown,
+          content: reflectionPatch.content ?? updated.content,
+          content_markdown: reflectionPatch.content_markdown ?? updated.content_markdown,
           title: titleTrim,
           tags: tagsNormalized,
         };
@@ -1385,7 +1577,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         return;
       }
 
-      const saved = await saveLocalEntry({
+      const newEntryPayload = {
         book,
         chapter,
         verse_start,
@@ -1396,7 +1588,29 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         title: titleTrim,
         is_favorite: false,
         tags: tagsNormalized,
-      });
+      };
+      const saved = await saveLocalEntry(
+        usedEnriched
+          ? {
+              ...newEntryPayload,
+              ...(() => {
+                const plan = planEnrichedReflectionSave({
+                  editorHtml: content,
+                  storedMarkdown: null,
+                  storedHtml: "",
+                  isExistingEntry: false,
+                });
+                if (plan.kind !== "write") return {};
+                return {
+                  content: plan.content,
+                  content_markdown: plan.content_markdown,
+                  content_format: plan.content_format,
+                  editor_version: plan.editor_version,
+                };
+              })(),
+            }
+          : newEntryPayload,
+      );
 
       await clearDefaultJournalDraft();
       confirmSaveSuccess("Reflection saved", () => finishSave(saved.id));
@@ -1750,6 +1964,26 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         onSelect={confirmSuggestion}
         onSelectStart={beginSuggestionPick}
         onDismiss={closeMention}
+      />
+    ) : null;
+
+  const renderEnrichedVerseOverlay = () =>
+    enrichedMentionOpen ? (
+      <VerseTagComposerOverlay
+        visible
+        query={enrichedMentionQuery}
+        error={null}
+        suggestions={enrichedSuggestions}
+        pending={enrichedSuggestionsPending}
+        selectedIndex={enrichedSelectedSuggestionIndex}
+        bundle={bundle}
+        insets={insets}
+        keyboardHeight={keyboardHeight}
+        caretAnchor={null}
+        placement="absolute"
+        onSelect={confirmEnrichedSuggestion}
+        onSelectStart={beginEnrichedSuggestionPick}
+        onDismiss={closeEnrichedMention}
       />
     ) : null;
 
@@ -2115,25 +2349,81 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
               backgroundColor: colors.parchmentDark,
             }}
           >
-            {renderReflectionInput(
-              fullscreenReflectionInputRef,
-              {
-                flex: 1,
-                minHeight: 0,
-                alignSelf: "stretch",
-                width: "100%",
-                borderRadius: 0,
-                backgroundColor: colors.parchmentDark,
-                paddingHorizontal: 8,
-                paddingTop: 16,
-                paddingBottom: 19,
-              },
-              fullscreenReflectionFieldRef,
+            {!reflectionNoteSurfaceOpen ? null : !noteSurfaceUsesLegacyEditor ? (
+              <ReflectionEnrichedEditor
+                key={enrichedSurfaceSession}
+                editorRef={enrichedEditorRef}
+                seedHtml={enrichedSeedHtml}
+                onChangeText={setEnrichedPlainText}
+                onChangeState={setEnrichedStyleState}
+                onFocus={onReflectionEditorFocus}
+                onBlur={onReflectionEditorBlur}
+                onStartMention={handleStartMention}
+                onChangeMention={handleChangeMention}
+                onEndMention={handleEndMention}
+                onPasteImages={(images) => {
+                  for (const image of images) {
+                    const imageId = `img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                    reflectionImagesRef.current = {
+                      ...reflectionImagesRef.current,
+                      [imageId]: image.uri,
+                    };
+                    enrichedEditorRef.current?.setImage(
+                      image.uri,
+                      image.width || 800,
+                      image.height || 800,
+                    );
+                  }
+                  setReflectionImages(reflectionImagesRef.current);
+                }}
+                placeholderTextColor={colors.tan200}
+                cursorColor={colors.brown800}
+                textColor={colors.brown800}
+                linkColor={colors.gold}
+                mentionColor={colors.brown800}
+                mentionBackgroundColor={j.chipActiveBackground ?? colors.goldLight}
+                checkboxColor={colors.brown800}
+                backgroundColor={colors.parchmentDark}
+              />
+            ) : (
+              renderReflectionInput(
+                fullscreenReflectionInputRef,
+                {
+                  flex: 1,
+                  minHeight: 0,
+                  alignSelf: "stretch",
+                  width: "100%",
+                  borderRadius: 0,
+                  backgroundColor: colors.parchmentDark,
+                  paddingHorizontal: 8,
+                  paddingTop: 16,
+                  paddingBottom: 19,
+                },
+                fullscreenReflectionFieldRef,
+              )
             )}
           </View>
         }
-        ribbon={renderReflectionDockedRibbon()}
-        verseTagOverlay={renderVerseTagOverlay()}
+        ribbon={
+          noteSurfaceUsesLegacyEditor ? (
+            renderReflectionDockedRibbon()
+          ) : (
+            <ReflectionEnrichedRibbon
+              editorRef={enrichedEditorRef}
+              styleState={enrichedStyleState}
+              iconColor={toolbarIconColor}
+              activeColor={colors.gold}
+              borderColor={colors.borderSolid}
+              backgroundColor={colors.parchment}
+              onHideKeyboard={dismissJournalKeyboard}
+              onInsertVerse={openInsertVerseSheet}
+              onAttachImage={() => void attachReflectionImage()}
+            />
+          )
+        }
+        verseTagOverlay={
+          noteSurfaceUsesLegacyEditor ? renderVerseTagOverlay() : renderEnrichedVerseOverlay()
+        }
       />
     ) : (
     <Modal

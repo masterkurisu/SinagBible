@@ -7,7 +7,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { htmlToReflectionMarkdown } from "@/lib/journal-reflection-html";
+import { hydrateJournalDraftReflection } from "@/lib/journal-reflection-enriched-session";
 import { normalizeJournalTags } from "@/lib/journal-tags";
 
 export const JOURNAL_DRAFT_INDEX_KEY = "sinagbible_journal_draft_index";
@@ -33,8 +33,13 @@ export type JournalNewEntryDraftPayload = {
   title: string;
   /** Markdown reflection source (Phase 0+). */
   reflectionMarkdown: string;
-  /** @deprecated Legacy RichEditor HTML draft — migrated on load. */
+  /**
+   * HTML from the Enriched notes-surface path (Phase 2). Also used as a
+   * legacy Pell migration source when `reflectionMarkdown` is absent.
+   */
   reflectionHtml?: string;
+  /** Set when the draft was written by Enriched; used on kill/resume. */
+  reflectionEditor?: "enriched-html" | "markdown";
   journalTranslationId: string;
   /** Optional category tokens; omitted on older drafts. */
   tags?: string[];
@@ -139,29 +144,28 @@ export async function hasAnyJournalDraft(): Promise<boolean> {
   return index.length > 0;
 }
 
-export async function loadDefaultJournalDraft(): Promise<JournalNewEntryDraftPayload | null> {
+export async function loadDefaultJournalDraft(opts?: {
+  /** Kill switch off: convert Enriched HTML drafts into markdown; discard body if empty/throws. */
+  convertEnrichedForLegacy?: boolean;
+}): Promise<JournalNewEntryDraftPayload | null> {
   await migrateJournalDraftIndexIfNeeded();
   const raw = await AsyncStorage.getItem(JOURNAL_DRAFT_CONTENT_KEY);
   if (!isNonEmptyDraftValue(raw)) return null;
   try {
-    const parsed = JSON.parse(raw!) as JournalNewEntryDraftPayload & { reflectionHtml?: string };
+    const parsed = JSON.parse(raw!) as JournalNewEntryDraftPayload;
     if (typeof parsed.passage !== "string") return null;
 
-    let reflectionMarkdown = "";
-    if (typeof parsed.reflectionMarkdown === "string") {
-      reflectionMarkdown = parsed.reflectionMarkdown;
-    } else if (typeof parsed.reflectionHtml === "string") {
-      reflectionMarkdown = parsed.reflectionHtml.trim()
-        ? htmlToReflectionMarkdown(parsed.reflectionHtml)
-        : "";
-    } else {
-      return null;
-    }
+    const reflection = hydrateJournalDraftReflection(parsed, {
+      convertEnrichedForLegacy: opts?.convertEnrichedForLegacy === true,
+    });
+    if (!reflection) return null;
 
     return {
       passage: parsed.passage,
       title: typeof parsed.title === "string" ? parsed.title : "",
-      reflectionMarkdown,
+      reflectionMarkdown: reflection.reflectionMarkdown,
+      reflectionHtml: reflection.reflectionHtml,
+      reflectionEditor: reflection.reflectionEditor,
       journalTranslationId:
         typeof parsed.journalTranslationId === "string" ? parsed.journalTranslationId : "",
       tags: normalizeJournalTags(parsed.tags),

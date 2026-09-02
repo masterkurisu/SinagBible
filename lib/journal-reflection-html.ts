@@ -79,6 +79,18 @@ function replaceImgTagsWithTokens(fragment: string, imageMap: Record<string, str
   });
 }
 
+function maskVerseTagHtmlNodes(html: string): { html: string; spans: string[] } {
+  const spans: string[] = [];
+  const next = html.replace(
+    /<span\b[^>]*\bdata-verse-ref=[^>]*>[\s\S]*?<\/span>|<mention\b[^>]*>[\s\S]*?<\/mention>/gi,
+    (full) => {
+      const index = spans.push(full) - 1;
+      return `%%VERSE_TAG_${index}%%`;
+    },
+  );
+  return { html: next, spans };
+}
+
 export function maskVerseTagHtmlSpans(html: string): { html: string; spans: string[] } {
   const spans: string[] = [];
   const next = html.replace(
@@ -95,8 +107,8 @@ export function unmaskVerseTagHtmlSpans(html: string, spans: string[]): string {
   return html.replace(/%%VERSE_TAG_(\d+)%%/g, (_full, index: string) => spans[Number(index)] ?? "");
 }
 
-function replaceVerseTagSpansWithTokens(fragment: string): string {
-  return fragment.replace(
+function replaceVerseTagNodesWithTokens(fragment: string): string {
+  const fromSpans = fragment.replace(
     /<span\b[^>]*\bdata-verse-ref=(["'])([^"']+)\1[^>]*>[\s\S]*?<\/span>/gi,
     (full, _quote: string, dataRef: string) => {
       const translation = /\bdata-translation=(["'])([^"']+)\1/i.exec(full)?.[2] ?? null;
@@ -105,10 +117,21 @@ function replaceVerseTagSpansWithTokens(fragment: string): string {
       return encodeVerseTag(ref);
     },
   );
+  return fromSpans.replace(
+    /<mention\b([^>]*)>([\s\S]*?)<\/mention>/gi,
+    (full, _attrs: string, inner: string) => {
+      const dataRef = /\bdata-verse-ref=(["'])([^"']+)\1/i.exec(full)?.[2];
+      if (!dataRef) return inner;
+      const translation = /\bdata-translation=(["'])([^"']+)\1/i.exec(full)?.[2] ?? null;
+      const ref = parseVerseTagFromHtmlAttrs(dataRef, translation);
+      if (!ref) return inner;
+      return encodeVerseTag(ref);
+    },
+  );
 }
 
 function inlineHtmlToMarkdown(fragment: string): string {
-  let s = replaceVerseTagSpansWithTokens(fragment);
+  let s = replaceVerseTagNodesWithTokens(fragment);
   s = s.replace(/<br\s*\/?>/gi, "\n");
   for (let pass = 0; pass < 8; pass++) {
     const prev = s;
@@ -137,8 +160,16 @@ function stripChecklistGlyph(markdown: string): string {
   return markdown.replace(/^[☐☑✓✔]\s*/, "");
 }
 
+function listItemIsChecked(attrs: string): boolean {
+  if (/data-checked=["']true["']/i.test(attrs)) return true;
+  if (/data-checked=["']false["']/i.test(attrs)) return false;
+  return /(?:^|\s)checked(?:\s|=|$)/i.test(attrs);
+}
+
 function convertListBlock(block: string, ordered: boolean, imageMap: Record<string, string>): string {
-  const isChecklist = /^<ul\b[^>]*\bdata-checklist=["']true["']/i.test(block);
+  const isChecklist =
+    /^<ul\b[^>]*\bdata-checklist=["']true["']/i.test(block) ||
+    /^<ul\b[^>]*\bdata-type=["']checkbox(?:List)?["']/i.test(block);
   const items = Array.from(block.matchAll(/<li([^>]*)>([\s\S]*?)<\/li>/gi));
   return items
     .map((li, index) => {
@@ -146,8 +177,7 @@ function convertListBlock(block: string, ordered: boolean, imageMap: Record<stri
       const body = replaceImgTagsWithTokens(li[2] ?? "", imageMap);
       const markdown = stripChecklistGlyph(inlineHtmlToMarkdown(body).trim());
       if (isChecklist) {
-        const checked = /data-checked=["']true["']/i.test(attrs);
-        return `- [${checked ? "x" : " "}] ${markdown}`;
+        return `- [${listItemIsChecked(attrs) ? "x" : " "}] ${markdown}`;
       }
       const prefix = ordered ? `${index + 1}. ` : "- ";
       return `${prefix}${markdown}`;
@@ -172,7 +202,7 @@ export function htmlToReflectionMarkdown(
   const trimmed = html.trim();
   if (!trimmed) return "";
 
-  const masked = maskVerseTagHtmlSpans(trimmed);
+  const masked = maskVerseTagHtmlNodes(trimmed);
   const normalized = unmaskVerseTagHtmlSpans(
     normalizeStyleSpansForReflectionHtml(masked.html)
       .replace(/<(\/?)b(\s[^>]*)?>/gi, "<$1strong$2>")

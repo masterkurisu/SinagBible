@@ -7,6 +7,7 @@ import {
   htmlHasNestedList,
   normalizeReflectionMarkdownForCompare,
   reflectionHtmlNeedsLegacyEditor,
+  shouldMountLegacyReflectionEditor,
 } from "@/lib/journal-reflection-legacy-route";
 
 describe("htmlHasNestedList", () => {
@@ -34,6 +35,21 @@ describe("reflectionHtmlNeedsLegacyEditor", () => {
     expect(reflectionHtmlNeedsLegacyEditor("<ul><li>outer<ul><li>inner</li></ul></li></ul>")).toBe(
       true,
     );
+  });
+
+  it("ORs screen readers into the same legacy path", () => {
+    expect(
+      shouldMountLegacyReflectionEditor({
+        html: "<p>Hello</p>",
+        screenReaderEnabled: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldMountLegacyReflectionEditor({
+        html: "<p>Hello</p>",
+        screenReaderEnabled: true,
+      }),
+    ).toBe(true);
   });
 });
 

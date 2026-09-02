@@ -66,11 +66,32 @@ describe("htmlToReflectionMarkdown", () => {
     ).toBe("[@john:3:16@KJV]");
   });
 
+  it("round-trips Enriched mention nodes back to [@...] tokens", () => {
+    expect(
+      htmlToReflectionMarkdown(
+        '<p>See <mention indicator="@" text="John 3:16" data-verse-ref="john:3:16">John 3:16</mention> today.</p>',
+      ),
+    ).toBe("See [@john:3:16] today.");
+    expect(
+      htmlToReflectionMarkdown(
+        '<p><mention indicator="@" text="John 3:16" data-verse-ref="john:3:16" data-translation="KJV">John 3:16</mention></p>',
+      ),
+    ).toBe("[@john:3:16@KJV]");
+  });
+
   it("does not treat a verse span followed by parens as a markdown link", () => {
     expect(
       htmlToReflectionMarkdown(
         '<p><span data-verse-ref="john:3:16">John 3:16</span>(not a link)</p>',
       ),
     ).toBe("[@john:3:16](not a link)");
+  });
+
+  it("converts Enriched native checkbox lists to markdown checklists", () => {
+    expect(
+      htmlToReflectionMarkdown(
+        '<ul data-type="checkbox"><li>todo one</li><li checked>done one</li></ul>',
+      ),
+    ).toBe("- [ ] todo one\n- [x] done one");
   });
 });

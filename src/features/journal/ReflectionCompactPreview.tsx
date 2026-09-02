@@ -19,7 +19,7 @@ type Props = {
 
 /**
  * Tap-to-open compact reflection preview (~6 lines + bottom fade).
- * Phase 1 default path when `JOURNAL_NOTES_SURFACE_ENABLED` is on.
+ * Default path when `JOURNAL_NOTES_SURFACE_ENABLED` is on.
  */
 export function ReflectionCompactPreview({
   markdown,

@@ -12,7 +12,18 @@
 export const ENRICHED_HTML_LIBRARY_PIN = "1.1.1";
 
 /** Bump when `htmlToReflectionMarkdown` or `reflectionMarkdownToContent` change. */
-export const REFLECTION_MARKDOWN_CONVERTER_REVISION = 1;
+export const REFLECTION_MARKDOWN_CONVERTER_REVISION = 2;
+
+/** Stored on real Enriched edits only (`content_format`). */
+export const ENRICHED_HTML_CONTENT_FORMAT = "enriched-html";
+
+/** Composite `editor_version`: library pin + converter revision. */
+export function compositeEnrichedEditorVersion(
+  pin: string = ENRICHED_HTML_LIBRARY_PIN,
+  converterRev: number = REFLECTION_MARKDOWN_CONVERTER_REVISION,
+): string {
+  return `enriched-html@${pin}+md${converterRev}`;
+}
 
 const LIST_OPEN_RE = /<(ul|ol)\b[^>]*>/gi;
 const LIST_CLOSE_RE = /<\/(ul|ol)>/gi;
@@ -52,6 +63,17 @@ export function htmlHasNestedList(html: string): boolean {
  */
 export function reflectionHtmlNeedsLegacyEditor(html: string): boolean {
   return htmlHasNestedList(html);
+}
+
+/**
+ * Decide the note-surface editor **before** any Enriched mount.
+ * Screen readers share the legacy path — not a fourth TextInput.
+ */
+export function shouldMountLegacyReflectionEditor(opts: {
+  html: string;
+  screenReaderEnabled: boolean;
+}): boolean {
+  return opts.screenReaderEnabled || reflectionHtmlNeedsLegacyEditor(opts.html);
 }
 
 const NASTY_TAG_RE: { tag: string; re: RegExp }[] = [
