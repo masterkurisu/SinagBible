@@ -10,6 +10,10 @@ import {
   ownedHtmlToEnrichedHtml,
 } from "@/lib/journal-reflection-enriched-mapping";
 import {
+  canonicalizeOwnedReflectionHtml,
+  reflectionSpacerSignature,
+} from "@/lib/journal-reflection-owned-html";
+import {
   ENRICHED_HTML_CONTENT_FORMAT,
   compositeEnrichedEditorVersion,
   normalizeReflectionMarkdownForCompare,
@@ -41,6 +45,29 @@ export type HydratedJournalDraftReflection = {
 
 const EMPTY_EDITOR_HTML = "<p></p>";
 
+function canonicalOwnedOrEmpty(html: string): string {
+  return canonicalizeOwnedReflectionHtml(html) || EMPTY_EDITOR_HTML;
+}
+
+function ownedMarkdownComparable(html: string): string {
+  return normalizeReflectionMarkdownForCompare(htmlToReflectionMarkdown(html));
+}
+
+function markdownMatches(editorHtml: string, storedMarkdown: string | null | undefined, storedHtml: string): boolean {
+  const left = ownedMarkdownComparable(editorHtml);
+  const stored = storedMarkdown?.trim();
+  const right = stored
+    ? normalizeReflectionMarkdownForCompare(storedMarkdown ?? "")
+    : ownedMarkdownComparable(storedHtml);
+  return left === right;
+}
+
+function spacerMatches(editorHtml: string, storedHtml: string): boolean {
+  const editorOwned = canonicalizeOwnedReflectionHtml(enrichedHtmlToOwnedHtml(editorHtml));
+  const storedOwned = canonicalizeOwnedReflectionHtml(storedHtml);
+  return reflectionSpacerSignature(editorOwned) === reflectionSpacerSignature(storedOwned);
+}
+
 /**
  * Kill/resume: convert an Enriched draft into the legacy markdown shape.
  * Discard the reflection body only if conversion is empty or throws.
@@ -70,17 +97,51 @@ export function resolveEnrichedSeedHtml(opts: {
   markdownToHtml: (markdown: string, images: Record<string, string>) => string;
 }): string {
   const stored = opts.storedHtml?.trim();
-  if (stored) return ownedHtmlToEnrichedHtml(stored);
+  if (stored) return ownedHtmlToEnrichedHtml(canonicalOwnedOrEmpty(stored));
 
   const draftHtml = opts.draftHtml?.trim();
-  if (draftHtml) return ownedHtmlToEnrichedHtml(draftHtml);
+  if (draftHtml) {
+    const owned = /<mention\b/i.test(draftHtml)
+      ? enrichedHtmlToOwnedHtml(draftHtml)
+      : draftHtml;
+    return ownedHtmlToEnrichedHtml(canonicalOwnedOrEmpty(owned));
+  }
 
   const draftMarkdown = opts.draftMarkdown?.trim();
   if (draftMarkdown) {
-    return ownedHtmlToEnrichedHtml(opts.markdownToHtml(draftMarkdown, opts.images ?? {}));
+    return ownedHtmlToEnrichedHtml(
+      canonicalOwnedOrEmpty(opts.markdownToHtml(draftMarkdown, opts.images ?? {})),
+    );
   }
 
   return ownedHtmlToEnrichedHtml(EMPTY_EDITOR_HTML);
+}
+
+/**
+ * Owned HTML for compact preview — same precedence as Enriched seed, without dialect mapping.
+ */
+export function resolveOwnedReflectionPreviewHtml(opts: {
+  storedHtml?: string | null;
+  draftHtml?: string | null;
+  draftMarkdown?: string | null;
+  images?: Record<string, string>;
+  markdownToHtml: (markdown: string, images: Record<string, string>) => string;
+}): string {
+  const stored = opts.storedHtml?.trim();
+  if (stored) return canonicalOwnedOrEmpty(stored);
+
+  const draftHtml = opts.draftHtml?.trim();
+  if (draftHtml) {
+    const owned = /<mention\b/i.test(draftHtml) ? enrichedHtmlToOwnedHtml(draftHtml) : draftHtml;
+    return canonicalOwnedOrEmpty(owned);
+  }
+
+  const draftMarkdown = opts.draftMarkdown?.trim();
+  if (draftMarkdown) {
+    return canonicalOwnedOrEmpty(opts.markdownToHtml(draftMarkdown, opts.images ?? {}));
+  }
+
+  return EMPTY_EDITOR_HTML;
 }
 
 export function isEnrichedReflectionNoOpSave(opts: {
@@ -88,12 +149,8 @@ export function isEnrichedReflectionNoOpSave(opts: {
   storedMarkdown: string | null | undefined;
   storedHtml: string;
 }): boolean {
-  const left = normalizeReflectionMarkdownForCompare(htmlToReflectionMarkdown(opts.editorHtml));
-  const storedMarkdown = opts.storedMarkdown?.trim();
-  const right = storedMarkdown
-    ? normalizeReflectionMarkdownForCompare(opts.storedMarkdown ?? "")
-    : normalizeReflectionMarkdownForCompare(htmlToReflectionMarkdown(opts.storedHtml));
-  return left === right;
+  if (!markdownMatches(opts.editorHtml, opts.storedMarkdown, opts.storedHtml)) return false;
+  return spacerMatches(opts.editorHtml, opts.storedHtml);
 }
 
 /**
@@ -122,7 +179,7 @@ export function planEnrichedReflectionSave(opts: {
 
   return {
     kind: "write",
-    content: enrichedHtmlToOwnedHtml(opts.editorHtml),
+    content: canonicalizeOwnedReflectionHtml(enrichedHtmlToOwnedHtml(opts.editorHtml)),
     content_markdown: markdown,
     content_format: ENRICHED_HTML_CONTENT_FORMAT,
     editor_version: compositeEnrichedEditorVersion(),

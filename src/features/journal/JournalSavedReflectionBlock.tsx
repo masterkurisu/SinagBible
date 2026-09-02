@@ -11,6 +11,7 @@ import {
   decodeHtmlEntities,
   type SavedReflectionBlock,
 } from "@/src/features/journal/journalSavedReflectionBlocks";
+import { REFLECTION_BLANK_STEP_PX } from "@/lib/journal-reflection-owned-html";
 import {
   maskVerseTagHtmlSpans,
   unmaskVerseTagHtmlSpans,
@@ -355,6 +356,36 @@ export const journalSavedReflectionStyles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.35)",
     marginBottom: 12,
   },
+  imageCompact: {
+    width: "100%",
+    height: 120,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.35)",
+    marginBottom: 8,
+  },
+  paragraphCompact: {
+    fontFamily: "Lora_400Regular",
+    fontSize: 15,
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  listItemCompact: {
+    fontFamily: "Lora_400Regular",
+    fontSize: 15,
+    lineHeight: 24,
+  },
+  heading1Compact: {
+    fontFamily: "Lora_400Regular",
+    fontSize: 22,
+    lineHeight: 28,
+    marginBottom: 6,
+  },
+  heading2Compact: {
+    fontFamily: "Lora_700Bold",
+    fontSize: 18,
+    lineHeight: 24,
+    marginBottom: 4,
+  },
 });
 
 type JournalSavedReflectionBlockProps = {
@@ -363,7 +394,12 @@ type JournalSavedReflectionBlockProps = {
   linkColor: string;
   bundle: MobileAppThemeBundle;
   translationId: string;
+  compact?: boolean;
 };
+
+function reflectionBlankMarginTop(leadingBlankCount: number | undefined): number {
+  return (leadingBlankCount ?? 0) * REFLECTION_BLANK_STEP_PX;
+}
 
 export const JournalSavedReflectionBlock = memo(function JournalSavedReflectionBlock({
   block,
@@ -371,13 +407,21 @@ export const JournalSavedReflectionBlock = memo(function JournalSavedReflectionB
   linkColor,
   bundle,
   translationId,
+  compact = false,
 }: JournalSavedReflectionBlockProps) {
+  const blankMarginTop = reflectionBlankMarginTop(block.leadingBlankCount);
+  const paragraphStyle = compact ? journalSavedReflectionStyles.paragraphCompact : journalSavedReflectionStyles.paragraph;
+  const heading1Style = compact ? journalSavedReflectionStyles.heading1Compact : journalSavedReflectionStyles.heading1;
+  const heading2Style = compact ? journalSavedReflectionStyles.heading2Compact : journalSavedReflectionStyles.heading2;
+  const listItemStyle = compact ? journalSavedReflectionStyles.listItemCompact : journalSavedReflectionStyles.listItem;
+  const imageStyle = compact ? journalSavedReflectionStyles.imageCompact : journalSavedReflectionStyles.image;
+
   if (block.kind === "image") {
     return (
       <Image
         source={{ uri: block.uri }}
         placeholder="L6PZfSi_.AyE_3t7t7R**0o#DgR4"
-        style={journalSavedReflectionStyles.image}
+        style={[imageStyle, { marginTop: blankMarginTop }]}
         contentFit="contain"
       />
     );
@@ -388,8 +432,11 @@ export const JournalSavedReflectionBlock = memo(function JournalSavedReflectionB
       <JournalReflectionRichText
         html={block.html}
         style={[
-          journalSavedReflectionStyles.heading1,
-          { marginTop: block.isFirst ? 0 : 10, color: bodyColor },
+          heading1Style,
+          {
+            marginTop: (block.isFirst ? 0 : 10) + blankMarginTop,
+            color: bodyColor,
+          },
         ]}
         linkColor={linkColor}
         bundle={bundle}
@@ -403,8 +450,11 @@ export const JournalSavedReflectionBlock = memo(function JournalSavedReflectionB
       <JournalReflectionRichText
         html={block.html}
         style={[
-          journalSavedReflectionStyles.heading2,
-          { marginTop: block.isFirst ? 0 : 8, color: bodyColor },
+          heading2Style,
+          {
+            marginTop: (block.isFirst ? 0 : 8) + blankMarginTop,
+            color: bodyColor,
+          },
         ]}
         linkColor={linkColor}
         bundle={bundle}
@@ -419,8 +469,9 @@ export const JournalSavedReflectionBlock = memo(function JournalSavedReflectionB
         html={block.html}
         leading={block.marker}
         style={[
-          journalSavedReflectionStyles.listItem,
+          listItemStyle,
           {
+            marginTop: blankMarginTop,
             marginBottom: block.isLastInList ? 0 : 4,
             color: bodyColor,
             opacity: block.checked ? 0.6 : 1,
@@ -437,7 +488,7 @@ export const JournalSavedReflectionBlock = memo(function JournalSavedReflectionB
   return (
     <JournalReflectionRichText
       html={block.html}
-      style={[journalSavedReflectionStyles.paragraph, { color: bodyColor }]}
+      style={[paragraphStyle, { marginTop: blankMarginTop, color: bodyColor }]}
       linkColor={linkColor}
       bundle={bundle}
       translationId={translationId}

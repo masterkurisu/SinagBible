@@ -1,7 +1,11 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { useMemo } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { ReflectionFormattedPreview } from "@/components/reflection-formatted-preview";
 import { REFLECTION_LIVE_BODY_LINE_HEIGHT } from "@/lib/journal-reflection-live-markdown-style";
+import { parseOwnedReflectionHtml } from "@/src/features/journal/journalSavedReflectionBlocks";
+import { JournalSavedReflectionBlock } from "@/src/features/journal/JournalSavedReflectionBlock";
 
 const PREVIEW_LINES = 6;
 const PREVIEW_VERTICAL_PAD = 12;
@@ -15,6 +19,12 @@ type Props = {
   onPress: () => void;
   fieldBackground: string;
   fieldOutline: string;
+  useHtmlPreview?: boolean;
+  ownedHtml?: string;
+  bundle?: MobileAppThemeBundle;
+  translationId?: string;
+  bodyColor?: string;
+  linkColor?: string;
   accessibilityLabel?: string;
 };
 
@@ -28,8 +38,21 @@ export function ReflectionCompactPreview({
   onPress,
   fieldBackground,
   fieldOutline,
+  useHtmlPreview = false,
+  ownedHtml = "",
+  bundle,
+  translationId = "KJV",
+  bodyColor,
+  linkColor,
   accessibilityLabel = "Open reflection note",
 }: Props) {
+  const htmlBlocks = useMemo(
+    () => (useHtmlPreview ? parseOwnedReflectionHtml(ownedHtml) : []),
+    [ownedHtml, useHtmlPreview],
+  );
+  const hasHtmlPreview = useHtmlPreview && htmlBlocks.length > 0;
+  const hasMarkdownPreview = !useHtmlPreview && markdown.trim().length > 0;
+
   return (
     <Pressable
       onPress={onPress}
@@ -50,12 +73,28 @@ export function ReflectionCompactPreview({
       >
         <View style={styles.clip}>
           <View style={styles.previewPad}>
-            <ReflectionFormattedPreview
-              markdown={markdown}
-              imageMap={imageMap}
-              compact
-              emptyText="Tap to write your reflection…"
-            />
+            {hasHtmlPreview && bundle && bodyColor && linkColor ? (
+              htmlBlocks.map((block) => (
+                <JournalSavedReflectionBlock
+                  key={block.key}
+                  block={block}
+                  bodyColor={bodyColor}
+                  linkColor={linkColor}
+                  bundle={bundle}
+                  translationId={translationId}
+                  compact
+                />
+              ))
+            ) : hasMarkdownPreview ? (
+              <ReflectionFormattedPreview
+                markdown={markdown}
+                imageMap={imageMap}
+                compact
+                emptyText="Tap to write your reflection…"
+              />
+            ) : (
+              <Text style={styles.emptyText}>Tap to write your reflection…</Text>
+            )}
           </View>
           <LinearGradient
             colors={["transparent", fieldBackground]}
@@ -91,5 +130,12 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: FADE_HEIGHT,
+  },
+  emptyText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    lineHeight: 24,
+    color: "#9c8e78",
+    fontStyle: "italic",
   },
 });

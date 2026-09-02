@@ -151,6 +151,26 @@ describe("isEnrichedReflectionNoOpSave", () => {
       }),
     ).toBe(true);
   });
+
+  it("no-ops when only leading/trailing blanks differ after canonical seed", () => {
+    expect(
+      isEnrichedReflectionNoOpSave({
+        editorHtml: "<p>Hello</p>",
+        storedMarkdown: "Hello",
+        storedHtml: "<p></p><p>Hello</p><p><br></p>",
+      }),
+    ).toBe(true);
+  });
+
+  it("writes when interior blank spacing changes even if markdown matches", () => {
+    expect(
+      isEnrichedReflectionNoOpSave({
+        editorHtml: `<p>Hello</p><p></p><p></p><p>World</p>`,
+        storedMarkdown: "Hello\n\nWorld",
+        storedHtml: `<p>Hello</p><p></p><p>World</p>`,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("planEnrichedReflectionSave", () => {
@@ -163,6 +183,50 @@ describe("planEnrichedReflectionSave", () => {
         isExistingEntry: true,
       }),
     ).toEqual({ kind: "noop" });
+  });
+
+  it("no-ops open-with-no-edits when interior blank spacing matches", () => {
+    expect(
+      planEnrichedReflectionSave({
+        editorHtml: `<p>Hello</p><p></p><p></p><p>World</p>`,
+        storedMarkdown: "Hello\n\nWorld",
+        storedHtml: `<p>Hello</p><p></p><p></p><p>World</p>`,
+        isExistingEntry: true,
+      }),
+    ).toEqual({ kind: "noop" });
+  });
+
+  it("writes when interior blank spacing increases", () => {
+    const plan = planEnrichedReflectionSave({
+      editorHtml: `<p>Hello</p><p></p><p></p><p>World</p>`,
+      storedMarkdown: "Hello\n\nWorld",
+      storedHtml: `<p>Hello</p><p></p><p>World</p>`,
+      isExistingEntry: true,
+    });
+    expect(plan.kind).toBe("write");
+  });
+
+  it("no-ops untouched legacy rows without stamping format fields", () => {
+    expect(
+      planEnrichedReflectionSave({
+        editorHtml: "<p>Original</p>",
+        storedMarkdown: "Original",
+        storedHtml: "<p>Original</p>",
+        isExistingEntry: true,
+      }),
+    ).toEqual({ kind: "noop" });
+  });
+
+  it("canonicalizes owned HTML on write", () => {
+    const plan = planEnrichedReflectionSave({
+      editorHtml: `<p>Changed</p><p></p>`,
+      storedMarkdown: "Hello",
+      storedHtml: "<p>Hello</p>",
+      isExistingEntry: true,
+    });
+    expect(plan.kind).toBe("write");
+    if (plan.kind !== "write") return;
+    expect(plan.content).toBe("<p>Changed</p>");
   });
 
   it("stamps format fields and asks for a snapshot on a real existing-id edit", () => {

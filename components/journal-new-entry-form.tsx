@@ -132,6 +132,7 @@ import { shouldMountLegacyReflectionEditor } from "@/lib/journal-reflection-lega
 import {
   planEnrichedReflectionSave,
   resolveEnrichedSeedHtml,
+  resolveOwnedReflectionPreviewHtml,
 } from "@/lib/journal-reflection-enriched-session";
 import { ReflectionCompactPreview } from "@/src/features/journal/ReflectionCompactPreview";
 import { ReflectionEnrichedEditor } from "@/src/features/journal/ReflectionEnrichedEditor";
@@ -350,6 +351,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const [enrichedSurfaceSession, setEnrichedSurfaceSession] = useState(0);
   const [enrichedStyleState, setEnrichedStyleState] = useState<OnChangeStateEvent | null>(null);
   const [enrichedPlainText, setEnrichedPlainText] = useState("");
+  const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
   const enrichedEditorRef = useRef<EnrichedTextInputInstance>(null);
   const enrichedHtmlRef = useRef("");
   const draftHtmlRef = useRef("");
@@ -903,6 +905,34 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     reflectionNoteSurfaceOpen,
     syncEnrichedDocument,
   ]);
+
+  useEffect(() => {
+    void AccessibilityInfo.isScreenReaderEnabled().then(setScreenReaderEnabled);
+    const subscription = AccessibilityInfo.addEventListener(
+      "screenReaderChanged",
+      setScreenReaderEnabled,
+    );
+    return () => subscription.remove();
+  }, []);
+
+  const previewOwnedHtml = useMemo(
+    () =>
+      resolveOwnedReflectionPreviewHtml({
+        storedHtml: editDraft?.content,
+        draftHtml: draftHtmlRef.current || enrichedHtmlRef.current,
+        draftMarkdown: reflectionMarkdown,
+        images: reflectionImages,
+        markdownToHtml: reflectionMarkdownToContent,
+      }),
+    [editDraft?.content, reflectionMarkdown, reflectionImages, enrichedPlainText],
+  );
+
+  const useHtmlReflectionPreview =
+    notesSurfaceEnabled &&
+    !shouldMountLegacyReflectionEditor({
+      html: previewOwnedHtml,
+      screenReaderEnabled,
+    });
 
   const openReflectionNoteSurface = () => {
     hapticLightImpact();
@@ -2027,6 +2057,12 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         onPress={openReflectionNoteSurface}
         fieldBackground={j.reflectionFieldBackground}
         fieldOutline={j.reflectionFieldOutline}
+        useHtmlPreview={useHtmlReflectionPreview}
+        ownedHtml={previewOwnedHtml}
+        bundle={bundle}
+        translationId={journalTranslationId}
+        bodyColor={colors.brown800}
+        linkColor={colors.gold}
       />
     </View>
   ) : (
