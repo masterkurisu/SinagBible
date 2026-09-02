@@ -125,6 +125,11 @@ import { estimateVerseTagCaretAnchor } from "@/src/features/verse-tags/verseTagO
 import { VerseTagComposerOverlay } from "@/src/features/verse-tags/VerseTagComposerOverlay";
 import { VerseTagMentionSheet } from "@/src/features/verse-tags/VerseTagMentionSheet";
 import type { VerseTagRef } from "@sinag-bible/types";
+import { JOURNAL_NOTES_SURFACE_ENABLED } from "@/lib/journal-notes-surface-flag";
+import { ReflectionCompactPreview } from "@/src/features/journal/ReflectionCompactPreview";
+import { ReflectionFormatRibbon } from "@/src/features/journal/ReflectionFormatRibbon";
+import { ReflectionNoteSurface } from "@/src/features/journal/ReflectionNoteSurface";
+import { formatReflectionPassageStrip } from "@/src/features/journal/formatReflectionPassageStrip";
 
 const VERSE_PREVIEW_LIMIT = 150;
 const TOOLBAR_BTN_SIZE = 40;
@@ -246,6 +251,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const colors = bundle.ui;
   const j = bundle.journal;
   const modalSurfaceColor = j.newEntrySheetBackground;
+  const notesSurfaceEnabled = JOURNAL_NOTES_SURFACE_ENABLED;
 
   const initialReflectionState = useMemo(
     () => (editDraft ? resolveReflectionMarkdownForEdit(editDraft) : { markdown: "", images: {} as Record<string, string> }),
@@ -328,6 +334,10 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const fullscreenToolbarAnchorRef = useRef<View>(null);
   const suppressReflectionBlurRef = useRef(false);
   const [reflectionFullscreenOpen, setReflectionFullscreenOpen] = useState(false);
+  const [reflectionNoteSurfaceOpen, setReflectionNoteSurfaceOpen] = useState(false);
+  const reflectionExpandedOpen = notesSurfaceEnabled
+    ? reflectionNoteSurfaceOpen
+    : reflectionFullscreenOpen;
   const [reflectionSelection, setReflectionSelection] = useState<ReflectionTextSelection>({
     start: 0,
     end: 0,
@@ -419,7 +429,9 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   );
 
   const getActiveReflectionInput = () =>
-    reflectionFullscreenOpen ? fullscreenReflectionInputRef.current : reflectionInputRef.current;
+    reflectionExpandedOpen
+      ? fullscreenReflectionInputRef.current
+      : reflectionInputRef.current;
 
   const pushReflectionUndoValue = useCallback((value: string) => {
     const stack = reflectionUndoStackRef.current;
@@ -583,7 +595,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   });
 
   const measureMentionCaretAnchor = useCallback(() => {
-    const node = reflectionFullscreenOpen
+    const node = reflectionExpandedOpen
       ? fullscreenReflectionFieldRef.current
       : reflectionFieldRef.current;
     if (!node || !mentionOpen) {
@@ -601,7 +613,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         }),
       );
     });
-  }, [mentionOpen, reflectionFullscreenOpen]);
+  }, [mentionOpen, reflectionExpandedOpen]);
 
   useEffect(() => {
     if (!mentionOpen) {
@@ -793,23 +805,24 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const onReflectionEditorBlur = () => {
     handleBlur();
     flushTypingUndoCheckpoint();
-    if (suppressReflectionBlurRef.current || reflectionFullscreenOpen) return;
+    if (suppressReflectionBlurRef.current || reflectionExpandedOpen) return;
     if (keyboardHeight > 0) return;
     releaseActiveFormField("reflection");
     setJournalKeyboardOpen(false);
   };
 
   const showReflectionFloatingToolbar =
+    !notesSurfaceEnabled &&
     activeFormField === "reflection" &&
     !mentionOpen &&
-    (journalKeyboardOpen || reflectionFullscreenOpen);
+    (journalKeyboardOpen || reflectionExpandedOpen);
 
   const measureReflectionToolbarBottomPx = useCallback(() => {
     if (keyboardHeight <= 0) {
       setReflectionToolbarBottomPx(FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX);
       return;
     }
-    const anchorRef = reflectionFullscreenOpen ? fullscreenToolbarAnchorRef : toolbarAnchorRef;
+    const anchorRef = reflectionExpandedOpen ? fullscreenToolbarAnchorRef : toolbarAnchorRef;
     anchorRef.current?.measureInWindow((_x, y, _w, h) => {
       const anchorBottomY = y + h;
       const targetToolbarBottomY = windowHeight - keyboardHeight - FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX;
@@ -817,7 +830,24 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         Math.max(FLOATING_TOOLBAR_ABOVE_KEYBOARD_PX, anchorBottomY - targetToolbarBottomY),
       );
     });
-  }, [keyboardHeight, reflectionFullscreenOpen, windowHeight]);
+  }, [keyboardHeight, reflectionExpandedOpen, windowHeight]);
+
+  const openReflectionNoteSurface = () => {
+    hapticLightImpact();
+    markActiveFormField("reflection");
+    setJournalKeyboardOpen(true);
+    setReflectionNoteSurfaceOpen(true);
+    requestAnimationFrame(() => fullscreenReflectionInputRef.current?.focus());
+  };
+
+  const closeReflectionNoteSurface = () => {
+    hapticLightImpact();
+    Keyboard.dismiss();
+    fullscreenReflectionInputRef.current?.blur();
+    markActiveFormField(null);
+    setJournalKeyboardOpen(false);
+    setReflectionNoteSurfaceOpen(false);
+  };
 
   const openReflectionFullscreen = () => {
     hapticLightImpact();
@@ -1148,7 +1178,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     sheetFormLayout,
     showReflectionFloatingToolbar,
     keyboardHeight,
-    reflectionFullscreenOpen,
+    reflectionExpandedOpen,
     contentScrollMaxHeight,
     measureReflectionToolbarBottomPx,
   ]);
@@ -1172,9 +1202,13 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     return contentScrollMaxHeight - SHEET_SAVE_BLOCK_PX;
   }, [sheetFormLayout, contentScrollMaxHeight]);
 
+  const sheetReflectionBlockMinPx = notesSurfaceEnabled
+    ? REFLECTION_LIVE_BODY_LINE_HEIGHT * 6 + 56
+    : SHEET_REFLECTION_MIN_PX;
+
   const sheetFieldsMinHeightPx = useMemo(
-    () => sheetTopFieldsHeightPx + SHEET_REFLECTION_MIN_PX + sheetChromeOverheadPx,
-    [sheetTopFieldsHeightPx, sheetChromeOverheadPx],
+    () => sheetTopFieldsHeightPx + sheetReflectionBlockMinPx + sheetChromeOverheadPx,
+    [sheetTopFieldsHeightPx, sheetChromeOverheadPx, sheetReflectionBlockMinPx],
   );
 
   useEffect(() => {
@@ -1401,127 +1435,136 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     justifyContent: "center" as const,
   };
 
-  const renderReflectionFloatingToolbar = () => (
-    <View style={floatingToolbarPillStyle}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="always"
-        contentContainerStyle={{ flexDirection: "row", alignItems: "center" }}
+  const renderReflectionToolbarButtons = () => (
+    <>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Undo"
+        onPress={undoReflection}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
       >
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Undo"
-          onPress={undoReflection}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <Ionicons name="arrow-undo" size={20} color={toolbarIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Bold"
-          onPressIn={snapshotReflectionSelectionForToolbar}
-          onPress={() => applyToolbarAction("bold")}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <ReflectionBoldIcon size={18} color={toolbarIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Italic"
-          onPressIn={snapshotReflectionSelectionForToolbar}
-          onPress={() => applyToolbarAction("italic")}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <ReflectionItalicIcon size={18} color={toolbarIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Heading"
-          onPressIn={snapshotReflectionSelectionForToolbar}
-          onPress={() => applyToolbarAction("heading")}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <ReflectionHeadingIcon size={18} color={toolbarIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Bulleted list"
-          onPressIn={snapshotReflectionSelectionForToolbar}
-          onPress={() => applyToolbarAction("bullet")}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <ReflectionBulletedListIcon size={18} color={toolbarIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Numbered list"
-          onPressIn={snapshotReflectionSelectionForToolbar}
-          onPress={() => applyToolbarAction("numbered")}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <ReflectionNumberedListIcon size={18} color={toolbarIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Checklist"
-          onPressIn={snapshotReflectionSelectionForToolbar}
-          onPress={() => applyToolbarAction("checklist")}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <ReflectionChecklistIcon size={18} color={toolbarIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Link"
-          onPressIn={snapshotReflectionSelectionForToolbar}
-          onPress={() => applyToolbarAction("link")}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <ReflectionLinkIcon size={18} color={toolbarIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Insert verse"
-          onPressIn={() => {
-            snapshotReflectionSelectionForToolbar();
-            beginSuggestionPick();
-          }}
-          onPress={openInsertVerseSheet}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <Ionicons name="book-outline" size={20} color={toolbarIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Attach image"
-          onPressIn={snapshotReflectionSelectionForToolbar}
-          onPress={() => void attachReflectionImage()}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <ReflectionImageIcon size={18} color={toolbarIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Hide keyboard"
-          onPress={dismissJournalKeyboard}
-          activeOpacity={0.85}
-          style={floatingToolbarIconButtonStyle}
-        >
-          <ReflectionKeyboardHideIcon size={20} color={toolbarIconColor} />
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+        <Ionicons name="arrow-undo" size={20} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Bold"
+        onPressIn={snapshotReflectionSelectionForToolbar}
+        onPress={() => applyToolbarAction("bold")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionBoldIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Italic"
+        onPressIn={snapshotReflectionSelectionForToolbar}
+        onPress={() => applyToolbarAction("italic")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionItalicIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Heading"
+        onPressIn={snapshotReflectionSelectionForToolbar}
+        onPress={() => applyToolbarAction("heading")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionHeadingIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Bulleted list"
+        onPressIn={snapshotReflectionSelectionForToolbar}
+        onPress={() => applyToolbarAction("bullet")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionBulletedListIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Numbered list"
+        onPressIn={snapshotReflectionSelectionForToolbar}
+        onPress={() => applyToolbarAction("numbered")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionNumberedListIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Checklist"
+        onPressIn={snapshotReflectionSelectionForToolbar}
+        onPress={() => applyToolbarAction("checklist")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionChecklistIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Link"
+        onPressIn={snapshotReflectionSelectionForToolbar}
+        onPress={() => applyToolbarAction("link")}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionLinkIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Insert verse"
+        onPressIn={() => {
+          snapshotReflectionSelectionForToolbar();
+          beginSuggestionPick();
+        }}
+        onPress={openInsertVerseSheet}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <Ionicons name="book-outline" size={20} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Attach image"
+        onPressIn={snapshotReflectionSelectionForToolbar}
+        onPress={() => void attachReflectionImage()}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionImageIcon size={18} color={toolbarIconColor} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Hide keyboard"
+        onPress={dismissJournalKeyboard}
+        activeOpacity={0.85}
+        style={floatingToolbarIconButtonStyle}
+      >
+        <ReflectionKeyboardHideIcon size={20} color={toolbarIconColor} />
+      </TouchableOpacity>
+    </>
+  );
+
+  const renderReflectionFloatingToolbar = () => (
+    <ReflectionFormatRibbon variant="floating-pill" pillStyle={floatingToolbarPillStyle}>
+      {renderReflectionToolbarButtons()}
+    </ReflectionFormatRibbon>
+  );
+
+  const renderReflectionDockedRibbon = () => (
+    <ReflectionFormatRibbon
+      variant="docked"
+      borderColor={colors.borderSolid}
+      backgroundColor={colors.parchment}
+    >
+      {renderReflectionToolbarButtons()}
+    </ReflectionFormatRibbon>
   );
 
   const formLeadingSections = (
@@ -1796,7 +1839,24 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     );
   };
 
-  const formReflectionSection = (
+  const formReflectionSection = notesSurfaceEnabled ? (
+    <View style={{ marginTop: 5 }}>
+      <View style={{ marginBottom: 6 }}>
+        <Text
+          className="text-xs tracking-widest uppercase"
+          style={{ fontFamily: "Inter_400Regular", color: colors.tan200 }}
+        >
+          Reflection
+        </Text>
+      </View>
+      <ReflectionCompactPreview
+        markdown={reflectionMarkdown}
+        imageMap={reflectionImages}
+        onPress={openReflectionNoteSurface}
+        parchmentDark={colors.parchmentDark}
+      />
+    </View>
+  ) : (
     <View style={[reflectionShellStyle, { marginTop: 5 }]}>
         <View style={{ marginBottom: 6 }}>
           <Text
@@ -2004,7 +2064,11 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
             >
               <View style={styles.formLeadingStack}>{formLeadingSections}</View>
             </ScrollView>
-            <View style={{ flex: 1, minHeight: 0 }}>{formReflectionSection}</View>
+            {notesSurfaceEnabled ? (
+              formReflectionSection
+            ) : (
+              <View style={{ flex: 1, minHeight: 0 }}>{formReflectionSection}</View>
+            )}
           </View>
         )}
         {!mergedFormScrollMode && !sheetFormLayout ? (
@@ -2019,7 +2083,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           </View>
         ) : null}
       </KeyboardAvoidingView>
-      {showReflectionFloatingToolbar && !reflectionFullscreenOpen ? (
+      {showReflectionFloatingToolbar && !reflectionExpandedOpen ? (
         <View
           pointerEvents="box-none"
           style={[styles.floatingToolbarAnchorInline, { bottom: reflectionFloatingToolbarBottomPx }]}
@@ -2027,10 +2091,51 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
           {renderReflectionFloatingToolbar()}
         </View>
       ) : null}
-      {!reflectionFullscreenOpen ? renderVerseTagOverlay() : null}
+      {!reflectionExpandedOpen ? renderVerseTagOverlay() : null}
       </View>
     </View>
 
+    {notesSurfaceEnabled ? (
+      <ReflectionNoteSurface
+        visible={reflectionNoteSurfaceOpen}
+        onClose={closeReflectionNoteSurface}
+        passageStrip={formatReflectionPassageStrip(passage, journalTranslationId)}
+        versePreview={passagePreview}
+        parchment={colors.parchment}
+        parchmentDark={colors.parchmentDark}
+        brown800={colors.brown800}
+        tan300={colors.tan300}
+        editor={
+          <View
+            style={{
+              flex: 1,
+              minHeight: 0,
+              borderRadius: 16,
+              overflow: "hidden",
+              backgroundColor: colors.parchmentDark,
+            }}
+          >
+            {renderReflectionInput(
+              fullscreenReflectionInputRef,
+              {
+                flex: 1,
+                minHeight: 0,
+                alignSelf: "stretch",
+                width: "100%",
+                borderRadius: 0,
+                backgroundColor: colors.parchmentDark,
+                paddingHorizontal: 8,
+                paddingTop: 16,
+                paddingBottom: 19,
+              },
+              fullscreenReflectionFieldRef,
+            )}
+          </View>
+        }
+        ribbon={renderReflectionDockedRibbon()}
+        verseTagOverlay={renderVerseTagOverlay()}
+      />
+    ) : (
     <Modal
       visible={reflectionFullscreenOpen}
       animationType="slide"
@@ -2127,6 +2232,7 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         </KeyboardAvoidingView>
       </View>
     </Modal>
+    )}
 
     <VerseTagMentionSheet
       isOpen={sheetOpen}

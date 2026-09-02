@@ -75,16 +75,14 @@ export function useReaderMobileSettingsMenu({
 
   const toggleToolsMenu = useCallback(() => {
     hapticLightImpact();
-    setToolsMenuOpen((open) => {
-      if (open) {
-        onClose?.();
-        return false;
-      }
-      clearMobileSettingsFollowUp();
-      onOpen?.();
-      return true;
-    });
-  }, [clearMobileSettingsFollowUp, onClose, onOpen]);
+    if (toolsMenuOpen) {
+      closeToolsMenu();
+      return;
+    }
+    clearMobileSettingsFollowUp();
+    onOpen?.();
+    setToolsMenuOpen(true);
+  }, [toolsMenuOpen, closeToolsMenu, clearMobileSettingsFollowUp, onOpen]);
 
   useEffect(() => {
     if (!enabled || !toolsMenuOpen) return;

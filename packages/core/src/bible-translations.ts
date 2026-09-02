@@ -43,14 +43,17 @@ type TranslationData = KJVData;
 
 /**
  * TEMPORARY instrumentation for the reader-open-stall investigation
- * (see `reader-open-stall-findings.md`, Phase 1). Dev-only, no-op in production —
- * reads `__DEV__` via `globalThis` (rather than the bare identifier) since this
- * package has no ambient RN type declarations for it. Delete once on-device
- * numbers are captured (Phase 1, step 4).
+ * (see `reader-open-stall-findings.md`, Phase 1). Off by default to keep Metro
+ * quiet. Flip `READER_PERF_LOG_ENABLED` and reload to recapture timings.
+ * Reads `__DEV__` via `globalThis` since this package has no ambient RN types.
  */
+const READER_PERF_LOG_ENABLED = false;
 const READER_PERF_TAG = "[reader-perf]";
 function isReaderPerfLoggingEnabled(): boolean {
-  return (globalThis as Record<string, unknown>).__DEV__ === true;
+  return (
+    READER_PERF_LOG_ENABLED &&
+    (globalThis as Record<string, unknown>).__DEV__ === true
+  );
 }
 function readerPerfStart(label: string): { label: string; startedAt: number } | null {
   if (!isReaderPerfLoggingEnabled()) return null;

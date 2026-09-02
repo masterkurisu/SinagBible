@@ -801,24 +801,19 @@ export default function ReaderChapterScreen() {
 
   const toggleToolsMenu = useCallback(() => {
     hapticLightImpact();
-    setToolsMenuOpen((open) => {
-      if (open) {
-        setFontSettingsSheetOpen(false);
-        setMoreSettingsSheetOpen(false);
-        setReaderDropdown(null);
-        setDropdownAnchor(null);
-        return false;
-      }
-      dismissVerseSelection();
-      clearMobileSettingsFollowUp();
-      setFontSettingsSheetOpen(false);
-      setMoreSettingsSheetOpen(false);
-      setDeleteMyDataDialogOpen(false);
-      setReaderDropdown(null);
-      setDropdownAnchor(null);
-      return true;
-    });
-  }, [clearMobileSettingsFollowUp, dismissVerseSelection]);
+    if (toolsMenuOpen) {
+      closeToolsMenu();
+      return;
+    }
+    dismissVerseSelection();
+    clearMobileSettingsFollowUp();
+    setFontSettingsSheetOpen(false);
+    setMoreSettingsSheetOpen(false);
+    setDeleteMyDataDialogOpen(false);
+    setReaderDropdown(null);
+    setDropdownAnchor(null);
+    setToolsMenuOpen(true);
+  }, [toolsMenuOpen, closeToolsMenu, clearMobileSettingsFollowUp, dismissVerseSelection]);
 
   const closeReaderDropdown = useCallback(() => {
     clearMobileSettingsFollowUp();
