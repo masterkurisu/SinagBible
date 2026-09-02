@@ -47,6 +47,9 @@ export type M3OutlinedTextFieldProps = {
   | "onSelectionChange"
   | "selection"
   | "onKeyPress"
+  | "autoFocus"
+  | "autoCorrect"
+  | "autoCapitalize"
 >;
 
 /** M3 outlined text field — floating label on the top border. */
@@ -77,6 +80,9 @@ export function M3OutlinedTextField({
   error = false,
   children,
   fieldFocused,
+  autoFocus,
+  autoCorrect,
+  autoCapitalize,
 }: M3OutlinedTextFieldProps) {
   const sheetChrome = useReaderSheetChrome();
   const [focused, setFocused] = useState(false);
@@ -146,6 +152,9 @@ export function M3OutlinedTextField({
             returnKeyType={returnKeyType}
             onSubmitEditing={onSubmitEditing}
             blurOnSubmit={blurOnSubmit}
+            autoFocus={autoFocus}
+            autoCorrect={autoCorrect}
+            autoCapitalize={autoCapitalize}
             onFocus={(e) => {
               setFocused(true);
               onFocus?.(e);

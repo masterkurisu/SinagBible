@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { StyleSheet, View, type TextInput } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import type { VerseTagRef } from "@sinag-bible/types";
 import { ReaderM3BottomSheet } from "@/src/components/m3/ReaderM3BottomSheet";
@@ -34,6 +34,7 @@ export function VerseTagMentionSheet({
 }: VerseTagMentionSheetProps) {
   const rc = bundle.reader;
   const scale = READER_OVERLAY_CONTENT_SCALE;
+  const inputRef = useRef<TextInput>(null);
   const [query, setQuery] = useState(initialQuery);
   const [suggestions, setSuggestions] = useState<VerseTagSuggestion[]>([]);
   const [pending, setPending] = useState(false);
@@ -41,6 +42,8 @@ export function VerseTagMentionSheet({
   useEffect(() => {
     if (!isOpen) return;
     setQuery(initialQuery);
+    const timer = setTimeout(() => inputRef.current?.focus(), 40);
+    return () => clearTimeout(timer);
   }, [initialQuery, isOpen]);
 
   useEffect(() => {
@@ -87,8 +90,9 @@ export function VerseTagMentionSheet({
       isTabletReaderLayout={isTabletReaderLayout}
       title="Insert verse"
       subtitle="Type a reference like john:3:16 or John 3:16"
-      scrollable={false}
+      scrollable
       maxHeightRatio={0.55}
+      avoidKeyboard
     >
       <M3OutlinedTextField
         label="Reference"
@@ -98,9 +102,13 @@ export function VerseTagMentionSheet({
         accentColor={bundle.ui.brown800}
         scale={scale}
         placeholder="john:3:16"
+        inputRef={inputRef}
+        autoFocus
+        autoCorrect={false}
+        returnKeyType="search"
       />
 
-      <View style={[styles.results, { marginTop: 12 * scale, minHeight: 120 * scale }]}>
+      <View style={[styles.results, { marginTop: 12 * scale, minHeight: 72 * scale }]}>
         <VerseTagSuggestionList
           suggestions={suggestions}
           pending={pending}

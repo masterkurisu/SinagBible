@@ -1,9 +1,12 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  Keyboard,
+  Platform,
   ScrollView,
   StyleSheet,
   View,
   useWindowDimensions,
+  type KeyboardEvent,
 } from "react-native";
 import Reanimated, {
   cancelAnimation,
@@ -13,6 +16,7 @@ import Reanimated, {
 import { isMobileAppDarkThemeId, type MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { DismissibleModal } from "@/src/components/m3/DismissibleModal";
 import { M3SettingsSheetTitle } from "@/src/components/m3/M3SettingsSheetTitle";
+import { computeReaderM3SheetKeyboardMetrics } from "@/src/components/m3/readerM3SheetKeyboard";
 import { useAndroidSheetBackdropSnapshot } from "@/lib/use-android-sheet-backdrop-snapshot";
 import {
   M3_SCRIM_OPACITY,
@@ -30,6 +34,13 @@ import {
   type ReaderM3SheetWidthVariant,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 import { READER_MENU_SLIDE_FROM_PX } from "@/src/features/reader/useReaderGestures";
+
+/** Ignore a hide event while focus moves from the parent field into this sheet. */
+const IGNORE_KEYBOARD_HIDE_AFTER_OPEN_MS = 450;
+
+function readKeyboardHeight(): number {
+  return Math.max(0, Keyboard.metrics()?.height ?? 0);
+}
 
 export type ReaderM3BottomSheetProps = {
   isOpen: boolean;
@@ -55,6 +66,11 @@ export type ReaderM3BottomSheetProps = {
   onBackdropPress?: () => void;
   /** Blur whatever's behind the sheet instead of a flat scrim. */
   blurBackdrop?: boolean;
+  /**
+   * Dock the sheet just above the IME and shrink it to the remaining space.
+   * Tracks live keyboard height so different IMEs / suggestion bars stay clear of the field.
+   */
+  avoidKeyboard?: boolean;
 };
 
 export function ReaderM3BottomSheet({
@@ -75,6 +91,7 @@ export function ReaderM3BottomSheet({
   dismissible = true,
   onBackdropPress,
   blurBackdrop = false,
+  avoidKeyboard = false,
 }: ReaderM3BottomSheetProps) {
   const rc = bundle.reader;
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -83,15 +100,32 @@ export function ReaderM3BottomSheet({
   const sheetOpacity = useSharedValue(0);
   const isDark = isMobileAppDarkThemeId(bundle.id);
   const androidBackdropUri = useAndroidSheetBackdropSnapshot(blurBackdrop && isOpen);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const lastKeyboardHeightRef = useRef(0);
+  const openedAtRef = useRef(0);
 
   const scale = READER_OVERLAY_CONTENT_SCALE;
   const useBottomSheet = !isTabletReaderLayout;
   const sheetMaxW = readerM3SheetMaxWidthPx(screenW, isTabletReaderLayout, widthVariant);
-  const sheetMaxH =
+  const unconstrainedMaxH =
     screenH * readerM3SheetMaxHeightRatio(isTabletReaderLayout, maxHeightRatio, widthVariant);
+  const keyboardMetrics = avoidKeyboard
+    ? computeReaderM3SheetKeyboardMetrics({
+        screenHeight: screenH,
+        keyboardHeight,
+        statusBarInset: insets.top,
+        maxHeight: unconstrainedMaxH,
+      })
+    : { bottomInset: 0, maxHeight: unconstrainedMaxH, floating: false };
+  const sheetMaxH = keyboardMetrics.maxHeight;
   const padH = 24 * scale;
   const bottomPad =
-    contentPaddingBottom ?? (useBottomSheet ? Math.max(insets.bottom, 16) * scale : 16 * scale);
+    contentPaddingBottom ??
+    (keyboardMetrics.floating
+      ? 12 * scale
+      : useBottomSheet
+        ? Math.max(insets.bottom, 16) * scale
+        : 16 * scale);
   const handleBlockHeight = useBottomSheet ? 12 + 4 + READER_M3_BOTTOM_SHEET_HANDLE_HEIGHT_PX : 0;
   const scrollAreaMaxHeight = Math.max(120, sheetMaxH - handleBlockHeight);
   const slideFrom = useBottomSheet ? 48 : READER_MENU_SLIDE_FROM_PX;
@@ -116,6 +150,65 @@ export function ReaderM3BottomSheet({
     animateM3EffectsOpacity(scrimOpacity, M3_SCRIM_OPACITY, true);
     animateM3EffectsOpacity(sheetOpacity, 1, true);
   }, [isOpen, scrimOpacity, sheetOpacity, slideProgress]);
+
+  useEffect(() => {
+    if (!avoidKeyboard) {
+      setKeyboardHeight(0);
+      return;
+    }
+
+    const applyHeight = (height: number) => {
+      const next = Math.max(0, height);
+      if (next > 0) lastKeyboardHeightRef.current = next;
+      if (isOpen) setKeyboardHeight(next);
+    };
+
+    if (isOpen) {
+      openedAtRef.current = Date.now();
+      applyHeight(readKeyboardHeight() || lastKeyboardHeightRef.current);
+    } else {
+      setKeyboardHeight(0);
+    }
+
+    const onShow = (e: KeyboardEvent) => applyHeight(e.endCoordinates.height);
+    let hideCheck: ReturnType<typeof setTimeout> | undefined;
+    const onHide = () => {
+      const remaining =
+        IGNORE_KEYBOARD_HIDE_AFTER_OPEN_MS - (Date.now() - openedAtRef.current);
+      if (isOpen && remaining > 0) {
+        if (hideCheck) clearTimeout(hideCheck);
+        hideCheck = setTimeout(() => {
+          const stillOpen = readKeyboardHeight();
+          if (stillOpen > 0) applyHeight(stillOpen);
+          else setKeyboardHeight(0);
+        }, remaining);
+        return;
+      }
+      if (isOpen) setKeyboardHeight(0);
+    };
+    const onFrame = (e: KeyboardEvent) => {
+      const height = e.endCoordinates.height;
+      if (height <= 0 || height >= screenH * 0.72) return;
+      applyHeight(height);
+    };
+
+    const showSubs = [
+      Keyboard.addListener("keyboardWillShow", onShow),
+      Keyboard.addListener("keyboardDidShow", onShow),
+    ];
+    if (Platform.OS === "android") {
+      showSubs.push(Keyboard.addListener("keyboardDidChangeFrame", onFrame));
+    }
+    const hideSubs = [
+      Keyboard.addListener("keyboardWillHide", onHide),
+      Keyboard.addListener("keyboardDidHide", onHide),
+    ];
+    return () => {
+      if (hideCheck) clearTimeout(hideCheck);
+      showSubs.forEach((sub) => sub.remove());
+      hideSubs.forEach((sub) => sub.remove());
+    };
+  }, [avoidKeyboard, isOpen, screenH]);
 
   const sheetAnimatedStyle = useAnimatedStyle(() => ({
     opacity: sheetOpacity.value,
@@ -151,9 +244,13 @@ export function ReaderM3BottomSheet({
         style={[
           styles.sheetAnchor,
           {
-            justifyContent: useBottomSheet ? "flex-end" : "center",
+            justifyContent: useBottomSheet || keyboardMetrics.floating ? "flex-end" : "center",
             paddingTop: useBottomSheet ? 0 : Math.max(insets.top, 16),
-            paddingBottom: useBottomSheet ? 0 : Math.max(insets.bottom, 16),
+            paddingBottom: keyboardMetrics.floating
+              ? keyboardMetrics.bottomInset
+              : useBottomSheet
+                ? 0
+                : Math.max(insets.bottom, 16),
             paddingHorizontal: useBottomSheet ? 0 : 24,
           },
         ]}
@@ -172,8 +269,10 @@ export function ReaderM3BottomSheet({
                 backgroundColor: rc.popoverSurface,
                 borderTopLeftRadius: useBottomSheet ? READER_M3_BOTTOM_SHEET_RADIUS_PX : 28,
                 borderTopRightRadius: useBottomSheet ? READER_M3_BOTTOM_SHEET_RADIUS_PX : 28,
-                borderBottomLeftRadius: useBottomSheet ? 0 : 28,
-                borderBottomRightRadius: useBottomSheet ? 0 : 28,
+                borderBottomLeftRadius:
+                  useBottomSheet && !keyboardMetrics.floating ? 0 : 28,
+                borderBottomRightRadius:
+                  useBottomSheet && !keyboardMetrics.floating ? 0 : 28,
                 shadowColor: rc.popoverShadow,
                 maxHeight: sheetMaxH,
               },
@@ -213,6 +312,8 @@ export function ReaderM3BottomSheet({
                   paddingHorizontal: padH,
                   paddingTop: useBottomSheet ? 4 * scale : 20 * scale,
                   paddingBottom: bottomPad,
+                  flexShrink: 1,
+                  minHeight: 0,
                 }}
               >
                 {body}
