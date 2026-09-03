@@ -44,7 +44,11 @@ import {
 import type { ReaderChapterScrollHandle } from "@/src/features/reader/readerChapterScrollRef";
 import type { ReaderVerseFlashItem } from "@/src/features/reader/useReaderGestures";
 import type { BibleVerseInlineItem } from "@sinag-bible/types";
-import type { ReaderVerseFlashVerse } from "./readerVerseFlashListData";
+import {
+  splitVerseIndexForBalancedColumns,
+  splitVersesForTwoColumns,
+  type ReaderVerseFlashVerse,
+} from "./readerVerseFlashListData";
 import type { ReaderVerseLayout } from "@/src/features/reader/useReaderPreferences";
 import { useReaderSelection } from "@/src/features/reader/useReaderSelection";
 import { ReaderAnnotationSheet } from "@/src/features/reader/ReaderAnnotationSheet";
@@ -87,6 +91,13 @@ const readerVerseListStyles = StyleSheet.create({
   },
   rightColumnPadding: {
     paddingLeft: READER_TABLET_TWO_COLUMN_GAP / 2,
+  },
+  paragraphTwoColumnRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  paragraphColumn: {
+    flex: 1,
   },
 });
 
@@ -996,59 +1007,84 @@ export const ReaderSelectionLayer = memo(function ReaderSelectionLayer({
     });
   }, [chapter.verses, chapter.verseInlineContent]);
 
+  const renderParagraphBlock = useCallback(
+    (verses: readonly ReaderVerseFlashVerse[]) => (
+      <ReaderVerseParagraphBlock
+        verses={verses}
+        selectedVerseNumbers={selectedVerseNumbers}
+        annotations={annotations}
+        notes={notes}
+        themeId={themeId}
+        selectionBackground={rc.selectionBackground}
+        selectionText={rc.selectionText}
+        verseNumberColor={rc.verseNumberColor}
+        noteBelowVerseBackground={rc.noteBelowVerseBackground}
+        bodyTextColor={colors.brown800}
+        readerVerseFontSize={readerVerseFontSize}
+        readerVerseLineHeight={readerVerseLineHeight}
+        readerVerseBodyFontFamily={readerVerseBodyFontFamily}
+        verseTextAlign={verseTextAlign}
+        onVersePress={handleVerseTapForOnboarding}
+        onVerseLongPress={handleVerseLongPressForOnboarding}
+        onNoteLongPress={handleNoteLongPress}
+        translationId={resolvedTranslationId}
+        bundle={bundle}
+        yvpFootnotes={yvpFootnotes}
+        onYvpFootnotePress={onYvpFootnotePress}
+      />
+    ),
+    [
+      selectedVerseNumbers,
+      annotations,
+      notes,
+      themeId,
+      rc.selectionBackground,
+      rc.selectionText,
+      rc.verseNumberColor,
+      rc.noteBelowVerseBackground,
+      colors.brown800,
+      readerVerseFontSize,
+      readerVerseLineHeight,
+      readerVerseBodyFontFamily,
+      verseTextAlign,
+      handleVerseTapForOnboarding,
+      handleVerseLongPressForOnboarding,
+      handleNoteLongPress,
+      resolvedTranslationId,
+      bundle,
+      yvpFootnotes,
+      onYvpFootnotePress,
+    ],
+  );
+
   const renderParagraphContent = useCallback(() => {
     if (paragraphScrollVerses.length === 0) return null;
+    if (readerTabletLandscapeTwoColumn) {
+      const { left, right } = splitVersesForTwoColumns(
+        paragraphScrollVerses,
+        splitVerseIndexForBalancedColumns(chapter.verses),
+      );
+      return (
+        <View style={readerVerseListStyles.paragraphTwoColumnRow}>
+          <View style={[readerVerseListStyles.paragraphColumn, readerVerseListStyles.leftColumnPadding]}>
+            {renderParagraphBlock(left)}
+          </View>
+          <View style={[readerVerseListStyles.paragraphColumn, readerVerseListStyles.rightColumnPadding]}>
+            {renderParagraphBlock(right)}
+          </View>
+        </View>
+      );
+    }
     return (
       <View style={readerVerseListStyles.flashItemBase}>
-        <ReaderVerseParagraphBlock
-          verses={paragraphScrollVerses}
-          selectedVerseNumbers={selectedVerseNumbers}
-          annotations={annotations}
-          notes={notes}
-          themeId={themeId}
-          selectionBackground={rc.selectionBackground}
-          selectionText={rc.selectionText}
-          verseNumberColor={rc.verseNumberColor}
-          noteBelowVerseBackground={rc.noteBelowVerseBackground}
-          bodyTextColor={colors.brown800}
-          readerVerseFontSize={readerVerseFontSize}
-          readerVerseLineHeight={readerVerseLineHeight}
-          readerVerseBodyFontFamily={readerVerseBodyFontFamily}
-          verseTextAlign={verseTextAlign}
-          onVersePress={handleVerseTapForOnboarding}
-          onVerseLongPress={handleVerseLongPressForOnboarding}
-          onNoteLongPress={handleNoteLongPress}
-          translationId={resolvedTranslationId}
-          bundle={bundle}
-          yvpFootnotes={yvpFootnotes}
-          onYvpFootnotePress={onYvpFootnotePress}
-        />
+        {renderParagraphBlock(paragraphScrollVerses)}
       </View>
     );
   }, [
+    chapter.verses,
     paragraphScrollVerses,
-    selectedVerseNumbers,
-    annotations,
-    notes,
-    themeId,
-    rc.selectionBackground,
-    rc.selectionText,
-    rc.verseNumberColor,
-    rc.noteBelowVerseBackground,
-    colors.brown800,
-    colors.parchmentMid,
-    colors.tan300,
-    readerVerseFontSize,
-    readerVerseLineHeight,
-    readerVerseBodyFontFamily,
-    verseTextAlign,
-    handleVerseTapForOnboarding,
-    handleVerseLongPressForOnboarding,
-    handleNoteLongPress,
-    resolvedTranslationId,
-    bundle,
-    yvpFootnotes,
-    onYvpFootnotePress,
+    readerTabletLandscapeTwoColumn,
+    renderParagraphBlock,
   ]);
 
   const renderReaderVerseFlashItem = useCallback(

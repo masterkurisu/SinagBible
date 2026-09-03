@@ -22,6 +22,9 @@ const styles = StyleSheet.create({
     marginHorizontal: -4,
     paddingHorizontal: 8,
   },
+  runText: {
+    alignSelf: "stretch",
+  },
   noteContainer: {
     marginTop: 6,
     marginBottom: 8,
@@ -253,14 +256,26 @@ function ReaderVerseParagraphBlockInner({
     <View style={styles.wrap}>
       {runs.map((run, runIndex) => (
         <View key={`run-${run.verses[0]?.verseIndex ?? runIndex}`}>
-          {run.verses.map((verse) =>
-            renderParagraphVerseText({
-              verse,
-              isLastInRun: false,
-              ...verseRenderParams,
-              verseTextAlign,
-            }),
-          )}
+          <Text
+            style={[
+              styles.runText,
+              {
+                fontFamily: typography.readerVerseBodyFontFamily,
+                fontSize: typography.readerVerseFontSize,
+                lineHeight: typography.readerVerseLineHeight,
+                textAlign: verseTextAlign,
+              },
+            ]}
+          >
+            {run.verses.map((verse, verseIndexInRun) =>
+              renderParagraphVerseText({
+                verse,
+                isLastInRun: verseIndexInRun === run.verses.length - 1,
+                ...verseRenderParams,
+                verseTextAlign,
+              }),
+            )}
+          </Text>
           {run.noteVerseNum != null && run.noteText ? (
             <Pressable
               onLongPress={() => onNoteLongPress?.(run.noteVerseNum!)}

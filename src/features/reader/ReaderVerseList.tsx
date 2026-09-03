@@ -228,7 +228,7 @@ export function ReaderVerseList({
   );
 
   const readerScrollLayoutKey = useParagraphScrollView
-    ? `${readerListContentKey}:paragraph-scroll`
+    ? `${readerListContentKey}:paragraph-scroll:${readerTabletLandscapeTwoColumn ? "2col" : "1col"}`
     : readerTabletLandscapeTwoColumn
       ? `${readerListContentKey}:2col-masonry:${verseFlashListDataForList[0]?.kind ?? "verse"}`
       : `${readerListContentKey}:1col:${verseFlashListDataForList[0]?.kind ?? "verse"}`;

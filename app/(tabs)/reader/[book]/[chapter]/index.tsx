@@ -1060,7 +1060,7 @@ export default function ReaderChapterScreen() {
   const readerTabletLandscapeTwoColumn =
     chapter != null && isReaderTabletLandscapeTwoColumn(windowWidth, windowHeight);
 
-  /** Paragraph mode always uses a single flowing column — two-column split truncates scroll at ~half the chapter. */
+  /** FlashList masonry two-column truncates paragraph scroll at ~half the chapter. Paragraph columns are laid out in the ScrollView instead. */
   const verseListUsesTwoColumn =
     readerTabletLandscapeTwoColumn && verseLayout !== "paragraph";
 

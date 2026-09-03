@@ -4,6 +4,7 @@ import {
   findFlashListIndexForVerseNumber,
   readerVerseFlashListColumnProps,
   splitVerseIndexForBalancedColumns,
+  splitVersesForTwoColumns,
 } from "./readerVerseFlashListData";
 
 describe("readerVerseFlashListColumnProps", () => {
@@ -105,5 +106,30 @@ describe("findFlashListIndexForVerseNumber", () => {
 describe("splitVerseIndexForBalancedColumns", () => {
   it("splits near half the total character length", () => {
     expect(splitVerseIndexForBalancedColumns(["aa", "bb", "cccc"])).toBe(2);
+  });
+});
+
+describe("splitVersesForTwoColumns", () => {
+  it("uses the same splitIndex as line-by-line balanced columns", () => {
+    const verses = ["v1", "v2", "v3", "v4", "v5"];
+    const splitIndex = splitVerseIndexForBalancedColumns(verses);
+    expect(splitIndex).toBe(3);
+    const { left, right } = splitVersesForTwoColumns(verses, splitIndex);
+    expect(left).toEqual(["v1", "v2", "v3"]);
+    expect(right).toEqual(["v4", "v5"]);
+  });
+
+  it("puts every verse on the left when there is only one", () => {
+    const verses = ["only"];
+    const splitIndex = splitVerseIndexForBalancedColumns(verses);
+    expect(splitIndex).toBe(1);
+    const { left, right } = splitVersesForTwoColumns(verses, splitIndex);
+    expect(left).toEqual(["only"]);
+    expect(right).toEqual([]);
+  });
+
+  it("clamps an out-of-range splitIndex", () => {
+    expect(splitVersesForTwoColumns(["a", "b"], 99)).toEqual({ left: ["a", "b"], right: [] });
+    expect(splitVersesForTwoColumns(["a", "b"], -1)).toEqual({ left: [], right: ["a", "b"] });
   });
 });

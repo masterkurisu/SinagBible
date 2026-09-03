@@ -135,3 +135,15 @@ export function splitVerseIndexForBalancedColumns(verses: readonly string[]): nu
   }
   return Math.ceil(n / 2);
 }
+
+/** Split a verse list at `splitIndex` for side-by-side paragraph columns. */
+export function splitVersesForTwoColumns<T>(
+  verses: readonly T[],
+  splitIndex: number,
+): { left: T[]; right: T[] } {
+  const clamped = Math.max(0, Math.min(splitIndex, verses.length));
+  return {
+    left: verses.slice(0, clamped),
+    right: verses.slice(clamped),
+  };
+}
