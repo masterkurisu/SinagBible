@@ -11,10 +11,10 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { READER_M3_ERROR } from "@/src/features/reader/readerSettingsPanelChrome";
+import { useChipLongPress } from "@/src/features/journal/useChipLongPress";
 
 const ICON_SIZE = 18;
-const TOUCH_TARGET = 44;
-const HIT_SLOP = (TOUCH_TARGET - ICON_SIZE) / 2;
+const HIT_SLOP = 13;
 
 export type JournalEntryEditableTagChipProps = {
   label: string;
@@ -27,10 +27,11 @@ export type JournalEntryEditableTagChipProps = {
   onCommitEdit: () => void;
   onCancelEdit: () => void;
   onRemove: () => void;
+  onLongPress?: () => void;
 };
 
 /**
- * Applied journal tag — M3 input chip with trailing remove and tap-to-rename body.
+ * Custom applied journal tag — same 32dp pill as catalog chips, small trailing remove.
  */
 export function JournalEntryEditableTagChip({
   label,
@@ -43,12 +44,15 @@ export function JournalEntryEditableTagChip({
   onCommitEdit,
   onCancelEdit,
   onRemove,
+  onLongPress,
 }: JournalEntryEditableTagChipProps) {
   const j = bundle.journal;
   const inputRef = useRef<TextInputType>(null);
+  const skipChipPressRef = useRef(false);
   const backgroundColor = j.chipActiveBackground;
   const borderColor = error ? READER_M3_ERROR : j.chipActiveBorder;
   const textColor = j.chipActiveText;
+  const longPress = useChipLongPress(editing ? undefined : onLongPress);
 
   useEffect(() => {
     if (editing) {
@@ -66,11 +70,23 @@ export function JournalEntryEditableTagChip({
     onCommitEdit();
   };
 
+  const handleChipPress = () => {
+    if (skipChipPressRef.current) {
+      skipChipPressRef.current = false;
+      return;
+    }
+    if (longPress.shouldSkipPress()) return;
+    onStartEdit();
+  };
+
+  const handleTrailingPress = () => {
+    skipChipPressRef.current = true;
+    if (editing) onCancelEdit();
+    else onRemove();
+  };
+
   return (
-    <View
-      accessibilityRole="none"
-      style={[styles.chip, { backgroundColor, borderColor }]}
-    >
+    <View style={[styles.chip, { backgroundColor, borderColor }]}>
       {editing ? (
         <TextInput
           ref={inputRef}
@@ -89,9 +105,12 @@ export function JournalEntryEditableTagChip({
         />
       ) : (
         <Pressable
-          onPress={onStartEdit}
+          onPress={handleChipPress}
+          onPressIn={longPress.onPressIn}
+          onPressOut={longPress.onPressOut}
           accessibilityRole="button"
-          accessibilityLabel={`Rename tag ${label}`}
+          accessibilityLabel={`Tag ${label}`}
+          accessibilityHint="Tap to rename. Long press for more actions."
           android_ripple={
             Platform.OS === "android"
               ? { color: bundle.chrome.androidRipple, borderless: false }
@@ -105,7 +124,9 @@ export function JournalEntryEditableTagChip({
         </Pressable>
       )}
       <Pressable
-        onPress={editing ? onCancelEdit : onRemove}
+        onPress={handleTrailingPress}
+        onPressIn={editing ? undefined : longPress.onPressIn}
+        onPressOut={editing ? undefined : longPress.onPressOut}
         accessibilityRole="button"
         accessibilityLabel={editing ? `Cancel renaming ${label}` : `Remove tag ${label}`}
         hitSlop={HIT_SLOP}
@@ -124,9 +145,9 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     maxWidth: "100%",
     minHeight: 32,
-    paddingLeft: 12,
-    paddingRight: 4,
-    paddingVertical: 4,
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
     overflow: "hidden",
@@ -135,8 +156,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
     justifyContent: "center",
-    minHeight: 24,
-    paddingRight: 4,
   },
   label: {
     flexShrink: 1,
@@ -157,8 +176,9 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   trailingAction: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
+    marginLeft: 2,
+    width: ICON_SIZE,
+    height: ICON_SIZE,
     alignItems: "center",
     justifyContent: "center",
   },
