@@ -94,4 +94,10 @@ describe("htmlToReflectionMarkdown", () => {
       ),
     ).toBe("- [ ] todo one\n- [x] done one");
   });
+
+  it("does not preserve nested-list structure (accepted-loss / legacy-router class)", () => {
+    expect(htmlToReflectionMarkdown("<ul><li>outer<ul><li>inner</li></ul></li></ul>")).not.toBe(
+      "- outer\n  - inner",
+    );
+  });
 });

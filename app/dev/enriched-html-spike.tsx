@@ -24,6 +24,7 @@ import {
   LONG_JANK_FIXTURE,
   MENTION_DOUBLE_ROUND_TRIP,
   ROUND_TRIP_FIXTURES,
+  mentionDoubleRoundTripAttrsSurvive,
 } from "@/lib/journal-reflection-enriched-fixtures";
 import {
   htmlHasNestedList,
@@ -45,13 +46,6 @@ import { useMobileAppTheme } from "@/lib/mobile-app-theme-context";
  */
 
 type EditorMode = "enriched" | "baseline";
-
-function mentionAttrsPresent(html: string): boolean {
-  return (
-    html.includes(MENTION_DOUBLE_ROUND_TRIP.attributes["data-verse-ref"]) &&
-    html.includes(MENTION_DOUBLE_ROUND_TRIP.attributes["data-translation"])
-  );
-}
 
 function EnrichedHtmlSpikeContent() {
   const enrichedRef = useRef<EnrichedTextInputInstance>(null);
@@ -159,7 +153,10 @@ function EnrichedHtmlSpikeContent() {
     editor.setValue(second);
     await new Promise((resolve) => setTimeout(resolve, 80));
     const third = await editor.getHTML();
-    const ok = mentionAttrsPresent(first) && mentionAttrsPresent(second) && mentionAttrsPresent(third);
+    const ok =
+      mentionDoubleRoundTripAttrsSurvive(first) &&
+      mentionDoubleRoundTripAttrsSurvive(second) &&
+      mentionDoubleRoundTripAttrsSurvive(third);
     appendLog(
       `${ok ? "PASS" : "FAIL"} mention double round-trip\n1: ${first}\n2: ${second}\n3: ${third}`,
     );

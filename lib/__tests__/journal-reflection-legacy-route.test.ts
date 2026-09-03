@@ -86,4 +86,13 @@ describe("censusJournalReflectionRows", () => {
     expect(census.nestedListHtml).toBe(1);
     expect(isNullOrEmptyMarkdown(null)).toBe(true);
   });
+
+  it("reports extra HTML nasties without treating them as nested-list rows", () => {
+    const census = censusJournalReflectionRows([
+      { id: "table", content: "<table><tr><td>x</td></tr></table>", content_markdown: "x" },
+    ]);
+    expect(census.nestedListHtml).toBe(0);
+    expect(census.otherNasties).toEqual([{ id: "table", tags: ["table"] }]);
+    expect(reflectionHtmlNeedsLegacyEditor("<table><tr><td>x</td></tr></table>")).toBe(false);
+  });
 });

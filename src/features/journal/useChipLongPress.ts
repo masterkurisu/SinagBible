@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 
-export const JOURNAL_TAG_CHIP_LONG_PRESS_MS = 150;
+export const JOURNAL_TAG_CHIP_LONG_PRESS_MS = 400;
 
 /**
  * ScrollView on Android often cancels Pressable `onLongPress`.

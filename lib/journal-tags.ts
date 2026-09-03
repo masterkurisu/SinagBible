@@ -1,4 +1,4 @@
-const MAX_TAGS_PER_ENTRY = 8;
+export const MAX_TAGS_PER_ENTRY = 8;
 const MAX_TAG_LENGTH = 24;
 
 /** Suggested category chips on the journal form. Custom tags are also allowed. */
@@ -16,7 +16,10 @@ export const JOURNAL_TAG_SUGGESTIONS = [
 export function formatJournalTagLabel(tag: string): string {
   const trimmed = tag.trim();
   if (!trimmed) return "";
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  return trimmed
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 }
 
 export function formatJournalTagList(tags: string[] | undefined): string {

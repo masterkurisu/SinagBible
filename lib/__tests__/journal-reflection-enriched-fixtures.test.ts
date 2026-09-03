@@ -15,6 +15,8 @@ import {
   ENRICHED_HTML_FIXTURES,
   ROUND_TRIP_FIXTURES,
   converterBranchesCovered,
+  mentionDoubleRoundTripAttrsSurvive,
+  MENTION_DOUBLE_ROUND_TRIP,
 } from "@/lib/journal-reflection-enriched-fixtures";
 import {
   ENRICHED_HTML_LIBRARY_PIN,
@@ -93,6 +95,9 @@ describe("enriched HTML fixture golden (converter revision " + REFLECTION_MARKDO
     expect(ACCEPTED_LOSS_FIXTURES.length).toBeGreaterThan(0);
     for (const fixture of ACCEPTED_LOSS_FIXTURES) {
       expect(reflectionHtmlNeedsLegacyEditor(fixture.html), fixture.id).toBe(true);
+      expect(fixture.markdown, `${fixture.id} lossless markdown must keep nested indent`).toMatch(
+        /\n\s+\S/,
+      );
       const converted = normalizeReflectionMarkdownForCompare(
         htmlToReflectionMarkdown(fixture.html, { ...fixture.images }),
       );
@@ -109,5 +114,19 @@ describe("enriched HTML fixture golden (converter revision " + REFLECTION_MARKDO
         expect(reflectionHtmlNeedsLegacyEditor(fixture.html), fixture.id).toBe(false);
       }
     }
+  });
+
+  it("treats mention attributes as surviving only when both 0b keys remain", () => {
+    const attrs = MENTION_DOUBLE_ROUND_TRIP.attributes;
+    expect(
+      mentionDoubleRoundTripAttrsSurvive(
+        `<mention indicator="@" text="John 3:16" data-verse-ref="${attrs["data-verse-ref"]}" data-translation="${attrs["data-translation"]}">John 3:16</mention>`,
+      ),
+    ).toBe(true);
+    expect(
+      mentionDoubleRoundTripAttrsSurvive(
+        `<mention indicator="@" text="John 3:16" data-verse-ref="${attrs["data-verse-ref"]}">John 3:16</mention>`,
+      ),
+    ).toBe(false);
   });
 });

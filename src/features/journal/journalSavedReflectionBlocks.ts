@@ -4,6 +4,7 @@ import {
   decodeHtmlEntities,
   isEmptyTopLevelParagraphBlock,
   MAX_CONSECUTIVE_BLANK_PARAGRAPHS,
+  REFLECTION_BLANK_STEP_PX,
 } from "@/lib/journal-reflection-owned-html";
 
 export {
@@ -14,6 +15,7 @@ export {
 
 export const JOURNAL_DETAIL_FLASH_LIST_MIN_BLOCKS = 12;
 export const JOURNAL_DETAIL_FLASH_LIST_MIN_CONTENT_CHARS = 4000;
+export const JOURNAL_REFLECTION_ESTIMATED_ITEM_SIZE_PX = 72;
 
 type BlockSpacing = {
   leadingBlankCount?: number;
@@ -95,6 +97,11 @@ export function parseOwnedReflectionHtml(contentHtml: string): SavedReflectionBl
     return leadingBlankCount;
   };
 
+  const restorePendingBlanks = (leadingBlankCount: number) => {
+    pendingBlanks = leadingBlankCount;
+    if (out.length === 0) seenContent = false;
+  };
+
   const withLeadingBlanks = <T extends SavedReflectionBlock>(block: T, leadingBlankCount: number): T =>
     leadingBlankCount > 0 ? { ...block, leadingBlankCount } : block;
 
@@ -108,7 +115,10 @@ export function parseOwnedReflectionHtml(contentHtml: string): SavedReflectionBl
 
     if (/^<h1\b/i.test(block)) {
       const body = block.replace(/^<h1[^>]*>/i, "").replace(/<\/h1>$/i, "");
-      if (!headingPlainText(body)) return;
+      if (!headingPlainText(body)) {
+        restorePendingBlanks(leadingBlankCount);
+        return;
+      }
       out.push(
         withLeadingBlanks(
           {
@@ -124,7 +134,10 @@ export function parseOwnedReflectionHtml(contentHtml: string): SavedReflectionBl
     }
     if (/^<h2\b/i.test(block)) {
       const body = block.replace(/^<h2[^>]*>/i, "").replace(/<\/h2>$/i, "");
-      if (!headingPlainText(body)) return;
+      if (!headingPlainText(body)) {
+        restorePendingBlanks(leadingBlankCount);
+        return;
+      }
       out.push(
         withLeadingBlanks(
           {
@@ -168,18 +181,25 @@ export function parseOwnedReflectionHtml(contentHtml: string): SavedReflectionBl
         .replace(/&nbsp;/gi, " ");
       const nestedLists = body.match(/<(ul|ol)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
       if (nestedLists.length > 0) {
+        const listStart = out.length;
         nestedLists.forEach((listBlock, listIndex) => {
           appendListItems(out, listBlock, `li-${i}-${listIndex}`, listIndex === 0 ? leadingBlankCount : 0);
         });
+        if (out.length === listStart) restorePendingBlanks(leadingBlankCount);
         return;
       }
       const plainBody = decodeHtmlEntities(body.replace(/<[^>]*>/g, "").trim());
-      if (!plainBody) return;
+      if (!plainBody) {
+        restorePendingBlanks(leadingBlankCount);
+        return;
+      }
       out.push(withLeadingBlanks({ key: `p-${i}`, kind: "paragraph", html: body }, leadingBlankCount));
       return;
     }
 
+    const listStart = out.length;
     appendListItems(out, block, `li-${i}`, leadingBlankCount);
+    if (out.length === listStart) restorePendingBlanks(leadingBlankCount);
   });
   return out;
 }
@@ -199,4 +219,9 @@ export function shouldVirtualizeJournalReflection(
     blockCount >= JOURNAL_DETAIL_FLASH_LIST_MIN_BLOCKS ||
     contentLength >= JOURNAL_DETAIL_FLASH_LIST_MIN_CONTENT_CHARS
   );
+}
+
+/** FlashList estimate: base row height plus leading blank margin (inline on recycled rows). */
+export function estimatedReflectionItemSizePx(block: SavedReflectionBlock): number {
+  return JOURNAL_REFLECTION_ESTIMATED_ITEM_SIZE_PX + (block.leadingBlankCount ?? 0) * REFLECTION_BLANK_STEP_PX;
 }

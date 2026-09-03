@@ -206,21 +206,21 @@ export const ENRICHED_HTML_FIXTURES: EnrichedFixture[] = [
     kind: "accepted-loss",
     branch: "nested-list",
     html: "<ul><li>outer<ul><li>inner</li></ul></li></ul>",
-    markdown: "- outer\n- inner",
+    markdown: "- outer\n  - inner",
   },
   {
     id: "nested-ol-in-ol",
     kind: "accepted-loss",
     branch: "nested-list",
     html: "<ol><li>one<ol><li>two</li></ol></li></ol>",
-    markdown: "1. one\n2. two",
+    markdown: "1. one\n   1. two",
   },
   {
     id: "ol-inside-ul-li",
     kind: "accepted-loss",
     branch: "nested-list",
     html: "<ul><li>alpha<ol><li>beta</li></ol></li></ul>",
-    markdown: "- alpha\n- beta",
+    markdown: "- alpha\n  1. beta",
   },
 ];
 
@@ -243,6 +243,14 @@ export const MENTION_DOUBLE_ROUND_TRIP = {
     "data-translation": "NIV",
   },
 } as const;
+
+/** True when both 0b mention attributes are still present after setValue/getHTML hops. */
+export function mentionDoubleRoundTripAttrsSurvive(html: string): boolean {
+  return (
+    html.includes(MENTION_DOUBLE_ROUND_TRIP.attributes["data-verse-ref"]) &&
+    html.includes(MENTION_DOUBLE_ROUND_TRIP.attributes["data-translation"])
+  );
+}
 
 export function converterBranchesCovered(): string[] {
   return [...new Set(ENRICHED_HTML_FIXTURES.map((fixture) => fixture.branch))];

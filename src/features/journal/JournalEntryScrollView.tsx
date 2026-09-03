@@ -24,6 +24,8 @@ import { JournalEntryTagRow } from "@/src/features/journal/JournalEntryTagRow";
 import {
   splitSavedReflectionHtml,
   shouldVirtualizeJournalReflection,
+  estimatedReflectionItemSizePx,
+  JOURNAL_REFLECTION_ESTIMATED_ITEM_SIZE_PX,
   type SavedReflectionBlock,
 } from "@/src/features/journal/journalSavedReflectionBlocks";
 import { useJournalDetailScrollToTopFab } from "@/src/features/journal/useJournalDetailScrollToTopFab";
@@ -36,7 +38,6 @@ const JOURNAL_PASSAGE_REF_BOTTOM_MARGIN_PX = 5;
 export const JOURNAL_VERSE_TEXT_FONT_SIZE_PX = 16;
 export const JOURNAL_VERSE_TEXT_LINE_HEIGHT_PX = 24;
 const JOURNAL_VERSE_TEXT_BOTTOM_MARGIN_PX = 32;
-const JOURNAL_REFLECTION_ESTIMATED_ITEM_SIZE_PX = 72;
 
 const AnimatedJournalReflectionFlashList = Animated.createAnimatedComponent(
   FlashList,
@@ -263,6 +264,13 @@ export function JournalEntryScrollView({
     [colors.brown800, colors.gold, bundle, activeTranslationId],
   );
 
+  const overrideItemLayout = useCallback(
+    (layout: { span?: number; size?: number }, item: SavedReflectionBlock) => {
+      layout.size = estimatedReflectionItemSizePx(item);
+    },
+    [],
+  );
+
   const scrollToTop = useCallback(() => {
     flashListRef.current?.scrollToOffset({ offset: 0, animated: false });
     scrollRef.current?.scrollTo({ y: 0, animated: false });
@@ -292,6 +300,7 @@ export function JournalEntryScrollView({
           renderItem={renderBlock}
           keyExtractor={(item) => item.key}
           ListHeaderComponent={listHeader}
+          overrideItemLayout={overrideItemLayout}
           {...({ estimatedItemSize: JOURNAL_REFLECTION_ESTIMATED_ITEM_SIZE_PX } as Record<
             string,
             unknown

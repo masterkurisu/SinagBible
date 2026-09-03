@@ -1,5 +1,6 @@
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
+import { READER_M3_ERROR } from "@/src/features/reader/readerSettingsPanelChrome";
 
 export type JournalEntryTagChipProps = {
   label: string;
@@ -8,6 +9,7 @@ export type JournalEntryTagChipProps = {
   /** Omit for read-only saved/preview chips (active fill, no press). */
   onPress?: () => void;
   accessibilityLabel?: string;
+  error?: boolean;
 };
 
 /**
@@ -27,12 +29,17 @@ export function JournalEntryTagChip({
   bundle,
   onPress,
   accessibilityLabel,
+  error = false,
 }: JournalEntryTagChipProps) {
   const j = bundle.journal;
   const interactive = onPress != null;
   const filled = selected || !interactive;
   const backgroundColor = filled ? j.chipActiveBackground : j.chipInactiveBackground;
-  const borderColor = filled ? j.chipActiveBorder : j.chipInactiveBorder;
+  const borderColor = error
+    ? READER_M3_ERROR
+    : filled
+      ? j.chipActiveBorder
+      : j.chipInactiveBorder;
   const textColor = filled ? j.chipActiveText : j.chipInactiveText;
 
   const labelNode = (

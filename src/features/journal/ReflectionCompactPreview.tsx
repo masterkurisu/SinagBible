@@ -93,7 +93,9 @@ export function ReflectionCompactPreview({
                 emptyText="Tap to write your reflection…"
               />
             ) : (
-              <Text style={styles.emptyText}>Tap to write your reflection…</Text>
+              <Text style={[styles.emptyText, bundle ? { color: bundle.ui.tan200 } : null]}>
+                Tap to write your reflection…
+              </Text>
             )}
           </View>
           <LinearGradient
@@ -135,7 +137,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 15,
     lineHeight: 24,
-    color: "#9c8e78",
     fontStyle: "italic",
   },
 });

@@ -16,7 +16,6 @@ import {
 } from "@/src/components/m3/m3-motion";
 import {
   READER_M3_BOTTOM_SHEET_RADIUS_PX,
-  READER_M3_ON_SURFACE,
   READER_OVERLAY_CONTENT_SCALE,
 } from "@/src/features/reader/readerSettingsPanelChrome";
 
@@ -126,7 +125,7 @@ export function JournalTagChipActionDialog({
               fontFamily: "Lora_400Regular",
               fontSize: 20 * scale,
               lineHeight: 26 * scale,
-              color: READER_M3_ON_SURFACE,
+              color: accentColor,
               marginBottom: 20 * scale,
             }}
           >

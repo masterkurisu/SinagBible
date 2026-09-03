@@ -5,6 +5,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  View,
+  type AccessibilityActionEvent,
   type TextInput as TextInputType,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -13,7 +15,7 @@ import { READER_M3_ERROR } from "@/src/features/reader/readerSettingsPanelChrome
 import { useChipLongPress } from "@/src/features/journal/useChipLongPress";
 
 const ICON_SIZE = 18;
-const HIT_SLOP = 13;
+const TRAILING_HIT_SIZE = 44;
 
 export type JournalEntryEditableTagChipProps = {
   label: string;
@@ -84,62 +86,91 @@ export function JournalEntryEditableTagChip({
     else onRemove();
   };
 
+  const handleAccessibilityAction = (event: AccessibilityActionEvent) => {
+    switch (event.nativeEvent.actionName) {
+      case "activate":
+        if (!editing) onStartEdit();
+        break;
+      case "longpress":
+        if (!editing) onLongPress?.();
+        break;
+      default:
+        break;
+    }
+  };
+
+  const accessibilityActions =
+    editing || !onLongPress
+      ? [{ name: "activate", label: "Rename" }]
+      : [
+          { name: "activate", label: "Rename" },
+          { name: "longpress", label: "More actions" },
+        ];
+
   return (
-    <Pressable
-      onPress={editing ? undefined : handleChipPress}
-      onPressIn={editing ? undefined : longPress.onPressIn}
-      onPressOut={editing ? undefined : longPress.onPressOut}
-      disabled={editing}
-      accessibilityRole="button"
-      accessibilityLabel={`Tag ${label}`}
-      accessibilityHint={editing ? undefined : "Tap to rename. Long press for more actions."}
-      android_ripple={
-        editing || Platform.OS !== "android"
-          ? undefined
-          : { color: bundle.chrome.androidRipple, borderless: false, foreground: true }
-      }
-      style={[styles.chip, { backgroundColor, borderColor }]}
-    >
-      {editing ? (
-        <TextInput
-          ref={inputRef}
-          value={editValue}
-          onChangeText={onEditValueChange}
-          onBlur={handleBlur}
-          onSubmitEditing={onCommitEdit}
-          returnKeyType="done"
-          blurOnSubmit
-          maxLength={24}
-          numberOfLines={1}
-          autoCorrect={false}
-          autoCapitalize="words"
-          accessibilityLabel={`Rename tag ${label}`}
-          style={[styles.input, { color: textColor }]}
-        />
-      ) : (
-        <Text numberOfLines={1} style={[styles.label, { color: textColor }]}>
-          {label}
-        </Text>
-      )}
+    <View style={styles.row}>
+      <Pressable
+        onPress={editing ? undefined : handleChipPress}
+        onPressIn={editing ? undefined : longPress.onPressIn}
+        onPressOut={editing ? undefined : longPress.onPressOut}
+        disabled={editing}
+        accessibilityRole="button"
+        accessibilityLabel={`Tag ${label}`}
+        accessibilityHint={editing ? undefined : "Tap to rename. Long press for more actions."}
+        accessibilityActions={accessibilityActions}
+        onAccessibilityAction={handleAccessibilityAction}
+        android_ripple={
+          editing || Platform.OS !== "android"
+            ? undefined
+            : { color: bundle.chrome.androidRipple, borderless: false, foreground: true }
+        }
+        style={[styles.chip, { backgroundColor, borderColor }]}
+      >
+        {editing ? (
+          <TextInput
+            ref={inputRef}
+            value={editValue}
+            onChangeText={onEditValueChange}
+            onBlur={handleBlur}
+            onSubmitEditing={onCommitEdit}
+            returnKeyType="done"
+            blurOnSubmit
+            maxLength={24}
+            numberOfLines={1}
+            autoCorrect={false}
+            autoCapitalize="words"
+            accessibilityLabel={`Rename tag ${label}`}
+            style={[styles.input, { color: textColor }]}
+          />
+        ) : (
+          <Text numberOfLines={1} style={[styles.label, { color: textColor }]}>
+            {label}
+          </Text>
+        )}
+      </Pressable>
       <Pressable
         onPress={handleTrailingPress}
         accessibilityRole="button"
         accessibilityLabel={editing ? `Cancel renaming ${label}` : `Remove tag ${label}`}
-        hitSlop={HIT_SLOP}
         style={styles.trailingAction}
       >
         <MaterialIcons name="close" size={ICON_SIZE} color={textColor} />
       </Pressable>
-    </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  chip: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
     maxWidth: "100%",
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
     minHeight: 32,
     paddingLeft: 16,
     paddingRight: 8,
@@ -167,9 +198,9 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   trailingAction: {
-    marginLeft: 2,
-    width: ICON_SIZE,
-    height: ICON_SIZE,
+    marginLeft: -6,
+    width: TRAILING_HIT_SIZE,
+    height: TRAILING_HIT_SIZE,
     alignItems: "center",
     justifyContent: "center",
   },

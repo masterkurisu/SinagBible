@@ -12,6 +12,8 @@ import { MaterialIcons } from "@expo/vector-icons";
 import type { MobileAppThemeBundle } from "@sinag-bible/tokens";
 import { READER_M3_ERROR } from "@/src/features/reader/readerSettingsPanelChrome";
 
+const TRAILING_HIT_SIZE = 44;
+
 export type JournalEntryAddTagChipProps = {
   bundle: MobileAppThemeBundle;
   expanded: boolean;
@@ -89,29 +91,36 @@ export function JournalEntryAddTagChip({
   };
 
   return (
-    <View style={[styles.chip, styles.chipExpanded, { backgroundColor: j.chipInactiveBackground, borderColor }]}>
-      <TextInput
-        ref={inputRef}
-        value={value}
-        onChangeText={onChangeText}
-        onBlur={handleBlur}
-        onSubmitEditing={onCommit}
-        returnKeyType="done"
-        blurOnSubmit
-        maxLength={24}
-        numberOfLines={1}
-        placeholder="Tag"
-        placeholderTextColor={j.chipInactiveText}
-        autoCorrect={false}
-        autoCapitalize="words"
-        accessibilityLabel="Add a tag"
-        style={[styles.input, { color: j.chipInactiveText }]}
-      />
+    <View style={styles.row}>
+      <View
+        style={[
+          styles.chip,
+          styles.chipExpanded,
+          { backgroundColor: j.chipInactiveBackground, borderColor },
+        ]}
+      >
+        <TextInput
+          ref={inputRef}
+          value={value}
+          onChangeText={onChangeText}
+          onBlur={handleBlur}
+          onSubmitEditing={onCommit}
+          returnKeyType="done"
+          blurOnSubmit
+          maxLength={24}
+          numberOfLines={1}
+          placeholder="Tag"
+          placeholderTextColor={j.chipInactiveText}
+          autoCorrect={false}
+          autoCapitalize="words"
+          accessibilityLabel="Add a tag"
+          style={[styles.input, { color: j.chipInactiveText }]}
+        />
+      </View>
       <Pressable
         onPress={onCollapse}
         accessibilityRole="button"
         accessibilityLabel="Cancel adding tag"
-        hitSlop={13}
         style={styles.cancelAction}
       >
         <MaterialIcons name="close" size={18} color={j.chipInactiveText} />
@@ -121,11 +130,16 @@ export function JournalEntryAddTagChip({
 }
 
 const styles = StyleSheet.create({
-  chip: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
     maxWidth: "100%",
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
     minHeight: 32,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -134,8 +148,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   chipExpanded: {
-    paddingRight: 4,
     minWidth: 120,
+    paddingRight: 12,
   },
   addIcon: {
     marginRight: 4,
@@ -157,8 +171,9 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   cancelAction: {
-    width: 44,
-    height: 44,
+    marginLeft: -6,
+    width: TRAILING_HIT_SIZE,
+    height: TRAILING_HIT_SIZE,
     alignItems: "center",
     justifyContent: "center",
   },

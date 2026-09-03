@@ -111,7 +111,7 @@ import {
 import { isTabletLayout, TABLET_NEW_ENTRY_MAX_WIDTH_PX } from "@/lib/tablet-layout";
 import { M3OutlinedTextField } from "@/src/components/m3/M3OutlinedTextField";
 import { JournalTagSection } from "@/src/features/journal/JournalTagSection";
-import { normalizeJournalTag, normalizeJournalTags } from "@/lib/journal-tags";
+import { MAX_TAGS_PER_ENTRY, normalizeJournalTag, normalizeJournalTags } from "@/lib/journal-tags";
 import { m3SettingsSheetTitleStyle } from "@/src/components/m3/M3SettingsSheetTitle";
 import {
   JOURNAL_M3_ELEVATED_CARD_ELEVATION_PX,
@@ -171,7 +171,7 @@ const SAVE_BUTTON_LABEL_COLOR = "#f5e9d6";
 /** iOS: avoid dismissing the keyboard when scrolling the form or reflection editor. */
 const FORM_SCROLL_KEYBOARD_DISMISS_MODE = Platform.OS === "ios" ? "none" : "on-drag";
 
-type JournalFormActiveField = "passage" | "title" | "reflection" | null;
+type JournalFormActiveField = "passage" | "title" | "reflection" | "tags" | null;
 
 export type JournalNewEntryInitialParams = {
   book?: string;
@@ -341,6 +341,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const fullscreenReflectionFieldRef = useRef<View>(null);
   const [mentionCaretAnchor, setMentionCaretAnchor] = useState<LayoutRectangle | null>(null);
   const sheetFormScrollRef = useRef<ScrollView>(null);
+  const sheetScrollContentRef = useRef<View>(null);
+  const tagSectionRef = useRef<View>(null);
   const toolbarAnchorRef = useRef<View>(null);
   const fullscreenToolbarAnchorRef = useRef<View>(null);
   const suppressReflectionBlurRef = useRef(false);
@@ -686,7 +688,8 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
   const commitTagDraft = (raw: string) => {
     const tag = normalizeJournalTag(raw);
     if (!tag) return false;
-    setTags((prev) => normalizeJournalTags([...prev, tag]));
+    if (tags.includes(tag) || tags.length >= MAX_TAGS_PER_ENTRY) return false;
+    setTags(normalizeJournalTags([...tags, tag]));
     return true;
   };
 
@@ -776,10 +779,38 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
     };
   }, []);
 
+  const scrollTagSectionIntoView = useCallback(() => {
+    const scroll = sheetFormScrollRef.current;
+    const tagNode = tagSectionRef.current;
+    const contentNode = sheetScrollContentRef.current;
+    if (!scroll || !tagNode || !contentNode || contentScrollMaxHeight == null) return;
+
+    tagNode.measureLayout(
+      contentNode,
+      (_x, y, _w, tagHeight) => {
+        const viewportH = contentScrollMaxHeight - SHEET_SAVE_BLOCK_PX;
+        const visibleH = Math.max(0, viewportH - keyboardHeight);
+        let targetY = Math.max(0, y - 12);
+        if (visibleH > 0 && y + tagHeight > targetY + visibleH) {
+          targetY = Math.max(0, y + tagHeight - visibleH + 12);
+        }
+        scroll.scrollTo({ y: targetY, animated: false });
+      },
+      () => {},
+    );
+  }, [contentScrollMaxHeight, keyboardHeight]);
+
   useEffect(() => {
-    if (contentScrollMaxHeight == null || keyboardHeight <= 0 || activeFormField !== "reflection") return;
-    sheetFormScrollRef.current?.scrollToEnd({ animated: false });
-  }, [keyboardHeight, activeFormField, contentScrollMaxHeight]);
+    if (contentScrollMaxHeight == null) return;
+    if (activeFormField === "reflection" && keyboardHeight > 0) {
+      sheetFormScrollRef.current?.scrollToEnd({ animated: false });
+      return;
+    }
+    if (activeFormField === "tags") {
+      const frame = requestAnimationFrame(() => scrollTagSectionIntoView());
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [keyboardHeight, activeFormField, contentScrollMaxHeight, scrollTagSectionIntoView]);
 
   useEffect(() => {
     if (!saveToastMessage) {
@@ -1903,15 +1934,19 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
         />
       </View>
 
-      <JournalTagSection
-        tags={tags}
-        onTagsChange={setTags}
-        tagDraft={tagDraft}
-        onTagDraftChange={setTagDraft}
-        onCommitTagDraft={commitTagDraft}
-        bundle={bundle}
-        surfaceColor={modalSurfaceColor}
-      />
+      <View ref={tagSectionRef} collapsable={false}>
+        <JournalTagSection
+          tags={tags}
+          onTagsChange={setTags}
+          tagDraft={tagDraft}
+          onTagDraftChange={setTagDraft}
+          onCommitTagDraft={commitTagDraft}
+          bundle={bundle}
+          surfaceColor={modalSurfaceColor}
+          onTagsSessionStart={() => markActiveFormField("tags")}
+          onTagsSessionEnd={() => releaseActiveFormField("tags")}
+        />
+      </View>
     </>
   );
 
@@ -2233,13 +2268,15 @@ export const JournalNewEntryForm = forwardRef<JournalNewEntryFormHandle, Props>(
                 showsVerticalScrollIndicator={sheetNeedsScroll}
                 scrollEnabled={sheetNeedsScroll}
               >
-                <View
-                  style={[styles.formLeadingStack, { flexShrink: 0 }]}
-                  onLayout={onTopFieldsLayout}
-                >
-                  {formLeadingSections}
+                <View ref={sheetScrollContentRef} collapsable={false}>
+                  <View
+                    style={[styles.formLeadingStack, { flexShrink: 0 }]}
+                    onLayout={onTopFieldsLayout}
+                  >
+                    {formLeadingSections}
+                  </View>
+                  {formReflectionSection}
                 </View>
-                {formReflectionSection}
               </ScrollView>
             </View>
             <View

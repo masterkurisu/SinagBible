@@ -1,6 +1,33 @@
 # Reflection notes surface — Phase 0 / 0a / 0b findings
 
-Status: **code and install landed; device gates still open.** Phase 1 was not started.
+Status: **Phase 0 / 0a / 0b code is implemented.** Later phases (note surface, Enriched default path) also landed in-app. Device measurements below were never filled in this file.
+
+## Implementation audit (2026-09-04)
+
+### Phase 0 — census tooling: done; live counts: still blank
+
+- `censusJournalReflectionRows` uses the same nested-list router as runtime.
+- Dev route `/dev/journal-census` queries `dbSelectAll()`.
+- Extra HTML shapes (`table`, `iframe`, `video`, `blockquote`, `pre`) are reported and are **not** in the router.
+- The two production-DB counts in the table below were never pasted. Tooling is correct; the risk read of “are shadow table / router load-bearing?” is still unknown until someone runs the screen.
+
+### Phase 0a — code: done; device pass/fail: still open
+
+1. Pin `react-native-enriched-html@1.1.1` exact (CI asserts no `^`/`~`).
+2. Spike `/dev/enriched-html-spike`: WYSIWYG toolbar, `setValue`+`focus()` with no 120ms timer, `getHTML` on demand, **no `onChangeHtml`**. Production `ReflectionEnrichedEditor` matches that.
+3. Cheap text-change event named: **`onChangeText`** (plain text). Optional 2s `getHTML` poll is spike-only for the jank re-run.
+4. Long-fixture seed exists (`long-document`). Framestats numbers were not recorded.
+5. KAV-in-Modal probe exists. `react-native-keyboard-controller` was not installed (probe never signed off).
+6. Paste / IME copy is on the spike screen. Not signed off on device.
+7. Backup-path finding is written in this file.
+
+### Phase 0b — fixtures + CI: done (strengthened 2026-09-04); native hops: spike-only
+
+1. Converter goldens in `lib/__tests__/journal-reflection-enriched-fixtures.test.ts`. Accepted-loss markdown is now the **indented nested** lossless form, so dual-assert cannot pass against flattened siblings by accident. Native `setValue → getHTML` still runs from the spike **0b fixtures** button.
+2. Mention attribute helper `mentionDoubleRoundTripAttrsSurvive`; spike **0b mentions** still required for native hops.
+3. Undo decision: no undo button (library has no undo API).
+
+---
 
 ## Phase 0 census
 
@@ -182,13 +209,12 @@ guarantee.
   `reflectionHtmlNeedsLegacyEditor`, `normalizeReflectionMarkdownForCompare`
 - `lib/journal-reflection-census.ts` — Phase 0 counts
 
-Phase 1 note-surface chrome was **not** started.
+Phase 1–4 note-surface chrome **did** ship after this session (`JOURNAL_NOTES_SURFACE_ENABLED = true`). This file only tracks 0 / 0a / 0b.
 
-## Remaining to close 0a / 0b
+## Remaining device-only items
 
-1. Rebuild iOS + Android dev clients after prebuild
-2. `/dev/journal-census` → fill the two counts above
-3. Device pass on `/dev/enriched-html-spike`: WYSIWYG, `focus()`, paste, IME,
+1. `/dev/journal-census` → fill the two counts above
+2. Device pass on `/dev/enriched-html-spike`: WYSIWYG, `focus()`, paste, IME,
    KAV modal, jank vs baseline, poll-off (and poll-on only if needed)
-4. Spike **0b fixtures** + **0b mentions**
-5. If 0a or native 0b fails → Fallback (no user-visible change, no Phase 1)
+3. Spike **0b fixtures** + **0b mentions** (native `setValue → getHTML`)
+4. If 0a or native 0b fails on device → that is a product risk against the already-shipped note surface, not a reason to delete the fixtures
