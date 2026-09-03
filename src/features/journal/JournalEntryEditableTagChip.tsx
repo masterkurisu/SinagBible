@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
   type TextInput as TextInputType,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -86,7 +85,21 @@ export function JournalEntryEditableTagChip({
   };
 
   return (
-    <View style={[styles.chip, { backgroundColor, borderColor }]}>
+    <Pressable
+      onPress={editing ? undefined : handleChipPress}
+      onPressIn={editing ? undefined : longPress.onPressIn}
+      onPressOut={editing ? undefined : longPress.onPressOut}
+      disabled={editing}
+      accessibilityRole="button"
+      accessibilityLabel={`Tag ${label}`}
+      accessibilityHint={editing ? undefined : "Tap to rename. Long press for more actions."}
+      android_ripple={
+        editing || Platform.OS !== "android"
+          ? undefined
+          : { color: bundle.chrome.androidRipple, borderless: false, foreground: true }
+      }
+      style={[styles.chip, { backgroundColor, borderColor }]}
+    >
       {editing ? (
         <TextInput
           ref={inputRef}
@@ -104,29 +117,12 @@ export function JournalEntryEditableTagChip({
           style={[styles.input, { color: textColor }]}
         />
       ) : (
-        <Pressable
-          onPress={handleChipPress}
-          onPressIn={longPress.onPressIn}
-          onPressOut={longPress.onPressOut}
-          accessibilityRole="button"
-          accessibilityLabel={`Tag ${label}`}
-          accessibilityHint="Tap to rename. Long press for more actions."
-          android_ripple={
-            Platform.OS === "android"
-              ? { color: bundle.chrome.androidRipple, borderless: false }
-              : undefined
-          }
-          style={styles.bodyPressable}
-        >
-          <Text numberOfLines={1} style={[styles.label, { color: textColor }]}>
-            {label}
-          </Text>
-        </Pressable>
+        <Text numberOfLines={1} style={[styles.label, { color: textColor }]}>
+          {label}
+        </Text>
       )}
       <Pressable
         onPress={handleTrailingPress}
-        onPressIn={editing ? undefined : longPress.onPressIn}
-        onPressOut={editing ? undefined : longPress.onPressOut}
         accessibilityRole="button"
         accessibilityLabel={editing ? `Cancel renaming ${label}` : `Remove tag ${label}`}
         hitSlop={HIT_SLOP}
@@ -134,7 +130,7 @@ export function JournalEntryEditableTagChip({
       >
         <MaterialIcons name="close" size={ICON_SIZE} color={textColor} />
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
@@ -148,14 +144,9 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
     paddingRight: 8,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: "hidden",
-  },
-  bodyPressable: {
-    flexShrink: 1,
-    minWidth: 0,
-    justifyContent: "center",
   },
   label: {
     flexShrink: 1,

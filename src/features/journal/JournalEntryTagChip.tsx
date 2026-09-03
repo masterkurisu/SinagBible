@@ -16,7 +16,8 @@ export type JournalEntryTagChipProps = {
  *
  * Chrome lives on a static Pressable style (not a style function). Android
  * ripple + a style callback drops the rounded background drawable, which
- * made these chips render as plain text.
+ * made these chips render as plain text. `borderRadius: 20` (not 999) is the
+ * clip mask Android can actually use, so tap highlight stays pill-shaped.
  *
  * Do not reuse JournalM3FilterChip here — list filters stay 8dp corners.
  */
@@ -60,7 +61,7 @@ export function JournalEntryTagChip({
       accessibilityState={{ selected }}
       android_ripple={
         Platform.OS === "android"
-          ? { color: bundle.chrome.androidRipple, borderless: false }
+          ? { color: bundle.chrome.androidRipple, borderless: false, foreground: true }
           : undefined
       }
       style={[styles.chip, { backgroundColor, borderColor }]}
@@ -79,7 +80,7 @@ const styles = StyleSheet.create({
     minHeight: 32,
     paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: "hidden",
   },

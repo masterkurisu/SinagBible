@@ -55,7 +55,7 @@ export function JournalEntryAddTagChip({
         accessibilityLabel="Add tag"
         android_ripple={
           Platform.OS === "android"
-            ? { color: bundle.chrome.androidRipple, borderless: false }
+            ? { color: bundle.chrome.androidRipple, borderless: false, foreground: true }
             : undefined
         }
         style={[
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     minHeight: 32,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: "hidden",
   },
