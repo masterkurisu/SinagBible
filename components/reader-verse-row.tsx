@@ -106,6 +106,7 @@ export function renderVerseBodyInline(
     fontFamily: verseBodyTypography.readerVerseBodyFontFamily,
     fontSize: verseBodyTypography.readerVerseFontSize,
     lineHeight: verseBodyTypography.readerVerseLineHeight,
+    includeFontPadding: false,
   } as const;
 
   return items.map((item, idx) => {

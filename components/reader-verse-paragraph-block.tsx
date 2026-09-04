@@ -1,5 +1,13 @@
-import { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { memo, useCallback, useMemo, useState } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type NativeSyntheticEvent,
+  type TextLayoutEventData,
+  type TextLayoutLine,
+} from "react-native";
 import type { VerseAnnotation } from "@sinag-bible/types";
 import { isMobileAppDarkThemeId } from "@sinag-bible/tokens";
 import { highlightColors, resolveAnnotationColorHex } from "@sinag-bible/ui";
@@ -11,6 +19,12 @@ import {
   type ReaderVerseTextAlignProp,
 } from "@/components/reader-verse-row";
 import type { ReaderVerseFlashVerse } from "@/src/features/reader/readerVerseFlashListData";
+import {
+  collectParagraphFillLinesByVerse,
+  collectParagraphUnderlineLinesByVerse,
+} from "@/src/features/reader/paragraphVerseUnderlineLines";
+import { resolveUnderlineStyle } from "@/src/features/reader/verseAnnotationUnderlineMetrics";
+import { VerseAnnotationUnderlineOverlay } from "@/src/features/reader/VerseAnnotationUnderlineOverlay";
 
 /** Deep red on parchment / light reader backgrounds */
 const WORDS_OF_JESUS_COLOR = "#C41E1E";
@@ -21,6 +35,10 @@ const styles = StyleSheet.create({
   wrap: {
     marginHorizontal: -4,
     paddingHorizontal: 8,
+  },
+  runBodyWrap: {
+    position: "relative",
+    overflow: "visible",
   },
   runText: {
     alignSelf: "stretch",
@@ -140,13 +158,6 @@ function renderParagraphVerseText({
   const isSelected = selectedVerseNumbers.has(verseNum);
   const annotation = annotations[verseNum];
   const isHighlight = !isSelected && annotation?.style === "highlight";
-  const isUnderline = !isSelected && annotation?.style === "underline";
-  const highlightBg =
-    isHighlight && annotation
-      ? highlightColors[annotation.colorId as keyof typeof highlightColors]
-      : undefined;
-  const underlineColor =
-    isUnderline && annotation ? resolveAnnotationColorHex(annotation.colorId) : undefined;
   const inkOnHighlight = isHighlight && isDarkTheme ? selectionText : null;
   const textCol = isSelected ? selectionText : inkOnHighlight ?? bodyTextColor;
   const numCol = isSelected ? selectionText : inkOnHighlight ?? verseNumberColor;
@@ -166,20 +177,17 @@ function renderParagraphVerseText({
       style={{
         fontFamily: typography.readerVerseBodyFontFamily,
         fontSize: typography.readerVerseFontSize,
-        lineHeight: typography.readerVerseLineHeight,
         color: textCol,
         textAlign: verseTextAlign,
-        backgroundColor: isSelected ? selectionBackground : highlightBg ?? "transparent",
-        textDecorationLine: underlineColor ? "underline" : "none",
-        textDecorationColor: underlineColor,
+        includeFontPadding: false,
       }}
     >
       <Text
         style={{
           fontFamily: "Inter_400Regular",
           fontSize: verseNumberFontSize,
-          lineHeight: typography.readerVerseLineHeight,
           color: numCol,
+          includeFontPadding: false,
         }}
       >
         {verseNum}
@@ -197,6 +205,182 @@ function renderParagraphVerseText({
         : verse.verseText}
       {isLastInRun ? null : " "}
     </Text>
+  );
+}
+
+type ParagraphRunBlockProps = {
+  run: ParagraphRun;
+  runIndex: number;
+  verseTextAlign: ReaderVerseTextAlignProp;
+  selectedVerseNumbers: ReadonlySet<number>;
+  annotations: Record<number, VerseAnnotation | undefined>;
+  noteBelowVerseBackground: string;
+  bodyTextColor: string;
+  readerVerseFontSize: number;
+  typography: ParagraphVerseTypography;
+  verseRenderParams: Omit<RenderParagraphVerseParams, "verse" | "isLastInRun" | "verseTextAlign">;
+  onNoteLongPress?: (verseNum: number) => void;
+  translationId: string;
+  bundle: MobileAppThemeBundle;
+  yvpFootnotes?: Record<number, { label: string; body: string }>;
+};
+
+function ParagraphRunBlock({
+  run,
+  runIndex,
+  verseTextAlign,
+  selectedVerseNumbers,
+  annotations,
+  noteBelowVerseBackground,
+  bodyTextColor,
+  readerVerseFontSize,
+  typography,
+  verseRenderParams,
+  onNoteLongPress,
+  translationId,
+  bundle,
+  yvpFootnotes,
+}: ParagraphRunBlockProps) {
+  const [layoutLines, setLayoutLines] = useState<readonly TextLayoutLine[]>([]);
+
+  const handleRunTextLayout = useCallback(
+    (event: NativeSyntheticEvent<TextLayoutEventData>) => {
+      setLayoutLines(event.nativeEvent.lines);
+    },
+    [],
+  );
+
+  const fillLinesByVerse = useMemo(
+    () =>
+      collectParagraphFillLinesByVerse(
+        layoutLines,
+        run.verses,
+        annotations,
+        selectedVerseNumbers,
+        typography.readerVerseLineHeight,
+        yvpFootnotes,
+        Boolean(verseRenderParams.onYvpFootnotePress),
+      ),
+    [
+      annotations,
+      layoutLines,
+      run.verses,
+      selectedVerseNumbers,
+      typography.readerVerseLineHeight,
+      verseRenderParams.onYvpFootnotePress,
+      yvpFootnotes,
+    ],
+  );
+
+  const underlineLinesByVerse = useMemo(
+    () =>
+      collectParagraphUnderlineLinesByVerse(
+        layoutLines,
+        run.verses,
+        annotations,
+        selectedVerseNumbers,
+        typography.readerVerseLineHeight,
+        yvpFootnotes,
+        Boolean(verseRenderParams.onYvpFootnotePress),
+        typography.readerVerseFontSize,
+      ),
+    [
+      annotations,
+      layoutLines,
+      run.verses,
+      selectedVerseNumbers,
+      typography.readerVerseFontSize,
+      typography.readerVerseLineHeight,
+      verseRenderParams.onYvpFootnotePress,
+      yvpFootnotes,
+    ],
+  );
+
+  return (
+    <View key={`run-${run.verses[0]?.verseIndex ?? runIndex}`}>
+      <View style={styles.runBodyWrap}>
+        {[...fillLinesByVerse.entries()].map(([verseNum, lines]) => {
+          const isSelected = selectedVerseNumbers.has(verseNum);
+          const annotation = annotations[verseNum];
+          const fillColor = isSelected
+            ? verseRenderParams.selectionBackground
+            : annotation?.style === "highlight"
+              ? highlightColors[annotation.colorId as keyof typeof highlightColors]
+              : undefined;
+          if (!fillColor) return null;
+          return lines.map((line, index) => (
+            <View
+              key={`fill-${verseNum}-${index}`}
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: line.x,
+                top: line.y,
+                width: line.width,
+                height: line.height,
+                backgroundColor: fillColor,
+                borderRadius: 3,
+              }}
+            />
+          ));
+        })}
+        <Text
+          style={[
+            styles.runText,
+            {
+              fontFamily: typography.readerVerseBodyFontFamily,
+              fontSize: typography.readerVerseFontSize,
+              lineHeight: typography.readerVerseLineHeight,
+              textAlign: verseTextAlign,
+              includeFontPadding: false,
+            },
+          ]}
+          onTextLayout={handleRunTextLayout}
+        >
+          {run.verses.map((verse, verseIndexInRun) =>
+            renderParagraphVerseText({
+              verse,
+              isLastInRun: verseIndexInRun === run.verses.length - 1,
+              ...verseRenderParams,
+              verseTextAlign,
+            }),
+          )}
+        </Text>
+        {[...underlineLinesByVerse.entries()].map(([verseNum, lines]) => {
+          const annotation = annotations[verseNum];
+          const color = annotation ? resolveAnnotationColorHex(annotation.colorId) : undefined;
+          if (!color) return null;
+          return (
+            <VerseAnnotationUnderlineOverlay
+              key={`ul-${verseNum}`}
+              lines={lines}
+              color={color}
+              colorId={annotation?.colorId}
+              underlineStyle={resolveUnderlineStyle(annotation?.underlineStyle)}
+              fontSize={readerVerseFontSize}
+            />
+          );
+        })}
+      </View>
+      {run.noteVerseNum != null && run.noteText ? (
+        <Pressable
+          onLongPress={() => onNoteLongPress?.(run.noteVerseNum!)}
+          delayLongPress={420}
+          style={[styles.noteContainer, { backgroundColor: noteBelowVerseBackground }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Note on verse ${run.noteVerseNum}`}
+          accessibilityHint={READER_INLINE_NOTE_LONG_PRESS_EDIT_HINT}
+        >
+          <VerseTaggedText
+            text={run.noteText}
+            textStyle={styles.noteText}
+            textColor={bodyTextColor}
+            translationId={translationId}
+            bundle={bundle}
+          />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -255,46 +439,23 @@ function ReaderVerseParagraphBlockInner({
   return (
     <View style={styles.wrap}>
       {runs.map((run, runIndex) => (
-        <View key={`run-${run.verses[0]?.verseIndex ?? runIndex}`}>
-          <Text
-            style={[
-              styles.runText,
-              {
-                fontFamily: typography.readerVerseBodyFontFamily,
-                fontSize: typography.readerVerseFontSize,
-                lineHeight: typography.readerVerseLineHeight,
-                textAlign: verseTextAlign,
-              },
-            ]}
-          >
-            {run.verses.map((verse, verseIndexInRun) =>
-              renderParagraphVerseText({
-                verse,
-                isLastInRun: verseIndexInRun === run.verses.length - 1,
-                ...verseRenderParams,
-                verseTextAlign,
-              }),
-            )}
-          </Text>
-          {run.noteVerseNum != null && run.noteText ? (
-            <Pressable
-              onLongPress={() => onNoteLongPress?.(run.noteVerseNum!)}
-              delayLongPress={420}
-              style={[styles.noteContainer, { backgroundColor: noteBelowVerseBackground }]}
-              accessibilityRole="button"
-              accessibilityLabel={`Note on verse ${run.noteVerseNum}`}
-              accessibilityHint={READER_INLINE_NOTE_LONG_PRESS_EDIT_HINT}
-            >
-              <VerseTaggedText
-                text={run.noteText}
-                textStyle={styles.noteText}
-                textColor={bodyTextColor}
-                translationId={translationId}
-                bundle={bundle}
-              />
-            </Pressable>
-          ) : null}
-        </View>
+        <ParagraphRunBlock
+          key={`run-${run.verses[0]?.verseIndex ?? runIndex}`}
+          run={run}
+          runIndex={runIndex}
+          verseTextAlign={verseTextAlign}
+          selectedVerseNumbers={selectedVerseNumbers}
+          annotations={annotations}
+          noteBelowVerseBackground={noteBelowVerseBackground}
+          bodyTextColor={bodyTextColor}
+          readerVerseFontSize={readerVerseFontSize}
+          typography={typography}
+          verseRenderParams={verseRenderParams}
+          onNoteLongPress={onNoteLongPress}
+          translationId={translationId}
+          bundle={bundle}
+          yvpFootnotes={yvpFootnotes}
+        />
       ))}
     </View>
   );

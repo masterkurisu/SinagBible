@@ -80,3 +80,18 @@ export function verseSquiggleMetricsForFontSize(fontSize: number): VerseSquiggle
 export function resolveUnderlineStyle(style: UnderlineStyle | undefined): UnderlineStyle {
   return style === "squiggly" ? "squiggly" : "straight";
 }
+
+/**
+ * Nested paragraph `<Text>` on Android reports a broken descender (~0 or negative).
+ * Line-by-line onTextLayout uses ~0.42 × fontSize (9.6px at 22.72). Without that
+ * clearance the overlay sits in the glyph box instead of below the baseline.
+ */
+const LINE_BY_LINE_DESCENDER_RATIO = 9.6 / 22.72;
+
+export function paragraphUnderlineExtraOffsetY(
+  fontSize: number,
+  reportedDescender: number,
+): number {
+  if (reportedDescender >= fontSize * 0.2) return 0;
+  return Math.round(fontSize * LINE_BY_LINE_DESCENDER_RATIO);
+}
