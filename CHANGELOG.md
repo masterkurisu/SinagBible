@@ -7,6 +7,40 @@ All notable changes to Sinag Bible, organized by version.
 
 ### New features & UI
 - **Journal notes** — tap Reflection to open a full-screen notes canvas. Formatting (bold, italic, headings, lists, checklists), verse mentions, and images paint in the field without markdown markers. Shrink or Android back returns to the compact preview. Nested lists and VoiceOver/TalkBack still use the previous editor.
+- **Journal tags** — pill tags on entries (suggestions plus custom), expandable section, rename or remove, and search by tag in the journal list and global search
+- **Verse-tag composer** — type `@` in notes and journal reflections for book suggestions, a mention sheet, themed chips, and tap-to-open in the reader; saved reflections render chips instead of raw `@` text
+- **Search** — redesigned overlay with blur backdrop, filter chips, optional voice search, and combined Bible + journal results. Filter highlights, saved verses, and journal favorites; related verses after a reference; named passages, English synonyms, Strong’s numbers, and topical themes. Typed tokens such as `tag:`, `book:`, `also:NIV`, and date phrases. Journal-list search covers entries, verses, dates, and tags
+- **Verse layout** — Line by Line or Paragraph in reader font settings; highlights and underlines follow wrapping text
+- **Page-turn controls** — circular previous/next buttons aligned with back-to-top (idle fade, fling-aware)
+- **Sheet blur** — bottom sheets and the search overlay use a blurred backdrop (live blur on iOS; snapshot blur on Android)
+- **Home** — page scrolls on shorter phones so the daily verse stays reachable
+- **Settings** — reader settings use the same side-sheet layout on phone and tablet; overlay chrome stays phone-sized on large screens
+- **New entry sheet** — layout and sizing more consistent across phones and tablets
+
+### Fixes
+- Tablet bottom sheets no longer fill the screen; pickers and reading sheets use centered card widths
+- Tablet landscape reader no longer leaves blank verse spacing
+- Journal settings buttons no longer appear behind the tablet settings panel
+- Carousel images sized correctly on tablet
+- Theme picker layout on wider screens
+- Journal tab no longer unmounts, so opening it is immediate
+- Flash when opening a journal entry
+- Reader stall when opening a chapter
+- Flicker at the bottom edge of the reader while the tab bar hides
+- Book selector sheet background stays white
+- Search overlay no longer breaking after the redesign
+- Paragraph-layout highlight and underline positioning (including two-column)
+- Insert-verse mention sheet sits above the keyboard
+- Bundled KJV chapter load
+
+### Performance
+- Smoother high-refresh scrolling on reader, journal, search, and home
+- Faster Bible keyword search
+- Journal carousel images prefetch so the tab opens without a hitch
+
+### Infrastructure
+- Native blur for sheets (`expo-blur`)
+- Metro watch/reload crash fixes
 
 ## 1.0.0 - Public Release
 
