@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { TextLayoutLine } from "react-native";
-import { paragraphUnderlineExtraOffsetY } from "@/src/features/reader/verseAnnotationUnderlineMetrics";
+import {
+  paragraphFillExtraOffsetY,
+  paragraphOverlayExtraOffsetY,
+} from "@/src/features/reader/verseAnnotationUnderlineMetrics";
 import {
   buildParagraphRunPlainText,
   collectParagraphFillLinesByVerse,
@@ -52,10 +55,17 @@ describe("normalizeParagraphTextLayoutLines", () => {
   });
 });
 
-describe("paragraphUnderlineExtraOffsetY", () => {
+describe("paragraphOverlayExtraOffsetY", () => {
   it("adds line-by-line descender clearance when nested Text reports no descender", () => {
-    expect(paragraphUnderlineExtraOffsetY(22.72, -1.78)).toBe(10);
-    expect(paragraphUnderlineExtraOffsetY(22.72, 9.6)).toBe(0);
+    expect(paragraphOverlayExtraOffsetY(22.72, -1.78)).toBe(10);
+    expect(paragraphOverlayExtraOffsetY(22.72, 9.6)).toBe(0);
+  });
+});
+
+describe("paragraphFillExtraOffsetY", () => {
+  it("always applies descender clearance, even when onTextLayout reports a real descender", () => {
+    expect(paragraphFillExtraOffsetY(22.72)).toBe(10);
+    expect(paragraphFillExtraOffsetY(0)).toBe(0);
   });
 });
 
@@ -97,7 +107,7 @@ describe("collectParagraphUnderlineLinesByVerse", () => {
 });
 
 describe("collectParagraphFillLinesByVerse", () => {
-  it("maps highlight verses without the underline extra offset", () => {
+  it("maps highlight verses and applies the fill extra offset", () => {
     const verses = [
       { verseIndex: 0, verseText: "First verse text goes here and wraps." },
       { verseIndex: 6, verseText: "When they brought the colt to Jesus." },
@@ -112,11 +122,35 @@ describe("collectParagraphFillLinesByVerse", () => {
       { 7: { style: "highlight", colorId: "green" } },
       new Set(),
       36.1816,
+      undefined,
+      false,
+      22.72,
     );
     expect(fills.has(7)).toBe(true);
     expect(fills.has(1)).toBe(false);
     const y = fills.get(7)?.[0]?.y ?? -1;
-    expect(y).toBeGreaterThanOrEqual(0);
-    expect(y).toBeLessThan(40);
+    expect(y).toBe(paragraphFillExtraOffsetY(22.72));
+  });
+
+  it("still offsets fills when onTextLayout reports a real descender (tablet two-column)", () => {
+    const verses = [{ verseIndex: 0, verseText: "First verse text goes here." }];
+    const { text } = buildParagraphRunPlainText(verses);
+    const lines = [
+      {
+        ...line(text.slice(0, 20), 0, 400),
+        descender: 9.6,
+      },
+    ];
+    const fills = collectParagraphFillLinesByVerse(
+      lines,
+      verses,
+      { 1: { style: "highlight", colorId: "yellow" } },
+      new Set(),
+      36.1816,
+      undefined,
+      false,
+      22.72,
+    );
+    expect(fills.get(1)?.[0]?.y).toBe(paragraphFillExtraOffsetY(22.72));
   });
 });

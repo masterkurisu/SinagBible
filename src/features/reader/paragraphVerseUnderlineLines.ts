@@ -1,7 +1,10 @@
 import type { BibleVerseInlineItem, VerseAnnotation } from "@sinag-bible/types";
 import type { TextLayoutLine } from "react-native";
 import type { ReaderVerseFlashVerse } from "@/src/features/reader/readerVerseFlashListData";
-import { paragraphUnderlineExtraOffsetY } from "@/src/features/reader/verseAnnotationUnderlineMetrics";
+import {
+  paragraphFillExtraOffsetY,
+  paragraphOverlayExtraOffsetY,
+} from "@/src/features/reader/verseAnnotationUnderlineMetrics";
 
 export type ParagraphVerseCharRange = {
   verseNum: number;
@@ -175,7 +178,7 @@ export function collectParagraphUnderlineLinesByVerse(
   canOpenFootnote = false,
   fontSize = 0,
 ): Map<number, TextLayoutLine[]> {
-  const extraY = paragraphUnderlineExtraOffsetY(fontSize, lines[0]?.descender ?? 0);
+  const extraY = paragraphOverlayExtraOffsetY(fontSize, lines[0]?.descender ?? 0);
   return collectParagraphVerseLinesByVerse(
     lines,
     verses,
@@ -188,7 +191,10 @@ export function collectParagraphUnderlineLinesByVerse(
   );
 }
 
-/** Highlight / selection fill rects — no underline extraY (fills cover the line box). */
+/**
+ * Highlight / selection fill rects. Always shifted by the line-by-line
+ * descender clearance so phone and tablet two-column bands sit on the glyphs.
+ */
 export function collectParagraphFillLinesByVerse(
   lines: readonly TextLayoutLine[],
   verses: readonly ReaderVerseFlashVerse[],
@@ -197,7 +203,9 @@ export function collectParagraphFillLinesByVerse(
   styledLineHeight: number,
   yvpFootnotes?: Record<number, { label: string; body: string }>,
   canOpenFootnote = false,
+  fontSize = 0,
 ): Map<number, TextLayoutLine[]> {
+  const extraY = paragraphFillExtraOffsetY(fontSize);
   return collectParagraphVerseLinesByVerse(
     lines,
     verses,
@@ -206,6 +214,6 @@ export function collectParagraphFillLinesByVerse(
     styledLineHeight,
     yvpFootnotes,
     canOpenFootnote,
-    0,
+    extraY,
   );
 }
